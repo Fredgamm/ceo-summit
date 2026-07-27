@@ -1,0 +1,567 @@
+// CEO Summit Platform — Database schema
+// PostgreSQL 16 · Prisma 5
+// Ref: /v2-ecosystem-2026/specs-dev/CEO_Summit_Architecture_Technique.docx
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════
+
+/// RBAC access level — checked by middleware on every protected route.
+enum Role {
+  GUEST
+  MEMBER
+  EXECUTIVE
+  CHAIRMAN
+  ADMIN
+}
+
+/// Membership tier — drives pricing, Deal Room credits, room access.
+enum Tier {
+  MEMBER
+  EXECUTIVE
+  CHAIRMAN
+}
+
+enum MembershipStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REFUSED
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum RegistrationStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  WAITLIST
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum OpportunityType {
+  PARTENARIAT
+  INVESTISSEMENT
+  APPEL_OFFRES
+  LEVEE_FONDS
+  JOINT_VENTURE
+}
+
+enum OpportunityStatus {
+  PENDING_MODERATION
+  PUBLISHED
+  CHANGES_REQUESTED
+  REFUSED
+  UNPUBLISHED
+  EXPIRED
+}
+
+enum ContactStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum CreditTransactionType {
+  INCLUDED_GRANT
+  PURCHASE
+  DEDUCTION
+  ADMIN_GRANT
+  REFUND
+}
+
+enum RoomAccessLevel {
+  ALL_MEMBERS
+  EXECUTIVE_PLUS
+  CHAIRMAN_ONLY
+}
+
+enum RoomStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED_DELETED
+  RESOLVED_WARNED
+  RESOLVED_EXCLUDED
+  DISMISSED
+}
+
+enum ServiceStatus {
+  DRAFT
+  PENDING_MODERATION
+  PUBLISHED
+  REFUSED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  MODERATEUR
+  FINANCIER
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  REJECTED_INVALID_SIGNATURE
+}
+
+// ═══════════════════════════════════════════════
+// AUTH & USERS
+// ═══════════════════════════════════════════════
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String
+  title         String? // ex: "CEO", "Directeur Général"
+  bio           String?   @db.Text
+  avatarUrl     String?
+  linkedinUrl   String?
+  phone         String?
+  country       String?
+  sectors       String[] // secteurs d'intérêt (référentiel dans AdminSettings)
+
+  role          Role      @default(MEMBER)
+  status        MembershipStatus @default(PENDING_ACTIVATION)
+
+  companyId     String?
+  company       Company?  @relation(fields: [companyId], references: [id])
+
+  sponsorId     String? // parrain (RG parrainage cercle privé)
+  sponsor       User?     @relation("Sponsorship", fields: [sponsorId], references: [id])
+  sponsees      User[]    @relation("Sponsorship")
+
+  emailVerifiedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships       Membership[]
+  eventRegistrations EventRegistration[]
+  opportunitiesAuthored Opportunity[]      @relation("OpportunityAuthor")
+  opportunityContactsInitiated OpportunityContact[] @relation("ContactInitiator")
+  opportunityContactsReceived  OpportunityContact[] @relation("ContactReceiver")
+  creditBalance     CreditBalance?
+  creditTransactions CreditTransaction[]
+  roomMessages      RoomMessage[]
+  sentMessages      Message[]           @relation("MessageSender")
+  conversationsAsMember1 Conversation[]  @relation("ConversationMember1")
+  conversationsAsMember2 Conversation[]  @relation("ConversationMember2")
+  serviceListings   ServiceListing[]
+  activationTokens  ActivationToken[]
+  passwordResetTokens PasswordResetToken[]
+  reportsFiled      RoomReport[]        @relation("ReportedBy")
+  auditLogsAsAdmin  AuditLog[]          @relation("AuditActor")
+
+  @@index([email])
+  @@index([role, status])
+  @@index([companyId])
+}
+
+model AdminUser {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  role        AdminRole @default(MODERATEUR)
+  active      Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([role])
+}
+
+model ActivationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime // 72h from creation
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime // 1h from creation
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+}
+
+// ═══════════════════════════════════════════════
+// MEMBERSHIP & CANDIDATURES
+// ═══════════════════════════════════════════════
+
+model MembershipApplication {
+  id           String             @id @default(cuid())
+  fullName     String
+  email        String
+  companyName  String
+  title        String
+  sector       String
+  country      String
+  motivation   String             @db.Text
+  sponsorName  String?
+  attachments  String[] // R2 URLs (CV, lettre de motivation...)
+  requestedTier Tier              @default(MEMBER)
+  status       ApplicationStatus  @default(PENDING)
+  adminNote    String?            @db.Text
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime           @default(now())
+
+  @@index([status])
+  @@index([email])
+}
+
+model Membership {
+  id           String            @id @default(cuid())
+  userId       String
+  user         User              @relation(fields: [userId], references: [id])
+  tier         Tier
+  startDate    DateTime
+  endDate      DateTime
+  status       MembershipStatus  @default(ACTIVE)
+  price        Int // in Ariary
+  paymentRef   String?           @unique // Evolia payment reference — unique so a webhook retry (RG-P1-01) can't create a duplicate Membership
+  autoRenew    Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+
+  @@index([userId])
+  @@index([status, endDate]) // used for "expiring soon" admin queries
+}
+
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  sector      String
+  country     String
+  description String?  @db.Text
+  logoUrl     String?
+  website     String?
+  createdAt   DateTime @default(now())
+
+  users            User[]
+  serviceListings  ServiceListing[]
+
+  @@index([sector])
+  @@index([country])
+}
+
+// ═══════════════════════════════════════════════
+// ÉVÉNEMENTS
+// ═══════════════════════════════════════════════
+
+model Event {
+  id             String       @id @default(cuid())
+  title          String
+  description    String       @db.Text
+  program        Json? // structured agenda blocks
+  speakers       Json? // [{ name, title, company, photoUrl }]
+  location       String
+  isOnline       Boolean      @default(false)
+  zoomMeetingId  String?
+  date           DateTime
+  capacity       Int
+  minTier        Tier         @default(MEMBER)
+  price          Int          @default(0) // 0 = inclus dans membership
+  imageUrl       String?
+  status         EventStatus  @default(DRAFT)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  registrations  EventRegistration[]
+
+  @@index([status, date])
+}
+
+model EventRegistration {
+  id             String              @id @default(cuid())
+  eventId        String
+  event          Event               @relation(fields: [eventId], references: [id])
+  userId         String
+  user           User                @relation(fields: [userId], references: [id])
+  status         RegistrationStatus  @default(PENDING_PAYMENT)
+  paymentStatus  PaymentStatus       @default(PENDING)
+  paymentRef     String?
+  badgeQrCode    String              @unique @default(cuid())
+  checkedIn      Boolean             @default(false)
+  checkedInAt    DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@unique([eventId, userId])
+  @@index([eventId, status])
+  @@index([badgeQrCode])
+}
+
+// ═══════════════════════════════════════════════
+// DEAL ROOM & CRÉDITS
+// ═══════════════════════════════════════════════
+
+model Opportunity {
+  id           String              @id @default(cuid())
+  authorId     String
+  author       User                @relation("OpportunityAuthor", fields: [authorId], references: [id])
+  title        String
+  type         OpportunityType
+  sector       String
+  country      String
+  description  String              @db.Text
+  budget       Int? // Ariary
+  deadline     DateTime?
+  visibility   Tier                @default(EXECUTIVE) // minimum tier to view
+  tags         String[]
+  attachments  String[] // R2 signed URLs, TTL 24h at generation
+  status       OpportunityStatus   @default(PENDING_MODERATION)
+  moderationNote String?           @db.Text
+  moderatedById String?
+  moderatedAt  DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  contacts     OpportunityContact[]
+
+  @@index([status, createdAt])
+  @@index([sector, country])
+}
+
+model OpportunityContact {
+  id             String         @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity    @relation(fields: [opportunityId], references: [id])
+  initiatorId    String
+  initiator      User           @relation("ContactInitiator", fields: [initiatorId], references: [id])
+  receiverId     String // = opportunity.authorId, denormalized for query convenience
+  receiver       User           @relation("ContactReceiver", fields: [receiverId], references: [id])
+  status         ContactStatus  @default(PENDING)
+  message        String?        @db.Text
+  creditsSpent   Int            @default(1)
+  conversationId String? // set once accepted and conversation auto-created
+  createdAt      DateTime       @default(now())
+
+  @@unique([opportunityId, initiatorId])
+  @@index([receiverId, status])
+}
+
+model CreditBalance {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  included   Int      @default(0) // reset at each renewal based on tier
+  purchased  Int      @default(0)
+  used       Int      @default(0)
+  resetAt    DateTime? // next renewal date
+  updatedAt  DateTime @updatedAt
+
+  /// Computed in application layer as (included + purchased - used).
+  /// Chairman tier bypasses this check entirely (unlimited).
+}
+
+model CreditTransaction {
+  id        String                 @id @default(cuid())
+  userId    String
+  user      User                   @relation(fields: [userId], references: [id])
+  amount    Int // positive = credit, negative = debit
+  type      CreditTransactionType
+  reason    String?
+  createdAt DateTime               @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model CreditPackPrice {
+  id       String @id @default(cuid())
+  credits  Int    @unique // 1, 5, 10
+  priceAr  Int
+}
+
+// ═══════════════════════════════════════════════
+// MESSAGERIE PRIVÉE
+// ═══════════════════════════════════════════════
+
+model Conversation {
+  id            String    @id @default(cuid())
+  member1Id     String
+  member1       User      @relation("ConversationMember1", fields: [member1Id], references: [id])
+  member2Id     String
+  member2       User      @relation("ConversationMember2", fields: [member2Id], references: [id])
+  opportunityId String? // set if initiated from a Deal Room contact
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  messages      Message[]
+
+  @@unique([member1Id, member2Id])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  /// Encrypted at rest via pgcrypto (see migration SQL). Never returned decrypted except to
+  /// the two conversation participants.
+  content        String       @db.Text
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+// ═══════════════════════════════════════════════
+// SALLES THÉMATIQUES (temps réel)
+// ═══════════════════════════════════════════════
+
+model Room {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  sector      String
+  minTier     RoomAccessLevel @default(ALL_MEMBERS)
+  status      RoomStatus      @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+
+  messages    RoomMessage[]
+
+  @@index([status])
+}
+
+model RoomMessage {
+  id         String       @id @default(cuid())
+  roomId     String
+  room       Room         @relation(fields: [roomId], references: [id])
+  authorId   String
+  author     User         @relation(fields: [authorId], references: [id])
+  content    String       @db.Text
+  attachmentUrl String?
+  deletedAt  DateTime? // soft-delete, replaced by "[Message supprimé]" client-side
+  createdAt  DateTime     @default(now())
+
+  reports    RoomReport[]
+
+  @@index([roomId, createdAt])
+}
+
+model RoomReport {
+  id            String       @id @default(cuid())
+  roomMessageId String
+  roomMessage   RoomMessage  @relation(fields: [roomMessageId], references: [id])
+  reportedById  String
+  reportedBy    User         @relation("ReportedBy", fields: [reportedById], references: [id])
+  status        ReportStatus @default(PENDING)
+  resolvedById  String?
+  resolvedAt    DateTime?
+  createdAt     DateTime     @default(now())
+
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// CATALOGUE DE SERVICES
+// ═══════════════════════════════════════════════
+
+model ServiceListing {
+  id          String        @id @default(cuid())
+  companyId   String?
+  company     Company?      @relation(fields: [companyId], references: [id])
+  authorId    String
+  author      User          @relation(fields: [authorId], references: [id])
+  title       String
+  category    String
+  description String        @db.Text
+  priceInfo   String?
+  gallery     String[]
+  status      ServiceStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, category])
+}
+
+// ═══════════════════════════════════════════════
+// ADMIN — PARAMÈTRES, LOGS, WEBHOOKS
+// ═══════════════════════════════════════════════
+
+/// Editable referentials shown in /admin/parametres — Référentiels tab.
+model Referential {
+  id       String @id @default(cuid())
+  type     String // "sector" | "country" | "opportunity_type"
+  label    String
+  position Int    @default(0)
+
+  @@unique([type, label])
+  @@index([type])
+}
+
+/// Key/value store for editable pricing shown in /admin/parametres — Tarifs tab.
+model PlatformSetting {
+  key       String   @id // "membership_price_member", "membership_price_executive"...
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model WebhookLog {
+  id         String        @id @default(cuid())
+  source     String // "evolia" | "resend" | "zoom"
+  event      String
+  payload    Json
+  status     WebhookStatus @default(RECEIVED)
+  error      String?
+  processedAt DateTime?
+  createdAt  DateTime      @default(now())
+
+  @@index([source, status])
+}
+
+/// Every admin action is logged here for audit (RGPD + accountability).
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actor     User     @relation("AuditActor", fields: [actorId], references: [id])
+  action    String // "candidature.approve", "member.suspend", "opportunity.publish"...
+  targetType String
+  targetId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+}

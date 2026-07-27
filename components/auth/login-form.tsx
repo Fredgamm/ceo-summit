@@ -1,0 +1,138 @@
+"use client";
+
+import * as React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { signIn } from "next-auth/react";
+import { z } from "zod";
+import { Lock } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
+const loginSchema = z.object({
+  email: z.string().min(1, "L'email est requis").email("Adresse email invalide"),
+  password: z.string().min(1, "Le mot de passe est requis"),
+});
+
+export function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+    setFieldErrors({});
+
+    const parsed = loginSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        errors[issue.path[0] as string] = issue.message;
+      }
+      setFieldErrors(errors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await signIn("credentials", {
+        email: parsed.data.email,
+        password: parsed.data.password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setFormError(
+          result.error === "ACCOUNT_SUSPENDED"
+            ? "Votre compte est suspendu. Contactez l'équipe CEO Summit."
+            : "Email ou mot de passe incorrect."
+        );
+        return;
+      }
+
+      router.push(callbackUrl);
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="w-full max-w-[400px]">
+      <div className="mb-8">
+        <h2 className="mb-1.5 text-2xl font-bold text-navy">Connexion à votre espace</h2>
+        <p className="text-sm text-text-muted">Membres CEO Summit — accès réservé</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email">Adresse email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="vous@entreprise.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            aria-invalid={!!fieldErrors.email}
+          />
+          {fieldErrors.email && <p className="text-xs text-red-600">{fieldErrors.email}</p>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Mot de passe</Label>
+            <Link href="/mot-de-passe-oublie" className="text-xs font-normal text-navy-mid">
+              Mot de passe oublié ?
+            </Link>
+          </div>
+          <Input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            aria-invalid={!!fieldErrors.password}
+          />
+          {fieldErrors.password && <p className="text-xs text-red-600">{fieldErrors.password}</p>}
+        </div>
+
+        {formError && (
+          <Alert variant="destructive">
+            <AlertDescription>{formError}</AlertDescription>
+          </Alert>
+        )}
+
+        <Button type="submit" size="lg" className="mt-1 w-full justify-center" disabled={loading}>
+          {loading ? "Connexion…" : "Se connecter"}
+        </Button>
+      </form>
+
+      <div className="mt-6 border-t border-border pt-6 text-center">
+        <p className="text-sm text-text-muted">Pas encore membre ?</p>
+        <Link href="/demande-acces" className="mt-1 block text-[13.5px] font-semibold text-navy-mid">
+          Demander l&apos;accès au CEO Summit →
+        </Link>
+      </div>
+
+      <Alert variant="gold" className="mt-5">
+        <Lock />
+        <AlertDescription>
+          L&apos;accès à la plateforme est réservé aux membres actifs. L&apos;inscription est
+          soumise à vérification.
+        </AlertDescription>
+      </Alert>
+    </div>
+  );
+}

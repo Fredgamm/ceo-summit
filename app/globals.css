@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* shadcn semantic tokens — mapped onto CEO Summit navy/gold identity */
+    --background: 60 20% 97%;        /* #F7F7F5 surface */
+    --foreground: 0 0% 10%;          /* #1A1A1A text */
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Primary = navy #1A2B5F */
+    --primary: 227 55% 24%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary = gold #C9A84C, used sparingly (premium accent) */
+    --secondary: 42 46% 54%;
+    --secondary-foreground: 227 55% 24%;
+
+    --muted: 60 9% 94%;
+    --muted-foreground: 0 0% 54%;
+
+    --accent: 42 55% 92%;            /* gold-pale */
+    --accent-foreground: 227 55% 24%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 227 55% 24%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+}
+
+/* ── Scrollbar (matches wireframe) ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
