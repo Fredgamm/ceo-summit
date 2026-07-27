@@ -117,6 +117,20 @@ Ce n'est pas un problème de code ; ça fonctionne normalement en local et sur C
 - ❌ PWA : `public/icons/*.png` sont des placeholders générés (navy/gold, sans logo réel)
   — swap prévu en E9-T01 ; pas de `next-pwa`/service worker configuré encore
 
+### E2 — Profils membres & entreprises
+
+- ✅ E2-T01 : Page profil membre (`/membres/[id]`) — onglets Profil/Entreprise/Deal Room/
+  Services (les deux derniers en `EmptyState` tant qu'E5/E6 n'existent pas), vue propre
+  (bouton "Éditer mon profil") vs vue autre membre (bouton "Envoyer un message", téléphone
+  masqué). "Demander une connexion" est désactivé — c'est une action Deal Room (E6) qui
+  n'existe pas encore.
+- ✅ E2-T02 : Édition profil (`/profil/editer`) — upload photo (`/api/profile/avatar`,
+  resize serveur 400×400 via `sharp`, stockage R2), nom/titre/bio/LinkedIn/pays/secteurs,
+  validation Zod. Testé (Vitest, upload + validations).
+- ❌ E2-T03/T04/T05 : Catalogue membres, fiche détail, profil entreprise — pas commencés
+  (prévus Sprint 3 selon `BACKLOG_DEV.md`).
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E2 → E9 : profils, événements, Deal Room, salles temps réel, messagerie, backoffice complet, PWA
+- E2-T03 → E2-T05 : Catalogue membres, fiche détail, profil entreprise
+- E3 → E9 : événements, Deal Room, salles temps réel, messagerie, backoffice complet, PWA
