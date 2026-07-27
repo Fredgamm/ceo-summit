@@ -46,9 +46,10 @@ export function SetPasswordForm({ mode, submitLabel, onSubmit, email }: SetPassw
 
       if (mode === "activation" && email) {
         // Auto sign-in right after activation so the member lands straight
-        // in their space instead of having to log in a second time.
+        // in their space instead of having to log in a second time, then
+        // straight into the onboarding tutorial (E1-T05).
         await signIn("credentials", { email, password, redirect: false });
-        router.push("/dashboard");
+        router.push("/bienvenue");
         router.refresh();
       } else {
         router.push("/login?reset=success");

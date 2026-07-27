@@ -164,6 +164,9 @@ model User {
   sponsees      User[]    @relation("Sponsorship")
 
   emailVerifiedAt DateTime?
+  /// Set once the /bienvenue tutorial (E1-T05) is completed or explicitly
+  /// skipped — gates whether it re-triggers on subsequent logins.
+  onboardingCompletedAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -36,10 +36,10 @@ Ouvrir http://localhost:3000 → redirige vers `/login`.
 
 ## Comptes de test (après seed)
 
-| Rôle | Email | Mot de passe |
-|------|-------|---------------|
+| Rôle                | Email              | Mot de passe |
+| ------------------- | ------------------ | ------------ |
 | Admin (Super Admin) | admin@ceosummit.mg | ChangeMe123! |
-| Membre (Chairman) | demo@ceosummit.mg | Demo1234! |
+| Membre (Chairman)   | demo@ceosummit.mg  | Demo1234!    |
 
 **Changer ces mots de passe avant tout déploiement staging/prod.**
 
@@ -107,12 +107,16 @@ Ce n'est pas un problème de code ; ça fonctionne normalement en local et sur C
   token déjà utilisé → redirect `/login`
 - ✅ E1-T04 : Page de connexion (`/login`)
 - ✅ E1-T06 : Mot de passe oublié (`/mot-de-passe-oublie`, `/reinitialiser/[token]`)
-- ❌ E1-T05 : Onboarding `/bienvenue` — pas commencé (l'activation redirige vers
-  `/dashboard` en attendant ; le lien `/demande-acces` dans `LoginForm` est mort)
+- ✅ E1-T05 : Onboarding `/bienvenue` — tutoriel 4 étapes (bienvenue, profil, secteurs,
+  clôture), skippable, chaque étape sauvegardée immédiatement (`onboardingCompletedAt`
+  empêche le re-déclenchement aux connexions suivantes). Photo de profil et entreprise
+  ne sont pas couvertes ici — elles dépendent de E2-T02 (upload R2) et E2-T05 (entités
+  Company) qui n'existent pas encore. Le lien `/demande-acces` dans `LoginForm` reste
+  mort : ce n'est pas une tâche numérotée du backlog E1 (candidature membership, hors
+  scope actuel).
 - ❌ PWA : `public/icons/*.png` sont des placeholders générés (navy/gold, sans logo réel)
   — swap prévu en E9-T01 ; pas de `next-pwa`/service worker configuré encore
 
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E1-T05 : Onboarding nouveau membre (`/bienvenue`, `/demande-acces`)
 - E2 → E9 : profils, événements, Deal Room, salles temps réel, messagerie, backoffice complet, PWA

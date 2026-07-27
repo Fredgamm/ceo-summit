@@ -1,0 +1,36 @@
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+
+export const metadata: Metadata = { title: "Bienvenue" };
+
+/**
+ * E1-T05 — reached after account activation (see set-password-form.tsx).
+ * Ref: conception/01_onboarding_acces.md UC-05 + Écran 07 (US-010/US-011).
+ *
+ * Guards against the tutorial re-triggering on later logins (US-010
+ * acceptance: "ne se re-déclenche pas aux connexions suivantes") by
+ * redirecting straight to /dashboard once onboardingCompletedAt is set.
+ */
+export default async function WelcomePage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (!user) redirect("/login");
+  if (user.onboardingCompletedAt) redirect("/dashboard");
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-surface p-6">
+      <OnboardingWizard
+        firstName={user.name.split(" ")[0]}
+        initialTitle={user.title ?? ""}
+        initialBio={user.bio ?? ""}
+        initialSectors={user.sectors}
+      />
+    </div>
+  );
+}
