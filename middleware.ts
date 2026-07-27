@@ -59,8 +59,14 @@ export const config = {
     /*
      * Match all paths except:
      * - static assets (_next/static, _next/image, favicon, icons, manifest)
-     * - API routes that manage their own auth (webhooks must stay public for Evolia/Zoom/Resend)
+     * - API routes that manage their own auth:
+     *   - api/webhooks must stay public for Evolia/Zoom/Resend
+     *   - api/auth is NextAuth's own surface (csrf, signin, callback/credentials,
+     *     session, signout...) — it must be reachable *without* a session, since
+     *     that's exactly how a session gets created. Blocking it here made login
+     *     itself impossible: signIn() calls /api/auth/callback/credentials, which
+     *     this middleware redirected to /login before NextAuth ever saw it.
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|api/webhooks).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|api/webhooks|api/auth).*)",
   ],
 };
