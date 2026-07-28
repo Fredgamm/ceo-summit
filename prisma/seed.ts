@@ -1,6 +1,8 @@
 import { PrismaClient, Role, Tier, MembershipStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+import { encryptMessageContent } from "../lib/message-crypto";
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -397,6 +399,47 @@ async function main() {
       content:
         "Merci pour l'accueil ! Je travaille justement sur un projet de ferme solaire à Toliara, disponible pour échanger avec d'autres porteurs de projets énergétiques.",
     },
+  });
+
+  // ── Messagerie privée (E7-T01/T02 demo data) — content is pgcrypto
+  // ciphertext, so it's encrypted here via lib/message-crypto.ts rather
+  // than a plain string, exactly like a real message would be stored ──
+  const [member1Id, member2Id] = [admin.id, demoMember.id].sort();
+  const demoConversation = await prisma.conversation.upsert({
+    where: { member1Id_member2Id: { member1Id, member2Id } },
+    update: {},
+    create: { id: "conv_admin_demo", member1Id, member2Id },
+  });
+
+  await prisma.message.upsert({
+    where: { id: "msg_demo_1" },
+    update: {},
+    create: {
+      id: "msg_demo_1",
+      conversationId: demoConversation.id,
+      senderId: admin.id,
+      content: await encryptMessageContent(
+        "Bonjour Sarah, bienvenue sur la plateforme CEO Summit ! N'hésitez pas si vous avez des questions."
+      ),
+      readAt: new Date(),
+    },
+  });
+
+  await prisma.message.upsert({
+    where: { id: "msg_demo_2" },
+    update: {},
+    create: {
+      id: "msg_demo_2",
+      conversationId: demoConversation.id,
+      senderId: demoMember.id,
+      content: await encryptMessageContent("Merci beaucoup, tout est très clair !"),
+      readAt: new Date(),
+    },
+  });
+
+  await prisma.conversation.update({
+    where: { id: demoConversation.id },
+    data: { lastMessageAt: new Date() },
   });
 
   // ── Membership applications (E8-T02 dashboard demo data — no candidature

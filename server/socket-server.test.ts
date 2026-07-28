@@ -10,10 +10,19 @@ vi.mock("../lib/prisma", () => ({
     user: { findUnique: vi.fn() },
     roomSuspension: { findFirst: vi.fn() },
     roomMessage: { create: vi.fn() },
+    conversation: { findUnique: vi.fn(), update: vi.fn() },
+    message: { create: vi.fn(), updateMany: vi.fn() },
   },
+}));
+vi.mock("../lib/message-crypto", () => ({
+  encryptMessageContent: vi.fn(async (plaintext: string) => Buffer.from(plaintext)),
+}));
+vi.mock("./offline-message-notifier", () => ({
+  scheduleOfflineEmailCheck: vi.fn(),
 }));
 
 import { prisma } from "../lib/prisma";
+import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
 import { createSocketServer } from "./socket-server";
 
 const SECRET = "test-secret";
@@ -214,5 +223,194 @@ describe("room:message", () => {
       client.emit("room:message", { roomId: "room_1", content: "   " }, resolve)
     );
     expect(result).toEqual({ ok: false, error: "empty" });
+  });
+});
+
+describe("conversation:join", () => {
+  it("joins a conversation the socket's user is a participant of", async () => {
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValue({
+      id: "conv_1",
+      member1Id: "user_1",
+      member2Id: "user_2",
+    } as never);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:join", "conv_1", resolve)
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("rejects a user who isn't a participant", async () => {
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValue({
+      id: "conv_1",
+      member1Id: "user_1",
+      member2Id: "user_2",
+    } as never);
+
+    const client = await connect("user_3");
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:join", "conv_1", resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("rejects a conversation that doesn't exist", async () => {
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValue(null);
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:join", "conv_x", resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+});
+
+describe("conversation:message", () => {
+  async function joinConversation(client: ClientSocket, conversationId = "conv_1") {
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValue({
+      id: conversationId,
+      member1Id: "user_1",
+      member2Id: "user_2",
+    } as never);
+    await new Promise((resolve) => client.emit("conversation:join", conversationId, resolve));
+  }
+
+  it("rejects a message from a socket that hasn't joined the conversation", async () => {
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:message", { conversationId: "conv_1", content: "hello" }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "not_joined" });
+  });
+
+  it("encrypts, persists, and broadcasts the plaintext to both participants", async () => {
+    const sender = await connect("user_1");
+    const recipient = await connect("user_2");
+    await joinConversation(sender);
+    await joinConversation(recipient);
+
+    vi.mocked(prisma.message.create).mockResolvedValue({
+      id: "msg_1",
+      conversationId: "conv_1",
+      senderId: "user_1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      name: "Jean-Pierre",
+      avatarUrl: null,
+    } as never);
+
+    const received = new Promise((resolve) => recipient.once("conversation:message", resolve));
+    const result = await new Promise((resolve) =>
+      sender.emit(
+        "conversation:message",
+        { conversationId: "conv_1", content: "Bonjour Sarah" },
+        resolve
+      )
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(await received).toMatchObject({
+      id: "msg_1",
+      content: "Bonjour Sarah",
+      senderId: "user_1",
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ conversationId: "conv_1", senderId: "user_1" }),
+      })
+    );
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "conv_1" } })
+    );
+  });
+
+  it("schedules an offline-email check when the recipient has no active socket", async () => {
+    const sender = await connect("user_1");
+    await joinConversation(sender);
+    vi.mocked(prisma.message.create).mockResolvedValue({
+      id: "msg_1",
+      createdAt: new Date(),
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_1", name: "JP" } as never);
+
+    await new Promise((resolve) =>
+      sender.emit("conversation:message", { conversationId: "conv_1", content: "hello" }, resolve)
+    );
+
+    expect(scheduleOfflineEmailCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        conversationId: "conv_1",
+        recipientId: "user_2",
+        senderId: "user_1",
+      })
+    );
+  });
+
+  it("does not schedule an offline-email check when the recipient is connected", async () => {
+    const sender = await connect("user_1");
+    const recipient = await connect("user_2");
+    await joinConversation(sender);
+    await joinConversation(recipient);
+    vi.mocked(prisma.message.create).mockResolvedValue({
+      id: "msg_1",
+      createdAt: new Date(),
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_1", name: "JP" } as never);
+
+    await new Promise((resolve) =>
+      sender.emit("conversation:message", { conversationId: "conv_1", content: "hello" }, resolve)
+    );
+
+    expect(scheduleOfflineEmailCheck).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty message", async () => {
+    const client = await connect("user_1");
+    await joinConversation(client);
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:message", { conversationId: "conv_1", content: "   " }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "empty" });
+  });
+});
+
+describe("conversation:read", () => {
+  it("marks the other participant's messages as read and broadcasts a receipt", async () => {
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValue({
+      id: "conv_1",
+      member1Id: "user_1",
+      member2Id: "user_2",
+    } as never);
+
+    const reader = await connect("user_2");
+    const sender = await connect("user_1");
+    await new Promise((resolve) => reader.emit("conversation:join", "conv_1", resolve));
+    await new Promise((resolve) => sender.emit("conversation:join", "conv_1", resolve));
+
+    const received = new Promise((resolve) => sender.once("conversation:read", resolve));
+    reader.emit("conversation:read", "conv_1");
+
+    expect(await received).toEqual({ conversationId: "conv_1", readerId: "user_2" });
+    expect(prisma.message.updateMany).toHaveBeenCalledWith({
+      where: { conversationId: "conv_1", senderId: { not: "user_2" }, readAt: null },
+      data: { readAt: expect.any(Date) },
+    });
+  });
+});
+
+describe("users:presence", () => {
+  it("reports online for connected users and offline for the rest", async () => {
+    const online = await connect("user_1");
+    const requester = await connect("user_3");
+
+    const result = await new Promise((resolve) =>
+      requester.emit("users:presence", ["user_1", "user_2"], resolve)
+    );
+
+    expect(result).toEqual({ user_1: true, user_2: false });
+    void online;
   });
 });

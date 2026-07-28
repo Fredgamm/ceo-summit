@@ -86,16 +86,19 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (209 tests) : webhook Evolia, actions d'auth (activation, mot de
+Couverture actuelle (249 tests) : webhook Evolia, actions d'auth (activation, mot de
 passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
-de requête catalogue/événements/membres/Deal Room/salles (`lib/catalogue.ts`, `lib/events-query.ts`,
-`lib/admin-members-query.ts`, `lib/deal-room-query.ts`, `lib/rooms-query.ts`), lock Redis
-générique et ses deux usages (capacité événement, déduction de crédits), actions Deal Room
-(publication, prise de contact), crédits (achat, confirmation admin) et salles (lecture,
-signalement, modération admin), et le serveur Socket.io autonome (`server/socket-server.ts`
-— auth, accès par tier, rate limiting, persistance/broadcast, testé via un vrai client
-socket.io-client contre un serveur éphémère). Les pages elles-mêmes (composants React)
-n'ont pas de tests de rendu — seule la logique serveur/pure est testée pour l'instant.
+de requête catalogue/événements/membres/Deal Room/salles/conversations (`lib/catalogue.ts`,
+`lib/events-query.ts`, `lib/admin-members-query.ts`, `lib/deal-room-query.ts`,
+`lib/rooms-query.ts`, `lib/conversations-query.ts`), lock Redis générique et ses deux usages
+(capacité événement, déduction de crédits), actions Deal Room (publication, prise de
+contact, accepter/refuser un contact), crédits (achat, confirmation admin), salles (lecture,
+signalement, modération admin) et messagerie (chiffrement pgcrypto, notification email
+hors-ligne), et le serveur Socket.io autonome (`server/socket-server.ts` — auth, accès par
+tier, rate limiting, persistance/broadcast pour les salles ET les conversations privées,
+testé via un vrai client socket.io-client contre un serveur éphémère). Les pages
+elles-mêmes (composants React) n'ont pas de tests de rendu — seule la logique
+serveur/pure est testée pour l'instant.
 
 ## Note environnement de build
 
@@ -307,9 +310,51 @@ l'absence de crash au démarrage sans `REDIS_URL`).
 
 **E4 est maintenant complet (4/4).**
 
+### E7 — Messagerie privée
+
+- ✅ E7-T01 : Liste des conversations (`/messagerie`) — layout partagé avec `/messagerie/[id]`
+  (`app/messagerie/layout.tsx`, la liste ne se recharge jamais en changeant de thread),
+  badge non-lu, aperçu déchiffré du dernier message. **Recherche implémentée côté client**
+  (liste déjà chargée/déchiffrée, filtre instantané) plutôt qu'en aller-retour serveur par
+  frappe — choix délibéré, pas une simplification par défaut.
+- ✅ E7-T02 : Thread (`/messagerie/[id]`) — messages temps réel, indicateur de frappe,
+  présence en ligne, indicateur "Lu" (double coche), historique paginé (50 messages +
+  bouton "Charger les précédents"). **Chiffrement au repos via pgcrypto réel** :
+  `Message.content` est stocké en `bytea` (`pgp_sym_encrypt`), déchiffré uniquement
+  côté serveur (`lib/message-crypto.ts`, raw SQL — Prisma n'a pas de chiffrement de
+  champ natif) et jamais renvoyé chiffré au client. Vérifié en direct contre la vraie
+  base (chiffrement, déchiffrement, et redémarrage à froid après rotation de la clé).
+  Pas de pièce jointe dans le chat (pas un bullet de T02, contrairement à E4-T03).
+- ✅ E7-T03 : Notification email (`server/offline-message-notifier.ts`) — si le
+  destinataire n'a aucune socket connectée 60s après l'envoi, email avec aperçu +
+  bouton "Répondre", au plus 1 par conversation par heure (`Conversation.lastEmailNotifiedAt`,
+  nouveau champ). "Hors ligne" = aucune socket ouverte sur l'ensemble de l'app (pas
+  seulement hors du thread) — dépend donc d'avoir déjà visité `/salles` ou `/messagerie`
+  au moins une fois dans la session pour qu'une socket existe.
+- ✅ E7-T04 : Lien Deal Room — **complète un flux laissé inachevé par E6** : le schéma
+  avait toujours `OpportunityContact.status`/`conversationId` prévus pour un
+  accepter/refuser, mais E6 créait le contact directement sans jamais les utiliser, et
+  sans que l'auteur soit informé qu'une demande existait. Ajout de l'email de demande
+  de contact, d'un panneau "Demandes reçues" sur `/deal-room/[id]` (accepter → crée la
+  conversation automatiquement / refuser), et du lien "Voir la conversation" une fois
+  acceptée.
+- Entrée "Envoyer un message" déjà présente sur `/membres/[id]` depuis E2 (`?new=<id>`,
+  jamais câblée avant) ; `/catalogue/[id]` redirige déjà vers `/membres/[id]`.
+- Seed : 1 conversation de démo (admin ↔ membre démo) avec 2 messages, chiffrés pour de
+  vrai via `pgp_sym_encrypt` — pas de texte en clair en base même pour la démo.
+
+⚠️ Piège opérationnel rencontré et corrigé pendant le dev : `tsx watch` (utilisé par
+`npm run socket:dev`) recharge le process sur changement d'un fichier `.ts`, **mais pas**
+sur changement de `.env` — après avoir édité `MESSAGE_ENCRYPTION_KEY`, l'ancien process
+continuait de chiffrer avec l'ancienne clé jusqu'à un redémarrage manuel. Si vous changez
+une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
+
+**E7 est maintenant complet (4/4).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E7 : Messagerie (peut réutiliser le serveur Socket.io d'E4-T01)
+- E5 : Catalogue de services
+- E8 : reste du backoffice (T06 modération Deal Room, T08-T11)
 - E5 : Catalogue de services
 - E8-T06/T08 → T11 : modération Deal Room, communications, finances, paramètres admin
 - E9 : PWA

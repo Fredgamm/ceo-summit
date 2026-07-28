@@ -9,7 +9,9 @@ import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card"
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ContactPanel } from "@/components/deal-room/contact-panel";
+import { ReceivedContactActions } from "@/components/deal-room/received-contact-actions";
 import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail opportunité" };
@@ -57,13 +59,21 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   if (opportunity.status !== "PUBLISHED" && !isAuthor) notFound();
   if (!isAuthor && !allowedVisibilities(viewerTier).includes(opportunity.visibility)) notFound();
 
-  const alreadyContacted = isAuthor
-    ? false
-    : !!(await prisma.opportunityContact.findUnique({
+  const myContact = isAuthor
+    ? null
+    : await prisma.opportunityContact.findUnique({
         where: {
           opportunityId_initiatorId: { opportunityId: opportunity.id, initiatorId: viewer.id },
         },
-      }));
+      });
+
+  const pendingReceivedContacts = isAuthor
+    ? await prisma.opportunityContact.findMany({
+        where: { opportunityId: opportunity.id, status: "PENDING" },
+        include: { initiator: { select: { name: true, avatarUrl: true } } },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
 
   const authorTier = opportunity.author.memberships[0]?.tier ?? null;
 
@@ -160,9 +170,17 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
 
             {isAuthor ? (
               <p className="text-sm text-text-muted">C&apos;est votre opportunité.</p>
-            ) : alreadyContacted ? (
-              <Badge variant="approved" className="w-full justify-center py-2">
-                Déjà contacté ✓
+            ) : myContact?.status === "ACCEPTED" ? (
+              <Button asChild className="w-full justify-center">
+                <Link href={`/messagerie/${myContact.conversationId}`}>Voir la conversation</Link>
+              </Button>
+            ) : myContact?.status === "PENDING" ? (
+              <Badge variant="pending" className="w-full justify-center py-2">
+                En attente d&apos;acceptation
+              </Badge>
+            ) : myContact?.status === "DECLINED" ? (
+              <Badge variant="refused" className="w-full justify-center py-2">
+                Demande refusée
               </Badge>
             ) : (
               <ContactPanel
@@ -172,6 +190,31 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               />
             )}
           </div>
+
+          {isAuthor && pendingReceivedContacts.length > 0 && (
+            <div className="rounded-lg border border-border bg-white p-5">
+              <p className="mb-3 text-xs font-bold uppercase text-text-muted">
+                Demandes de contact reçues ({pendingReceivedContacts.length})
+              </p>
+              <div className="flex flex-col gap-3">
+                {pendingReceivedContacts.map((contact) => (
+                  <div key={contact.id} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage
+                          src={contact.initiator.avatarUrl ?? undefined}
+                          alt={contact.initiator.name}
+                        />
+                        <AvatarFallback>{initials(contact.initiator.name)}</AvatarFallback>
+                      </Avatar>
+                      <p className="text-sm font-semibold text-navy">{contact.initiator.name}</p>
+                    </div>
+                    <ReceivedContactActions contactId={contact.id} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </AppShell>

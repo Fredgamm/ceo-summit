@@ -7,7 +7,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     opportunity: { findUnique: vi.fn(), create: vi.fn() },
     user: { findUnique: vi.fn() },
-    opportunityContact: { findUnique: vi.fn(), create: vi.fn() },
+    opportunityContact: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     creditBalance: { findUnique: vi.fn(), update: vi.fn() },
     creditTransaction: { create: vi.fn() },
     $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockTx)),
@@ -30,12 +30,20 @@ vi.mock("@/lib/credit-deduction-lock", async (importOriginal) => {
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/admin-opportunity-alert-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("@/emails/opportunity-contact-request-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("@/lib/conversations", () => ({ getOrCreateConversation: vi.fn() }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
+import { getOrCreateConversation } from "@/lib/conversations";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { publishOpportunity, contactOpportunityAuthor } from "./deal-room";
+import {
+  publishOpportunity,
+  contactOpportunityAuthor,
+  acceptOpportunityContact,
+  declineOpportunityContact,
+} from "./deal-room";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
 
@@ -57,6 +65,7 @@ function makeOpportunity(overrides: Partial<Record<string, unknown>> = {}) {
     title: "Recherche partenaire",
     authorId: "author_1",
     status: "PUBLISHED",
+    author: { email: "author@example.com" },
     ...overrides,
   } as never;
 }
@@ -207,5 +216,86 @@ describe("contactOpportunityAuthor", () => {
     const result = await contactOpportunityAuthor("opp_1");
     expect(result.success).toBe(false);
     expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
+  });
+});
+
+function makeContact(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "contact_1",
+    opportunityId: "opp_1",
+    initiatorId: "user_2",
+    receiverId: "user_1",
+    status: "PENDING",
+    ...overrides,
+  } as never;
+}
+
+describe("acceptOpportunityContact", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+  });
+
+  it("rejects an unauthenticated call", async () => {
+    vi.mocked(auth).mockResolvedValue(null as never);
+    const result = await acceptOpportunityContact("contact_1");
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects someone who isn't the receiver", async () => {
+    vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(
+      makeContact({ receiverId: "someone_else" })
+    );
+    const result = await acceptOpportunityContact("contact_1");
+    expect(result.success).toBe(false);
+    expect(getOrCreateConversation).not.toHaveBeenCalled();
+  });
+
+  it("rejects an already-processed request", async () => {
+    vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(
+      makeContact({ status: "ACCEPTED" })
+    );
+    const result = await acceptOpportunityContact("contact_1");
+    expect(result.success).toBe(false);
+  });
+
+  it("creates the conversation and marks the contact accepted", async () => {
+    vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(makeContact());
+    vi.mocked(getOrCreateConversation).mockResolvedValue({ id: "conv_1" } as never);
+
+    const result = await acceptOpportunityContact("contact_1");
+
+    expect(result).toEqual({ success: true, data: { conversationId: "conv_1" } });
+    expect(getOrCreateConversation).toHaveBeenCalledWith("user_2", "user_1", "opp_1");
+    expect(prisma.opportunityContact.update).toHaveBeenCalledWith({
+      where: { id: "contact_1" },
+      data: { status: "ACCEPTED", conversationId: "conv_1" },
+    });
+  });
+});
+
+describe("declineOpportunityContact", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+  });
+
+  it("rejects someone who isn't the receiver", async () => {
+    vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(
+      makeContact({ receiverId: "someone_else" })
+    );
+    const result = await declineOpportunityContact("contact_1");
+    expect(result.success).toBe(false);
+    expect(prisma.opportunityContact.update).not.toHaveBeenCalled();
+  });
+
+  it("marks the contact declined", async () => {
+    vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(makeContact());
+    const result = await declineOpportunityContact("contact_1");
+    expect(result.success).toBe(true);
+    expect(prisma.opportunityContact.update).toHaveBeenCalledWith({
+      where: { id: "contact_1" },
+      data: { status: "DECLINED" },
+    });
   });
 });

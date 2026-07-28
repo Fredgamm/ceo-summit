@@ -6,8 +6,10 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { opportunityFormSchema } from "@/lib/validations/opportunity";
 import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
+import { getOrCreateConversation } from "@/lib/conversations";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
+import OpportunityContactRequestEmail from "@/emails/opportunity-contact-request-email";
 
 type ActionResult<T = undefined> =
   { success: true; data: T } | { success: false; error: string; code?: "INSUFFICIENT_CREDITS" };
@@ -69,7 +71,10 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
 
   const [opportunity, viewer] = await Promise.all([
-    prisma.opportunity.findUnique({ where: { id: opportunityId } }),
+    prisma.opportunity.findUnique({
+      where: { id: opportunityId },
+      include: { author: { select: { email: true } } },
+    }),
     prisma.user.findUnique({
       where: { id: session.user.id },
       include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
@@ -140,6 +145,72 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
     throw err;
   }
 
+  await sendTransactionalEmail({
+    to: opportunity.author.email,
+    subject: `Nouvelle demande de contact — ${opportunity.title}`,
+    react: OpportunityContactRequestEmail({
+      initiatorName: viewer.name,
+      opportunityTitle: opportunity.title,
+      opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
+    }),
+  });
+
   revalidatePath(`/deal-room/${opportunityId}`);
+  return { success: true, data: undefined };
+}
+
+/**
+ * E7-T04 — "À l'acceptation d'un contact Deal Room → création automatique
+ * de la conversation." Only the receiver (opportunity author) may decide.
+ */
+export async function acceptOpportunityContact(
+  contactId: string
+): Promise<ActionResult<{ conversationId: string }>> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const contact = await prisma.opportunityContact.findUnique({
+    where: { id: contactId },
+    include: { opportunity: { select: { id: true, title: true } } },
+  });
+  if (!contact || contact.receiverId !== session.user.id) {
+    return { success: false, error: "Demande introuvable." };
+  }
+  if (contact.status !== "PENDING") {
+    return { success: false, error: "Cette demande a déjà été traitée." };
+  }
+
+  const conversation = await getOrCreateConversation(
+    contact.initiatorId,
+    contact.receiverId,
+    contact.opportunityId
+  );
+  await prisma.opportunityContact.update({
+    where: { id: contactId },
+    data: { status: "ACCEPTED", conversationId: conversation.id },
+  });
+
+  revalidatePath(`/deal-room/${contact.opportunityId}`);
+  return { success: true, data: { conversationId: conversation.id } };
+}
+
+export async function declineOpportunityContact(contactId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const contact = await prisma.opportunityContact.findUnique({ where: { id: contactId } });
+  if (!contact || contact.receiverId !== session.user.id) {
+    return { success: false, error: "Demande introuvable." };
+  }
+  if (contact.status !== "PENDING") {
+    return { success: false, error: "Cette demande a déjà été traitée." };
+  }
+
+  await prisma.opportunityContact.update({
+    where: { id: contactId },
+    data: { status: "DECLINED" },
+  });
+
+  revalidatePath(`/deal-room/${contact.opportunityId}`);
   return { success: true, data: undefined };
 }

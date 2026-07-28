@@ -464,16 +464,18 @@ model CreditPurchase {
 // ═══════════════════════════════════════════════
 
 model Conversation {
-  id            String    @id @default(cuid())
-  member1Id     String
-  member1       User      @relation("ConversationMember1", fields: [member1Id], references: [id])
-  member2Id     String
-  member2       User      @relation("ConversationMember2", fields: [member2Id], references: [id])
-  opportunityId String? // set if initiated from a Deal Room contact
-  lastMessageAt DateTime  @default(now())
-  createdAt     DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  member1Id           String
+  member1             User      @relation("ConversationMember1", fields: [member1Id], references: [id])
+  member2Id           String
+  member2             User      @relation("ConversationMember2", fields: [member2Id], references: [id])
+  opportunityId       String? // set if initiated from a Deal Room contact
+  lastMessageAt       DateTime  @default(now())
+  /// E7-T03 — "Max 1 email par conversation par heure (anti-spam)".
+  lastEmailNotifiedAt DateTime?
+  createdAt           DateTime  @default(now())
 
-  messages      Message[]
+  messages            Message[]
 
   @@unique([member1Id, member2Id])
   @@index([lastMessageAt])
@@ -485,9 +487,10 @@ model Message {
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   senderId       String
   sender         User         @relation("MessageSender", fields: [senderId], references: [id])
-  /// Encrypted at rest via pgcrypto (see migration SQL). Never returned decrypted except to
-  /// the two conversation participants.
-  content        String       @db.Text
+  /// Encrypted at rest via pgcrypto (pgp_sym_encrypt/pgp_sym_decrypt, see
+  /// lib/message-crypto.ts) — stored as ciphertext bytes, never as plain
+  /// text. Decrypted server-side only, never sent encrypted to the client.
+  content        Bytes
   readAt         DateTime?
   createdAt      DateTime     @default(now())
 
