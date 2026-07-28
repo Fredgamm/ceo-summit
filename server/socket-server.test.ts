@@ -1,0 +1,218 @@
+import type { AddressInfo } from "net";
+
+import jwt from "jsonwebtoken";
+import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../lib/prisma", () => ({
+  prisma: {
+    room: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn() },
+    roomSuspension: { findFirst: vi.fn() },
+    roomMessage: { create: vi.fn() },
+  },
+}));
+
+import { prisma } from "../lib/prisma";
+import { createSocketServer } from "./socket-server";
+
+const SECRET = "test-secret";
+process.env.NEXTAUTH_SECRET = SECRET;
+
+function tokenFor(userId: string) {
+  return jwt.sign({ sub: userId }, SECRET, { expiresIn: "5m" });
+}
+
+let server: ReturnType<typeof createSocketServer>;
+let port: number;
+const clients: ClientSocket[] = [];
+
+function connect(userId: string): Promise<ClientSocket> {
+  return new Promise((resolve, reject) => {
+    const client = ioClient(`http://localhost:${port}`, { auth: { token: tokenFor(userId) } });
+    clients.push(client);
+    client.on("connect", () => resolve(client));
+    client.on("connect_error", (err) => reject(err));
+  });
+}
+
+beforeEach(async () => {
+  vi.clearAllMocks();
+  delete process.env.REDIS_URL;
+  server = createSocketServer();
+  await new Promise<void>((resolve) => server.httpServer.listen(0, resolve));
+  port = (server.httpServer.address() as AddressInfo).port;
+});
+
+afterEach(async () => {
+  for (const client of clients.splice(0)) client.disconnect();
+  await new Promise<void>((resolve) => server.io.close(() => resolve()));
+});
+
+describe("connection auth", () => {
+  it("rejects a connection without a token", async () => {
+    await expect(
+      new Promise((resolve, reject) => {
+        const client = ioClient(`http://localhost:${port}`, { auth: {} });
+        clients.push(client);
+        client.on("connect", () => resolve(undefined));
+        client.on("connect_error", reject);
+      })
+    ).rejects.toThrow();
+  });
+
+  it("rejects a connection with an invalid token", async () => {
+    await expect(
+      new Promise((resolve, reject) => {
+        const client = ioClient(`http://localhost:${port}`, { auth: { token: "garbage" } });
+        clients.push(client);
+        client.on("connect", () => resolve(undefined));
+        client.on("connect_error", reject);
+      })
+    ).rejects.toThrow();
+  });
+
+  it("accepts a connection with a valid token", async () => {
+    const client = await connect("user_1");
+    expect(client.connected).toBe(true);
+  });
+});
+
+describe("room:join", () => {
+  it("joins a room the member's tier allows", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      status: "ACTIVE",
+      minTier: "ALL_MEMBERS",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      memberships: [{ tier: "MEMBER" }],
+    } as never);
+    vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("rejects when the room does not exist", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue(null);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) => client.emit("room:join", "room_x", resolve));
+    expect(result).toEqual({ ok: false, error: "not_found" });
+  });
+
+  it("rejects when the member's tier is insufficient", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      status: "ACTIVE",
+      minTier: "CHAIRMAN_ONLY",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      memberships: [{ tier: "MEMBER" }],
+    } as never);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("rejects a suspended member", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      status: "ACTIVE",
+      minTier: "ALL_MEMBERS",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      memberships: [{ tier: "MEMBER" }],
+    } as never);
+    vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue({ id: "susp_1" } as never);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));
+    expect(result).toEqual({ ok: false, error: "suspended" });
+  });
+});
+
+describe("room:message", () => {
+  async function joinRoom(client: ClientSocket, roomId = "room_1") {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: roomId,
+      status: "ACTIVE",
+      minTier: "ALL_MEMBERS",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      memberships: [{ tier: "MEMBER" }],
+    } as never);
+    vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
+    await new Promise((resolve) => client.emit("room:join", roomId, resolve));
+  }
+
+  it("rejects a message from a socket that hasn't joined the room", async () => {
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) =>
+      client.emit("room:message", { roomId: "room_1", content: "hello" }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "not_joined" });
+  });
+
+  it("persists and broadcasts a message to everyone in the room", async () => {
+    const sender = await connect("user_1");
+    const listener = await connect("user_2");
+    await joinRoom(sender);
+    await joinRoom(listener);
+
+    vi.mocked(prisma.roomMessage.create).mockResolvedValue({
+      id: "msg_1",
+      roomId: "room_1",
+      authorId: "user_1",
+      content: "Bonjour à tous",
+      attachmentUrl: null,
+      author: { id: "user_1", name: "Jean-Pierre", avatarUrl: null },
+    } as never);
+
+    const received = new Promise((resolve) => listener.once("room:message", resolve));
+    const result = await new Promise((resolve) =>
+      sender.emit("room:message", { roomId: "room_1", content: "Bonjour à tous" }, resolve)
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(await received).toMatchObject({ id: "msg_1", content: "Bonjour à tous" });
+    expect(prisma.roomMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          roomId: "room_1",
+          authorId: "user_1",
+          content: "Bonjour à tous",
+        }),
+      })
+    );
+  });
+
+  it("rate-limits a second message sent within 1s", async () => {
+    const client = await connect("user_1");
+    await joinRoom(client);
+    vi.mocked(prisma.roomMessage.create).mockResolvedValue({ id: "msg_1", author: {} } as never);
+
+    const first = await new Promise((resolve) =>
+      client.emit("room:message", { roomId: "room_1", content: "un" }, resolve)
+    );
+    const second = await new Promise((resolve) =>
+      client.emit("room:message", { roomId: "room_1", content: "deux" }, resolve)
+    );
+
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: false, error: "rate_limited" });
+  });
+
+  it("rejects an empty message with no attachment", async () => {
+    const client = await connect("user_1");
+    await joinRoom(client);
+
+    const result = await new Promise((resolve) =>
+      client.emit("room:message", { roomId: "room_1", content: "   " }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "empty" });
+  });
+});

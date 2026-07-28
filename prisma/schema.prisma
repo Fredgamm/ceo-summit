@@ -508,8 +508,37 @@ model Room {
   createdAt   DateTime        @default(now())
 
   messages    RoomMessage[]
+  reads       RoomRead[]
+  suspensions RoomSuspension[]
 
   @@index([status])
+}
+
+/// E4-T02 — badge "nouveau message" sur /salles : dernière lecture par membre.
+/// userId volontairement sans relation (comme moderatedById/confirmedById
+/// ailleurs) : toujours consommé à partir de l'id du membre connecté.
+model RoomRead {
+  id         String   @id @default(cuid())
+  roomId     String
+  room       Room     @relation(fields: [roomId], references: [id])
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+}
+
+/// E4-T04 — "Suspension membre d'une salle (durée configurable)".
+model RoomSuspension {
+  id             String   @id @default(cuid())
+  roomId         String
+  room           Room     @relation(fields: [roomId], references: [id])
+  userId         String
+  reason         String?
+  suspendedUntil DateTime
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  @@index([roomId, userId])
 }
 
 model RoomMessage {

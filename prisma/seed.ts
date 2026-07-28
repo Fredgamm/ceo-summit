@@ -268,7 +268,7 @@ async function main() {
       country: "Madagascar",
       description:
         "Projet de ferme solaire photovoltaïque de 50MW en phase de développement avancé (études de faisabilité et foncier sécurisés). Recherche partenaire technique et/ou financier pour la phase de construction.",
-      budget: 45_000_000_000,
+      budget: 1_450_000_000,
       deadline: inDays(60),
       visibility: Tier.MEMBER,
       status: "PUBLISHED",
@@ -287,7 +287,7 @@ async function main() {
       country: "Comores",
       description:
         "Fintech en forte croissance (150 000 utilisateurs actifs) lançant sa Série A pour financer l'expansion régionale et l'obtention de licences bancaires additionnelles.",
-      budget: 8_000_000_000,
+      budget: 120_000_000,
       deadline: inDays(45),
       visibility: Tier.EXECUTIVE,
       status: "PUBLISHED",
@@ -306,7 +306,7 @@ async function main() {
       country: "Île Maurice",
       description:
         "Appel à offres pour la modernisation des équipements de manutention et la digitalisation des opérations du port. Réservé aux membres Chairman en raison de la confidentialité du cahier des charges.",
-      budget: 22_000_000_000,
+      budget: 1_950_000_000,
       deadline: inDays(30),
       visibility: Tier.CHAIRMAN,
       status: "PUBLISHED",
@@ -325,10 +325,77 @@ async function main() {
       country: "Madagascar",
       description:
         "Recherche de partenaire régional pour la création d'une unité de transformation et de conditionnement dédiée à l'export de vanille et d'épices vers l'Europe et les Émirats.",
-      budget: 3_500_000_000,
+      budget: 35_000_000,
       deadline: null,
       visibility: Tier.MEMBER,
       status: "PUBLISHED",
+    },
+  });
+
+  // ── Salles thématiques (E4-T02/T03 demo data — no admin "create room" UI
+  // per backlog scope, rooms are seeded; membership only tracks tier access) ──
+  const roomEnergie = await prisma.room.upsert({
+    where: { id: "room_energie" },
+    update: {},
+    create: {
+      id: "room_energie",
+      name: "Énergie & Environnement",
+      description:
+        "Transition énergétique, énergies renouvelables et environnement dans l'Océan Indien.",
+      sector: "Énergie & Environnement",
+      minTier: "ALL_MEMBERS",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.room.upsert({
+    where: { id: "room_finance" },
+    update: {},
+    create: {
+      id: "room_finance",
+      name: "Finance & Investissement",
+      description: "Marchés, M&A, private equity et financement de projets régionaux.",
+      sector: "Finance & Banque",
+      minTier: "EXECUTIVE_PLUS",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.room.upsert({
+    where: { id: "room_chairman" },
+    update: {},
+    create: {
+      id: "room_chairman",
+      name: "Salle Privée Chairman",
+      description:
+        "Espace confidentiel réservé aux membres Chairman — dossiers stratégiques et co-investissements.",
+      sector: "Autre",
+      minTier: "CHAIRMAN_ONLY",
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.roomMessage.upsert({
+    where: { id: "roommsg_energie_1" },
+    update: {},
+    create: {
+      id: "roommsg_energie_1",
+      roomId: roomEnergie.id,
+      authorId: admin.id,
+      content:
+        "Bienvenue dans la salle Énergie & Environnement — un espace pour échanger sur la transition énergétique et les projets EnR de la région.",
+    },
+  });
+
+  await prisma.roomMessage.upsert({
+    where: { id: "roommsg_energie_2" },
+    update: {},
+    create: {
+      id: "roommsg_energie_2",
+      roomId: roomEnergie.id,
+      authorId: demoMember.id,
+      content:
+        "Merci pour l'accueil ! Je travaille justement sur un projet de ferme solaire à Toliara, disponible pour échanger avec d'autres porteurs de projets énergétiques.",
     },
   });
 

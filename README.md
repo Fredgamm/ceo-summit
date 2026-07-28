@@ -25,14 +25,14 @@ npm run db:seed        # crée admin@ceosummit.mg / ChangeMe123! et demo@ceosumm
 
 # 5. Lancer le serveur de dev
 npm run dev
+
+# 6. (optionnel) Serveur Socket.io pour les salles thématiques temps réel (E4)
+npm run socket:dev
 ```
 
-⚠️ **Ce dossier n'est pas encore un dépôt git.** Avant de committer quoi que ce soit,
-lancer `git init` à la racine du projet (`B2B plateforme/`), puis `npm install` pour que
-Husky active réellement le hook pre-commit (`.husky/pre-commit` existe déjà mais reste
-inactif sans `.git`).
-
-Ouvrir http://localhost:3000 → redirige vers `/login`.
+Ouvrir http://localhost:3000 → redirige vers `/login`. Sans l'étape 6, tout le reste de
+l'app fonctionne normalement — seules les pages `/salles` et `/salles/[id]` perdent le
+temps réel (compteur en ligne, messages live) et affichent une erreur de connexion.
 
 ## Comptes de test (après seed)
 
@@ -86,12 +86,15 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (165 tests) : webhook Evolia, actions d'auth (activation, mot de
+Couverture actuelle (209 tests) : webhook Evolia, actions d'auth (activation, mot de
 passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
-de requête catalogue/événements/membres/Deal Room (`lib/catalogue.ts`, `lib/events-query.ts`,
-`lib/admin-members-query.ts`, `lib/deal-room-query.ts`), lock Redis générique et ses deux
-usages (capacité événement, déduction de crédits), actions Deal Room (publication, prise
-de contact) et crédits (achat, confirmation admin). Les pages elles-mêmes (composants React)
+de requête catalogue/événements/membres/Deal Room/salles (`lib/catalogue.ts`, `lib/events-query.ts`,
+`lib/admin-members-query.ts`, `lib/deal-room-query.ts`, `lib/rooms-query.ts`), lock Redis
+générique et ses deux usages (capacité événement, déduction de crédits), actions Deal Room
+(publication, prise de contact), crédits (achat, confirmation admin) et salles (lecture,
+signalement, modération admin), et le serveur Socket.io autonome (`server/socket-server.ts`
+— auth, accès par tier, rate limiting, persistance/broadcast, testé via un vrai client
+socket.io-client contre un serveur éphémère). Les pages elles-mêmes (composants React)
 n'ont pas de tests de rendu — seule la logique serveur/pure est testée pour l'instant.
 
 ## Note environnement de build
@@ -265,10 +268,49 @@ vraie instance dans cet environnement.
 
 **E6 est maintenant complet (5/5).**
 
+### E4 — Salles thématiques (temps réel)
+
+- ✅ E4-T01 : Serveur Socket.io autonome (`server/socket-server.ts`, `npm run socket:dev`)
+  — **pas un custom server Next.js** (qui aurait touché `next dev`/`next build`) : un
+  process Node séparé, l'autre alternative explicitement citée par le backlog. Auth par
+  JWT court terme (`/api/socket/token`, signé avec `NEXTAUTH_SECRET`) plutôt que
+  décodage de cookie de session (ce process n'a pas accès à `auth()`). Vérification
+  d'accès par tier + suspension à chaque `room:join`, rate limiting 1 msg/s par socket,
+  adapter Redis Pub/Sub activé seulement si `REDIS_URL` est configuré (sinon adapter
+  en mémoire — suffisant pour une seule instance).
+- ✅ E4-T02 : Liste des salles (`/salles`) — filtres secteur/accès (`lib/rooms-query.ts`,
+  testé), verrouillage visuel si tier insuffisant, badge "nouveau message" (nouveau
+  modèle `RoomRead` — absent du schéma initial, ajouté car explicitement requis par le
+  backlog). Compteur "en ligne" : un seul aller-retour vers le serveur Socket.io au
+  chargement (`rooms:presence`), pas un flux temps réel sur cette page — un visiteur n'a
+  rejoint aucune salle donc rien ne peut lui être poussé en direct avant qu'il en ouvre une.
+- ✅ E4-T03 : Chat de salle (`/salles/[id]`) — messages temps réel, indicateur de frappe,
+  présence en ligne réelle, upload de pièce jointe (R2, 5 Mo, tous types), signalement de
+  message. Historique paginé : les 50 derniers messages chargés côté serveur, un bouton
+  "Charger les messages précédents" appelle `/api/rooms/[id]/messages?before=` pour le
+  reste (pas d'auto-scroll infini par `IntersectionObserver` — un bouton explicite, plus
+  simple et suffisant pour l'usage attendu).
+- ✅ E4-T04 : Modération (`/admin/salles`) — file de signalements avec les 4 issues du
+  wireframe (`ReportStatus` : supprimer le message / avertir par email / exclure de la
+  salle via un nouveau modèle `RoomSuspension` avec durée configurable / ignorer),
+  archivage/restauration de salle. **Pas de "créer une salle" en admin** — comme pour
+  les événements et opportunités avant leur CRUD dédié, les salles sont seedées ; ce
+  n'est pas un bullet du backlog E4-T04 (seulement modération), donc pas construit ici.
+- Seed : 3 salles de démo (accès Tous membres / Executive+ / Chairman uniquement) + 2
+  messages d'exemple dans la salle Énergie.
+
+⚠️ Contrairement aux epics précédents, **cette fois testé contre une vraie instance
+PostgreSQL locale et un vrai serveur Socket.io** (join, message, broadcast, vérifiés en
+direct) — seul le fallback Redis reste non testé en conditions réelles (pas de Redis
+disponible dans cet environnement de dev ; le code tolère son absence, testé pour
+l'absence de crash au démarrage sans `REDIS_URL`).
+
+**E4 est maintenant complet (4/4).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E4 : Salles thématiques
-- E7 : Messagerie
+- E7 : Messagerie (peut réutiliser le serveur Socket.io d'E4-T01)
+- E5 : Catalogue de services
 - E8-T06/T08 → T11 : modération Deal Room, communications, finances, paramètres admin
 - E9 : PWA
 - EX : tâches transverses (emails planifiés, intégration Zoom réelle, etc.)
