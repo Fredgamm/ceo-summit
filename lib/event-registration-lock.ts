@@ -1,8 +1,4 @@
-import { randomUUID } from "crypto";
-
-import { getRedisClient } from "@/lib/redis";
-
-const LOCK_TTL_MS = 5000;
+import { withRedisLock, LockBusyError } from "@/lib/redis-lock";
 
 export class RegistrationLockBusyError extends Error {
   constructor() {
@@ -24,20 +20,10 @@ export async function withEventRegistrationLock<T>(
   eventId: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  const redis = getRedisClient();
-  const lockKey = `lock:event:${eventId}:register`;
-  const token = randomUUID();
-
-  const acquired = await redis.set(lockKey, token, "PX", LOCK_TTL_MS, "NX");
-  if (!acquired) {
-    throw new RegistrationLockBusyError();
-  }
-
   try {
-    return await fn();
-  } finally {
-    // Best-effort release — the short TTL is the real safety net if this
-    // process dies mid-lock, so an unconditional DEL here is acceptable.
-    await redis.del(lockKey);
+    return await withRedisLock(`lock:event:${eventId}:register`, fn);
+  } catch (err) {
+    if (err instanceof LockBusyError) throw new RegistrationLockBusyError();
+    throw err;
   }
 }

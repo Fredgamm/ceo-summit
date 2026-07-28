@@ -86,10 +86,12 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (59 tests) : webhook Evolia, actions d'auth (activation, mot de passe
-oublié, onboarding, profil), logique de requête catalogue/événements (`lib/catalogue.ts`,
-`lib/events-query.ts`), lock Redis de capacité (`lib/event-registration-lock.ts`) et
-inscription événement (`app/actions/events.ts`). Les pages elles-mêmes (composants React)
+Couverture actuelle (165 tests) : webhook Evolia, actions d'auth (activation, mot de
+passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
+de requête catalogue/événements/membres/Deal Room (`lib/catalogue.ts`, `lib/events-query.ts`,
+`lib/admin-members-query.ts`, `lib/deal-room-query.ts`), lock Redis générique et ses deux
+usages (capacité événement, déduction de crédits), actions Deal Room (publication, prise
+de contact) et crédits (achat, confirmation admin). Les pages elles-mêmes (composants React)
 n'ont pas de tests de rendu — seule la logique serveur/pure est testée pour l'instant.
 
 ## Note environnement de build
@@ -227,7 +229,46 @@ contre une vraie instance. Même caveat que PostgreSQL : fonctionne normalement 
 
 **E3 est maintenant complet (5/5).**
 
+### E6 — Deal Room & Crédits
+
+- ✅ E6-T01 : Liste des opportunités (`/deal-room`) — filtres type/secteur/pays/budget,
+  tri, pagination (`lib/deal-room-query.ts`, testé). Bannière de solde de crédits en
+  tête de page (`Illimité` pour Chairman).
+- ✅ E6-T02 : Détail opportunité (`/deal-room/[id]`) — visibilité par tier en
+  défense-en-profondeur (double vérification : requête + page, `allowedVisibilities()`),
+  prise de contact (`ContactPanel`) qui déduit 1 crédit sauf pour l'auteur ou un membre
+  Chairman (illimité). Redirection vers `/credits/acheter` si solde insuffisant.
+- ✅ E6-T03 : Publication d'opportunité (`/deal-room/publier`) — stepper 4 étapes,
+  pièces jointes PDF (3 max, 10 Mo, upload R2 via `/api/deal-room/attachment`).
+  Toute nouvelle opportunité part en `PENDING_MODERATION` et alerte l'admin par email —
+  **il n'existe pas encore d'écran de modération dédié** (file d'attente, valider/
+  refuser avec motif) : ce serait la suite naturelle d'E8-T06, pas construite ici.
+- ✅ E6-T04 : Déduction de crédit atomique — `withCreditDeductionLock` (lock Redis
+  générique `lib/redis-lock.ts`, réutilisé/extrait du lock de capacité événement)
+  encapsule une transaction Prisma qui vérifie le solde puis incrémente `used` et
+  journalise un `CreditTransaction` (`DEDUCTION`, -1). Empêche qu'un double-clic ou
+  deux requêtes concurrentes ne fassent passer le solde en négatif.
+- ✅ E6-T05 : Achat de crédits (`/credits/acheter`) — sélection d'un pack + mode de
+  paiement (virement/mobile money, même énumération que les événements — pas de
+  nouvel enum), demande envoyée en attente de validation admin (`CreditPurchase`,
+  nouveau modèle + migration). Validation minimale côté admin ajoutée à
+  `/admin/credits` (confirmer crédite le solde `purchased` + email au membre ; refuser
+  clôture la demande) — **c'est un amorçage d'E8-T07**, pas la page complète (pas de
+  vue des soldes par membre ni d'email de relance/upsell).
+- Seed : 4 opportunités de démo ajoutées (types/secteurs/pays/visibilités variés) —
+  aucune UI de modération n'existe encore pour en publier de nouvelles autrement que
+  via `/deal-room/publier` (qui les met en attente, jamais publiées automatiquement).
+
+⚠️ Même caveat que pour Redis/PostgreSQL ailleurs dans ce document : le lock de
+crédits est testé unitairement avec un client Redis mocké, jamais vérifié contre une
+vraie instance dans cet environnement.
+
+**E6 est maintenant complet (5/5).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E3-T04/T05 pour clore E3
-- E4 → E9 : Deal Room, salles temps réel, messagerie, reste du backoffice, PWA
+- E4 : Salles thématiques
+- E7 : Messagerie
+- E8-T06/T08 → T11 : modération Deal Room, communications, finances, paramètres admin
+- E9 : PWA
+- EX : tâches transverses (emails planifiés, intégration Zoom réelle, etc.)

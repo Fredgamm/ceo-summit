@@ -194,6 +194,7 @@ model User {
   opportunityContactsReceived  OpportunityContact[] @relation("ContactReceiver")
   creditBalance     CreditBalance?
   creditTransactions CreditTransaction[]
+  creditPurchases   CreditPurchase[]
   roomMessages      RoomMessage[]
   sentMessages      Message[]           @relation("MessageSender")
   conversationsAsMember1 Conversation[]  @relation("ConversationMember1")
@@ -432,6 +433,30 @@ model CreditPackPrice {
   id       String @id @default(cuid())
   credits  Int    @unique // 1, 5, 10
   priceAr  Int
+}
+
+enum CreditPurchaseStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+/// E6-T05 — "Flux paiement (virement ou mobile money) → validation admin →
+/// crédits crédités". Kept separate from CreditTransaction, which is an
+/// immutable ledger entry only written once a purchase is actually confirmed.
+model CreditPurchase {
+  id            String               @id @default(cuid())
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id])
+  credits       Int
+  priceAr       Int
+  paymentMethod EventPaymentMethod // reused: same virement/mobile_money choice, no new enum needed
+  status        CreditPurchaseStatus @default(PENDING)
+  confirmedById String?
+  confirmedAt   DateTime?
+  createdAt     DateTime             @default(now())
+
+  @@index([status])
 }
 
 // ═══════════════════════════════════════════════

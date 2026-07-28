@@ -254,6 +254,84 @@ async function main() {
     },
   });
 
+  // ── Deal Room opportunities (E6-T01/T02 demo data — no admin CRUD UI
+  // exists yet to create these for real) ──
+  await prisma.opportunity.upsert({
+    where: { id: "opp_energie_solaire" },
+    update: {},
+    create: {
+      id: "opp_energie_solaire",
+      authorId: admin.id,
+      title: "Recherche partenaire pour ferme solaire de 50MW à Toliara",
+      type: "PARTENARIAT",
+      sector: "Énergie & Environnement",
+      country: "Madagascar",
+      description:
+        "Projet de ferme solaire photovoltaïque de 50MW en phase de développement avancé (études de faisabilité et foncier sécurisés). Recherche partenaire technique et/ou financier pour la phase de construction.",
+      budget: 45_000_000_000,
+      deadline: inDays(60),
+      visibility: Tier.MEMBER,
+      status: "PUBLISHED",
+    },
+  });
+
+  await prisma.opportunity.upsert({
+    where: { id: "opp_levee_fintech" },
+    update: {},
+    create: {
+      id: "opp_levee_fintech",
+      authorId: admin.id,
+      title: "Levée de fonds Série A — plateforme fintech mobile money",
+      type: "LEVEE_FONDS",
+      sector: "Finance & Investissement",
+      country: "Comores",
+      description:
+        "Fintech en forte croissance (150 000 utilisateurs actifs) lançant sa Série A pour financer l'expansion régionale et l'obtention de licences bancaires additionnelles.",
+      budget: 8_000_000_000,
+      deadline: inDays(45),
+      visibility: Tier.EXECUTIVE,
+      status: "PUBLISHED",
+    },
+  });
+
+  await prisma.opportunity.upsert({
+    where: { id: "opp_appel_offres_port" },
+    update: {},
+    create: {
+      id: "opp_appel_offres_port",
+      authorId: admin.id,
+      title: "Appel à offres — modernisation infrastructure portuaire",
+      type: "APPEL_OFFRES",
+      sector: "BTP & Infrastructure",
+      country: "Île Maurice",
+      description:
+        "Appel à offres pour la modernisation des équipements de manutention et la digitalisation des opérations du port. Réservé aux membres Chairman en raison de la confidentialité du cahier des charges.",
+      budget: 22_000_000_000,
+      deadline: inDays(30),
+      visibility: Tier.CHAIRMAN,
+      status: "PUBLISHED",
+    },
+  });
+
+  await prisma.opportunity.upsert({
+    where: { id: "opp_joint_venture_agri" },
+    update: {},
+    create: {
+      id: "opp_joint_venture_agri",
+      authorId: demoMember.id,
+      title: "Joint-venture transformation agroalimentaire — export vanille & épices",
+      type: "JOINT_VENTURE",
+      sector: "Agriculture & Alimentation",
+      country: "Madagascar",
+      description:
+        "Recherche de partenaire régional pour la création d'une unité de transformation et de conditionnement dédiée à l'export de vanille et d'épices vers l'Europe et les Émirats.",
+      budget: 3_500_000_000,
+      deadline: null,
+      visibility: Tier.MEMBER,
+      status: "PUBLISHED",
+    },
+  });
+
   // ── Membership applications (E8-T02 dashboard demo data — no candidature
   // UI exists yet to create these for real, see conception/01_onboarding_acces.md UC-01/02) ──
   await prisma.membershipApplication.upsert({
