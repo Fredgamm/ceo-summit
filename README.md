@@ -187,12 +187,27 @@ contre une vraie instance. Même caveat que PostgreSQL : fonctionne normalement 
 - Seed : 2 candidatures (`MembershipApplication`) de démo ajoutées — aucune UI de
   candidature n'existe encore pour en créer réellement (UC-01/02/03 du module 01,
   hors scope backlog E1-E3 actuel).
-- ❌ E8-T03 → T11 (candidatures, membres, événements, Deal Room, salles, crédits,
-  communications, finances, paramètres) : pas commencés.
+- ✅ E8-T03 : Gestion candidatures (`/admin/candidatures`, `/admin/candidatures/[id]`)
+  — tabs par statut, détail avec décision (valider avec choix du tier / refuser /
+  demander complément d'info), note interne. **Valider crée le compte** (comme une
+  "sélection directe" UC-03) et envoie l'email d'activation déjà existant — mais ne
+  crée aucune `Membership` : le candidat n'a pas encore payé via Evolia, cette étape
+  ne fait que débloquer la création de compte. Le refus **ne communique jamais le
+  motif interne au candidat** (RG-07) — l'email de refus est volontairement générique,
+  même si le wireframe suggérait le contraire.
+- ✅ E8-T04 : Gestion membres (`/admin/membres`, `/admin/membres/[id]`) — liste avec
+  filtres (tier/pays/secteur/statut/recherche) + pagination, détail en 5 onglets
+  (Profil, Activité, Crédits, Paiements, Notes admin). Actions : changer tier (met à
+  jour l'adhésion active ou en crée une à prix 0 si aucune n'existe), suspendre/
+  exclure/réactiver, attribuer des crédits (bucket `purchased`, tracé en
+  `CreditTransaction` de type `ADMIN_GRANT`). Ajout de `User.adminNote` au schéma
+  (absent jusqu'ici, nécessaire pour l'onglet Notes admin).
+- ❌ E8-T05 → T11 (événements, Deal Room, salles, crédits, communications, finances,
+  paramètres) : pas commencés.
+
+**E8 est maintenant à 4/11.**
 
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E8-T03/T04 (gestion candidatures + membres) pour boucler la boucle "candidature →
-  validation admin → activation" sans passer par le seed
 - E3-T04/T05 pour clore E3
 - E4 → E9 : Deal Room, salles temps réel, messagerie, reste du backoffice, PWA
