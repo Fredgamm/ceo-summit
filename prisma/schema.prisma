@@ -52,6 +52,14 @@ enum EventStatus {
   COMPLETED
 }
 
+/// Matches the category tabs on wireframe/evenements.html.
+enum EventType {
+  SUMMIT
+  DINER
+  WEBINAIRE
+  RENCONTRE
+}
+
 enum RegistrationStatus {
   PENDING_PAYMENT
   CONFIRMED
@@ -64,6 +72,13 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+}
+
+/// E3-T03 — "virement / mobile money / gratuit si inclus".
+enum EventPaymentMethod {
+  VIREMENT
+  MOBILE_MONEY
+  INCLUS
 }
 
 enum OpportunityType {
@@ -294,6 +309,7 @@ model Company {
 model Event {
   id             String       @id @default(cuid())
   title          String
+  type           EventType    @default(RENCONTRE)
   description    String       @db.Text
   program        Json? // structured agenda blocks
   speakers       Json? // [{ name, title, company, photoUrl }]
@@ -312,6 +328,7 @@ model Event {
   registrations  EventRegistration[]
 
   @@index([status, date])
+  @@index([type])
 }
 
 model EventRegistration {
@@ -322,6 +339,7 @@ model EventRegistration {
   user           User                @relation(fields: [userId], references: [id])
   status         RegistrationStatus  @default(PENDING_PAYMENT)
   paymentStatus  PaymentStatus       @default(PENDING)
+  paymentMethod  EventPaymentMethod?
   paymentRef     String?
   badgeQrCode    String              @unique @default(cuid())
   checkedIn      Boolean             @default(false)

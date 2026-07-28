@@ -39,3 +39,11 @@ export function tierLabel(tier?: string | null): string {
   if (!tier) return "Membre";
   return tier.charAt(0) + tier.slice(1).toLowerCase();
 }
+
+const TIER_RANK: Record<string, number> = { MEMBER: 1, EXECUTIVE: 2, CHAIRMAN: 3 };
+
+/** Whether a member's tier satisfies a minimum tier requirement (e.g. an event's minTier). */
+export function meetsMinTier(userTier: string | null | undefined, minTier: string): boolean {
+  if (!userTier) return false;
+  return (TIER_RANK[userTier] ?? 0) >= (TIER_RANK[minTier] ?? 0);
+}

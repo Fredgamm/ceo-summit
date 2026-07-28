@@ -86,10 +86,11 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-À date, la couverture porte sur `app/api/webhooks/evolia/route.ts` (signature invalide,
-payload malformé, création de compte, renouvellement, idempotence sur `paymentRef`
-en doublon). Les routes/actions restantes n'ont pas encore de tests — à compléter au
-fil d'E1/E2 (voir critère d'acceptation EX-T02 dans `BACKLOG_DEV.md`).
+Couverture actuelle (59 tests) : webhook Evolia, actions d'auth (activation, mot de passe
+oublié, onboarding, profil), logique de requête catalogue/événements (`lib/catalogue.ts`,
+`lib/events-query.ts`), lock Redis de capacité (`lib/event-registration-lock.ts`) et
+inscription événement (`app/actions/events.ts`). Les pages elles-mêmes (composants React)
+n'ont pas de tests de rendu — seule la logique serveur/pure est testée pour l'instant.
 
 ## Note environnement de build
 
@@ -142,6 +143,33 @@ Ce n'est pas un problème de code ; ça fonctionne normalement en local et sur C
 
 **E2 est maintenant complet (5/5).**
 
+### E3 — Événements & inscriptions
+
+- ✅ E3-T01 : Liste des événements (`/evenements`) — grille, filtres type/date/accès,
+  badges de capacité (Complet/Places limitées/Bientôt), section "Événements passés"
+  séparée. A nécessité d'ajouter `Event.type` (enum `EventType`) au schéma — absent
+  jusqu'ici, or le backlog exige explicitement un filtre par type.
+- ✅ E3-T02 : Détail événement (`/evenements/[id]`) — programme, intervenants,
+  participants inscrits, capacité restante. Le lien Zoom n'est jamais exposé publiquement
+  (même logique que le wireframe : envoyé par email aux seuls inscrits) — l'intégration
+  Zoom API réelle (création automatique de meeting) est E3-T05 (admin), pas construite.
+- ✅ E3-T03 : Inscription + paiement (`/evenements/[id]/inscrire`) — stepper 3 étapes
+  (récapitulatif, mode de paiement virement/mobile money/inclus, confirmation),
+  vérification de capacité via lock Redis (`lib/event-registration-lock.ts`, SET NX)
+  pour éviter l'overbooking, email de confirmation avec badge QR (`qrcode`), alerte
+  admin par email si virement (validation manuelle — pas de passerelle de paiement
+  réelle intégrée, ni pour virement ni pour mobile money).
+- ❌ E3-T04 (QR Badge & Check-in) et E3-T05 (CRUD événements admin) : pas commencés —
+  T05 dépend d'E8 (auth + layout admin), qui n'existe pas encore. Sans lui, les
+  événements ne peuvent être créés que via `prisma/seed.ts` (5 événements de démo).
+
+⚠️ **Redis n'est pas disponible dans cet environnement de dev** (pas de Docker ici) —
+le lock de capacité est testé unitairement avec un client Redis mocké, jamais vérifié
+contre une vraie instance. Même caveat que PostgreSQL : fonctionne normalement une fois
+`docker-compose up -d` lancé localement.
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E3 → E9 : événements, Deal Room, salles temps réel, messagerie, backoffice complet, PWA
+- E3-T04/T05, ou E8 (backoffice admin) pour permettre la gestion des événements/membres
+  sans passer par le seed
+- E4 → E9 : Deal Room, salles temps réel, messagerie, backoffice complet, PWA

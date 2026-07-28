@@ -1,0 +1,73 @@
+import type { Metadata } from "next";
+import { notFound, redirect } from "next/navigation";
+import type { RegistrationStatus } from "@prisma/client";
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { eventCapacityBadge } from "@/lib/events-query";
+import { RegistrationWizard } from "@/components/events/registration-wizard";
+import { meetsMinTier } from "@/lib/utils";
+
+export const metadata: Metadata = { title: "Inscription à l'événement" };
+
+const TAKEN_STATUSES: RegistrationStatus[] = ["CONFIRMED", "PENDING_PAYMENT"];
+
+/**
+ * E3-T03 — server-side re-validation of every condition the /evenements/[id]
+ * CTA already encodes (tier, capacity, already registered, event date) —
+ * the disabled button there is a UX hint, not the actual gate.
+ */
+export default async function EventRegistrationPage({ params }: { params: { id: string } }) {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const [event, viewer] = await Promise.all([
+    prisma.event.findUnique({
+      where: { id: params.id },
+      include: {
+        _count: { select: { registrations: { where: { status: { in: TAKEN_STATUSES } } } } },
+      },
+    }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      include: {
+        memberships: { where: { status: "ACTIVE" }, take: 1 },
+        company: { select: { name: true } },
+      },
+    }),
+  ]);
+
+  if (!event || event.status !== "PUBLISHED") notFound();
+  if (!viewer) redirect("/login");
+
+  const tierOk = meetsMinTier(viewer.memberships[0]?.tier, event.minTier);
+  const isPast = event.date < new Date();
+  const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
+
+  const alreadyRegistered = await prisma.eventRegistration.findUnique({
+    where: { eventId_userId: { eventId: event.id, userId: viewer.id } },
+  });
+
+  if (!tierOk || isPast || capacity === "complet" || alreadyRegistered) {
+    redirect(`/evenements/${event.id}`);
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-surface p-6">
+      <RegistrationWizard
+        eventId={event.id}
+        eventTitle={event.title}
+        eventDate={event.date}
+        eventLocation={event.location}
+        isOnline={event.isOnline}
+        price={event.price}
+        viewer={{
+          name: viewer.name,
+          title: viewer.title ?? "",
+          email: viewer.email,
+          companyName: viewer.company?.name ?? null,
+        }}
+      />
+    </div>
+  );
+}
