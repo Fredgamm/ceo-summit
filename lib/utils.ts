@@ -33,3 +33,9 @@ export function initials(name: string): string {
     .map((p) => p[0]?.toUpperCase())
     .join("");
 }
+
+/** Display label for a Tier/Role enum value: "EXECUTIVE" -> "Executive". Falls back to "Membre" when absent. */
+export function tierLabel(tier?: string | null): string {
+  if (!tier) return "Membre";
+  return tier.charAt(0) + tier.slice(1).toLowerCase();
+}

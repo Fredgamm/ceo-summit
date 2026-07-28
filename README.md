@@ -127,10 +127,21 @@ Ce n'est pas un problème de code ; ça fonctionne normalement en local et sur C
 - ✅ E2-T02 : Édition profil (`/profil/editer`) — upload photo (`/api/profile/avatar`,
   resize serveur 400×400 via `sharp`, stockage R2), nom/titre/bio/LinkedIn/pays/secteurs,
   validation Zod. Testé (Vitest, upload + validations).
-- ❌ E2-T03/T04/T05 : Catalogue membres, fiche détail, profil entreprise — pas commencés
-  (prévus Sprint 3 selon `BACKLOG_DEV.md`).
+- ✅ E2-T03 : Catalogue membres (`/catalogue`) — grille de cartes, filtres (secteur,
+  pays, tier, mot-clé), tri (récent/alphabétique/tier), pagination classique. La
+  logique de construction de requête est isolée dans `lib/catalogue.ts` (pure,
+  testée) plutôt qu'inline dans la page.
+- ✅ E2-T04 : Fiche détail membre (`/catalogue/[id]`) — canonicalise vers
+  `/membres/[id]` plutôt que dupliquer la vue riche déjà construite en E2-T01
+  (même concept que le wireframe `catalogue-fiche.html`).
+- ✅ E2-T05 : Profil entreprise (`/entreprises/[id]`) — logo/nom/secteur/description/
+  site web, liste des membres rattachés, onglets Deal Room/Services en `EmptyState`
+  (E5/E6 pas construits). `/entreprise` (lien sidebar "Mon Entreprise") redirige vers
+  la fiche du viewer si `companyId` est renseigné, sinon état vide explicite — pas de
+  flux de création d'entreprise (hors scope backlog actuel).
+
+**E2 est maintenant complet (5/5).**
 
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E2-T03 → E2-T05 : Catalogue membres, fiche détail, profil entreprise
 - E3 → E9 : événements, Deal Room, salles temps réel, messagerie, backoffice complet, PWA

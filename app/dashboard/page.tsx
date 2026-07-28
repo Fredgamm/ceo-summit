@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Accueil" };
 
@@ -23,15 +24,11 @@ export default async function DashboardPage() {
   });
   if (!user) redirect("/login");
 
-  const tierLabel = user.memberships[0]?.tier
-    ? user.memberships[0].tier.charAt(0) + user.memberships[0].tier.slice(1).toLowerCase()
-    : "Membre";
-
   return (
     <AppShell
       user={{
         name: user.name,
-        tier: tierLabel,
+        tier: tierLabel(user.memberships[0]?.tier),
         avatarUrl: user.avatarUrl,
         isAdmin: user.role === "ADMIN",
       }}
@@ -45,8 +42,8 @@ export default async function DashboardPage() {
           <CardTitle>Fondations posées</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-text-mid">
-          Auth, RBAC, layout et composants UI sont opérationnels. Le contenu complet du
-          tableau de bord (bannière événement, stats, activité récente) suit dans E2/E3.
+          Auth, RBAC, layout et composants UI sont opérationnels. Le contenu complet du tableau de
+          bord (bannière événement, stats, activité récente) suit dans E2/E3.
         </CardContent>
       </Card>
     </AppShell>

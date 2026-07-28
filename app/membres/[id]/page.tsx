@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatDateFr, initials } from "@/lib/utils";
+import { formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Profil membre" };
 
@@ -48,15 +48,12 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
 
   const isSelf = viewer.id === user.id;
   const tier = user.memberships[0]?.tier;
-  const viewerTierLabel = viewer.memberships[0]?.tier
-    ? viewer.memberships[0].tier.charAt(0) + viewer.memberships[0].tier.slice(1).toLowerCase()
-    : "Membre";
 
   return (
     <AppShell
       user={{
         name: viewer.name,
-        tier: viewerTierLabel,
+        tier: tierLabel(viewer.memberships[0]?.tier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
@@ -75,11 +72,7 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
                 {[user.title, user.company?.name, user.country].filter(Boolean).join(" · ")}
               </p>
               <div className="mt-1.5 flex items-center gap-2">
-                {tier && (
-                  <Badge variant={TIER_BADGE[tier]}>
-                    {tier.charAt(0) + tier.slice(1).toLowerCase()}
-                  </Badge>
-                )}
+                {tier && <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>}
                 <span className="text-xs text-text-muted">
                   Membre depuis {formatDateFr(user.createdAt)}
                 </span>

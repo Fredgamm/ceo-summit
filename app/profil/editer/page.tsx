@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfileEditForm } from "@/components/profile/profile-edit-form";
 import { Button } from "@/components/ui/button";
+import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Éditer mon profil" };
 
@@ -23,15 +24,11 @@ export default async function EditProfilePage() {
   });
   if (!user) redirect("/login");
 
-  const tierLabel = user.memberships[0]?.tier
-    ? user.memberships[0].tier.charAt(0) + user.memberships[0].tier.slice(1).toLowerCase()
-    : "Membre";
-
   return (
     <AppShell
       user={{
         name: user.name,
-        tier: tierLabel,
+        tier: tierLabel(user.memberships[0]?.tier),
         avatarUrl: user.avatarUrl,
         isAdmin: user.role === "ADMIN",
       }}
