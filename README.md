@@ -168,8 +168,31 @@ le lock de capacité est testé unitairement avec un client Redis mocké, jamais
 contre une vraie instance. Même caveat que PostgreSQL : fonctionne normalement une fois
 `docker-compose up -d` lancé localement.
 
+### E8 — Backoffice admin (démarré)
+
+- ✅ E8-T01 : Auth admin + layout BO (`/admin`, protégé par middleware + vérifié à
+  nouveau dans `app/admin/layout.tsx`). Sous-rôles `super_admin | moderateur | financier`
+  (`AdminUser.role`) avec RBAC granulaire par section (`lib/admin-rbac.ts`, testé) —
+  `AdminSidebar` masque les sections que le sous-rôle ne peut pas atteindre (ex :
+  financier ne voit pas Paramètres/Candidatures/Membres).
+- ✅ E8-T02 : Dashboard admin (`/admin`) — KPIs (membres actifs par tier, MRR estimé,
+  candidatures en attente, remplissage du prochain événement), strip d'alertes
+  (candidatures/paiements/signalements en attente, masqué si tout est à 0), graphique
+  revenus 12 mois (Recharts), activité récente, tableaux candidatures/événements à venir.
+  **Aucune métrique n'est inventée** : pas de deltas ("+12 ce mois") comme dans le
+  wireframe — il n'existe pas d'historique/snapshot pour les calculer honnêtement, donc
+  ils ne sont simplement pas affichés plutôt que fabriqués. Le MRR est une estimation
+  (prix total de chaque adhésion active réparti sur sa durée), pas une vraie ligne de
+  facturation récurrente.
+- Seed : 2 candidatures (`MembershipApplication`) de démo ajoutées — aucune UI de
+  candidature n'existe encore pour en créer réellement (UC-01/02/03 du module 01,
+  hors scope backlog E1-E3 actuel).
+- ❌ E8-T03 → T11 (candidatures, membres, événements, Deal Room, salles, crédits,
+  communications, finances, paramètres) : pas commencés.
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E3-T04/T05, ou E8 (backoffice admin) pour permettre la gestion des événements/membres
-  sans passer par le seed
-- E4 → E9 : Deal Room, salles temps réel, messagerie, backoffice complet, PWA
+- E8-T03/T04 (gestion candidatures + membres) pour boucler la boucle "candidature →
+  validation admin → activation" sans passer par le seed
+- E3-T04/T05 pour clore E3
+- E4 → E9 : Deal Room, salles temps réel, messagerie, reste du backoffice, PWA

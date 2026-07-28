@@ -1,7 +1,9 @@
+import type { AdminRole } from "@prisma/client";
+
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 
 interface AdminShellProps {
-  admin: { name: string; email: string };
+  admin: { name: string; email: string; role: AdminRole };
   badges?: { candidatures?: number; opportunities?: number };
   breadcrumb?: string;
   title: string;
@@ -14,7 +16,14 @@ interface AdminShellProps {
  * 1:1 with the /wireframe-bo/*.html structure (.bo-layout / .bo-sidebar / .bo-topbar / .bo-body).
  * Admin is desktop-first — no bottom nav / mobile collapse for v1 (internal tool).
  */
-export function AdminShell({ admin, badges, breadcrumb = "Admin /", title, actions, children }: AdminShellProps) {
+export function AdminShell({
+  admin,
+  badges,
+  breadcrumb = "Admin /",
+  title,
+  actions,
+  children,
+}: AdminShellProps) {
   return (
     <div className="flex min-h-screen">
       <AdminSidebar admin={admin} badges={badges} />

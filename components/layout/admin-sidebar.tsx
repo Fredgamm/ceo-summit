@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { AdminRole } from "@prisma/client";
 import {
   Home,
   ClipboardList,
@@ -16,46 +17,73 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+import { canAccessSection, type AdminSection } from "@/lib/admin-rbac";
 import { cn } from "@/lib/utils";
 
-const SECTIONS = [
+const SECTIONS: {
+  title: string;
+  items: {
+    href: string;
+    label: string;
+    icon: typeof Home;
+    section: AdminSection;
+    badgeKey?: "candidatures" | "opportunities";
+  }[];
+}[] = [
   {
     title: "Vue générale",
-    items: [{ href: "/admin", label: "Tableau de bord", icon: Home }],
+    items: [{ href: "/admin", label: "Tableau de bord", icon: Home, section: "dashboard" }],
   },
   {
     title: "Membres",
     items: [
-      { href: "/admin/candidatures", label: "Candidatures", icon: ClipboardList, badgeKey: "candidatures" as const },
-      { href: "/admin/membres", label: "Membres", icon: Users },
+      {
+        href: "/admin/candidatures",
+        label: "Candidatures",
+        icon: ClipboardList,
+        section: "candidatures",
+        badgeKey: "candidatures",
+      },
+      { href: "/admin/membres", label: "Membres", icon: Users, section: "membres" },
     ],
   },
   {
     title: "Contenu",
     items: [
-      { href: "/admin/evenements", label: "Événements", icon: CalendarDays },
-      { href: "/admin/deal-room", label: "Deal Room", icon: Diamond, badgeKey: "opportunities" as const },
-      { href: "/admin/salles", label: "Salles", icon: LayoutGrid },
+      { href: "/admin/evenements", label: "Événements", icon: CalendarDays, section: "evenements" },
+      {
+        href: "/admin/deal-room",
+        label: "Deal Room",
+        icon: Diamond,
+        section: "deal-room",
+        badgeKey: "opportunities",
+      },
+      { href: "/admin/salles", label: "Salles", icon: LayoutGrid, section: "salles" },
     ],
   },
   {
     title: "Opérations",
     items: [
-      { href: "/admin/credits", label: "Crédits", icon: CreditCard },
-      { href: "/admin/communications", label: "Communications", icon: Mail },
+      { href: "/admin/credits", label: "Crédits", icon: CreditCard, section: "credits" },
+      {
+        href: "/admin/communications",
+        label: "Communications",
+        icon: Mail,
+        section: "communications",
+      },
     ],
   },
   {
     title: "Gestion",
     items: [
-      { href: "/admin/finances", label: "Finances", icon: Landmark },
-      { href: "/admin/parametres", label: "Paramètres", icon: Settings },
+      { href: "/admin/finances", label: "Finances", icon: Landmark, section: "finances" },
+      { href: "/admin/parametres", label: "Paramètres", icon: Settings, section: "parametres" },
     ],
   },
 ];
 
 interface AdminSidebarProps {
-  admin: { name: string; email: string };
+  admin: { name: string; email: string; role: AdminRole };
   badges?: Partial<Record<"candidatures" | "opportunities", number>>;
 }
 
@@ -63,9 +91,18 @@ interface AdminSidebarProps {
  * Backoffice sidebar (240px, navy-dark #0D1B42) — 1:1 with /wireframe-bo/*.html nav.
  * Kept as its own component (not reusing MemberSidebar) since the BO has a distinct
  * dark theme, no tier badge, and a "Vue membre" escape hatch back to the front app.
+ *
+ * E8-T01 — sections a sub-role can't reach (e.g. financier + parametres) simply
+ * don't render here. The real gate is server-side per route (canAccessSection
+ * checked again in each /admin/* page) — this filtering is a UX courtesy, not
+ * the security boundary.
  */
 export function AdminSidebar({ admin, badges = {} }: AdminSidebarProps) {
   const pathname = usePathname();
+  const visibleSections = SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) => canAccessSection(admin.role, item.section)),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <aside className="fixed left-0 top-0 flex h-screen w-sidebar-bo flex-col overflow-y-auto bg-navy-dark">
@@ -82,14 +119,14 @@ export function AdminSidebar({ admin, badges = {} }: AdminSidebarProps) {
       </div>
 
       <div className="flex-1 py-2">
-        {SECTIONS.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.title}>
             <div className="px-[18px] pb-[5px] pt-3.5 text-[10px] uppercase tracking-wide text-white/30">
               {section.title}
             </div>
             {section.items.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + "/");
-              const badge = "badgeKey" in item ? badges[item.badgeKey as keyof typeof badges] : undefined;
+              const badge = item.badgeKey ? badges[item.badgeKey] : undefined;
               return (
                 <Link
                   key={item.href}
