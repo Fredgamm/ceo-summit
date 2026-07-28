@@ -6,6 +6,7 @@ import type { RegistrationStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
+import { parseProgram, parseSpeakers } from "@/lib/event-content";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -15,31 +16,6 @@ import { formatAriary, formatDateFr, initials, meetsMinTier, tierLabel } from "@
 export const metadata: Metadata = { title: "Détail événement" };
 
 const TAKEN_STATUSES: RegistrationStatus[] = ["CONFIRMED", "PENDING_PAYMENT"];
-
-interface ProgramBlock {
-  day: string;
-  items: string[];
-}
-interface Speaker {
-  name: string;
-  title?: string;
-  company?: string;
-}
-
-function parseProgram(json: unknown): ProgramBlock[] {
-  if (!Array.isArray(json)) return [];
-  return json.filter(
-    (b): b is ProgramBlock =>
-      !!b && typeof b === "object" && typeof (b as ProgramBlock).day === "string"
-  );
-}
-
-function parseSpeakers(json: unknown): Speaker[] {
-  if (!Array.isArray(json)) return [];
-  return json.filter(
-    (s): s is Speaker => !!s && typeof s === "object" && typeof (s as Speaker).name === "string"
-  );
-}
 
 /**
  * E3-T02 — détail événement. Le lien de webinaire Zoom n'est jamais affiché
@@ -181,9 +157,14 @@ export default async function EventDetailPage({ params }: { params: { id: string
             </p>
 
             {isRegistered ? (
-              <Badge variant="approved" className="mt-4 w-full justify-center py-2">
-                Inscrit ✓
-              </Badge>
+              <>
+                <Badge variant="approved" className="mt-4 w-full justify-center py-2">
+                  Inscrit ✓
+                </Badge>
+                <Button asChild variant="outline" className="mt-2 w-full justify-center">
+                  <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
+                </Button>
+              </>
             ) : isPast ? (
               <Button disabled className="mt-4 w-full justify-center">
                 Événement passé

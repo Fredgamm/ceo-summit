@@ -202,10 +202,30 @@ contre une vraie instance. Même caveat que PostgreSQL : fonctionne normalement 
   exclure/réactiver, attribuer des crédits (bucket `purchased`, tracé en
   `CreditTransaction` de type `ADMIN_GRANT`). Ajout de `User.adminNote` au schéma
   (absent jusqu'ici, nécessaire pour l'onglet Notes admin).
-- ❌ E8-T05 → T11 (événements, Deal Room, salles, crédits, communications, finances,
-  paramètres) : pas commencés.
+- ✅ E8-T05 : Gestion événements admin (`/admin/evenements`, `nouveau`, `[id]/editer`)
+  — création/édition, upload bannière (R2, resize serveur 1200×675), statuts
+  draft → published → cancelled. Programme et intervenants s'éditent en texte libre
+  (une ligne = un élément) plutôt qu'avec un éditeur de blocs (voir `lib/event-content.ts`)
+  — simplification délibérée, pas un éditeur multi-blocs comme le wireframe. **Pas
+  d'intégration Zoom API réelle** (pas de clés sandbox) ni d'emails automatiques J-7/J-1
+  (aucune infra de tâche planifiée dans ce projet — ce serait EX-T03, pas construit).
+- ❌ E8-T06 → T11 (Deal Room, salles, crédits, communications, finances, paramètres) :
+  pas commencés.
 
-**E8 est maintenant à 4/11.**
+**E8 est maintenant à 5/11.**
+
+### E3-T04 — QR Badge & Check-in
+
+- ✅ Badge numérique (`/evenements/[id]/badge`) — QR code intégré en image data:
+  (fonctionne offline une fois la page chargée), non disponible si l'inscription
+  n'est pas confirmée.
+- ✅ Check-in admin (`/admin/evenements/[id]/checkin`) — code de badge saisi/collé
+  plutôt que scanné à la caméra (aucune lib de scan ajoutée) ; la logique de
+  validation (marquer `checkedIn`) est réelle, seule l'interface de scan est
+  simplifiée.
+- ✅ Export CSV des inscrits (`/api/admin/evenements/[id]/export`).
+
+**E3 est maintenant complet (5/5).**
 
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
