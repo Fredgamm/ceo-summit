@@ -86,20 +86,22 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (318 tests) : webhook Evolia, webhook Resend (E8-T09), actions
+Couverture actuelle (331 tests) : webhook Evolia, webhook Resend (E8-T09), actions
 d'auth (activation, mot de passe oublié, onboarding, profil), actions
 membres/candidatures/événements admin, logique de requête catalogue/événements/
-membres/Deal Room/salles/conversations/services/broadcasts (`lib/catalogue.ts`,
-`lib/events-query.ts`, `lib/admin-members-query.ts`, `lib/deal-room-query.ts`,
-`lib/rooms-query.ts`, `lib/conversations-query.ts`, `lib/services-query.ts`,
-`lib/admin-deal-room-query.ts`, `lib/broadcast-segments.ts`,
-`lib/broadcast-template.ts`), lock Redis générique et ses deux usages (capacité
-événement, déduction de crédits), actions Deal Room (publication, prise de contact,
-accepter/refuser un contact, modération admin), crédits (achat, confirmation admin),
-salles (lecture, signalement, modération admin, CRUD admin), messagerie (chiffrement
-pgcrypto, notification email hors-ligne), catalogue de services (dépôt, modération
-admin) et broadcasts admin (segmentation, envoi test, envoi réel, webhook
-d'ouverture), et le serveur Socket.io autonome (`server/socket-server.ts` — auth,
+membres/Deal Room/salles/conversations/services/broadcasts/finances
+(`lib/catalogue.ts`, `lib/events-query.ts`, `lib/admin-members-query.ts`,
+`lib/deal-room-query.ts`, `lib/rooms-query.ts`, `lib/conversations-query.ts`,
+`lib/services-query.ts`, `lib/admin-deal-room-query.ts`, `lib/broadcast-segments.ts`,
+`lib/broadcast-template.ts`, `lib/finance.ts`), lock Redis générique et ses deux
+usages (capacité événement, déduction de crédits), actions Deal Room (publication,
+prise de contact, accepter/refuser un contact, modération admin), crédits (achat,
+confirmation admin), salles (lecture, signalement, modération admin, CRUD admin),
+messagerie (chiffrement pgcrypto, notification email hors-ligne), catalogue de
+services (dépôt, modération admin), broadcasts admin (segmentation, envoi test,
+envoi réel, webhook d'ouverture) et finances admin (validation paiement événement,
+relances renouvellement, export comptable), et le serveur Socket.io autonome
+(`server/socket-server.ts` — auth,
 accès par tier, rate limiting, persistance/broadcast pour les salles ET les
 conversations privées, testé via un vrai client socket.io-client contre un serveur
 éphémère). Les pages
@@ -450,8 +452,34 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E8 est maintenant à 8/11.**
 
+### E8-T10 — Finances admin (`/admin/finances`)
+
+- ✅ Dashboard MRR/ARR (réutilise `computeMRR`, déjà construit pour E8-T02) +
+  répartition par tier (`lib/finance.ts`), revenus réels du mois par source
+  (membership/événements/crédits) — aucun delta inventé (le "+8.3% vs juin" du
+  wireframe n'est pas repris), même règle que le dashboard admin.
+- ✅ Abonnements expirant dans 30/60/90j (comptes réels, `@@index([status, endDate])`
+  déjà anticipé dans le schéma) + relance manuelle par email
+  (`sendRenewalReminders`) — "relance automatique" du wireframe non implémentée
+  (pas d'infra de cron, même limitation documentée ailleurs), remplacée par un
+  déclenchement manuel qui envoie réellement les emails plutôt que de simuler.
+- ✅ **Débloque un vrai cul-de-sac** : une inscription événement payée par
+  virement/mobile money restait en `PENDING` pour toujours — seul un email
+  d'alerte admin existait (E3-T03), aucune action pour la confirmer.
+  `confirmEventPayment` complète ce flux (statut → `CONFIRMED`/`PAID`, email de
+  confirmation avec badge QR réutilisé). Les achats de crédits en attente
+  réutilisent directement les actions déjà construites en E6.
+- ✅ Export comptable CSV réel (`/api/admin/finances/export`), fusionnant les 3
+  sources de paiement, même pattern que l'export inscrits événement (E3-T04).
+- ✅ Onglet "Remboursements" — réel (`PaymentStatus.REFUNDED`), vide dans les
+  données actuelles (aucun remboursement n'a jamais été traité dans ce projet).
+- Vérifié en direct : dashboard, les 3 onglets et l'export CSV (contenu réel,
+  triage chronologique correct) testés avec succès.
+
+**E8 est maintenant à 9/11.**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E8-T10/T11 : finances, paramètres plateforme
+- E8-T11 : paramètres plateforme
 - E9 : PWA
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)
