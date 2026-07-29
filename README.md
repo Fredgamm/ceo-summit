@@ -86,19 +86,20 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (272 tests) : webhook Evolia, actions d'auth (activation, mot de
+Couverture actuelle (289 tests) : webhook Evolia, actions d'auth (activation, mot de
 passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
 de requête catalogue/événements/membres/Deal Room/salles/conversations/services
 (`lib/catalogue.ts`, `lib/events-query.ts`, `lib/admin-members-query.ts`,
 `lib/deal-room-query.ts`, `lib/rooms-query.ts`, `lib/conversations-query.ts`,
-`lib/services-query.ts`), lock Redis générique et ses deux usages (capacité événement,
-déduction de crédits), actions Deal Room (publication, prise de contact, accepter/refuser
-un contact), crédits (achat, confirmation admin), salles (lecture, signalement,
-modération admin), messagerie (chiffrement pgcrypto, notification email hors-ligne) et
-catalogue de services (dépôt, modération admin), et le serveur Socket.io autonome
-(`server/socket-server.ts` — auth, accès par tier, rate limiting, persistance/broadcast
-pour les salles ET les conversations privées, testé via un vrai client socket.io-client
-contre un serveur éphémère). Les pages
+`lib/services-query.ts`, `lib/admin-deal-room-query.ts`), lock Redis générique et ses
+deux usages (capacité événement, déduction de crédits), actions Deal Room (publication,
+prise de contact, accepter/refuser un contact, modération admin), crédits (achat,
+confirmation admin), salles (lecture, signalement, modération admin), messagerie
+(chiffrement pgcrypto, notification email hors-ligne) et catalogue de services (dépôt,
+modération admin), et le serveur Socket.io autonome (`server/socket-server.ts` — auth,
+accès par tier, rate limiting, persistance/broadcast pour les salles ET les
+conversations privées, testé via un vrai client socket.io-client contre un serveur
+éphémère). Les pages
 elles-mêmes (composants React) n'ont pas de tests de rendu — seule la logique
 serveur/pure est testée pour l'instant.
 
@@ -379,8 +380,33 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E5 est maintenant complet (3/3).**
 
+### E8-T06 — Modération Deal Room admin (`/admin/deal-room`)
+
+- ✅ File de modération (onglet "À valider") — carte par opportunité, checklist visuelle
+  (non persistée : le backlog demande une aide à la revue, pas un stockage des réponses),
+  décision en 3 issues (`OpportunityStatus`) : **Valider et publier**, **Demander des
+  modifications** (message libre envoyé à l'auteur), **Refuser** (motif envoyé à
+  l'auteur). Navigation précédente/suivante dans la file d'attente.
+- ✅ Onglet "Actives" — recherche/type/secteur (`lib/admin-deal-room-query.ts`), action
+  **Dépublier**.
+- ✅ Onglet "Archivées" — dépubliées/refusées/expirées, action **Republier** pour les
+  dépubliées uniquement.
+- Note de modération : champ **interne admin uniquement** (`Opportunity.moderationNote`,
+  déjà dans le schéma) — jamais envoyée au membre, distinct du motif de refus (qui, lui,
+  **est** envoyé — contrairement à la règle RG-07 des candidatures, le wireframe
+  `bo-deal-room-detail.html` est explicite : "Motif (envoyé au membre)").
+- Stats en tête de page : uniquement des comptes réels (en attente / actives / contacts
+  ce mois / refusées ce mois) — pas de deltas inventés ("+8 ce mois"), même règle que le
+  dashboard admin (E8-T02).
+- Vérifié en direct : opportunité de test insérée en attente → visible dans la file →
+  page de décision/checklist/navigation rendue → onglet Actives affiche les vraies
+  opportunités publiées du seed.
+
+**E8-T06 fait maintenant partie des tâches livrées d'E8 (6/11).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E8-T06/T08 → T11 : modération Deal Room, salles admin, communications, finances, paramètres
+- E8-T08 → T11 : CRUD salles admin (T08, hors modération déjà faite en E4),
+  communications, finances, paramètres
 - E9 : PWA
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)
