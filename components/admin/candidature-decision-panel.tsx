@@ -10,28 +10,38 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatAriary, tierLabel } from "@/lib/utils";
 
-const TIERS: { value: Tier; price: number; perk: string }[] = [
-  { value: "MEMBER", price: 200000, perk: "Accès de base" },
-  { value: "EXECUTIVE", price: 600000, perk: "10 crédits Deal Room" },
-  { value: "CHAIRMAN", price: 1500000, perk: "Crédits illimités" },
-];
-
 interface CandidatureDecisionPanelProps {
   applicationId: string;
   requestedTier: Tier;
+  prices: Record<Tier, number>;
+  includedCredits: Record<"MEMBER" | "EXECUTIVE", number>;
 }
 
 /**
  * E8-T03 — decision panel on a pending candidature. RG-07: the "refuser"
  * textarea is an internal note, never sent to the candidate (see
  * app/actions/candidatures.ts refuseApplication + ApplicationRefusedEmail).
+ * E8-T11 — prices/includedCredits come from PlatformSetting (see
+ * lib/platform-settings.ts) instead of being hardcoded here.
  */
 export function CandidatureDecisionPanel({
   applicationId,
   requestedTier,
+  prices,
+  includedCredits,
 }: CandidatureDecisionPanelProps) {
   const router = useRouter();
   const [tier, setTier] = React.useState<Tier>(requestedTier);
+
+  const TIERS: { value: Tier; price: number; perk: string }[] = [
+    { value: "MEMBER", price: prices.MEMBER, perk: "Accès de base" },
+    {
+      value: "EXECUTIVE",
+      price: prices.EXECUTIVE,
+      perk: `${includedCredits.EXECUTIVE} crédits Deal Room`,
+    },
+    { value: "CHAIRMAN", price: prices.CHAIRMAN, perk: "Crédits illimités" },
+  ];
   const [mode, setMode] = React.useState<"idle" | "refuse" | "info">("idle");
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);

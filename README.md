@@ -86,7 +86,7 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (331 tests) : webhook Evolia, webhook Resend (E8-T09), actions
+Couverture actuelle (353 tests) : webhook Evolia, webhook Resend (E8-T09), actions
 d'auth (activation, mot de passe oublié, onboarding, profil), actions
 membres/candidatures/événements admin, logique de requête catalogue/événements/
 membres/Deal Room/salles/conversations/services/broadcasts/finances
@@ -99,8 +99,10 @@ prise de contact, accepter/refuser un contact, modération admin), crédits (ach
 confirmation admin), salles (lecture, signalement, modération admin, CRUD admin),
 messagerie (chiffrement pgcrypto, notification email hors-ligne), catalogue de
 services (dépôt, modération admin), broadcasts admin (segmentation, envoi test,
-envoi réel, webhook d'ouverture) et finances admin (validation paiement événement,
-relances renouvellement, export comptable), et le serveur Socket.io autonome
+envoi réel, webhook d'ouverture), finances admin (validation paiement événement,
+relances renouvellement, export comptable) et paramètres plateforme (tarifs
+membership/crédits, référentiels, promotion/gestion des comptes admin), et le
+serveur Socket.io autonome
 (`server/socket-server.ts` — auth,
 accès par tier, rate limiting, persistance/broadcast pour les salles ET les
 conversations privées, testé via un vrai client socket.io-client contre un serveur
@@ -478,8 +480,45 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E8 est maintenant à 9/11.**
 
+### E8-T11 — Paramètres plateforme (`/admin/parametres`)
+
+- ✅ **Débloque deux vraies impasses** : `PlatformSetting` (tarifs) et
+  `Referential` (secteurs/pays/types d'opportunité) existaient dans le schéma
+  depuis le début mais n'étaient lus/écrits par aucun code — les tarifs
+  membership étaient codés en dur dans `CandidatureDecisionPanel`
+  (`lib/platform-settings.ts` centralise désormais la lecture avec fallback
+  par défaut par tier, testé), et `Referential` n'avait aucun CRUD.
+- ✅ Onglet Tarifs & Règles — prix membership (3 tiers) + crédits inclus
+  Executive/Member, prix des 3 packs crédits Deal Room (`CreditPackPrice`,
+  déjà consommé par `/credits/acheter`) ; `CandidatureDecisionPanel` lit
+  maintenant ces vraies valeurs au lieu du tableau codé en dur.
+- ✅ Onglet Référentiels — CRUD réel (ajout/suppression) sur `Referential`.
+  Limite documentée dans le code : les filtres membre-facing (`lib/sectors.ts`,
+  `lib/countries.ts`, statiques, utilisés dans ~10 fichiers) ne consomment
+  pas encore cette table — migration séparée, plus large que ce ticket.
+- ✅ Onglet Administrateurs — liste des `AdminUser` (jointure manuelle avec
+  `User`, car aucune relation Prisma n'existe entre les deux modèles),
+  changement de rôle, activation/désactivation (garde-fou : un admin ne peut
+  pas se désactiver lui-même). Contrairement au wireframe (qui crée un
+  compte ex-nihilo), on **promeut un membre existant** trouvé par email —
+  seul flux de création de compte cohérent avec le reste de la plateforme
+  (webhook Evolia ou candidature approuvée).
+- ✅ Onglet Intégrations — lecture seule, statuts réels basés sur la présence
+  des variables d'environnement (Evolia, Resend, Cloudflare R2, Zoom) plutôt
+  que les statuts fictifs du wireframe ("Mailjet", taux d'ouverture 54.2%,
+  etc.). L'application mobile reste explicitement "en développement" — aucune
+  API mobile n'existe dans ce projet.
+- ✅ Accès restreint à SUPER_ADMIN (`lib/admin-rbac.ts` — "parametres" n'apparaît
+  dans aucune autre liste de sections), déjà vrai avant ce ticket.
+- Vérifié en direct : connexion SUPER_ADMIN, les 4 onglets retournent 200 et
+  affichent les vraies données (tarifs par défaut, référentiels seedés,
+  compte admin SUPER_ADMIN) ; upsert + suppression `PlatformSetting`
+  vérifiés directement contre Postgres.
+
+**E8 est maintenant complet (11/11).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E8-T11 : paramètres plateforme
+- E9 : PWA (icônes réelles, service worker, manifest)
 - E9 : PWA
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)

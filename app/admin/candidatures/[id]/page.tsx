@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { CandidatureDecisionPanel } from "@/components/admin/candidature-decision-panel";
 import { CandidatureNoteForm } from "@/components/admin/candidature-note-form";
 import { formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { parseMembershipPrices, parseIncludedCredits } from "@/lib/platform-settings";
 
 export const metadata: Metadata = { title: "Admin — Candidature" };
 
@@ -40,6 +41,10 @@ export default async function AdminCandidatureDetailPage({ params }: { params: {
 
   const application = await prisma.membershipApplication.findUnique({ where: { id: params.id } });
   if (!application) notFound();
+
+  const settingRows = await prisma.platformSetting.findMany();
+  const prices = parseMembershipPrices(settingRows);
+  const includedCredits = parseIncludedCredits(settingRows);
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,6 +144,8 @@ export default async function AdminCandidatureDetailPage({ params }: { params: {
             <CandidatureDecisionPanel
               applicationId={application.id}
               requestedTier={application.requestedTier}
+              prices={prices}
+              includedCredits={includedCredits}
             />
           ) : (
             <div className="rounded-lg border border-border bg-white p-5 text-sm text-text-muted">
