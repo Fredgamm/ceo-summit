@@ -6,9 +6,65 @@ import type { ReportStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { roomFormSchema } from "@/lib/validations/room";
 import MemberRoomWarningEmail from "@/emails/member-room-warning-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+/** E8-T08 — "CRUD salles + gestion accès tier". */
+export async function createRoom(input: unknown): Promise<ActionResult<{ id: string }>> {
+  const { userId: adminId } = await requireAdmin("salles");
+
+  const parsed = roomFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+  const f = parsed.data;
+
+  const room = await prisma.room.create({
+    data: {
+      name: f.name,
+      description: f.description || null,
+      sector: f.sector,
+      minTier: f.minTier,
+    },
+  });
+  await prisma.auditLog.create({
+    data: { actorId: adminId, action: "room.create", targetType: "Room", targetId: room.id },
+  });
+
+  revalidatePath("/admin/salles");
+  revalidatePath("/salles");
+  return { success: true, data: { id: room.id } };
+}
+
+export async function updateRoom(roomId: string, input: unknown): Promise<ActionResult> {
+  const { userId: adminId } = await requireAdmin("salles");
+
+  const parsed = roomFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+  const f = parsed.data;
+
+  await prisma.room.update({
+    where: { id: roomId },
+    data: {
+      name: f.name,
+      description: f.description || null,
+      sector: f.sector,
+      minTier: f.minTier,
+    },
+  });
+  await prisma.auditLog.create({
+    data: { actorId: adminId, action: "room.update", targetType: "Room", targetId: roomId },
+  });
+
+  revalidatePath("/admin/salles");
+  revalidatePath("/salles");
+  revalidatePath(`/salles/${roomId}`);
+  return { success: true, data: undefined };
+}
 
 /** E4-T04 — "Archivage salle (masquage membres, conservation historique)". */
 export async function archiveRoom(roomId: string): Promise<ActionResult> {

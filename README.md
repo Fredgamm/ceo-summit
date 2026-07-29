@@ -86,7 +86,7 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (289 tests) : webhook Evolia, actions d'auth (activation, mot de
+Couverture actuelle (293 tests) : webhook Evolia, actions d'auth (activation, mot de
 passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
 de requête catalogue/événements/membres/Deal Room/salles/conversations/services
 (`lib/catalogue.ts`, `lib/events-query.ts`, `lib/admin-members-query.ts`,
@@ -94,11 +94,12 @@ de requête catalogue/événements/membres/Deal Room/salles/conversations/servic
 `lib/services-query.ts`, `lib/admin-deal-room-query.ts`), lock Redis générique et ses
 deux usages (capacité événement, déduction de crédits), actions Deal Room (publication,
 prise de contact, accepter/refuser un contact, modération admin), crédits (achat,
-confirmation admin), salles (lecture, signalement, modération admin), messagerie
-(chiffrement pgcrypto, notification email hors-ligne) et catalogue de services (dépôt,
-modération admin), et le serveur Socket.io autonome (`server/socket-server.ts` — auth,
-accès par tier, rate limiting, persistance/broadcast pour les salles ET les
-conversations privées, testé via un vrai client socket.io-client contre un serveur
+confirmation admin), salles (lecture, signalement, modération admin, CRUD admin),
+messagerie (chiffrement pgcrypto, notification email hors-ligne) et catalogue de
+services (dépôt, modération admin), et le serveur Socket.io autonome
+(`server/socket-server.ts` — auth, accès par tier, rate limiting, persistance/broadcast
+pour les salles ET les conversations privées, testé via un vrai client socket.io-client
+contre un serveur
 éphémère). Les pages
 elles-mêmes (composants React) n'ont pas de tests de rendu — seule la logique
 serveur/pure est testée pour l'instant.
@@ -404,9 +405,19 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E8-T06 fait maintenant partie des tâches livrées d'E8 (6/11).**
 
+### E8-T08 — CRUD salles admin (`/admin/salles/nouveau`, `/admin/salles/[id]/editer`)
+
+- ✅ Complète E8-T08 : la modération (signalements, archivage/restauration) était déjà
+  livrée en E4-T04 ; il manquait la création/édition de salle elle-même. Formulaire
+  nom/description/secteur/accès minimum (`RoomFormValues`), même pattern create/edit
+  qu'`EventForm` (E3-T05).
+- Vérifié en direct : page de création et page d'édition (préremplie avec une vraie
+  salle du seed) toutes deux rendues avec succès.
+
+**E8 est maintenant à 7/11.**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E8-T08 → T11 : CRUD salles admin (T08, hors modération déjà faite en E4),
-  communications, finances, paramètres
+- E8-T09 → T11 : communications & broadcasts, finances, paramètres plateforme
 - E9 : PWA
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)

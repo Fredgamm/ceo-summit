@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
@@ -6,6 +7,7 @@ import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { RoomAdminActions } from "@/components/admin/room-admin-actions";
 import { RoomReportDialog } from "@/components/admin/room-report-dialog";
 
@@ -49,11 +51,16 @@ export default async function AdminRoomsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-bold text-navy">Salles thématiques</h1>
-        <p className="text-sm text-text-muted">
-          {rooms.length} salles · {pendingReports.length} signalement(s) en attente
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-navy">Salles thématiques</h1>
+          <p className="text-sm text-text-muted">
+            {rooms.length} salles · {pendingReports.length} signalement(s) en attente
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/admin/salles/nouveau">+ Créer une salle</Link>
+        </Button>
       </div>
 
       <div>
@@ -128,7 +135,12 @@ export default async function AdminRoomsPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <RoomAdminActions roomId={room.id} status={room.status} />
+                      <div className="flex items-center gap-1">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href={`/admin/salles/${room.id}/editer`}>Éditer</Link>
+                        </Button>
+                        <RoomAdminActions roomId={room.id} status={room.status} />
+                      </div>
                     </td>
                   </tr>
                 ))}

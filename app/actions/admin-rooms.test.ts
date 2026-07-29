@@ -6,7 +6,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    room: { update: vi.fn() },
+    room: { create: vi.fn(), update: vi.fn() },
     roomMessage: { update: vi.fn() },
     roomSuspension: { create: vi.fn() },
     roomReport: { findUnique: vi.fn(), update: vi.fn() },
@@ -20,7 +20,7 @@ vi.mock("@/emails/member-room-warning-email", () => ({ default: vi.fn(() => null
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { archiveRoom, restoreRoom, resolveRoomReport } from "./admin-rooms";
+import { archiveRoom, restoreRoom, resolveRoomReport, createRoom, updateRoom } from "./admin-rooms";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
 
@@ -125,5 +125,70 @@ describe("resolveRoomReport", () => {
     expect(prisma.roomReport.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "DISMISSED" }) })
     );
+  });
+});
+
+const VALID_ROOM_INPUT = {
+  name: "Énergie & Environnement",
+  description: "Transition énergétique en Océan Indien",
+  sector: "Énergie & Environnement",
+  minTier: "ALL_MEMBERS" as const,
+};
+
+describe("createRoom", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
+  });
+
+  it("creates a room and logs the action", async () => {
+    vi.mocked(prisma.room.create).mockResolvedValue({ id: "room_1" } as never);
+
+    const result = await createRoom(VALID_ROOM_INPUT);
+
+    expect(result).toEqual({ success: true, data: { id: "room_1" } });
+    expect(prisma.room.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ name: VALID_ROOM_INPUT.name, minTier: "ALL_MEMBERS" }),
+      })
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: "room.create" }) })
+    );
+  });
+
+  it("rejects invalid input without creating anything", async () => {
+    const result = await createRoom({ ...VALID_ROOM_INPUT, name: "a" });
+    expect(result.success).toBe(false);
+    expect(prisma.room.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateRoom", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
+  });
+
+  it("updates a room and logs the action", async () => {
+    const result = await updateRoom("room_1", VALID_ROOM_INPUT);
+    expect(result.success).toBe(true);
+    expect(prisma.room.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "room_1" },
+        data: expect.objectContaining({ name: VALID_ROOM_INPUT.name }),
+      })
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ action: "room.update" }) })
+    );
+  });
+
+  it("rejects invalid input without updating anything", async () => {
+    const result = await updateRoom("room_1", { ...VALID_ROOM_INPUT, sector: "" });
+    expect(result.success).toBe(false);
+    expect(prisma.room.update).not.toHaveBeenCalled();
   });
 });
