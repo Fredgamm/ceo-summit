@@ -4,6 +4,7 @@ import { Briefcase, Globe, Handshake } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -38,6 +39,8 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
   });
   if (!company) notFound();
 
+  const unreadMessages = await countUnreadMessages(viewer.id);
+
   return (
     <AppShell
       user={{
@@ -46,6 +49,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4 flex items-start gap-4 rounded-lg border border-border bg-white p-6">
         <Avatar className="h-16 w-16 shrink-0 rounded-xl">

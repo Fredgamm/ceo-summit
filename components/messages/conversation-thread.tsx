@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
-import { Send } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 
 import { getSocketClient } from "@/lib/socket-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -155,6 +156,13 @@ export function ConversationThread({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
+        <Link
+          href="/messagerie"
+          aria-label="Retour aux conversations"
+          className="-ml-1.5 rounded p-1.5 text-text-muted hover:bg-surface md:hidden"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
         <Avatar className="h-9 w-9">
           <AvatarImage src={otherUser.avatarUrl ?? undefined} alt={otherUser.name} />
           <AvatarFallback>{initials(otherUser.name)}</AvatarFallback>

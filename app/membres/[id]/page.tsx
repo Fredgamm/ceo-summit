@@ -5,6 +5,7 @@ import { Building2, Handshake, Briefcase, Linkedin } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +49,7 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
 
   const isSelf = viewer.id === user.id;
   const tier = user.memberships[0]?.tier;
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -57,6 +59,7 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4 overflow-hidden rounded-lg border border-border bg-white">
         <div className="h-24 bg-navy" />

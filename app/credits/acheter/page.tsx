@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { BuyCreditsForm } from "@/components/credits/buy-credits-form";
 import { tierLabel } from "@/lib/utils";
@@ -29,6 +30,8 @@ export default async function BuyCreditsPage() {
         ? viewer.creditBalance.included + viewer.creditBalance.purchased - viewer.creditBalance.used
         : 0;
 
+  const unreadMessages = await countUnreadMessages(viewer.id);
+
   return (
     <AppShell
       user={{
@@ -37,6 +40,7 @@ export default async function BuyCreditsPage() {
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-6 rounded-lg bg-navy p-6 text-white">
         <p className="text-sm text-white/60">Crédits actuels</p>

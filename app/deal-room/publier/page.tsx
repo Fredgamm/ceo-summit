@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { PublishWizard } from "@/components/deal-room/publish-wizard";
 import { tierLabel } from "@/lib/utils";
@@ -19,6 +20,8 @@ export default async function PublishOpportunityPage() {
   });
   if (!viewer) redirect("/login");
 
+  const unreadMessages = await countUnreadMessages(viewer.id);
+
   return (
     <AppShell
       user={{
@@ -27,6 +30,7 @@ export default async function PublishOpportunityPage() {
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <PublishWizard authorName={viewer.name} authorTitle={viewer.title ?? ""} />
     </AppShell>

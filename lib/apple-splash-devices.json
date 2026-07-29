@@ -1,0 +1,19 @@
+[
+  { "name": "iphone-se1", "widthPt": 320, "heightPt": 568, "dpr": 2 },
+  { "name": "iphone-6-7-8", "widthPt": 375, "heightPt": 667, "dpr": 2 },
+  { "name": "iphone-6-7-8-plus", "widthPt": 414, "heightPt": 736, "dpr": 3 },
+  { "name": "iphone-x-xs-11pro", "widthPt": 375, "heightPt": 812, "dpr": 3 },
+  { "name": "iphone-11promax-xsmax", "widthPt": 414, "heightPt": 896, "dpr": 3 },
+  { "name": "iphone-11-xr", "widthPt": 414, "heightPt": 896, "dpr": 2 },
+  { "name": "iphone-12mini-13mini", "widthPt": 360, "heightPt": 780, "dpr": 3 },
+  { "name": "iphone-12-12pro-13-13pro-14", "widthPt": 390, "heightPt": 844, "dpr": 3 },
+  { "name": "iphone-12promax-13promax-14plus", "widthPt": 428, "heightPt": 926, "dpr": 3 },
+  { "name": "iphone-14pro-15-16", "widthPt": 393, "heightPt": 852, "dpr": 3 },
+  { "name": "iphone-14promax-15plus-15promax-16plus", "widthPt": 430, "heightPt": 932, "dpr": 3 },
+  { "name": "iphone-16pro", "widthPt": 402, "heightPt": 874, "dpr": 3 },
+  { "name": "iphone-16promax", "widthPt": 440, "heightPt": 956, "dpr": 3 },
+  { "name": "ipad-9-7", "widthPt": 768, "heightPt": 1024, "dpr": 2 },
+  { "name": "ipad-air2-pro10-5", "widthPt": 834, "heightPt": 1112, "dpr": 2 },
+  { "name": "ipad-pro11", "widthPt": 834, "heightPt": 1194, "dpr": 2 },
+  { "name": "ipad-pro12-9", "widthPt": 1024, "heightPt": 1366, "dpr": 2 }
+]

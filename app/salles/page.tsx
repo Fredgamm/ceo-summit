@@ -5,6 +5,7 @@ import { MessagesSquare } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildRoomsWhere, meetsRoomAccess, type RoomsSearchParams } from "@/lib/rooms-query";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomsFilters } from "@/components/rooms/rooms-filters";
 import { RoomsGrid } from "@/components/rooms/rooms-grid";
@@ -58,6 +59,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
   });
 
   const unreadCount = roomCards.filter((r) => r.unread).length;
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -67,7 +69,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
-      badges={{ rooms: unreadCount || undefined }}
+      badges={{ rooms: unreadCount || undefined, messages: unreadMessages || undefined }}
     >
       <div className="mb-4">
         <h1 className="text-xl font-bold text-navy">Salles thématiques</h1>

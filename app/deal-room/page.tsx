@@ -10,6 +10,7 @@ import {
   DEAL_ROOM_PAGE_SIZE,
   type DealRoomSearchParams,
 } from "@/lib/deal-room-query";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { DealRoomFilters } from "@/components/deal-room/deal-room-filters";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
@@ -66,6 +67,7 @@ export default async function DealRoomPage({
       : viewer.creditBalance
         ? viewer.creditBalance.included + viewer.creditBalance.purchased - viewer.creditBalance.used
         : 0;
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -75,6 +77,7 @@ export default async function DealRoomPage({
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Deal Room</h1>

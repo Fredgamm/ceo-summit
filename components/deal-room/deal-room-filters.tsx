@@ -1,6 +1,8 @@
 "use client";
 
+import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { SlidersHorizontal } from "lucide-react";
 
 import { SECTORS } from "@/lib/sectors";
 import { COUNTRIES } from "@/lib/countries";
@@ -12,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
+import { cn } from "@/lib/utils";
 
 const ALL = "__all__";
 
@@ -36,6 +39,7 @@ export function DealRoomFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [open, setOpen] = React.useState(false);
 
   function updateParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -46,83 +50,99 @@ export function DealRoomFilters() {
   }
 
   return (
-    <div className="mb-4 flex flex-wrap gap-3">
-      <Select value={searchParams.get("type") || ALL} onValueChange={(v) => updateParam("type", v)}>
-        <SelectTrigger className="w-[170px]">
-          <SelectValue placeholder="Tous les types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous les types</SelectItem>
-          {TYPES.map(([value, label]) => (
-            <SelectItem key={value} value={value}>
-              {label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={searchParams.get("sector") || ALL}
-        onValueChange={(v) => updateParam("sector", v)}
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-navy md:hidden"
       >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Tous les secteurs" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous les secteurs</SelectItem>
-          {SECTORS.map((s) => (
-            <SelectItem key={s} value={s}>
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <SlidersHorizontal className="h-4 w-4" /> Filtres {open ? "▲" : "▼"}
+      </button>
 
-      <Select value={searchParams.get("pays") || ALL} onValueChange={(v) => updateParam("pays", v)}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Toutes zones" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Toutes zones</SelectItem>
-          {COUNTRIES.map((c) => (
-            <SelectItem key={c} value={c}>
-              {c}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className={cn(open ? "flex" : "hidden md:flex", "flex-wrap gap-3")}>
+        <Select
+          value={searchParams.get("type") || ALL}
+          onValueChange={(v) => updateParam("type", v)}
+        >
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Tous les types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tous les types</SelectItem>
+            {TYPES.map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      <Select
-        value={searchParams.get("budget") || ALL}
-        onValueChange={(v) => updateParam("budget", v)}
-      >
-        <SelectTrigger className="w-[150px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {BUDGETS.map((b) => (
-            <SelectItem key={b.value} value={b.value}>
-              {b.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          value={searchParams.get("sector") || ALL}
+          onValueChange={(v) => updateParam("sector", v)}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Tous les secteurs" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tous les secteurs</SelectItem>
+            {SECTORS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-      <Select
-        value={searchParams.get("tri") || "recent"}
-        onValueChange={(v) => updateParam("tri", v)}
-      >
-        <SelectTrigger className="w-[190px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SORTS.map((s) => (
-            <SelectItem key={s.value} value={s.value}>
-              {s.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        <Select
+          value={searchParams.get("pays") || ALL}
+          onValueChange={(v) => updateParam("pays", v)}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Toutes zones" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Toutes zones</SelectItem>
+            {COUNTRIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={searchParams.get("budget") || ALL}
+          onValueChange={(v) => updateParam("budget", v)}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {BUDGETS.map((b) => (
+              <SelectItem key={b.value} value={b.value}>
+                {b.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={searchParams.get("tri") || "recent"}
+          onValueChange={(v) => updateParam("tri", v)}
+        >
+          <SelectTrigger className="w-[190px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SORTS.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

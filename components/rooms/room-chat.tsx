@@ -178,7 +178,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
   }
 
   return (
-    <div className="flex h-[calc(100vh-140px)] flex-col rounded-lg border border-border bg-white">
+    <div className="flex h-[calc(100dvh-140px)] flex-col rounded-lg border border-border bg-white md:h-[calc(100vh-140px)]">
       <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
         <div>
           <h2 className="text-sm font-bold text-navy">{room.name}</h2>
@@ -267,7 +267,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
         </div>
       </div>
 
-      <div className="border-t border-border p-4">
+      <div className="sticky bottom-0 border-t border-border bg-white p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] md:pb-4">
         <div className="flex items-end gap-2">
           <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
           <Button

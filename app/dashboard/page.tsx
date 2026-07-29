@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { tierLabel } from "@/lib/utils";
@@ -24,6 +25,8 @@ export default async function DashboardPage() {
   });
   if (!user) redirect("/login");
 
+  const unreadMessages = await countUnreadMessages(user.id);
+
   return (
     <AppShell
       user={{
@@ -32,6 +35,7 @@ export default async function DashboardPage() {
         avatarUrl: user.avatarUrl,
         isAdmin: user.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Bonjour, {user.name.split(" ")[0]} 👋</h1>

@@ -3,11 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    message: { count: vi.fn() },
   },
 }));
 
 import { prisma } from "@/lib/prisma";
-import { getOrCreateConversation } from "./conversations";
+import { getOrCreateConversation, countUnreadMessages } from "./conversations";
 
 describe("getOrCreateConversation", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -70,5 +71,24 @@ describe("getOrCreateConversation", () => {
     await getOrCreateConversation("user_a", "user_b", "opp_new");
 
     expect(prisma.conversation.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("countUnreadMessages", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("counts unread messages sent to the viewer across every conversation", async () => {
+    vi.mocked(prisma.message.count).mockResolvedValue(3);
+
+    const result = await countUnreadMessages("user_a");
+
+    expect(result).toBe(3);
+    expect(prisma.message.count).toHaveBeenCalledWith({
+      where: {
+        readAt: null,
+        senderId: { not: "user_a" },
+        conversation: { OR: [{ member1Id: "user_a" }, { member2Id: "user_a" }] },
+      },
+    });
   });
 });

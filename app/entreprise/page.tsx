@@ -4,6 +4,7 @@ import { Building2 } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { tierLabel } from "@/lib/utils";
@@ -30,6 +31,8 @@ export default async function MyCompanyPage() {
     redirect(`/entreprises/${viewer.companyId}`);
   }
 
+  const unreadMessages = await countUnreadMessages(viewer.id);
+
   return (
     <AppShell
       user={{
@@ -38,6 +41,7 @@ export default async function MyCompanyPage() {
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <EmptyState
         icon={Building2}

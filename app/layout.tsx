@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
+import { SPLASH_DEVICES, splashMediaQuery } from "@/lib/apple-splash-screens";
 import "./globals.css";
 
 const inter = Inter({
@@ -27,6 +28,11 @@ export const metadata: Metadata = {
   icons: {
     icon: "/icons/icon-192.png",
     apple: "/icons/icon-192.png",
+    other: SPLASH_DEVICES.map((device) => ({
+      rel: "apple-touch-startup-image",
+      url: `/splash/${device.name}.png`,
+      media: splashMediaQuery(device),
+    })),
   },
 };
 

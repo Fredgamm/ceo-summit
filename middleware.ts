@@ -12,7 +12,7 @@ import { auth } from "@/auth";
  * happen inside the page/server action itself, close to the data being gated.
  */
 
-const PUBLIC_ROUTES = ["/login", "/mot-de-passe-oublie", "/demande-acces", "/"];
+const PUBLIC_ROUTES = ["/login", "/mot-de-passe-oublie", "/demande-acces", "/", "/~offline"];
 const PUBLIC_PREFIXES = ["/activer/", "/reinitialiser/"];
 
 function isPublicRoute(pathname: string) {
@@ -58,7 +58,11 @@ export const config = {
   matcher: [
     /*
      * Match all paths except:
-     * - static assets (_next/static, _next/image, favicon, icons, logo, manifest)
+     * - static assets (_next/static, _next/image, favicon, icons, logo, splash, manifest)
+     * - the PWA service worker + its generated helper scripts (sw.js,
+     *   workbox-*.js, fallback-*.js, E9-T01) — same class of bug as icons/logo
+     *   above: a logged-out browser could never register the service worker
+     *   if this middleware redirected the SW file itself to /login.
      * - API routes that manage their own auth:
      *   - api/webhooks must stay public for Evolia/Zoom/Resend
      *   - api/auth is NextAuth's own surface (csrf, signin, callback/credentials,
@@ -67,6 +71,6 @@ export const config = {
      *     itself impossible: signIn() calls /api/auth/callback/credentials, which
      *     this middleware redirected to /login before NextAuth ever saw it.
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|logo|manifest.json|api/webhooks|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|logo|splash|manifest.json|sw\\.js|workbox-|fallback-|api/webhooks|api/auth).*)",
   ],
 };

@@ -11,6 +11,7 @@ import {
   eventCapacityBadge,
   type EventsSearchParams,
 } from "@/lib/events-query";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { EventFilters } from "@/components/events/event-filters";
 import { EventCard } from "@/components/events/event-card";
@@ -52,6 +53,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
       },
     }),
   ]);
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -61,6 +63,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4">
         <h1 className="text-xl font-bold text-navy">Événements</h1>

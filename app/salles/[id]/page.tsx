@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { markRoomAsRead } from "@/app/actions/rooms";
 import { meetsRoomAccess, ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomChat } from "@/components/rooms/room-chat";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
     }),
     markRoomAsRead(room.id),
   ]);
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -55,6 +57,7 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <Link href="/salles" className="mb-3 inline-block text-sm text-text-muted">
         ← Salles thématiques

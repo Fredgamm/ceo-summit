@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,8 @@ export default async function ServiceDetailPage({ params }: { params: { id: stri
   const isAuthor = listing.authorId === viewer.id;
   if (listing.status !== "PUBLISHED" && !isAuthor) notFound();
 
+  const unreadMessages = await countUnreadMessages(viewer.id);
+
   return (
     <AppShell
       user={{
@@ -45,6 +48,7 @@ export default async function ServiceDetailPage({ params }: { params: { id: stri
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <Link href="/catalogue/services" className="mb-4 inline-block text-sm text-text-muted">
         ← Catalogue de services

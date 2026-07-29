@@ -30,3 +30,20 @@ export async function getOrCreateConversation(
 
   return prisma.conversation.create({ data: { member1Id, member2Id, opportunityId } });
 }
+
+/**
+ * E9-T02 — total unread private messages across every conversation, for the
+ * "Messages" badge on MobileBottomNav/MemberSidebar. The per-conversation
+ * version of this exact query already existed in app/messagerie/layout.tsx
+ * (for the conversation list badges) but was never summed and passed to
+ * AppShell — so the nav badge itself was dead code until now.
+ */
+export async function countUnreadMessages(userId: string): Promise<number> {
+  return prisma.message.count({
+    where: {
+      readAt: null,
+      senderId: { not: userId },
+      conversation: { OR: [{ member1Id: userId }, { member2Id: userId }] },
+    },
+  });
+}

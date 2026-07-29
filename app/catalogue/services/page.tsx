@@ -10,6 +10,7 @@ import {
   SERVICES_PAGE_SIZE,
   type ServicesSearchParams,
 } from "@/lib/services-query";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceFilters } from "@/components/catalogue-services/service-filters";
 import { ServiceCard } from "@/components/catalogue-services/service-card";
@@ -51,6 +52,7 @@ export default async function ServicesCataloguePage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / SERVICES_PAGE_SIZE));
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -60,6 +62,7 @@ export default async function ServicesCataloguePage({
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Catalogue de services</h1>

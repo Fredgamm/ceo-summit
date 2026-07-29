@@ -17,6 +17,13 @@
 /.next/
 /out/
 
+# next-pwa — generated service worker (E9-T01), rebuilt on every `next build`
+/public/sw.js
+/public/sw.js.map
+/public/workbox-*.js
+/public/worker-*.js
+/public/fallback-*.js
+
 # production
 /build
 

@@ -1,5 +1,6 @@
 import { MemberSidebar } from "@/components/layout/member-sidebar";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { InstallPrompt } from "@/components/layout/install-prompt";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -25,12 +26,7 @@ export function AppShell({ user, badges, rightPanel, children }: AppShellProps) 
     <div className="flex min-h-screen">
       <MemberSidebar user={user} badges={badges} />
 
-      <main
-        className={cn(
-          "min-h-screen flex-1 md:ml-sidebar",
-          rightPanel && "md:mr-right-panel"
-        )}
-      >
+      <main className={cn("min-h-screen flex-1 md:ml-sidebar", rightPanel && "md:mr-right-panel")}>
         <div className="p-4 pb-24 md:p-7 md:pb-7">{children}</div>
       </main>
 
@@ -41,6 +37,7 @@ export function AppShell({ user, badges, rightPanel, children }: AppShellProps) 
       )}
 
       <MobileBottomNav badges={{ messages: badges?.messages }} />
+      <InstallPrompt />
     </div>
   );
 }

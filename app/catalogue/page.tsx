@@ -10,6 +10,7 @@ import {
   CATALOGUE_PAGE_SIZE,
   type CatalogueSearchParams,
 } from "@/lib/catalogue";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { CatalogueFilters } from "@/components/catalogue/catalogue-filters";
 import { MemberCard } from "@/components/catalogue/member-card";
@@ -52,6 +53,7 @@ export default async function CataloguePage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / CATALOGUE_PAGE_SIZE));
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -61,6 +63,7 @@ export default async function CataloguePage({
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Catalogue des membres</h1>

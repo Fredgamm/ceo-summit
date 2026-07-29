@@ -86,7 +86,7 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (353 tests) : webhook Evolia, webhook Resend (E8-T09), actions
+Couverture actuelle (354 tests) : webhook Evolia, webhook Resend (E8-T09), actions
 d'auth (activation, mot de passe oublié, onboarding, profil), actions
 membres/candidatures/événements admin, logique de requête catalogue/événements/
 membres/Deal Room/salles/conversations/services/broadcasts/finances
@@ -521,8 +521,62 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E8 est maintenant complet (11/11).**
 
+### E9 — PWA & Mobile (4/5)
+
+- ✅ **E9-T01** — Configuration PWA complète. `@ducanh2912/next-pwa` (fork
+  maintenu, compatible App Router — le paquet `next-pwa` original n'a pas
+  été mis à jour depuis des années) génère un vrai service worker
+  (`public/sw.js`, gitignoré — régénéré à chaque build). Cache
+  `StaleWhileRevalidate` sur les pages membres, `NetworkFirst` dédié sur
+  login/dashboard/messagerie (les 3 pages citées par le backlog) avec une
+  rétention plus longue que le reste. Fallback offline réel
+  (`app/~offline`) quand une page non cachée échoue sans réseau. 17 splash
+  screens iOS (`apple-touch-startup-image`, portrait uniquement — le
+  manifest déclare `orientation: portrait-primary`) générées depuis le vrai
+  logo, table d'appareils partagée entre `lib/apple-splash-screens.ts` et
+  `scripts/generate-splash-screens.mjs` — table assemblée à partir d'une
+  source vérifiée (iPhone SE→11) + tailles iPhone 12-16 recoupées sur des
+  références de viewport publiées, pas scrapée en direct depuis Apple HIG ;
+  à considérer comme "bonne couverture des formats courants", pas une
+  garantie exhaustive par modèle.
+- ✅ **Débloque un vrai gap de sécurité** : le middleware RBAC excluait déjà
+  `icons`/`manifest.json` de la vérification d'auth mais pas `sw.js` — un
+  visiteur non connecté ne pouvait jamais réellement enregistrer le service
+  worker (redirigé vers `/login` en tentant de le charger). Même correction
+  appliquée à `/splash/*`.
+- ✅ **E9-T02** — Bottom navigation mobile : déjà entièrement construite
+  (5 onglets, badge non-lu, `safe-area-inset-bottom`) mais **le badge
+  "Messages" n'était jamais alimenté** — aucune des ~18 pages membres ne
+  passait de compteur réel à `AppShell`. Ajout de
+  `countUnreadMessages()` (`lib/conversations.ts`, testé) et branchement
+  sur chaque page membre (dont `/messagerie` qui calculait déjà ce total
+  par conversation sans jamais le sommer).
+- ✅ **E9-T05** — Bandeau d'installation (`components/layout/install-prompt.tsx`) :
+  écoute `beforeinstallprompt` (Android/Chrome), affiché après la 2e visite
+  (compteur `localStorage`) ; guide statique dédié pour Safari iOS (qui ne
+  déclenche jamais cet événement) — "Partager → Sur l'écran d'accueil".
+  Composant 100% client/`localStorage`, ne rend rien côté serveur par
+  conception (évite un mismatch d'hydratation) — non vérifiable par simple
+  requête HTTP, nécessiterait un vrai navigateur pour un test visuel complet.
+- 🟡 **E9-T03** — Revue responsive : faite en lecture de code (pas de
+  navigateur/appareil disponible dans cet environnement pour une QA
+  visuelle réelle). 4 vrais écarts trouvés et corrigés : filtres Deal Room
+  toujours visibles sans bouton de repli mobile (ajout d'un toggle
+  "Filtres"), thread de messagerie sans bouton retour vers la liste sur
+  mobile (ajouté), chat de salle utilisant `100vh` au lieu de `100dvh`
+  (coupé par la barre d'adresse mobile) avec un champ de saisie non
+  `sticky`, et les onglets (`TabsList`, composant partagé) sans défilement
+  horizontal en cas de débordement. Non vérifié visuellement sur un vrai
+  appareil.
+- ❌ **E9-T04** (push notifications, P2/optionnel) — non fait. Nécessiterait
+  des clés VAPID, un endpoint backend de souscription push et un flux
+  opt-in RGPD complets : aucune de ces briques n'existe. Même limitation
+  que Redis/Resend ailleurs dans ce projet — non simulé plutôt que faussement
+  implémenté.
+
+**E9 est maintenant à 4/5 (T04 explicitement hors scope, optionnel/P2).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E9 : PWA — icônes/logo réels déjà en place (voir E0/E1 plus haut), reste
-  `next-pwa`/service worker + manifest/splash screens
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)
+- E9-T04 (push notifications) si l'infra VAPID/push devient une priorité produit

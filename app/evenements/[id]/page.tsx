@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { parseProgram, parseSpeakers } from "@/lib/event-content";
+import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +55,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
 
   const program = parseProgram(event.program);
   const speakers = parseSpeakers(event.speakers);
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -63,6 +65,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <Link href="/evenements" className="mb-4 inline-block text-sm text-text-muted">
         ← Événements

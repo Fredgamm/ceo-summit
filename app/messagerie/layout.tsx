@@ -41,6 +41,8 @@ export default async function MessagerieLayout({ children }: { children: React.R
     },
   });
 
+  const totalUnread = conversations.reduce((sum, c) => sum + c._count.messages, 0);
+
   const items: ConversationListItem[] = await Promise.all(
     conversations.map(async (c) => {
       const otherId = otherParticipantId(c, viewer.id);
@@ -70,6 +72,7 @@ export default async function MessagerieLayout({ children }: { children: React.R
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: totalUnread || undefined }}
     >
       <div className="flex h-[calc(100vh-140px)] overflow-hidden rounded-lg border border-border bg-white">
         <SplitPane

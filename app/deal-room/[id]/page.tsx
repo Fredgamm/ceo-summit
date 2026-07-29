@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { allowedVisibilities } from "@/lib/deal-room-query";
+import { countUnreadMessages } from "@/lib/conversations";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -76,6 +77,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
     : [];
 
   const authorTier = opportunity.author.memberships[0]?.tier ?? null;
+  const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
@@ -85,6 +87,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}
+      badges={{ messages: unreadMessages || undefined }}
     >
       <Link href="/deal-room" className="mb-4 inline-block text-sm text-text-muted">
         ← Deal Room
