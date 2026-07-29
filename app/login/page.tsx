@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Suspense } from "react";
 import { Diamond, CalendarDays, Mail } from "lucide-react";
 
@@ -18,9 +19,14 @@ export default function LoginPage() {
       {/* Left brand panel — hidden on mobile (wireframe .login-left) */}
       <div className="hidden w-[45%] flex-col justify-center bg-navy p-[60px] md:flex">
         <div className="mb-10">
-          <div className="mb-2 text-[26px] font-extrabold text-white">
-            CEO<span className="text-gold">Summit</span>
-          </div>
+          <Image
+            src="/logo/ceo-summit-logo-dark.png"
+            alt="CEO Summit"
+            width={220}
+            height={105}
+            className="mb-3"
+            priority
+          />
           <div className="text-sm uppercase tracking-wide text-white/50">
             Le cercle des décideurs de l&apos;Océan Indien
           </div>
@@ -30,8 +36,8 @@ export default function LoginPage() {
           Votre réseau d&apos;affaires premium
         </div>
         <div className="mb-12 text-[15px] leading-relaxed text-white/55">
-          Accédez à la Deal Room, au Catalogue de services, aux salles thématiques et aux
-          événements exclusifs CEO Summit.
+          Accédez à la Deal Room, au Catalogue de services, aux salles thématiques et aux événements
+          exclusifs CEO Summit.
         </div>
 
         <div className="flex flex-col gap-4">

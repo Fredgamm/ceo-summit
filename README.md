@@ -133,8 +133,12 @@ Ce n'est pas un problème de code ; ça fonctionne normalement en local et sur C
   Company) qui n'existent pas encore. Le lien `/demande-acces` dans `LoginForm` reste
   mort : ce n'est pas une tâche numérotée du backlog E1 (candidature membership, hors
   scope actuel).
-- ❌ PWA : `public/icons/*.png` sont des placeholders générés (navy/gold, sans logo réel)
-  — swap prévu en E9-T01 ; pas de `next-pwa`/service worker configuré encore
+- 🟡 PWA : les icônes manifest (`public/icons/icon-*.png`) et le logo affiché dans
+  l'app (`public/logo/`) sont désormais les vrais exports de marque CEO Summit
+  (remplacent les placeholders navy/gold générés) — variante couleur sur fond clair
+  (`ceo-summit-logo.png`, utilisée par `AuthCard`) et variante blanche sur fond sombre
+  (`ceo-summit-logo-dark.png`, utilisée par les sidebars membre/admin et le panneau
+  gauche de `/login`). Il manque toujours `next-pwa`/service worker (reste E9-T01).
 
 ### E2 — Profils membres & entreprises
 
@@ -519,6 +523,6 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E9 : PWA (icônes réelles, service worker, manifest)
-- E9 : PWA
+- E9 : PWA — icônes/logo réels déjà en place (voir E0/E1 plus haut), reste
+  `next-pwa`/service worker + manifest/splash screens
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)

@@ -58,7 +58,7 @@ export const config = {
   matcher: [
     /*
      * Match all paths except:
-     * - static assets (_next/static, _next/image, favicon, icons, manifest)
+     * - static assets (_next/static, _next/image, favicon, icons, logo, manifest)
      * - API routes that manage their own auth:
      *   - api/webhooks must stay public for Evolia/Zoom/Resend
      *   - api/auth is NextAuth's own surface (csrf, signin, callback/credentials,
@@ -67,6 +67,6 @@ export const config = {
      *     itself impossible: signIn() calls /api/auth/callback/credentials, which
      *     this middleware redirected to /login before NextAuth ever saw it.
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|api/webhooks|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|logo|manifest.json|api/webhooks|api/auth).*)",
   ],
 };

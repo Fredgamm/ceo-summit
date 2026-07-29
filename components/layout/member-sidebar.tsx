@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -47,10 +48,8 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
   return (
     <aside className="fixed left-0 top-0 hidden h-screen w-sidebar flex-col overflow-y-auto bg-navy md:flex">
       <div className="border-b border-white/10 px-[18px] py-[18px] pb-3.5">
-        <div className="text-[17px] font-extrabold tracking-tight text-white">
-          CEO<span className="text-gold">Summit</span>
-        </div>
-        <div className="mt-0.5 text-[10px] uppercase tracking-wider text-white/40">
+        <Image src="/logo/ceo-summit-logo-dark.png" alt="CEO Summit" width={140} height={67} />
+        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/40">
           Océan Indien · Décideurs
         </div>
       </div>
