@@ -442,6 +442,40 @@ async function main() {
     data: { lastMessageAt: new Date() },
   });
 
+  // ── Catalogue de services (E5-T01/T02 demo data — no admin CRUD UI exists
+  // yet to create these for real, they go through the moderation flow) ──
+  await prisma.serviceListing.upsert({
+    where: { id: "svc_audit_strategique" },
+    update: {},
+    create: {
+      id: "svc_audit_strategique",
+      authorId: demoMember.id,
+      title: "Audit stratégique & accompagnement levée de fonds",
+      category: "Conseil & Stratégie",
+      description:
+        "Accompagnement des PME et ETI dans leurs opérations de croissance : audit stratégique, structuration financière et mise en relation avec des investisseurs régionaux.",
+      priceInfo: "Sur devis",
+      gallery: [],
+      status: "PUBLISHED",
+    },
+  });
+
+  await prisma.serviceListing.upsert({
+    where: { id: "svc_conformite_juridique" },
+    update: {},
+    create: {
+      id: "svc_conformite_juridique",
+      authorId: admin.id,
+      title: "Mise en conformité juridique & fiscale régionale",
+      category: "Juridique & Fiscal",
+      description:
+        "Cabinet spécialisé dans l'accompagnement des entreprises de l'Océan Indien sur leurs obligations juridiques et fiscales multi-juridictions (Madagascar, Maurice, Comores, La Réunion).",
+      priceInfo: "À partir de 800 000 Ar",
+      gallery: [],
+      status: "PUBLISHED",
+    },
+  });
+
   // ── Membership applications (E8-T02 dashboard demo data — no candidature
   // UI exists yet to create these for real, see conception/01_onboarding_acces.md UC-01/02) ──
   await prisma.membershipApplication.upsert({

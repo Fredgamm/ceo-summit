@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Diamond,
   LayoutGrid,
+  Briefcase,
   CreditCard,
   Mail,
   Landmark,
@@ -59,6 +60,12 @@ const SECTIONS: {
         badgeKey: "opportunities",
       },
       { href: "/admin/salles", label: "Salles", icon: LayoutGrid, section: "salles" },
+      {
+        href: "/admin/catalogue-services",
+        label: "Catalogue services",
+        icon: Briefcase,
+        section: "services",
+      },
     ],
   },
   {

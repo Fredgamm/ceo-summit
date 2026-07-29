@@ -86,17 +86,19 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (249 tests) : webhook Evolia, actions d'auth (activation, mot de
+Couverture actuelle (272 tests) : webhook Evolia, actions d'auth (activation, mot de
 passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
-de requête catalogue/événements/membres/Deal Room/salles/conversations (`lib/catalogue.ts`,
-`lib/events-query.ts`, `lib/admin-members-query.ts`, `lib/deal-room-query.ts`,
-`lib/rooms-query.ts`, `lib/conversations-query.ts`), lock Redis générique et ses deux usages
-(capacité événement, déduction de crédits), actions Deal Room (publication, prise de
-contact, accepter/refuser un contact), crédits (achat, confirmation admin), salles (lecture,
-signalement, modération admin) et messagerie (chiffrement pgcrypto, notification email
-hors-ligne), et le serveur Socket.io autonome (`server/socket-server.ts` — auth, accès par
-tier, rate limiting, persistance/broadcast pour les salles ET les conversations privées,
-testé via un vrai client socket.io-client contre un serveur éphémère). Les pages
+de requête catalogue/événements/membres/Deal Room/salles/conversations/services
+(`lib/catalogue.ts`, `lib/events-query.ts`, `lib/admin-members-query.ts`,
+`lib/deal-room-query.ts`, `lib/rooms-query.ts`, `lib/conversations-query.ts`,
+`lib/services-query.ts`), lock Redis générique et ses deux usages (capacité événement,
+déduction de crédits), actions Deal Room (publication, prise de contact, accepter/refuser
+un contact), crédits (achat, confirmation admin), salles (lecture, signalement,
+modération admin), messagerie (chiffrement pgcrypto, notification email hors-ligne) et
+catalogue de services (dépôt, modération admin), et le serveur Socket.io autonome
+(`server/socket-server.ts` — auth, accès par tier, rate limiting, persistance/broadcast
+pour les salles ET les conversations privées, testé via un vrai client socket.io-client
+contre un serveur éphémère). Les pages
 elles-mêmes (composants React) n'ont pas de tests de rendu — seule la logique
 serveur/pure est testée pour l'instant.
 
@@ -351,11 +353,34 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E7 est maintenant complet (4/4).**
 
+### E5 — Catalogue de services
+
+- ✅ E5-T01 : Liste (`/catalogue/services`) — filtres catégorie/pays/tier. Comme
+  `ServiceListing` n'a pas ses propres champs pays/tier, "pays" retombe sur le pays de
+  l'entreprise liée (ou celui de l'auteur si aucune entreprise) et "tier" filtre sur le
+  niveau d'adhésion actif du prestataire — décrit explicitement en commentaire dans
+  `lib/services-query.ts` pour éviter toute ambiguïté future.
+- ✅ E5-T02 : Fiche (`/catalogue/services/[id]`) — description, tarif, galerie, bouton
+  "Contacter" qui réutilise directement le hook `/messagerie?new=<id>` déjà posé par E2
+  et câblé par E7 (aucune nouvelle logique de contact nécessaire).
+- ✅ E5-T03 : Dépôt (`/catalogue/services/publier`) — stepper 3 étapes, galerie jusqu'à
+  6 visuels (upload indépendant + redimensionnement serveur, même pattern que l'avatar/
+  la bannière événement), statut `pending_moderation` → email admin. Limite "1 fiche
+  active par entreprise (Member/Executive), illimité Chairman" appliquée par
+  `authorId`/`companyId` selon que l'auteur a une entreprise liée ou non.
+- **Modération admin ajoutée alors qu'aucune tâche E8-Txx ne la couvre explicitement** :
+  T03 exige "Modération admin avant publication" mais aucun epic E8 n'a de bullet dédié
+  au catalogue de services. Ajout d'une section `services` à `lib/admin-rbac.ts` (accès
+  SUPER_ADMIN + MODÉRATEUR, comme Deal Room/Salles) et d'une page minimale
+  `/admin/catalogue-services` (publier/refuser, email à l'auteur) plutôt que de laisser
+  le dépôt sans aucune façon d'être validé.
+- Seed : 2 fiches de démo publiées (Conseil & Stratégie, Juridique & Fiscal), sans
+  visuel (pas d'assets R2 réels disponibles pour la démo).
+
+**E5 est maintenant complet (3/3).**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E5 : Catalogue de services
-- E8 : reste du backoffice (T06 modération Deal Room, T08-T11)
-- E5 : Catalogue de services
-- E8-T06/T08 → T11 : modération Deal Room, communications, finances, paramètres admin
+- E8-T06/T08 → T11 : modération Deal Room, salles admin, communications, finances, paramètres
 - E9 : PWA
-- EX : tâches transverses (emails planifiés, intégration Zoom réelle, etc.)
+- EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)

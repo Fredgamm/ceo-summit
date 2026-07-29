@@ -1,0 +1,85 @@
+"use client";
+
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+
+import { SERVICE_CATEGORIES } from "@/lib/service-categories";
+import { COUNTRIES } from "@/lib/countries";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const ALL = "__all__";
+
+const TIERS = [
+  { value: "MEMBER", label: "Member" },
+  { value: "EXECUTIVE", label: "Executive" },
+  { value: "CHAIRMAN", label: "Chairman" },
+];
+
+/** E5-T01 — filtres catégorie/pays/tier du prestataire. */
+export function ServiceFilters() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function updateParam(key: string, value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value && value !== ALL) params.set(key, value);
+    else params.delete(key);
+    params.delete("page");
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <div className="mb-4 flex flex-wrap gap-3">
+      <Select
+        value={searchParams.get("categorie") || ALL}
+        onValueChange={(v) => updateParam("categorie", v)}
+      >
+        <SelectTrigger className="w-[200px]">
+          <SelectValue placeholder="Toutes les catégories" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>Toutes les catégories</SelectItem>
+          {SERVICE_CATEGORIES.map((c) => (
+            <SelectItem key={c} value={c}>
+              {c}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={searchParams.get("pays") || ALL} onValueChange={(v) => updateParam("pays", v)}>
+        <SelectTrigger className="w-[150px]">
+          <SelectValue placeholder="Toutes zones" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>Toutes zones</SelectItem>
+          {COUNTRIES.map((c) => (
+            <SelectItem key={c} value={c}>
+              {c}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={searchParams.get("tier") || ALL} onValueChange={(v) => updateParam("tier", v)}>
+        <SelectTrigger className="w-[160px]">
+          <SelectValue placeholder="Tous niveaux" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>Tous niveaux</SelectItem>
+          {TIERS.map((t) => (
+            <SelectItem key={t.value} value={t.value}>
+              {t.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
