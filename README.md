@@ -86,20 +86,22 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (293 tests) : webhook Evolia, actions d'auth (activation, mot de
-passe oublié, onboarding, profil), actions membres/candidatures/événements admin, logique
-de requête catalogue/événements/membres/Deal Room/salles/conversations/services
-(`lib/catalogue.ts`, `lib/events-query.ts`, `lib/admin-members-query.ts`,
-`lib/deal-room-query.ts`, `lib/rooms-query.ts`, `lib/conversations-query.ts`,
-`lib/services-query.ts`, `lib/admin-deal-room-query.ts`), lock Redis générique et ses
-deux usages (capacité événement, déduction de crédits), actions Deal Room (publication,
-prise de contact, accepter/refuser un contact, modération admin), crédits (achat,
-confirmation admin), salles (lecture, signalement, modération admin, CRUD admin),
-messagerie (chiffrement pgcrypto, notification email hors-ligne) et catalogue de
-services (dépôt, modération admin), et le serveur Socket.io autonome
-(`server/socket-server.ts` — auth, accès par tier, rate limiting, persistance/broadcast
-pour les salles ET les conversations privées, testé via un vrai client socket.io-client
-contre un serveur
+Couverture actuelle (318 tests) : webhook Evolia, webhook Resend (E8-T09), actions
+d'auth (activation, mot de passe oublié, onboarding, profil), actions
+membres/candidatures/événements admin, logique de requête catalogue/événements/
+membres/Deal Room/salles/conversations/services/broadcasts (`lib/catalogue.ts`,
+`lib/events-query.ts`, `lib/admin-members-query.ts`, `lib/deal-room-query.ts`,
+`lib/rooms-query.ts`, `lib/conversations-query.ts`, `lib/services-query.ts`,
+`lib/admin-deal-room-query.ts`, `lib/broadcast-segments.ts`,
+`lib/broadcast-template.ts`), lock Redis générique et ses deux usages (capacité
+événement, déduction de crédits), actions Deal Room (publication, prise de contact,
+accepter/refuser un contact, modération admin), crédits (achat, confirmation admin),
+salles (lecture, signalement, modération admin, CRUD admin), messagerie (chiffrement
+pgcrypto, notification email hors-ligne), catalogue de services (dépôt, modération
+admin) et broadcasts admin (segmentation, envoi test, envoi réel, webhook
+d'ouverture), et le serveur Socket.io autonome (`server/socket-server.ts` — auth,
+accès par tier, rate limiting, persistance/broadcast pour les salles ET les
+conversations privées, testé via un vrai client socket.io-client contre un serveur
 éphémère). Les pages
 elles-mêmes (composants React) n'ont pas de tests de rendu — seule la logique
 serveur/pure est testée pour l'instant.
@@ -416,8 +418,40 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E8 est maintenant à 7/11.**
 
+### E8-T09 — Communications & broadcasts (`/admin/communications`)
+
+- ✅ Composer un broadcast — objet + corps avec variables `{{prénom}}` `{{nom}}`
+  `{{tier}}` `{{entreprise}}` (`lib/broadcast-template.ts`), segmentation réelle
+  (tous actifs / Chairman / Executive / personnalisé par pays+secteur —
+  `lib/broadcast-segments.ts`, comptes en direct depuis la base), aperçu, envoi
+  test (à l'admin connecté uniquement) et envoi réel (un email par destinataire,
+  `Broadcast` + `BroadcastRecipient`, nouveaux modèles).
+- ✅ Historique — liste des broadcasts envoyés avec taux d'ouverture réel.
+- ✅ Webhook Resend (`/api/webhooks/resend`) — reçoit `email.opened`, marque le
+  destinataire et incrémente le compteur d'ouvertures, idempotent (un second
+  événement pour le même destinataire ne recompte pas). **Signature simplifiée** :
+  vérifiée avec le HMAC générique déjà utilisé pour Evolia plutôt que le schéma
+  Svix réel de Resend — il n'y a pas de compte Resend réel dans cet environnement
+  pour déclencher un vrai webhook de toute façon ; brancher un vrai compte plus
+  tard ne change que cette seule fonction de vérification.
+- **"Envoi programmé" du wireframe non implémenté** — nécessiterait une infra de
+  tâches planifiées qui n'existe pas dans ce projet (même limitation que les
+  rappels J-7/J-1 et les relances de renouvellement, déjà documentée ailleurs).
+- **"Édition des 6 templates" scopée honnêtement** : les templates sont des
+  composants React Email versionnés dans le code (`emails/*.tsx`), pas du
+  contenu éditable en base — l'onglet "Templates automatiques" les liste en
+  lecture seule (nom, déclencheur, statut **réel** actif/non-automatisé — 2 des
+  6 flux du wireframe n'ont jamais été automatisés dans ce projet faute de cron)
+  plutôt que de simuler un bouton "Éditer" qui ne ferait rien.
+- Vérifié en direct : les 3 onglets (composeur, templates, historique) rendus
+  avec succès ; l'envoi réel d'email n'a pas pu être testé en direct — aucune
+  clé Resend valide dans cet environnement (même limitation que tous les autres
+  envois d'email du projet), couvert par les tests unitaires à la place.
+
+**E8 est maintenant à 8/11.**
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- E8-T09 → T11 : communications & broadcasts, finances, paramètres plateforme
+- E8-T10/T11 : finances, paramètres plateforme
 - E9 : PWA
 - EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)

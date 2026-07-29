@@ -27,3 +27,24 @@ export const evoliaWebhookSchema = z.object({
 });
 
 export type EvoliaWebhookPayload = z.infer<typeof evoliaWebhookSchema>;
+
+/**
+ * Resend webhook payload (E8-T09 — "taux d'ouverture"). Real shape per
+ * https://resend.com/docs/dashboard/webhooks/event-types — only `email.opened`
+ * is acted on here, the rest are accepted and logged for completeness.
+ */
+export const resendWebhookSchema = z.object({
+  type: z.enum([
+    "email.sent",
+    "email.delivered",
+    "email.delivery_delayed",
+    "email.opened",
+    "email.clicked",
+    "email.bounced",
+    "email.complained",
+  ]),
+  created_at: z.string(),
+  data: z.object({ email_id: z.string() }).passthrough(),
+});
+
+export type ResendWebhookPayload = z.infer<typeof resendWebhookSchema>;

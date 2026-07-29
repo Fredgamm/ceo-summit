@@ -645,3 +645,45 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([targetType, targetId])
 }
+
+// ═══════════════════════════════════════════════
+// COMMUNICATIONS & BROADCASTS (E8-T09)
+// ═══════════════════════════════════════════════
+
+enum BroadcastSegment {
+  ALL_ACTIVE
+  CHAIRMAN
+  EXECUTIVE
+  CUSTOM
+}
+
+model Broadcast {
+  id             String           @id @default(cuid())
+  subject        String
+  body           String           @db.Text
+  segment        BroadcastSegment
+  segmentCountry String?
+  segmentSector  String?
+  sentById       String
+  recipientCount Int
+  openCount      Int              @default(0)
+  createdAt      DateTime         @default(now())
+
+  recipients     BroadcastRecipient[]
+
+  @@index([createdAt])
+}
+
+/// Un e-mail par destinataire, gardant l'id Resend pour corréler le webhook
+/// d'ouverture (E8-T09 : "taux d'ouverture (webhook Resend)").
+model BroadcastRecipient {
+  id              String    @id @default(cuid())
+  broadcastId     String
+  broadcast       Broadcast @relation(fields: [broadcastId], references: [id])
+  userId          String
+  resendMessageId String?
+  openedAt        DateTime?
+
+  @@unique([broadcastId, userId])
+  @@index([resendMessageId])
+}
