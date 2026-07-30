@@ -1,16 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { AdminRole, Tier } from "@prisma/client";
+import type { AdminRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
-import { membershipPriceKey, creditsIncludedKey } from "@/lib/platform-settings";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
-const TIERS: Tier[] = ["MEMBER", "EXECUTIVE", "CHAIRMAN"];
-const CREDIT_TIERS: ("MEMBER" | "EXECUTIVE")[] = ["MEMBER", "EXECUTIVE"];
 const REFERENTIAL_TYPES = ["sector", "country", "opportunity_type"] as const;
 
 function parsePositiveInt(value: string): number | null {
@@ -18,55 +15,9 @@ function parsePositiveInt(value: string): number | null {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
 }
 
-/** E8-T11 — "Tarifs membership annuels" + "Règles crédits inclus par tier". */
-export async function saveMembershipTariffs(
-  prices: Record<Tier, string>,
-  includedCredits: Record<"MEMBER" | "EXECUTIVE", string>
-): Promise<ActionResult> {
-  const { userId: adminId } = await requireAdmin("parametres");
-
-  for (const tier of TIERS) {
-    const parsed = parsePositiveInt(prices[tier]);
-    if (parsed === null) return { success: false, error: `Tarif ${tier} invalide.` };
-  }
-  for (const tier of CREDIT_TIERS) {
-    const parsed = parsePositiveInt(includedCredits[tier]);
-    if (parsed === null) return { success: false, error: `Crédits inclus ${tier} invalides.` };
-  }
-
-  await Promise.all([
-    ...TIERS.map((tier) =>
-      prisma.platformSetting.upsert({
-        where: { key: membershipPriceKey(tier) },
-        update: { value: String(parsePositiveInt(prices[tier])) },
-        create: { key: membershipPriceKey(tier), value: String(parsePositiveInt(prices[tier])) },
-      })
-    ),
-    ...CREDIT_TIERS.map((tier) =>
-      prisma.platformSetting.upsert({
-        where: { key: creditsIncludedKey(tier) },
-        update: { value: String(parsePositiveInt(includedCredits[tier])) },
-        create: {
-          key: creditsIncludedKey(tier),
-          value: String(parsePositiveInt(includedCredits[tier])),
-        },
-      })
-    ),
-  ]);
-
-  await prisma.auditLog.create({
-    data: {
-      actorId: adminId,
-      action: "settings.update_tariffs",
-      targetType: "PlatformSetting",
-      targetId: "membership",
-    },
-  });
-
-  revalidatePath("/admin/parametres");
-  revalidatePath("/admin/candidatures");
-  return { success: true, data: undefined };
-}
+// `saveMembershipTariffs` retiré (Phase 1 offres dynamiques, 30 juillet
+// 2026) — les tarifs/crédits inclus par offre se gèrent depuis
+// app/actions/admin-plans.ts maintenant, plus par les 3 tiers fixes.
 
 /** E8-T11 — "Tarifs packs crédits Deal Room". */
 export async function saveCreditPackPrices(

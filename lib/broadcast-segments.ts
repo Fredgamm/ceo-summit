@@ -12,6 +12,13 @@ export const SEGMENT_LABEL: Record<BroadcastSegment, string> = {
 export interface CustomSegmentParams {
   country?: string;
   sector?: string;
+  /**
+   * Phase 1 offres dynamiques (30 juillet 2026) — cible une offre précise
+   * (au-delà des 2 segments CHAIRMAN/EXECUTIVE fixes ci-dessus, gardés tels
+   * quels pour compatibilité) via un vrai CUSTOM segment plutôt que
+   * d'ajouter une valeur d'enum `BroadcastSegment` par plan créé.
+   */
+  planId?: string;
 }
 
 /**
@@ -34,6 +41,7 @@ export function buildBroadcastRecipientsWhere(
   } else if (segment === "CUSTOM") {
     if (custom.country) where.country = custom.country;
     if (custom.sector) where.sectors = { has: custom.sector };
+    if (custom.planId) where.memberships = { some: { status: "ACTIVE", planId: custom.planId } };
   }
 
   return where;

@@ -10,7 +10,6 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
-    platformSetting: { upsert: vi.fn() },
     creditPackPrice: { upsert: vi.fn() },
     referential: {
       findFirst: vi.fn(),
@@ -27,7 +26,6 @@ vi.mock("@/lib/prisma", () => ({
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  saveMembershipTariffs,
   saveCreditPackPrices,
   createReferentialItem,
   deleteReferentialItem,
@@ -50,39 +48,9 @@ beforeEach(() => {
   });
 });
 
-describe("saveMembershipTariffs", () => {
-  it("upserts a PlatformSetting row per tier and per credit rule", async () => {
-    const result = await saveMembershipTariffs(
-      { MEMBER: "250000", EXECUTIVE: "650000", CHAIRMAN: "1600000" },
-      { MEMBER: "1", EXECUTIVE: "12" }
-    );
-
-    expect(result.success).toBe(true);
-    expect(prisma.platformSetting.upsert).toHaveBeenCalledTimes(5);
-    expect(prisma.platformSetting.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { key: "membership_price_chairman" } })
-    );
-  });
-
-  it("rejects an invalid price", async () => {
-    const result = await saveMembershipTariffs(
-      { MEMBER: "not-a-number", EXECUTIVE: "650000", CHAIRMAN: "1600000" },
-      { MEMBER: "1", EXECUTIVE: "12" }
-    );
-    expect(result.success).toBe(false);
-    expect(prisma.platformSetting.upsert).not.toHaveBeenCalled();
-  });
-
-  it("denies a non-SUPER_ADMIN", async () => {
-    vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "FINANCIER" } as never);
-    await expect(
-      saveMembershipTariffs(
-        { MEMBER: "1", EXECUTIVE: "1", CHAIRMAN: "1" },
-        { MEMBER: "1", EXECUTIVE: "1" }
-      )
-    ).rejects.toThrow();
-  });
-});
+// saveMembershipTariffs retiré (Phase 1 offres dynamiques, 30 juillet 2026)
+// — voir app/actions/admin-plans.test.ts pour la couverture équivalente sur
+// le CRUD Plan qui l'a remplacé.
 
 describe("saveCreditPackPrices", () => {
   it("upserts each pack", async () => {

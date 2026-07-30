@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+import { legacyTierRank } from "@/lib/plan-access";
+
 /**
  * Merge Tailwind classes intelligently, resolving conflicts (shadcn/ui standard helper).
  * Used by every shadcn component and across the app for conditional classNames.
@@ -40,10 +42,13 @@ export function tierLabel(tier?: string | null): string {
   return tier.charAt(0) + tier.slice(1).toLowerCase();
 }
 
-const TIER_RANK: Record<string, number> = { MEMBER: 1, EXECUTIVE: 2, CHAIRMAN: 3 };
-
-/** Whether a member's tier satisfies a minimum tier requirement (e.g. an event's minTier). */
+/**
+ * Whether a member's tier satisfies a minimum tier requirement (e.g. an
+ * event's legacy `minTier`). Ranking sourced from lib/plan-access.ts — see
+ * that file's header comment for why this is the legacy-only fallback path,
+ * not the canonical `Plan.rank` comparison.
+ */
 export function meetsMinTier(userTier: string | null | undefined, minTier: string): boolean {
   if (!userTier) return false;
-  return (TIER_RANK[userTier] ?? 0) >= (TIER_RANK[minTier] ?? 0);
+  return legacyTierRank(userTier) >= legacyTierRank(minTier);
 }

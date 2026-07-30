@@ -16,6 +16,7 @@ import {
   Mail,
   Landmark,
   Settings,
+  Tag,
   ArrowLeft,
 } from "lucide-react";
 
@@ -85,6 +86,7 @@ const SECTIONS: {
     title: "Gestion",
     items: [
       { href: "/admin/finances", label: "Finances", icon: Landmark, section: "finances" },
+      { href: "/admin/plans", label: "Offres", icon: Tag, section: "plans" },
       { href: "/admin/parametres", label: "Paramètres", icon: Settings, section: "parametres" },
     ],
   },

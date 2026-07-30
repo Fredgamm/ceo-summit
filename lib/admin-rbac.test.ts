@@ -37,6 +37,6 @@ describe("accessibleSections", () => {
   });
 
   it("returns only the financier's sections for FINANCIER", () => {
-    expect(accessibleSections("FINANCIER")).toEqual(["dashboard", "credits", "finances"]);
+    expect(accessibleSections("FINANCIER")).toEqual(["dashboard", "credits", "finances", "plans"]);
   });
 });

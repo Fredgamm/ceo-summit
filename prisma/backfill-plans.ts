@@ -1,8 +1,21 @@
 import { PrismaClient, Tier } from "@prisma/client";
 
-import { DEFAULT_MEMBERSHIP_PRICES, DEFAULT_INCLUDED_CREDITS } from "../lib/platform-settings";
-
 const prisma = new PrismaClient();
+
+// Mirrors the hardcoded defaults lib/platform-settings.ts used to hold
+// before it was retired in favor of /admin/plans (Phase 1 offres
+// dynamiques, 30 juillet 2026) — kept here, inlined, purely so this
+// one-off backfill script has no dependency on a module that no longer
+// exists.
+const DEFAULT_MEMBERSHIP_PRICES: Record<Tier, number> = {
+  MEMBER: 200_000,
+  EXECUTIVE: 600_000,
+  CHAIRMAN: 1_500_000,
+};
+const DEFAULT_INCLUDED_CREDITS: Record<"MEMBER" | "EXECUTIVE", number> = {
+  MEMBER: 0,
+  EXECUTIVE: 10,
+};
 
 /**
  * Phase 0 of the offers/payment rework (30 juillet 2026) — one-off, idempotent

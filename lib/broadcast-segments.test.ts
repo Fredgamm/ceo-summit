@@ -44,4 +44,11 @@ describe("buildBroadcastRecipientsWhere", () => {
       memberships: { some: { status: "ACTIVE" } },
     });
   });
+
+  it("scopes CUSTOM to a specific Plan when planId is given (dynamic offers, not just CHAIRMAN/EXECUTIVE)", () => {
+    expect(buildBroadcastRecipientsWhere("CUSTOM", { planId: "plan_sponsor_or" })).toEqual({
+      status: "ACTIVE",
+      memberships: { some: { status: "ACTIVE", planId: "plan_sponsor_or" } },
+    });
+  });
 });

@@ -1,42 +1,92 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  computeMRRByTier,
+  computeMRRByPlan,
   buildExpiringWithinDays,
   mergeFinanceTransactions,
   type FinanceTransaction,
 } from "./finance";
 
-describe("computeMRRByTier", () => {
-  it("groups and sums MRR per tier independently", () => {
-    const result = computeMRRByTier([
+describe("computeMRRByPlan", () => {
+  it("groups and sums MRR per plan independently", () => {
+    const result = computeMRRByPlan([
       {
-        tier: "CHAIRMAN",
+        planId: "plan_chairman",
         price: 1_200_000,
         startDate: new Date("2026-01-01"),
         endDate: new Date("2027-01-01"),
       },
       {
-        tier: "CHAIRMAN",
+        planId: "plan_chairman",
         price: 1_200_000,
         startDate: new Date("2026-01-01"),
         endDate: new Date("2027-01-01"),
       },
       {
-        tier: "EXECUTIVE",
+        planId: "plan_executive",
         price: 600_000,
         startDate: new Date("2026-01-01"),
         endDate: new Date("2027-01-01"),
       },
     ]);
 
-    expect(result.CHAIRMAN).toBe(200_000);
-    expect(result.EXECUTIVE).toBe(50_000);
-    expect(result.MEMBER).toBe(0);
+    expect(result.get("plan_chairman")).toBe(200_000);
+    expect(result.get("plan_executive")).toBe(50_000);
+    expect(result.get("plan_member")).toBeUndefined();
   });
 
-  it("returns all-zero for no memberships", () => {
-    expect(computeMRRByTier([])).toEqual({ MEMBER: 0, EXECUTIVE: 0, CHAIRMAN: 0 });
+  it("returns an empty map for no memberships", () => {
+    expect(computeMRRByPlan([])).toEqual(new Map());
+  });
+
+  it("scales to more than 3 plans (dynamic offer count, not a fixed tier bucket)", () => {
+    const result = computeMRRByPlan([
+      {
+        planId: "plan_a",
+        price: 100_000,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2027-01-01"),
+      },
+      {
+        planId: "plan_b",
+        price: 200_000,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2027-01-01"),
+      },
+      {
+        planId: "plan_c",
+        price: 300_000,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2027-01-01"),
+      },
+      {
+        planId: "plan_d",
+        price: 400_000,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2027-01-01"),
+      },
+      {
+        planId: "plan_e",
+        price: 500_000,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2027-01-01"),
+      },
+    ]);
+
+    expect(result.size).toBe(5);
+    expect(result.get("plan_e")).toBeCloseTo(41_667, 0);
+  });
+
+  it("buckets memberships with no planId under 'unknown' instead of dropping them", () => {
+    const result = computeMRRByPlan([
+      {
+        planId: null,
+        price: 240_000,
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2027-01-01"),
+      },
+    ]);
+    expect(result.get("unknown")).toBe(20_000);
   });
 });
 

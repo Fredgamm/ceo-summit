@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { Tier } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { computeMRR } from "@/lib/admin-dashboard";
+import { getAllPlans } from "@/lib/plans-query";
 import {
-  computeMRRByTier,
+  computeMRRByPlan,
   buildExpiringWithinDays,
   mergeFinanceTransactions,
   type FinanceTransaction,
@@ -28,12 +28,18 @@ const TABS = [
   { key: "en-attente", label: "En attente" },
 ];
 
-const TIER_ORDER: Tier[] = ["CHAIRMAN", "EXECUTIVE", "MEMBER"];
-const TIER_BADGE: Record<Tier, "chairman" | "executive" | "member"> = {
+// Phase 1 offres dynamiques (30 juillet 2026) — les 3 plans legacy sont
+// nommés exactement "MEMBER"/"EXECUTIVE"/"CHAIRMAN" par prisma/backfill-plans.ts,
+// donc cette table reste valable pour eux ; tout autre plan retombe sur
+// "secondary" (badge.tsx reste volontairement fixe à 3 variantes de tier).
+const LEGACY_PLAN_BADGE: Record<string, "chairman" | "executive" | "member"> = {
   CHAIRMAN: "chairman",
   EXECUTIVE: "executive",
   MEMBER: "member",
 };
+function planBadgeVariant(planName: string) {
+  return LEGACY_PLAN_BADGE[planName] ?? "secondary";
+}
 
 export default async function AdminFinancesPage({
   searchParams,
@@ -53,7 +59,7 @@ export default async function AdminFinancesPage({
 
   const [
     activeMemberships,
-    memberCountByTier,
+    plans,
     monthMemberships,
     monthRegistrations,
     monthPurchases,
@@ -63,13 +69,9 @@ export default async function AdminFinancesPage({
   ] = await Promise.all([
     prisma.membership.findMany({
       where: { status: "ACTIVE" },
-      select: { tier: true, price: true, startDate: true, endDate: true },
+      select: { planId: true, price: true, startDate: true, endDate: true },
     }),
-    prisma.membership.groupBy({
-      by: ["tier"],
-      where: { status: "ACTIVE" },
-      _count: { _all: true },
-    }),
+    getAllPlans(),
     prisma.membership.aggregate({
       where: { createdAt: { gte: startOfMonth } },
       _sum: { price: true },
@@ -95,10 +97,14 @@ export default async function AdminFinancesPage({
 
   const mrr = computeMRR(activeMemberships);
   const arr = mrr * 12;
-  const mrrByTier = computeMRRByTier(activeMemberships);
-  const countByTier = Object.fromEntries(
-    memberCountByTier.map((c) => [c.tier, c._count._all])
-  ) as Record<Tier, number>;
+  const mrrByPlan = computeMRRByPlan(activeMemberships);
+  const countByPlan = new Map<string, number>();
+  for (const m of activeMemberships) {
+    const key = m.planId ?? "unknown";
+    countByPlan.set(key, (countByPlan.get(key) ?? 0) + 1);
+  }
+  const plansByRankDesc = [...plans].sort((a, b) => b.rank - a.rank);
+  const totalActiveMembers = activeMemberships.length;
 
   const eventRevenueThisMonth = monthRegistrations.reduce((sum, r) => sum + r.event.price, 0);
   const membershipRevenueThisMonth = monthMemberships._sum.price ?? 0;
@@ -304,9 +310,7 @@ export default async function AdminFinancesPage({
             {formatAriary(membershipRevenueThisMonth)}
           </p>
           <p className="text-xs text-text-muted">Revenus membership ce mois</p>
-          <p className="mt-1.5 text-xs text-text-muted">
-            {Object.values(countByTier).reduce((a, b) => a + b, 0)} membres actifs
-          </p>
+          <p className="mt-1.5 text-xs text-text-muted">{totalActiveMembers} membres actifs</p>
         </div>
         <div className="rounded-lg border border-border bg-white p-4">
           <p className="text-2xl font-bold text-blue-600">{formatAriary(eventRevenueThisMonth)}</p>
@@ -320,25 +324,30 @@ export default async function AdminFinancesPage({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-white p-5">
-          <h2 className="mb-3 text-sm font-bold text-navy">Revenus membership par tier (MRR)</h2>
+          <h2 className="mb-3 text-sm font-bold text-navy">Revenus membership par offre (MRR)</h2>
           <div className="flex flex-col gap-3">
-            {TIER_ORDER.map((tier) => (
-              <div key={tier}>
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>
-                    <span className="text-text-muted">{countByTier[tier] ?? 0} membres</span>
+            {plansByRankDesc.map((plan) => {
+              const planMrr = mrrByPlan.get(plan.id) ?? 0;
+              return (
+                <div key={plan.id}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={planBadgeVariant(plan.name)}>{plan.name}</Badge>
+                      <span className="text-text-muted">
+                        {countByPlan.get(plan.id) ?? 0} membres
+                      </span>
+                    </div>
+                    <strong>{formatAriary(planMrr)}</strong>
                   </div>
-                  <strong>{formatAriary(mrrByTier[tier])}</strong>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full bg-navy"
+                      style={{ width: `${mrr > 0 ? Math.round((planMrr / mrr) * 100) : 0}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div
-                    className="h-full bg-navy"
-                    style={{ width: `${mrr > 0 ? Math.round((mrrByTier[tier] / mrr) * 100) : 0}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

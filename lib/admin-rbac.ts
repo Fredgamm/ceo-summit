@@ -18,6 +18,7 @@ export const ADMIN_SECTIONS = [
   "communications",
   "finances",
   "parametres",
+  "plans",
 ] as const;
 
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
@@ -34,7 +35,9 @@ const SECTION_ACCESS: Record<AdminRole, "*" | AdminSection[]> = {
     "services",
     "communications",
   ],
-  FINANCIER: ["dashboard", "credits", "finances"],
+  // Tarification — même famille que "credits"/"finances", pas "parametres"
+  // (référentiels, comptes admin) qui reste réservé SUPER_ADMIN.
+  FINANCIER: ["dashboard", "credits", "finances", "plans"],
 };
 
 export function canAccessSection(role: AdminRole, section: AdminSection): boolean {

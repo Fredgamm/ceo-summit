@@ -2,6 +2,7 @@ import type { Prisma, Tier, OpportunityType } from "@prisma/client";
 
 import { SECTORS } from "@/lib/sectors";
 import { COUNTRIES } from "@/lib/countries";
+import { LEGACY_TIER_ORDER } from "@/lib/plan-access";
 
 /** E6-T01 — pure filter/sort/visibility logic for `/deal-room`, same rationale as lib/catalogue.ts. */
 
@@ -14,8 +15,6 @@ const VALID_TYPES: OpportunityType[] = [
   "LEVEE_FONDS",
   "JOINT_VENTURE",
 ];
-
-const TIER_ORDER: Tier[] = ["MEMBER", "EXECUTIVE", "CHAIRMAN"];
 
 export interface DealRoomSearchParams {
   type?: string;
@@ -41,9 +40,9 @@ export interface DealRoomQuery {
  * opportunity at or below their own tier.
  */
 export function allowedVisibilities(viewerTier: Tier | null | undefined): Tier[] {
-  const rank = viewerTier ? TIER_ORDER.indexOf(viewerTier) : -1;
+  const rank = viewerTier ? LEGACY_TIER_ORDER.indexOf(viewerTier) : -1;
   if (rank < 0) return [];
-  return TIER_ORDER.slice(0, rank + 1);
+  return LEGACY_TIER_ORDER.slice(0, rank + 1);
 }
 
 export function buildDealRoomQuery(

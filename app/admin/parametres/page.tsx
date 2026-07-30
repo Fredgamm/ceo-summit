@@ -4,14 +4,11 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { parseMembershipPrices, parseIncludedCredits } from "@/lib/platform-settings";
-import {
-  MembershipTariffsForm,
-  CreditPackPricesForm,
-} from "@/components/admin/settings/tariffs-form";
+import { CreditPackPricesForm } from "@/components/admin/settings/tariffs-form";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Admin — Paramètres" };
 
@@ -45,16 +42,20 @@ export default async function AdminParametresPage({
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "tarifs") {
-    const [settingRows, creditPacks] = await Promise.all([
-      prisma.platformSetting.findMany(),
-      prisma.creditPackPrice.findMany({ orderBy: { credits: "asc" } }),
-    ]);
-    const prices = parseMembershipPrices(settingRows);
-    const includedCredits = parseIncludedCredits(settingRows);
+    const creditPacks = await prisma.creditPackPrice.findMany({ orderBy: { credits: "asc" } });
 
     tabContent = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <MembershipTariffsForm prices={prices} includedCredits={includedCredits} />
+        <div className="rounded-lg border border-border bg-white p-5">
+          <h3 className="text-sm font-bold text-navy">Offres & tarifs d&apos;adhésion</h3>
+          <p className="mb-4 mt-1 text-xs text-text-muted">
+            Les prix, crédits inclus et rang d&apos;accès de chaque offre se gèrent désormais depuis
+            un catalogue dédié, créable librement — plus limité aux 3 tiers fixes d&apos;origine.
+          </p>
+          <Button asChild>
+            <Link href="/admin/plans">Gérer les offres →</Link>
+          </Button>
+        </div>
         <CreditPackPricesForm packs={creditPacks} />
       </div>
     );

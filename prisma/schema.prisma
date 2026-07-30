@@ -348,6 +348,8 @@ model Plan {
 
   memberships         Membership[]
   users               User[]
+  eventsAsMinPlan     Event[]       @relation("EventMinPlan")
+  opportunitiesAsVisibilityPlan Opportunity[] @relation("OpportunityVisibilityPlan")
 
   @@index([scope, isActive, displayOrder])
 }
@@ -386,6 +388,11 @@ model Event {
   date           DateTime
   capacity       Int
   minTier        Tier         @default(MEMBER)
+  /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `minTier` à
+  /// terme. Nullable : un événement créé avant cette migration retombe sur
+  /// `minTier` (comparaison par rang legacy) tant qu'il n'est pas réédité.
+  minPlanId      String?
+  minPlan        Plan?        @relation("EventMinPlan", fields: [minPlanId], references: [id])
   price          Int          @default(0) // 0 = inclus dans membership
   imageUrl       String?
   status         EventStatus  @default(DRAFT)
@@ -396,6 +403,7 @@ model Event {
 
   @@index([status, date])
   @@index([type])
+  @@index([minPlanId])
 }
 
 model EventRegistration {
@@ -434,6 +442,10 @@ model Opportunity {
   budget       Int? // Ariary
   deadline     DateTime?
   visibility   Tier                @default(EXECUTIVE) // minimum tier to view
+  /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `visibility` à
+  /// terme, même logique de repli que `Event.minPlanId`.
+  visibilityPlanId String?
+  visibilityPlan   Plan?           @relation("OpportunityVisibilityPlan", fields: [visibilityPlanId], references: [id])
   tags         String[]
   attachments  String[] // R2 signed URLs, TTL 24h at generation
   status       OpportunityStatus   @default(PENDING_MODERATION)
@@ -447,6 +459,7 @@ model Opportunity {
 
   @@index([status, createdAt])
   @@index([sector, country])
+  @@index([visibilityPlanId])
 }
 
 model OpportunityContact {

@@ -1,26 +1,32 @@
-import type { Tier } from "@prisma/client";
-
 import { computeMRR } from "@/lib/admin-dashboard";
 
 /** E8-T10 — pure computations for the admin finances page. */
 
 export interface MembershipForFinance {
-  tier: Tier;
+  planId: string | null;
   price: number;
   startDate: Date;
   endDate: Date;
 }
 
-/** Real MRR per tier — reuses the same spread-over-term logic as the global MRR (E8-T02). */
-export function computeMRRByTier(memberships: MembershipForFinance[]): Record<Tier, number> {
-  const byTier: Record<Tier, MembershipForFinance[]> = { MEMBER: [], EXECUTIVE: [], CHAIRMAN: [] };
-  for (const m of memberships) byTier[m.tier].push(m);
+/**
+ * Real MRR per plan — reuses the same spread-over-term logic as the global
+ * MRR (E8-T02). Phase 1 offres dynamiques (30 juillet 2026) — replaces the
+ * old `computeMRRByTier`'s fixed 3-key `Record<Tier, ...>` bucket, which
+ * couldn't represent a 5th/6th admin-created plan. Groups by `planId`
+ * instead; a `null` planId (a membership that predates the Phase 0 backfill
+ * somehow) buckets under the `"unknown"` key rather than being dropped.
+ */
+export function computeMRRByPlan(memberships: MembershipForFinance[]): Map<string, number> {
+  const byPlan = new Map<string, MembershipForFinance[]>();
+  for (const m of memberships) {
+    const key = m.planId ?? "unknown";
+    const bucket = byPlan.get(key) ?? [];
+    bucket.push(m);
+    byPlan.set(key, bucket);
+  }
 
-  return {
-    MEMBER: computeMRR(byTier.MEMBER),
-    EXECUTIVE: computeMRR(byTier.EXECUTIVE),
-    CHAIRMAN: computeMRR(byTier.CHAIRMAN),
-  };
+  return new Map([...byPlan.entries()].map(([planId, ms]) => [planId, computeMRR(ms)]));
 }
 
 /**
