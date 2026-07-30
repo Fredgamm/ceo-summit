@@ -86,7 +86,7 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (354 tests) : webhook Evolia, webhook Resend (E8-T09), actions
+Couverture actuelle (366 tests) : webhook Evolia, webhook Resend (E8-T09), actions
 d'auth (activation, mot de passe oublié, onboarding, profil), actions
 membres/candidatures/événements admin, logique de requête catalogue/événements/
 membres/Deal Room/salles/conversations/services/broadcasts/finances
@@ -576,7 +576,68 @@ une variable d'environnement pendant que `socket:dev` tourne, relancez-le.
 
 **E9 est maintenant à 4/5 (T04 explicitement hors scope, optionnel/P2).**
 
+### EX-T01 — Sprint de correction sécurité/conformité/parcours/accessibilité
+
+Audit complet mené le 29 juillet (4 agents indépendants : sécurité, RGPD,
+parcours utilisateur cas par cas, accessibilité statique) —
+`AUDIT_SECURITE_CONFORMITE_ACCESSIBILITE.md`. 4 bloquants et plusieurs quick
+wins corrigés le soir même :
+
+- ✅ **`/demande-acces` créé** — le lien depuis `/login` pointait vers une
+  route inexistante : le seul canal d'acquisition de nouveaux membres était
+  cassé. Formulaire réel (`app/actions/apply.ts`, 7 tests), consentement RGPD
+  horodaté (`MembershipApplication.consentedAt`), email d'accusé de
+  réception. Pages `/cgu`/`/confidentialite` créées en brouillon explicite
+  (contenu à valider par un juriste) pour que le lien de consentement ne
+  pointe pas dans le vide.
+- ✅ **Expiration d'adhésion enfin synchronisée** — `Membership.endDate`
+  dépassée ne mettait jamais à jour `User.status` (aucun cron dans ce
+  projet) : un membre expiré gardait un accès complet indéfiniment.
+  `auth.ts` synchronise maintenant au moment de la connexion. Limite
+  assumée : une session déjà ouverte reste valide jusqu'à 24h (durée du
+  JWT) — pas un vrai remplacement de cron.
+- ✅ **Boucle de redirection infinie corrigée** — un compte `EXPIRED`
+  s'authentifiait avec succès puis tombait dans `/dashboard` ⇄ `/login` à
+  l'infini. Bloqué au même endroit que `SUSPENDED` (déjà existant), avec un
+  message dédié dans `login-form.tsx`.
+- ✅ **Candidat approuvé sans paiement = accès gratuit illimité, corrigé** —
+  nouveau gate dans `middleware.ts` (`/paiement-en-attente`) pour tout
+  membre `ACTIVE` sans `tier`. **Bug annexe trouvé au passage** : le lien
+  "Déconnexion" de la sidebar membre n'appelait jamais `signOut()` — un
+  simple lien vers `/login` qui laissait la session active.
+- 🟡 **Pièces jointes R2 : code corrigé, non vérifiable en direct** — URLs
+  publiques permanentes remplacées par des URLs signées à durée de vie
+  courte (`lib/r2.ts`, `Opportunity.attachments` et `RoomMessage.attachmentKey`
+  renommé depuis `attachmentUrl`) + whitelist MIME sur l'upload de salle
+  (absente avant). Aucune donnée seedée n'a de pièce jointe et les
+  identifiants R2 de cet environnement sont vides — confirmé que l'appel
+  échoue proprement plutôt que de planter silencieusement.
+- ✅ **Les 6 en-têtes HTTP de sécurité** (HSTS, CSP, X-Frame-Options,
+  X-Content-Type-Options, Referrer-Policy, Permissions-Policy) + suppression
+  de `X-Powered-By` — totalement absents avant. CSP en `'unsafe-inline'`
+  plutôt qu'un système de nonces (chantier séparé). **Piège découvert en
+  vérifiant le build** : une première version de `not-found.tsx` appelait
+  `auth()`, ce qui a fait perdre l'optimisation statique de `/login` et
+  autres pages publiques — corrigé.
+- ✅ **Pages d'erreur brandées** (`app/error.tsx`, `app/not-found.tsx`) — le
+  404/500 générique de Next.js s'affichait auparavant, hors design, sans
+  navigation.
+- 🟡 **4 correctifs d'accessibilité critiques sur 11 trouvés** : boutons
+  icône-seule sans nom accessible, `aria-live`/`role="log"` sur les chats
+  temps réel, focus clavier sur le bouton "Signaler", erreurs de formulaire
+  annoncées. Reste : contrastes, lien d'évitement, défilement des onglets.
+- ✅ **Curseur de pagination messagerie/salles scopé** — un id de message
+  d'une autre conversation/salle pouvait servir de curseur de pagination.
+
+**Reste dans le backlog** (voir `AUDIT_SECURITE_CONFORMITE_ACCESSIBILITE.md`
+section 6) : rate limiting/anti-brute-force, gate de tier sur l'achat de
+crédits, remboursement de crédit Deal Room (contact refusé/expiré),
+annulation d'inscription événement, réédition d'opportunité refusée,
+validation Zod sur ~7 fichiers d'actions, contrastes de couleur, contenu
+juridique définitif des pages CGU/confidentialité.
+
 ## Prochaines étapes (voir BACKLOG_DEV.md)
 
-- EX : tâches transverses (sécurité/hardening, tests avancés, monitoring, migration WordPress)
+- EX : suite du sprint sécurité/conformité (rate limiting, gates de tier
+  restants, remboursements Deal Room, contrastes)
 - E9-T04 (push notifications) si l'infra VAPID/push devient une priorité produit

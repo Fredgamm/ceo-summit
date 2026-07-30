@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { markRoomAsRead } from "@/app/actions/rooms";
 import { meetsRoomAccess, ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getSignedDownloadUrl } from "@/lib/r2";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomChat } from "@/components/rooms/room-chat";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,21 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
   ]);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
+  // B4 (audit du 29 juillet 2026) — attachmentKey is a private R2 key,
+  // resolved here to a short-lived signed URL for the initial page load
+  // (live messages are resolved the same way in server/socket-server.ts).
+  const messagesWithUrls = await Promise.all(
+    messages.map(async ({ attachmentKey, ...m }) => ({
+      ...m,
+      attachmentUrl: attachmentKey
+        ? await getSignedDownloadUrl(
+            process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+            attachmentKey
+          )
+        : null,
+    }))
+  );
+
   return (
     <AppShell
       user={{
@@ -70,7 +86,7 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
 
       <RoomChat
         room={{ id: room.id, name: room.name }}
-        initialMessages={messages.reverse()}
+        initialMessages={messagesWithUrls.reverse()}
         hasMoreOlder={messages.length === MESSAGE_PAGE_SIZE}
         viewer={{ id: viewer.id }}
       />

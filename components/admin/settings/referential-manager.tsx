@@ -76,7 +76,8 @@ export function ReferentialManager({ type, title, items }: ReferentialManagerPro
               <button
                 onClick={() => handleDelete(item.id)}
                 disabled={deletingId === item.id}
-                className="rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-red-50 hover:text-red-600"
+                aria-label={`Supprimer ${item.label}`}
+                className="rounded px-1.5 py-0.5 text-xs text-text-muted hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy"
               >
                 ✕
               </button>

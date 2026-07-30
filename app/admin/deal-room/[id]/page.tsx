@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
+import { getSignedDownloadUrl } from "@/lib/r2";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { OpportunityChecklist } from "@/components/admin/deal-room/opportunity-checklist";
 import { OpportunityDecisionPanel } from "@/components/admin/deal-room/opportunity-decision-panel";
@@ -69,6 +70,19 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
 
   const authorTier = opportunity.author.memberships[0]?.tier ?? null;
 
+  // B4 (audit du 29 juillet 2026) — see app/deal-room/[id]/page.tsx for the
+  // member-facing equivalent; same private-key → signed-URL resolution.
+  const attachmentLinks = await Promise.all(
+    opportunity.attachments.map(async (key) => ({
+      key,
+      name: key.split("/").pop() ?? key,
+      url: await getSignedDownloadUrl(
+        process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+        key
+      ),
+    }))
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 text-sm">
@@ -118,19 +132,19 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
               </div>
             </div>
 
-            {opportunity.attachments.length > 0 && (
+            {attachmentLinks.length > 0 && (
               <div className="border-t border-border pt-4">
                 <p className="mb-2 text-xs font-bold uppercase text-text-muted">Documents joints</p>
                 <ul className="flex flex-col gap-2">
-                  {opportunity.attachments.map((url) => (
-                    <li key={url}>
+                  {attachmentLinks.map((a) => (
+                    <li key={a.key}>
                       <a
-                        href={url}
+                        href={a.url}
                         target="_blank"
                         rel="noreferrer"
                         className="text-sm text-navy-mid"
                       >
-                        📄 {url.split("/").pop()}
+                        📄 {a.name}
                       </a>
                     </li>
                   ))}

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/r2", () => ({
-  uploadObject: vi.fn().mockResolvedValue("https://cdn.example.com/salles/room_1/doc.pdf"),
+  uploadPrivateObject: vi.fn().mockResolvedValue({ key: "salles/room_1/doc.pdf" }),
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -13,7 +13,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { uploadObject } from "@/lib/r2";
+import { uploadPrivateObject } from "@/lib/r2";
 import { POST } from "./route";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
@@ -54,6 +54,13 @@ describe("POST /api/rooms/attachment", () => {
     expect(res.status).toBe(422);
   });
 
+  it("rejects a disallowed MIME type", async () => {
+    const file = new File(["<script>alert(1)</script>"], "evil.html", { type: "text/html" });
+    const res = await POST(makeRequest(file));
+    expect(res.status).toBe(422);
+    expect(uploadPrivateObject).not.toHaveBeenCalled();
+  });
+
   it("rejects a viewer whose tier can't access the room", async () => {
     vi.mocked(prisma.room.findUnique).mockResolvedValue({
       id: "room_1",
@@ -65,15 +72,24 @@ describe("POST /api/rooms/attachment", () => {
     expect(res.status).toBe(403);
   });
 
-  it("uploads a valid file to the documents bucket", async () => {
+  it("uploads a valid file to the documents bucket and returns its key, not a public URL", async () => {
     const file = new File(["bytes"], "etude.pdf", { type: "application/pdf" });
     const res = await POST(makeRequest(file));
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.data.url).toBe("https://cdn.example.com/salles/room_1/doc.pdf");
-    expect(uploadObject).toHaveBeenCalledWith(
+    expect(json.data.key).toMatch(/^salles\/room_1\/[0-9a-f-]+-etude\.pdf$/);
+    expect(json.data.url).toBeUndefined();
+    expect(uploadPrivateObject).toHaveBeenCalledWith(
       expect.objectContaining({ contentType: "application/pdf" })
     );
+  });
+
+  it("sanitizes a filename containing path traversal characters", async () => {
+    const file = new File(["bytes"], "../../etc/passwd.pdf", { type: "application/pdf" });
+    await POST(makeRequest(file));
+
+    const call = vi.mocked(uploadPrivateObject).mock.calls[0][0];
+    expect(call.key).not.toContain("../");
   });
 });

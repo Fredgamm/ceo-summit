@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getSignedDownloadUrl } from "@/lib/r2";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -79,6 +80,20 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   const authorTier = opportunity.author.memberships[0]?.tier ?? null;
   const unreadMessages = await countUnreadMessages(viewer.id);
 
+  // B4 (audit du 29 juillet 2026) — attachments are R2 keys in a private
+  // bucket, resolved to short-lived signed URLs only after the visibility
+  // gate above has already run, never exposed as permanent public links.
+  const attachmentLinks = await Promise.all(
+    opportunity.attachments.map(async (key) => ({
+      key,
+      name: key.split("/").pop() ?? key,
+      url: await getSignedDownloadUrl(
+        process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+        key
+      ),
+    }))
+  );
+
   return (
     <AppShell
       user={{
@@ -121,19 +136,19 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
             </p>
           </div>
 
-          {opportunity.attachments.length > 0 && (
+          {attachmentLinks.length > 0 && (
             <div className="rounded-lg border border-border bg-white p-6">
               <h2 className="mb-3 text-base font-bold text-navy">Pièces jointes</h2>
               <ul className="flex flex-col gap-2">
-                {opportunity.attachments.map((url) => (
-                  <li key={url}>
+                {attachmentLinks.map((a) => (
+                  <li key={a.key}>
                     <a
-                      href={url}
+                      href={a.url}
                       target="_blank"
                       rel="noreferrer"
                       className="text-sm text-navy-mid"
                     >
-                      📄 {url.split("/").pop()}
+                      📄 {a.name}
                     </a>
                   </li>
                 ))}

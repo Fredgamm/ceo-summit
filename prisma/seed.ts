@@ -476,8 +476,7 @@ async function main() {
     },
   });
 
-  // ── Membership applications (E8-T02 dashboard demo data — no candidature
-  // UI exists yet to create these for real, see conception/01_onboarding_acces.md UC-01/02) ──
+  // ── Membership applications (E8-T02 dashboard demo data) ──
   await prisma.membershipApplication.upsert({
     where: { id: "app_sonia_bouchard" },
     update: {},
@@ -493,6 +492,7 @@ async function main() {
         "Souhaite rejoindre le cercle pour développer des partenariats régionaux dans l'énergie.",
       requestedTier: Tier.EXECUTIVE,
       status: "PENDING",
+      consentedAt: new Date(),
     },
   });
 
@@ -510,6 +510,7 @@ async function main() {
       motivation: "Recommandé par un membre actuel pour son expertise en investissement régional.",
       requestedTier: Tier.CHAIRMAN,
       status: "PENDING",
+      consentedAt: new Date(),
     },
   });
 

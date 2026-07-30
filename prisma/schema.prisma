@@ -265,6 +265,10 @@ model MembershipApplication {
   adminNote    String?            @db.Text
   decidedById  String?
   decidedAt    DateTime?
+  /// Horodatage du consentement RGPD à la collecte (case CGU/politique de
+  /// confidentialité cochée sur /demande-acces) — preuve du consentement,
+  /// pas juste un booléen : audit conformité du 29 juillet 2026.
+  consentedAt  DateTime
   createdAt    DateTime           @default(now())
 
   @@index([status])
@@ -551,7 +555,11 @@ model RoomMessage {
   authorId   String
   author     User         @relation(fields: [authorId], references: [id])
   content    String       @db.Text
-  attachmentUrl String?
+  /// R2 key (private bucket), not a URL — resolved to a short-lived signed
+  /// URL at broadcast/render time (server/socket-server.ts,
+  /// app/salles/[id]/page.tsx). Renamed from `attachmentUrl` — B4, audit
+  /// sécurité du 29 juillet 2026.
+  attachmentKey String?
   deletedAt  DateTime? // soft-delete, replaced by "[Message supprimé]" client-side
   createdAt  DateTime     @default(now())
 

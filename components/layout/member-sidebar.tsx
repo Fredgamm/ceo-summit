@@ -13,10 +13,10 @@ import {
   User,
   Building2,
   Settings,
-  LogOut,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { cn, initials } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -120,13 +120,7 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
             <span>Administration</span>
           </Link>
         )}
-        <Link
-          href="/login"
-          className="flex items-center gap-2.5 border-r-[3px] border-transparent px-[18px] py-2.5 text-[13.5px] text-white/60 transition-colors hover:bg-white/[0.07] hover:text-white/90"
-        >
-          <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
-          <span>Déconnexion</span>
-        </Link>
+        <SignOutButton className="flex items-center gap-2.5 border-r-[3px] border-transparent px-[18px] py-2.5 text-[13.5px] text-white/60 transition-colors hover:bg-white/[0.07] hover:text-white/90" />
       </div>
     </aside>
   );

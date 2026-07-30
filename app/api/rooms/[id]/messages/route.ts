@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { meetsRoomAccess } from "@/lib/rooms-query";
+import { getSignedDownloadUrl } from "@/lib/r2";
 
 const PAGE_SIZE = 50;
 
@@ -35,7 +36,11 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const before = new URL(req.url).searchParams.get("before");
   let cursor: { createdAt: Date } | undefined;
   if (before) {
-    const beforeMessage = await prisma.roomMessage.findUnique({ where: { id: before } });
+    // Scoped to this room — a message id from another room must not leak
+    // its createdAt as a pagination cursor here (audit du 29 juillet 2026).
+    const beforeMessage = await prisma.roomMessage.findFirst({
+      where: { id: before, roomId: params.id },
+    });
     if (beforeMessage) cursor = { createdAt: beforeMessage.createdAt };
   }
 
@@ -46,5 +51,18 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     include: { author: { select: { id: true, name: true, avatarUrl: true } } },
   });
 
-  return NextResponse.json({ data: messages.reverse() }, { status: 200 });
+  // B4 — same private-key → signed-URL resolution as the initial page load.
+  const withUrls = await Promise.all(
+    messages.map(async ({ attachmentKey, ...m }) => ({
+      ...m,
+      attachmentUrl: attachmentKey
+        ? await getSignedDownloadUrl(
+            process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+            attachmentKey
+          )
+        : null,
+    }))
+  );
+
+  return NextResponse.json({ data: withUrls.reverse() }, { status: 200 });
 }

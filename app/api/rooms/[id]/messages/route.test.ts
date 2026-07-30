@@ -5,8 +5,13 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     room: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
-    roomMessage: { findUnique: vi.fn(), findMany: vi.fn() },
+    roomMessage: { findFirst: vi.fn(), findMany: vi.fn() },
   },
+}));
+vi.mock("@/lib/r2", () => ({
+  getSignedDownloadUrl: vi
+    .fn()
+    .mockResolvedValue("https://signed.example.com/salles/room_1/doc.pdf"),
 }));
 
 import { auth } from "@/auth";
@@ -64,17 +69,32 @@ describe("GET /api/rooms/[id]/messages", () => {
   });
 
   it("paginates before a given message's createdAt", async () => {
-    vi.mocked(prisma.roomMessage.findUnique).mockResolvedValue({
+    vi.mocked(prisma.roomMessage.findFirst).mockResolvedValue({
       id: "msg_2",
       createdAt: new Date("2026-01-02"),
     } as never);
 
     await GET(makeRequest("msg_2"), { params: { id: "room_1" } });
 
+    expect(prisma.roomMessage.findFirst).toHaveBeenCalledWith({
+      where: { id: "msg_2", roomId: "room_1" },
+    });
     expect(prisma.roomMessage.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ createdAt: { lt: new Date("2026-01-02") } }),
       })
     );
+  });
+
+  it("resolves an attachmentKey to a signed URL, never a raw key", async () => {
+    vi.mocked(prisma.roomMessage.findMany).mockResolvedValue([
+      { id: "msg_1", createdAt: new Date("2026-01-01"), attachmentKey: "salles/room_1/doc.pdf" },
+    ] as never);
+
+    const res = await GET(makeRequest(), { params: { id: "room_1" } });
+    const json = await res.json();
+
+    expect(json.data[0].attachmentUrl).not.toBe("salles/room_1/doc.pdf");
+    expect(json.data[0].attachmentKey).toBeUndefined();
   });
 });

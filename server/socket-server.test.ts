@@ -20,8 +20,14 @@ vi.mock("../lib/message-crypto", () => ({
 vi.mock("./offline-message-notifier", () => ({
   scheduleOfflineEmailCheck: vi.fn(),
 }));
+vi.mock("../lib/r2", () => ({
+  getSignedDownloadUrl: vi
+    .fn()
+    .mockResolvedValue("https://signed.example.com/salles/room_1/doc.pdf"),
+}));
 
 import { prisma } from "../lib/prisma";
+import { getSignedDownloadUrl } from "../lib/r2";
 import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
 import { createSocketServer } from "./socket-server";
 
@@ -177,7 +183,7 @@ describe("room:message", () => {
       roomId: "room_1",
       authorId: "user_1",
       content: "Bonjour à tous",
-      attachmentUrl: null,
+      attachmentKey: null,
       author: { id: "user_1", name: "Jean-Pierre", avatarUrl: null },
     } as never);
 
@@ -197,6 +203,36 @@ describe("room:message", () => {
         }),
       })
     );
+  });
+
+  it("resolves attachmentKey to a signed URL when broadcasting, never the raw key", async () => {
+    const sender = await connect("user_1");
+    const listener = await connect("user_2");
+    await joinRoom(sender);
+    await joinRoom(listener);
+
+    vi.mocked(prisma.roomMessage.create).mockResolvedValue({
+      id: "msg_2",
+      roomId: "room_1",
+      authorId: "user_1",
+      content: "",
+      attachmentKey: "salles/room_1/doc.pdf",
+      author: { id: "user_1", name: "Jean-Pierre", avatarUrl: null },
+    } as never);
+
+    const received = new Promise((resolve) => listener.once("room:message", resolve));
+    await new Promise((resolve) =>
+      sender.emit(
+        "room:message",
+        { roomId: "room_1", content: "", attachmentKey: "salles/room_1/doc.pdf" },
+        resolve
+      )
+    );
+
+    expect(await received).toMatchObject({
+      attachmentUrl: "https://signed.example.com/salles/room_1/doc.pdf",
+    });
+    expect(getSignedDownloadUrl).toHaveBeenCalledWith(expect.any(String), "salles/room_1/doc.pdf");
   });
 
   it("rate-limits a second message sent within 1s", async () => {

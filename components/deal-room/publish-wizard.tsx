@@ -45,7 +45,7 @@ interface FormValues {
   budget: string;
   deadline: string;
   visibility: Tier;
-  attachments: { url: string; name: string }[];
+  attachments: { key: string; name: string }[];
 }
 
 const EMPTY_VALUES: FormValues = {
@@ -131,16 +131,16 @@ export function PublishWizard({
         setUploadError(json.error ?? "Échec de l'envoi.");
         return;
       }
-      set("attachments", [...values.attachments, { url: json.data.url, name: json.data.name }]);
+      set("attachments", [...values.attachments, { key: json.data.key, name: json.data.name }]);
     } finally {
       setUploading(false);
     }
   }
 
-  function removeAttachment(url: string) {
+  function removeAttachment(key: string) {
     set(
       "attachments",
-      values.attachments.filter((a) => a.url !== url)
+      values.attachments.filter((a) => a.key !== key)
     );
   }
 
@@ -157,7 +157,7 @@ export function PublishWizard({
         budget: values.budget,
         deadline: values.deadline,
         visibility: values.visibility,
-        attachments: values.attachments.map((a) => a.url),
+        attachments: values.attachments.map((a) => a.key),
       });
       if (!result.success) {
         setError(result.error);
@@ -346,13 +346,14 @@ export function PublishWizard({
               <ul className="mt-3 flex flex-col gap-2">
                 {values.attachments.map((a) => (
                   <li
-                    key={a.url}
+                    key={a.key}
                     className="flex items-center justify-between rounded-md bg-surface p-2.5 text-sm"
                   >
                     <span>📄 {a.name}</span>
                     <button
                       type="button"
-                      onClick={() => removeAttachment(a.url)}
+                      onClick={() => removeAttachment(a.key)}
+                      aria-label={`Retirer ${a.name}`}
                       className="text-text-muted"
                     >
                       ✕

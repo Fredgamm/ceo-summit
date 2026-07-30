@@ -4,7 +4,7 @@ vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findUnique: vi.fn() },
-    message: { findUnique: vi.fn(), findMany: vi.fn() },
+    message: { findFirst: vi.fn(), findMany: vi.fn() },
   },
 }));
 vi.mock("@/lib/message-crypto", () => ({
@@ -68,13 +68,16 @@ describe("GET /api/messagerie/[id]/messages", () => {
   });
 
   it("paginates before a given message's createdAt", async () => {
-    vi.mocked(prisma.message.findUnique).mockResolvedValue({
+    vi.mocked(prisma.message.findFirst).mockResolvedValue({
       id: "msg_2",
       createdAt: new Date("2026-01-02"),
     } as never);
 
     await GET(makeRequest("msg_2"), { params: { id: "conv_1" } });
 
+    expect(prisma.message.findFirst).toHaveBeenCalledWith({
+      where: { id: "msg_2", conversationId: "conv_1" },
+    });
     expect(prisma.message.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ createdAt: { lt: new Date("2026-01-02") } }),

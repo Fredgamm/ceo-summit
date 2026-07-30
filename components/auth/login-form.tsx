@@ -11,11 +11,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ResendActivationForm } from "@/components/auth/resend-activation-form";
 
 const loginSchema = z.object({
   email: z.string().min(1, "L'email est requis").email("Adresse email invalide"),
   password: z.string().min(1, "Le mot de passe est requis"),
 });
+
+/**
+ * B2/B3 (audit du 29 juillet 2026) — chaque code d'erreur lancé par
+ * auth.ts a désormais un message dédié, au lieu du "Email ou mot de passe
+ * incorrect" générique qui masquait auparavant les comptes en attente
+ * d'activation ou expirés (et laissait un compte EXPIRED s'authentifier
+ * puis boucler entre /login et /dashboard).
+ */
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  ACCOUNT_SUSPENDED: "Votre compte est suspendu. Contactez l'équipe CEO Summit.",
+  ACCOUNT_EXPIRED: "Votre adhésion a expiré. Contactez l'équipe CEO Summit pour la renouveler.",
+  ACCOUNT_PENDING_ACTIVATION:
+    "Ce compte n'a pas encore été activé. Demandez un nouveau lien d'activation ci-dessous.",
+};
 
 export function LoginForm() {
   const router = useRouter();
@@ -52,11 +67,7 @@ export function LoginForm() {
       });
 
       if (result?.error) {
-        setFormError(
-          result.error === "ACCOUNT_SUSPENDED"
-            ? "Votre compte est suspendu. Contactez l'équipe CEO Summit."
-            : "Email ou mot de passe incorrect."
-        );
+        setFormError(result.error);
         return;
       }
 
@@ -85,8 +96,13 @@ export function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             aria-invalid={!!fieldErrors.email}
+            aria-describedby={fieldErrors.email ? "email-error" : undefined}
           />
-          {fieldErrors.email && <p className="text-xs text-red-600">{fieldErrors.email}</p>}
+          {fieldErrors.email && (
+            <p id="email-error" role="alert" className="text-xs text-red-600">
+              {fieldErrors.email}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -104,13 +120,20 @@ export function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             aria-invalid={!!fieldErrors.password}
+            aria-describedby={fieldErrors.password ? "password-error" : undefined}
           />
-          {fieldErrors.password && <p className="text-xs text-red-600">{fieldErrors.password}</p>}
+          {fieldErrors.password && (
+            <p id="password-error" role="alert" className="text-xs text-red-600">
+              {fieldErrors.password}
+            </p>
+          )}
         </div>
 
         {formError && (
           <Alert variant="destructive">
-            <AlertDescription>{formError}</AlertDescription>
+            <AlertDescription>
+              {AUTH_ERROR_MESSAGES[formError] ?? "Email ou mot de passe incorrect."}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -119,9 +142,18 @@ export function LoginForm() {
         </Button>
       </form>
 
+      {formError === "ACCOUNT_PENDING_ACTIVATION" && (
+        <div className="mt-4 border-t border-border pt-4">
+          <ResendActivationForm />
+        </div>
+      )}
+
       <div className="mt-6 border-t border-border pt-6 text-center">
         <p className="text-sm text-text-muted">Pas encore membre ?</p>
-        <Link href="/demande-acces" className="mt-1 block text-[13.5px] font-semibold text-navy-mid">
+        <Link
+          href="/demande-acces"
+          className="mt-1 block text-[13.5px] font-semibold text-navy-mid"
+        >
           Demander l&apos;accès au CEO Summit →
         </Link>
       </div>

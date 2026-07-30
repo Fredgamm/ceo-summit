@@ -9,3 +9,18 @@ export const roomFormSchema = z.object({
 });
 
 export type RoomFormInput = z.input<typeof roomFormSchema>;
+
+/**
+ * B4 (audit sécurité du 29 juillet 2026) — E4-T03 "upload fichier dans le
+ * chat" avait aucune whitelist MIME (seule la taille était vérifiée),
+ * laissant un membre stocker un `.html`/`.svg` arbitraire. Images + PDF
+ * couvre l'usage réel (capture d'écran, document partagé).
+ */
+export const ROOM_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+export const ROOM_ATTACHMENT_ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+];

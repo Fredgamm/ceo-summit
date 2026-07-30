@@ -8,6 +8,7 @@ import { Server, type Socket } from "socket.io";
 import { prisma } from "../lib/prisma";
 import { meetsRoomAccess } from "../lib/rooms-query";
 import { encryptMessageContent } from "../lib/message-crypto";
+import { getSignedDownloadUrl } from "../lib/r2";
 import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
 
 /**
@@ -34,7 +35,7 @@ interface JoinResult {
 interface MessagePayload {
   roomId: string;
   content: string;
-  attachmentUrl?: string | null;
+  attachmentKey?: string | null;
 }
 
 interface MessageResult {
@@ -79,9 +80,9 @@ async function handleMessage(
   socket: Socket,
   payload: MessagePayload
 ): Promise<MessageResult> {
-  const { roomId, content, attachmentUrl } = payload;
+  const { roomId, content, attachmentKey } = payload;
   if (!socket.rooms.has(roomId)) return { ok: false, error: "not_joined" };
-  if (!content?.trim() && !attachmentUrl) return { ok: false, error: "empty" };
+  if (!content?.trim() && !attachmentKey) return { ok: false, error: "empty" };
 
   const now = Date.now();
   const last = (socket.data.lastMessageAt as number | undefined) ?? 0;
@@ -98,13 +99,22 @@ async function handleMessage(
       roomId,
       authorId: userId,
       content: content.trim(),
-      attachmentUrl: attachmentUrl ?? null,
+      attachmentKey: attachmentKey ?? null,
     },
     include: { author: { select: { id: true, name: true, avatarUrl: true } } },
   });
 
   socket.data.lastMessageAt = now;
-  io.to(roomId).emit("room:message", message);
+  // B4 — the DB only ever stores the private R2 key; broadcast a
+  // short-lived signed URL instead so clients can render `href` directly
+  // without needing their own signing round-trip.
+  const attachmentUrl = message.attachmentKey
+    ? await getSignedDownloadUrl(
+        process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+        message.attachmentKey
+      )
+    : null;
+  io.to(roomId).emit("room:message", { ...message, attachmentUrl });
   return { ok: true };
 }
 

@@ -28,7 +28,12 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const before = new URL(req.url).searchParams.get("before");
   let cursor: { createdAt: Date } | undefined;
   if (before) {
-    const beforeMessage = await prisma.message.findUnique({ where: { id: before } });
+    // Scoped to this conversation — a message id from another conversation
+    // must not leak its createdAt as a pagination cursor here (audit du 29
+    // juillet 2026).
+    const beforeMessage = await prisma.message.findFirst({
+      where: { id: before, conversationId: params.id },
+    });
     if (beforeMessage) cursor = { createdAt: beforeMessage.createdAt };
   }
 

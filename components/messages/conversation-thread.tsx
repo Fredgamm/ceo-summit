@@ -176,7 +176,13 @@ export function ConversationThread({
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        className="flex-1 overflow-y-auto px-5 py-4"
+      >
         {hasMore && (
           <div className="mb-3 text-center">
             <Button variant="outline" size="sm" onClick={loadOlder} disabled={loadingMore}>
@@ -231,7 +237,12 @@ export function ConversationThread({
             className="min-h-[40px] flex-1 resize-none"
             disabled={!joined}
           />
-          <Button onClick={sendMessage} disabled={!joined || sending || !text.trim()} size="icon">
+          <Button
+            onClick={sendMessage}
+            disabled={!joined || sending || !text.trim()}
+            size="icon"
+            aria-label="Envoyer le message"
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>

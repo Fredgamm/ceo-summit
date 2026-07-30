@@ -52,11 +52,51 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           },
         });
 
-        if (!user || !user.passwordHash) return null;
+        if (!user) return null;
+
+        // B2b (audit du 29 juillet 2026) — un compte PENDING_ACTIVATION n'a
+        // pas encore de passwordHash, donc tombait auparavant dans le même
+        // "Email ou mot de passe incorrect" générique qu'un vrai échec —
+        // trompeur, puisque le vrai problème est "activez d'abord votre
+        // compte". Pas un souci d'énumération ici : le flux d'activation
+        // (resendActivationLink) part déjà du principe inverse ("no account
+        // found" est volontairement révélé, voir actions/auth.ts).
+        if (!user.passwordHash) {
+          throw new Error("ACCOUNT_PENDING_ACTIVATION");
+        }
 
         // Suspended/cancelled accounts cannot authenticate at all.
         if (user.status === "SUSPENDED" || user.status === "CANCELLED") {
           throw new Error("ACCOUNT_SUSPENDED");
+        }
+
+        // B2 (audit du 29 juillet 2026) — aucun cron n'existe dans ce projet
+        // pour faire passer un Membership expiré à EXPIRED : sans ce
+        // rattrapage, un membre dont l'adhésion a expiré gardait un accès
+        // complet indéfiniment. On synchronise ici, au point de connexion —
+        // ce n'est pas un vrai remplacement d'un job planifié (une session
+        // déjà ouverte reste valide jusqu'à 24h, durée du JWT), mais ça
+        // couvre le cas le plus critique : se reconnecter après expiration.
+        const activeMembership = user.memberships[0];
+        let status = user.status;
+        if (status === "ACTIVE" && activeMembership && activeMembership.endDate < new Date()) {
+          await prisma.$transaction([
+            prisma.membership.update({
+              where: { id: activeMembership.id },
+              data: { status: "EXPIRED" },
+            }),
+            prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED" } }),
+          ]);
+          status = "EXPIRED";
+        }
+
+        // B3 — avant ce correctif, un compte EXPIRED s'authentifiait avec
+        // succès puis tombait dans une boucle de redirection infinie
+        // /dashboard ⇄ /login (middleware.ts bloque le non-ACTIVE sur les
+        // routes membres, mais renvoie tout /login authentifié vers
+        // /dashboard). Le bloquer ici, comme SUSPENDED, casse la boucle.
+        if (status === "EXPIRED") {
+          throw new Error("ACCOUNT_EXPIRED");
         }
 
         const valid = await bcrypt.compare(password, user.passwordHash);
@@ -68,8 +108,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           image: user.avatarUrl,
           role: user.role,
-          tier: user.memberships[0]?.tier ?? null,
-          status: user.status,
+          tier: activeMembership?.tier ?? null,
+          status,
         };
       },
     }),

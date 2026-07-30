@@ -124,13 +124,13 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
     }
   }
 
-  function sendMessage(attachmentUrl?: string) {
+  function sendMessage(attachmentKey?: string) {
     const content = text.trim();
-    if (!content && !attachmentUrl) return;
+    if (!content && !attachmentKey) return;
     setSending(true);
     socketRef.current?.emit(
       "room:message",
-      { roomId: room.id, content, attachmentUrl },
+      { roomId: room.id, content, attachmentKey },
       (res: { ok: boolean; error?: string }) => {
         setSending(false);
         if (res.ok) {
@@ -165,7 +165,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
         toast.error(json.error ?? "Échec de l'envoi du fichier.");
         return;
       }
-      sendMessage(json.data.url);
+      sendMessage(json.data.key);
     } finally {
       setSending(false);
     }
@@ -189,7 +189,13 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        className="flex-1 overflow-y-auto px-5 py-4"
+      >
         {hasMore && (
           <div className="mb-3 text-center">
             <Button variant="outline" size="sm" onClick={loadOlder} disabled={loadingMore}>
@@ -254,7 +260,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
                       <button
                         type="button"
                         onClick={() => handleReport(message.id)}
-                        className="opacity-0 transition-opacity hover:underline group-hover:opacity-100"
+                        className="opacity-0 transition-opacity hover:underline focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy group-hover:opacity-100 group-focus-within:opacity-100"
                       >
                         Signaler
                       </button>
@@ -269,7 +275,13 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
 
       <div className="sticky bottom-0 border-t border-border bg-white p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] md:pb-4">
         <div className="flex items-end gap-2">
-          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+            className="hidden"
+            onChange={handleFileChange}
+          />
           <Button
             type="button"
             variant="ghost"
@@ -301,6 +313,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
             onClick={() => sendMessage()}
             disabled={!joined || sending || !text.trim()}
             size="icon"
+            aria-label="Envoyer le message"
           >
             <Send className="h-4 w-4" />
           </Button>

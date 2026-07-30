@@ -12,7 +12,15 @@ import { auth } from "@/auth";
  * happen inside the page/server action itself, close to the data being gated.
  */
 
-const PUBLIC_ROUTES = ["/login", "/mot-de-passe-oublie", "/demande-acces", "/", "/~offline"];
+const PUBLIC_ROUTES = [
+  "/login",
+  "/mot-de-passe-oublie",
+  "/demande-acces",
+  "/cgu",
+  "/confidentialite",
+  "/",
+  "/~offline",
+];
 const PUBLIC_PREFIXES = ["/activer/", "/reinitialiser/"];
 
 function isPublicRoute(pathname: string) {
@@ -49,6 +57,21 @@ export default auth((req) => {
   // as PENDING_ACTIVATION and must go through /activer/[token] first).
   if (!isAdminRoute && !isPublic && session.user.status !== "ACTIVE") {
     return NextResponse.redirect(new URL("/login", req.nextUrl.origin));
+  }
+
+  // B1f (audit du 29 juillet 2026) — un candidat approuvé (compte ACTIVE)
+  // qui ne va jamais au bout du paiement Evolia n'a pas de Membership, donc
+  // pas de tier : avant ce correctif, il gardait un accès plateforme complet
+  // et gratuit indéfiniment. Les admins n'ont jamais de Membership non plus
+  // (rôle distinct des tiers) — explicitement exclus ici.
+  if (
+    !isAdminRoute &&
+    !isPublic &&
+    session.user.role !== "ADMIN" &&
+    session.user.tier == null &&
+    pathname !== "/paiement-en-attente"
+  ) {
+    return NextResponse.redirect(new URL("/paiement-en-attente", req.nextUrl.origin));
   }
 
   return NextResponse.next();

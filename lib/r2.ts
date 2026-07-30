@@ -1,4 +1,5 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * Cloudflare R2 client (S3-compatible API). Ref: CEO_Summit_Architecture_Technique.docx
@@ -54,4 +55,49 @@ export async function uploadObject({
   );
 
   return `${publicBaseUrl.replace(/\/$/, "")}/${key}`;
+}
+
+interface UploadPrivateObjectArgs {
+  bucket: string;
+  key: string;
+  body: Buffer;
+  contentType: string;
+}
+
+/**
+ * B4 (audit sécurité/RGPD du 29 juillet 2026) — for content that must stay
+ * access-controlled (Deal Room attachments, room chat attachments): unlike
+ * `uploadObject`, this never returns a public URL — only the R2 key, which
+ * is meaningless without a signed URL generated via `getSignedDownloadUrl`
+ * at render time, after the caller's own authorization check has already
+ * run. Requires the target bucket to NOT have public access configured on
+ * the Cloudflare side (a manual dashboard change this code cannot make).
+ */
+export async function uploadPrivateObject({
+  bucket,
+  key,
+  body,
+  contentType,
+}: UploadPrivateObjectArgs): Promise<{ key: string }> {
+  const r2 = getR2Client();
+  await r2.send(
+    new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType })
+  );
+  return { key };
+}
+
+/**
+ * Generates a short-lived, signed GET URL for a private object. Call this
+ * only after verifying the requesting user is actually allowed to see the
+ * resource (tier, ownership, room membership...) — the signature itself
+ * carries no authorization, just an expiry.
+ */
+export async function getSignedDownloadUrl(
+  bucket: string,
+  key: string,
+  expiresInSeconds = 3600
+): Promise<string> {
+  const r2 = getR2Client();
+  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  return getSignedUrl(r2, command, { expiresIn: expiresInSeconds });
 }
