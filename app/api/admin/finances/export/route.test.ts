@@ -14,7 +14,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { GET } from "./route";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 describe("GET /api/admin/finances/export", () => {
   beforeEach(() => {

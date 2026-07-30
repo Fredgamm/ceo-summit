@@ -12,7 +12,7 @@ export class AdminAccessError extends Error {}
  */
 export async function requireAdmin(section: AdminSection): Promise<{ userId: string }> {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ADMIN") {
+  if (!session?.user?.id || !session.user.isPlatformAdmin) {
     throw new AdminAccessError("Non autorisé.");
   }
 

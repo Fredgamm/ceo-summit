@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { AdminAccessError } from "@/lib/admin-auth";
 import { createEvent, updateEvent, setEventStatus, checkInRegistration } from "./admin-events";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 const VALID_INPUT = {
   title: "Dîner Privé — Finance",

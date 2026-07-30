@@ -28,7 +28,7 @@ import {
   saveModerationNote,
 } from "./admin-deal-room";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 function makeOpportunity(overrides: Partial<Record<string, unknown>> = {}) {
   return {

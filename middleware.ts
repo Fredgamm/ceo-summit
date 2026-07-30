@@ -48,8 +48,8 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 
-  // Admin space requires the ADMIN role specifically (not just an active tier).
-  if (isAdminRoute && session.user.role !== "ADMIN") {
+  // Admin space requires isPlatformAdmin specifically (not just an active tier).
+  if (isAdminRoute && !session.user.isPlatformAdmin) {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 
@@ -67,7 +67,7 @@ export default auth((req) => {
   if (
     !isAdminRoute &&
     !isPublic &&
-    session.user.role !== "ADMIN" &&
+    !session.user.isPlatformAdmin &&
     session.user.tier == null &&
     pathname !== "/paiement-en-attente"
   ) {

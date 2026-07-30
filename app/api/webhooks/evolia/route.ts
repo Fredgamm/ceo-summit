@@ -5,6 +5,7 @@ import { verifyHmacSignature } from "@/lib/hmac";
 import { generateSecureToken, ACTIVATION_TOKEN_TTL_MS } from "@/lib/tokens";
 import { evoliaWebhookSchema } from "@/lib/validations/webhooks";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { syncUserPlanCache } from "@/lib/membership-sync";
 import ActivationEmail from "@/emails/activation-email";
 import type { Tier } from "@prisma/client";
 
@@ -125,7 +126,9 @@ async function handlePaymentConfirmed(payload: ReturnType<typeof evoliaWebhookSc
     where: { paymentRef: payload.payment.reference },
   });
   if (duplicate) {
-    console.warn(`[evolia webhook] duplicate payment.reference ${payload.payment.reference} — already processed, ignoring`);
+    console.warn(
+      `[evolia webhook] duplicate payment.reference ${payload.payment.reference} — already processed, ignoring`
+    );
     return;
   }
 
@@ -150,10 +153,18 @@ async function handlePaymentConfirmed(payload: ReturnType<typeof evoliaWebhookSc
     },
   });
 
+  // Phase 0 of the offers/payment rework (30 juillet 2026) — resolve the Plan
+  // row mirroring this legacy tier (seeded by prisma/backfill-plans.ts) and
+  // route the cache write through the shared sync function instead of a
+  // second independent `prisma.user.update({ data: { role } })` — this is
+  // exactly the dual-write-path problem that function exists to fix.
+  const plan = await prisma.plan.findFirst({ where: { name: tier, scope: "INDIVIDUAL" } });
+
   await prisma.membership.create({
     data: {
       userId: user.id,
       tier,
+      planId: plan?.id,
       startDate: new Date(payload.subscription.startDate),
       endDate: new Date(payload.subscription.endDate),
       status: "ACTIVE",
@@ -161,6 +172,14 @@ async function handlePaymentConfirmed(payload: ReturnType<typeof evoliaWebhookSc
       paymentRef: payload.payment.reference,
     },
   });
+
+  if (plan) {
+    await syncUserPlanCache(user.id, plan.id);
+  } else {
+    console.warn(
+      `[evolia webhook] no Plan row found for legacy tier "${tier}" — planId not backfilled for user ${user.id}`
+    );
+  }
 
   // Reset/create the Deal Room credit balance per tier rules (E6-T04).
   const includedCredits = tier === "CHAIRMAN" ? 999999 : tier === "EXECUTIVE" ? 10 : 0;

@@ -82,6 +82,7 @@ async function main() {
       name: "Admin CEO Summit",
       passwordHash: adminPassword,
       role: Role.ADMIN,
+      isPlatformAdmin: true,
       status: MembershipStatus.ACTIVE,
       emailVerifiedAt: new Date(),
     },

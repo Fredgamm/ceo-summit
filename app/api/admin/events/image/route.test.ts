@@ -28,7 +28,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadObject } from "@/lib/r2";
 import { POST } from "./route";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 function makeRequest(file: File | null) {
   const formData = new FormData();

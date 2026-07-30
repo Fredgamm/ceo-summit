@@ -25,7 +25,7 @@ import {
   sendBroadcast,
 } from "./broadcasts";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
   return {

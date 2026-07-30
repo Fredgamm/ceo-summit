@@ -159,7 +159,10 @@ export async function promoteToAdmin(email: string, role: AdminRole): Promise<Ac
 
   await prisma.$transaction([
     prisma.adminUser.create({ data: { userId: user.id, role } }),
-    prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } }),
+    prisma.user.update({
+      where: { id: user.id },
+      data: { role: "ADMIN", isPlatformAdmin: true },
+    }),
   ]);
 
   await prisma.auditLog.create({

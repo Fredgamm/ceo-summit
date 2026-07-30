@@ -18,7 +18,7 @@ import { AdminShell } from "@/components/layout/admin-shell";
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!session?.user?.id || !session.user.isPlatformAdmin) redirect("/dashboard");
 
   const [user, adminUser, pendingCandidatures, pendingOpportunities] = await Promise.all([
     prisma.user.findUnique({ where: { id: session.user.id } }),

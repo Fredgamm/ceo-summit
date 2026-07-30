@@ -25,10 +25,19 @@ enum Role {
 }
 
 /// Membership tier — drives pricing, Deal Room credits, room access.
+/// Superseded by the dynamic `Plan` model (Phase 1 of the offers/payment
+/// rework, 30 juillet 2026) but kept as-is during the transition: existing
+/// `Membership.tier`/`User.role` rows stay valid and readable, nothing reads
+/// this as the source of truth for new logic anymore.
 enum Tier {
   MEMBER
   EXECUTIVE
   CHAIRMAN
+}
+
+enum PlanScope {
+  INDIVIDUAL
+  COMPANY
 }
 
 enum MembershipStatus {
@@ -169,7 +178,20 @@ model User {
   sectors       String[] // secteurs d'intérêt (référentiel dans AdminSettings)
 
   role          Role      @default(MEMBER)
+  /// Split off `role` (Phase 0, 30 juillet 2026) — `role` used to double as
+  /// both "is this account an admin" and a denormalized tier cache, synced
+  /// by two independent write paths that had to stay in lockstep by
+  /// convention only. This is now the single source of truth for the admin
+  /// axis; `role` stays populated for compatibility during the Tier->Plan
+  /// transition but nothing new should read it as an admin check.
+  isPlatformAdmin Boolean @default(false)
   status        MembershipStatus @default(PENDING_ACTIVATION)
+
+  /// Denormalized cache of the current plan, kept in sync exclusively via
+  /// lib/membership-sync.ts::syncUserPlanCache. Nullable: a brand-new
+  /// signup or a company-invited teammate has no personal plan of their own.
+  planId        String?
+  plan          Plan?     @relation(fields: [planId], references: [id])
 
   companyId     String?
   company       Company?  @relation(fields: [companyId], references: [id])
@@ -208,6 +230,7 @@ model User {
   @@index([email])
   @@index([role, status])
   @@index([companyId])
+  @@index([planId])
 }
 
 model AdminUser {
@@ -280,6 +303,12 @@ model Membership {
   userId       String
   user         User              @relation(fields: [userId], references: [id])
   tier         Tier
+  /// Nullable during the Tier->Plan transition (Phase 0, 30 juillet 2026) —
+  /// backfilled for every existing row from `tier`, and set going forward by
+  /// lib/membership-sync.ts::syncUserPlanCache. `tier` itself is left
+  /// populated in parallel, read by any not-yet-migrated code path.
+  planId       String?
+  plan         Plan?             @relation(fields: [planId], references: [id])
   startDate    DateTime
   endDate      DateTime
   status       MembershipStatus  @default(ACTIVE)
@@ -290,6 +319,37 @@ model Membership {
 
   @@index([userId])
   @@index([status, endDate]) // used for "expiring soon" admin queries
+  @@index([planId])
+}
+
+/// Admin-creatable offer/plan — replaces the fixed `Tier` enum as the source
+/// of truth for membership level, pricing, and included Deal Room credits
+/// (Phase 1 of the offers/payment rework, 30 juillet 2026). `rank` is the
+/// canonical ordering used for "minimum plan to access X" checks, converging
+/// what used to be two separately-hardcoded arrays
+/// (lib/deal-room-query.ts::TIER_ORDER, lib/utils.ts::TIER_RANK).
+model Plan {
+  id                  String    @id @default(cuid())
+  name                String
+  description         String?   @db.Text
+  scope               PlanScope @default(INDIVIDUAL)
+  priceAr             Int
+  /// Only meaningful for scope: COMPANY plans — enforced at invite time, not just payment.
+  maxTeamMembers      Int?
+  includedCredits     Int       @default(0)
+  /// Replaces the scattered `=== "CHAIRMAN"` unlimited-credits checks.
+  hasUnlimitedCredits Boolean   @default(false)
+  rank                Int
+  eligibilityNote     String?   @db.Text
+  isActive            Boolean   @default(true)
+  displayOrder        Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  memberships         Membership[]
+  users               User[]
+
+  @@index([scope, isActive, displayOrder])
 }
 
 model Company {

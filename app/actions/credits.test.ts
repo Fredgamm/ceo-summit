@@ -25,7 +25,7 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { requestCreditPurchase, confirmCreditPurchase, rejectCreditPurchase } from "./credits";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 describe("requestCreditPurchase", () => {
   beforeEach(() => {

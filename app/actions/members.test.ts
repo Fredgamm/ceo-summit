@@ -11,12 +11,18 @@ vi.mock("@/lib/prisma", () => ({
     creditBalance: { upsert: vi.fn() },
     creditTransaction: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    plan: { findFirst: vi.fn() },
   },
+}));
+
+vi.mock("@/lib/membership-sync", () => ({
+  syncUserPlanCache: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { AdminAccessError } from "@/lib/admin-auth";
+import { syncUserPlanCache } from "@/lib/membership-sync";
 import {
   changeMemberTier,
   suspendMember,
@@ -26,17 +32,18 @@ import {
   saveMemberNote,
 } from "./members";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 describe("member admin actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ id: "plan_chairman" } as never);
   });
 
   describe("changeMemberTier", () => {
-    it("updates the existing active membership and syncs User.role", async () => {
+    it("updates the existing active membership and syncs User.role + Plan cache", async () => {
       vi.mocked(prisma.membership.findFirst).mockResolvedValue({ id: "mem_1" } as never);
 
       const result = await changeMemberTier("user_1", "CHAIRMAN");
@@ -44,13 +51,14 @@ describe("member admin actions", () => {
       expect(result.success).toBe(true);
       expect(prisma.membership.update).toHaveBeenCalledWith({
         where: { id: "mem_1" },
-        data: { tier: "CHAIRMAN" },
+        data: { tier: "CHAIRMAN", planId: "plan_chairman" },
       });
       expect(prisma.membership.create).not.toHaveBeenCalled();
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user_1" },
         data: { role: "CHAIRMAN" },
       });
+      expect(syncUserPlanCache).toHaveBeenCalledWith("user_1", "plan_chairman");
     });
 
     it("creates a zero-price admin-granted membership when none is active", async () => {

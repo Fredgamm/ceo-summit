@@ -22,7 +22,7 @@ import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { archiveRoom, restoreRoom, resolveRoomReport, createRoom, updateRoom } from "./admin-rooms";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 const REPORT_BASE = {
   id: "report_1",

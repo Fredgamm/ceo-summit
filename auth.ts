@@ -114,6 +114,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: user.name,
           image: user.avatarUrl,
           role: user.role,
+          isPlatformAdmin: user.isPlatformAdmin,
           tier: activeMembership?.tier ?? null,
           status,
         };
@@ -126,6 +127,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.isPlatformAdmin = user.isPlatformAdmin;
         token.tier = user.tier;
         token.status = user.status;
       }
@@ -137,6 +139,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // order, so we assert here rather than fight the inference.
       session.user.id = token.id as string;
       session.user.role = token.role as (typeof session.user)["role"];
+      session.user.isPlatformAdmin = token.isPlatformAdmin as boolean;
       session.user.tier = token.tier as string | null;
       session.user.status = token.status as string;
       return session;

@@ -36,7 +36,9 @@ import {
   toggleAdminActive,
 } from "./admin-settings";
 
-const SUPER_ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const SUPER_ADMIN_SESSION = {
+  user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true },
+} as never;
 
 beforeEach(() => {
   vi.clearAllMocks();

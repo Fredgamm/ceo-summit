@@ -5,6 +5,7 @@ import type { Tier } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { syncUserPlanCache } from "@/lib/membership-sync";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -17,13 +18,20 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
 export async function changeMemberTier(userId: string, tier: Tier): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("membres");
 
+  // Phase 0 of the offers/payment rework (30 juillet 2026) — resolve the
+  // Plan row mirroring this legacy tier (seeded by prisma/backfill-plans.ts).
+  const plan = await prisma.plan.findFirst({ where: { name: tier, scope: "INDIVIDUAL" } });
+
   const activeMembership = await prisma.membership.findFirst({
     where: { userId, status: "ACTIVE" },
     orderBy: { endDate: "desc" },
   });
 
   if (activeMembership) {
-    await prisma.membership.update({ where: { id: activeMembership.id }, data: { tier } });
+    await prisma.membership.update({
+      where: { id: activeMembership.id },
+      data: { tier, planId: plan?.id },
+    });
   } else {
     // No active membership to adjust (e.g. a candidature-approved account that
     // hasn't paid via Evolia yet) — an admin-granted one, price 0, 1 year.
@@ -31,6 +39,7 @@ export async function changeMemberTier(userId: string, tier: Tier): Promise<Acti
       data: {
         userId,
         tier,
+        planId: plan?.id,
         startDate: new Date(),
         endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         status: "ACTIVE",
@@ -40,6 +49,9 @@ export async function changeMemberTier(userId: string, tier: Tier): Promise<Acti
   }
 
   await prisma.user.update({ where: { id: userId }, data: { role: tier } });
+  if (plan) {
+    await syncUserPlanCache(userId, plan.id);
+  }
 
   await prisma.auditLog.create({
     data: {

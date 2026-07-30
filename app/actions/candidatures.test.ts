@@ -29,7 +29,7 @@ import {
   saveApplicationNote,
 } from "./candidatures";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 function makeApplication(overrides: Partial<Record<string, unknown>> = {}) {
   return {

@@ -20,7 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { approveServiceListing, rejectServiceListing } from "./admin-services";
 
-const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN" } } as never;
+const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
 function makeListing(overrides: Partial<Record<string, unknown>> = {}) {
   return {

@@ -18,6 +18,7 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:backfill-plans": "tsx prisma/backfill-plans.ts",
     "prepare": "husky"
   },
   "dependencies": {

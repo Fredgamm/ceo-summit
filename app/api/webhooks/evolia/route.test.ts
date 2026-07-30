@@ -30,7 +30,14 @@ vi.mock("@/lib/prisma", () => ({
     activationToken: {
       create: vi.fn().mockResolvedValue({}),
     },
+    plan: {
+      findFirst: vi.fn().mockResolvedValue({ id: "plan_executive" }),
+    },
   },
+}));
+
+vi.mock("@/lib/membership-sync", () => ({
+  syncUserPlanCache: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/resend", () => ({
@@ -87,7 +94,9 @@ describe("POST /api/webhooks/evolia", () => {
 
     expect(res.status).toBe(401);
     expect(prisma.webhookLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "REJECTED_INVALID_SIGNATURE" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "REJECTED_INVALID_SIGNATURE" }),
+      })
     );
     expect(prisma.user.upsert).not.toHaveBeenCalled();
   });
@@ -126,7 +135,9 @@ describe("POST /api/webhooks/evolia", () => {
       })
     );
     expect(prisma.membership.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ paymentRef: "EVL-2026-0001", tier: "EXECUTIVE" }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ paymentRef: "EVL-2026-0001", tier: "EXECUTIVE" }),
+      })
     );
     expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
     expect(prisma.webhookLog.update).toHaveBeenCalledWith(
@@ -135,7 +146,10 @@ describe("POST /api/webhooks/evolia", () => {
   });
 
   it("updates role/status but sends no activation email when the member already has an account (renewal)", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_1", status: "EXPIRED" } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "EXPIRED",
+    } as never);
     vi.mocked(prisma.user.upsert).mockResolvedValue({
       id: "user_1",
       email: "marie@example.com",
@@ -147,7 +161,9 @@ describe("POST /api/webhooks/evolia", () => {
 
     expect(res.status).toBe(200);
     expect(prisma.user.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: expect.objectContaining({ role: "EXECUTIVE", status: "ACTIVE" }) })
+      expect.objectContaining({
+        update: expect.objectContaining({ role: "EXECUTIVE", status: "ACTIVE" }),
+      })
     );
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
