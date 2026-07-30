@@ -204,7 +204,60 @@ docker compose -f docker-compose.prod.yml exec postgres \
 À automatiser via un cron sur le VPS une fois le déploiement stabilisé —
 aucune sauvegarde automatique n'est configurée par défaut.
 
-## 12. Commandes utiles
+## 12. CI/CD (déploiement automatique)
+
+Depuis `.github/workflows/ci-cd.yml`, chaque push sur `main` déclenche : un
+job `ci` (lint, type-check, tests, migrations sur une base Postgres
+éphémère fraîche, build), puis — seulement si `ci` réussit — un job
+`deploy` qui se connecte en SSH au VPS et relance la stack.
+
+Deux choses à faire une seule fois pour activer ça :
+
+### 12.1 Générer une clé SSH dédiée au déploiement
+
+Ne pas réutiliser ta clé SSH personnelle. Sur ta machine (pas sur le VPS) :
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ./ceo-summit-deploy-key -N ""
+```
+
+Ça crée deux fichiers : `ceo-summit-deploy-key` (privée) et
+`ceo-summit-deploy-key.pub` (publique).
+
+### 12.2 Autoriser la clé publique sur le VPS
+
+```bash
+ssh debian@167.114.96.153 \
+  "echo '$(cat ceo-summit-deploy-key.pub)' >> ~/.ssh/authorized_keys"
+```
+
+Vérifie que ça fonctionne avant de continuer :
+
+```bash
+ssh -i ceo-summit-deploy-key debian@167.114.96.153 "echo ok"
+```
+
+### 12.3 Ajouter les secrets sur GitHub
+
+Dans le dépôt GitHub → **Settings → Secrets and variables → Actions → New
+repository secret**, ajouter les 3 secrets suivants :
+
+| Nom           | Valeur                                                         |
+| ------------- | -------------------------------------------------------------- |
+| `VPS_HOST`    | `167.114.96.153`                                               |
+| `VPS_USER`    | `debian`                                                       |
+| `VPS_SSH_KEY` | contenu complet de `ceo-summit-deploy-key` (la clé **privée**) |
+
+Une fois fait, **supprime la clé privée de ta machine locale**
+(`rm ceo-summit-deploy-key ceo-summit-deploy-key.pub`) — elle est en
+sécurité dans les secrets GitHub chiffrés, inutile de la garder en clair
+ailleurs.
+
+Après ça, tout push sur `main` qui passe le job `ci` redéploie
+automatiquement — la mise à jour manuelle de la section 10 reste possible
+mais n'est plus nécessaire au quotidien.
+
+## 13. Commandes utiles
 
 ```bash
 # Logs
@@ -224,8 +277,8 @@ docker compose -f docker-compose.prod.yml ps
 
 ## Limites connues de ce déploiement
 
-- **Pas de CI/CD** (`E0-T04`, jamais fait) — chaque mise à jour se fait
-  manuellement via `git pull` + rebuild (section 10).
+- **CI/CD en place** (`E0-T04`) mais nécessite la configuration manuelle
+  ponctuelle de la section 12 (clé SSH + secrets GitHub) pour être actif.
 - **Pas de sauvegarde automatique** — voir section 11.
 - **Rate limiting toujours absent** (`EX-T01`, voir l'audit sécurité) — à
   garder en tête avant une exposition publique large.

@@ -1,0 +1,99 @@
+name: CI/CD
+
+# E0-T04 (backlog) — jamais fait jusqu'ici, voir BACKLOG_DEV.md "Dette
+# technique connue". Deux jobs : `ci` valide chaque push/PR (lint,
+# type-check, tests, migrations sur une vraie base fraîche, build) ; `deploy`
+# ne tourne que sur push vers main, après succès de `ci`, et déploie sur le
+# VPS OVH via SSH (voir DEPLOY.md pour la mise en place initiale du VPS et
+# des secrets ci-dessous).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ceosummit
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: ceo_summit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ceosummit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://ceosummit:ci_test_password@localhost:5432/ceo_summit?schema=public"
+      NEXTAUTH_SECRET: "ci-dummy-secret-never-used-in-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXT_PUBLIC_SOCKET_URL: "http://localhost:3001"
+      MESSAGE_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      NODE_ENV: "test"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply migrations to a fresh database
+        # Valide que toutes les migrations s'appliquent proprement dans
+        # l'ordre sur une base vide — l'historique de ce projet a plusieurs
+        # migrations créées/appliquées manuellement hors-ligne (voir
+        # README.md), donc cette vérification a une vraie valeur.
+        run: npx prisma migrate deploy
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run type-check
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/ceo-summit
+            git pull origin main
+            docker compose -f docker-compose.prod.yml up -d --build
+            docker image prune -f
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl -sf -o /dev/null "http://${{ secrets.VPS_HOST }}/login" \
+            && echo "OK — /login répond." \
+            || (echo "Échec du health check post-déploiement." && exit 1)
