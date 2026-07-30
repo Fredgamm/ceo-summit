@@ -1,0 +1,27 @@
+# CEO Summit Platform — production image.
+# Same image serves both the Next.js app and the standalone Socket.io
+# server (server/socket-server.ts) — docker-compose.prod.yml just runs a
+# different `command:` against each. Debian slim (not Alpine): Prisma's
+# query engine and `sharp` are both far less fragile against glibc than
+# musl, and the extra image size doesn't matter at this project's scale.
+FROM node:20-bookworm-slim AS base
+WORKDIR /app
+# openssl: required at runtime by Prisma's query engine on Debian.
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate
+RUN npm run build
+
+FROM base AS runner
+ENV NODE_ENV=production
+COPY --from=builder /app ./
+EXPOSE 3000 3001
+CMD ["npm", "run", "start"]

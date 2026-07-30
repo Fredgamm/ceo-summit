@@ -23,6 +23,12 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Déploiement auto-hébergé derrière Nginx (pas Vercel, qui définit ça
+  // automatiquement) — sans ça, NextAuth v5 rejette toute requête en mode
+  // production (`next start`) avec une erreur "UntrustedHost", même quand
+  // le Host correspond exactement à NEXTAUTH_URL. Trouvé en testant le
+  // sprint de sécurité du 29 juillet 2026 en conditions de production.
+  trustHost: true,
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24h — matches architecture doc

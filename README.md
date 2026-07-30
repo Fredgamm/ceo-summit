@@ -4,6 +4,7 @@ Plateforme B2B CEO Summit : membership, événements, Deal Room, salles thémati
 Stack : Next.js 14 (App Router) · TypeScript · Tailwind + shadcn/ui · Prisma · PostgreSQL · Redis · NextAuth v5.
 
 Voir `/BACKLOG_DEV.md` (racine du projet) pour la liste complète des tâches par epic.
+Voir `DEPLOY.md` pour déployer sur un VPS (Docker Compose, testé de bout en bout localement).
 
 ## Démarrage rapide
 
