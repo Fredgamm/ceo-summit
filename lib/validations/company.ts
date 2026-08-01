@@ -3,16 +3,40 @@ import { z } from "zod";
 import { SECTORS } from "@/lib/sectors";
 import { COUNTRIES } from "@/lib/countries";
 
-/** Phase 2 offres/paiement (30 juillet 2026) — création de fiche entreprise. */
+/**
+ * Parcours revu (1er août 2026) — coordonnées, réseaux sociaux et logo
+ * ajoutés au formulaire d'entreprise. Réseaux sociaux limités à 3 plateformes
+ * concrètes (LinkedIn/Facebook/Instagram) plutôt qu'une liste ouverte —
+ * couvre l'usage réel sans complexifier le formulaire ; stockés en JSON
+ * (Company.socialLinks) pour ne pas figer le schéma si une 4e s'ajoute.
+ */
 export const companyFormSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),
   sector: z.enum(SECTORS, { errorMap: () => ({ message: "Secteur invalide" }) }),
   country: z.enum(COUNTRIES, { errorMap: () => ({ message: "Pays invalide" }) }),
   description: z.string().trim().max(1000).optional().default(""),
   website: z.string().trim().max(200).optional().default(""),
+  logoUrl: z.string().trim().max(500).optional().default(""),
+  phone: z.string().trim().max(40).optional().default(""),
+  address: z.string().trim().max(300).optional().default(""),
+  linkedinUrl: z.string().trim().max(300).optional().default(""),
+  facebookUrl: z.string().trim().max(300).optional().default(""),
+  instagramUrl: z.string().trim().max(300).optional().default(""),
+  additionalInfo: z.string().trim().max(1000).optional().default(""),
 });
 
 export type CompanyFormInput = z.input<typeof companyFormSchema>;
+
+/**
+ * L'assistant de création choisit une offre avant de renseigner
+ * l'entreprise (cas d'usage retenu, 1er août 2026) — les deux sont
+ * soumis ensemble en une seule action transactionnelle
+ * (voir app/actions/company.ts::createCompany), pas deux écritures
+ * séparées dans l'ordre inverse comme avant.
+ */
+export const createCompanyWithPlanSchema = companyFormSchema.extend({
+  planId: z.string().min(1, "Choisissez une offre"),
+});
 
 export const inviteTeammateSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(100),

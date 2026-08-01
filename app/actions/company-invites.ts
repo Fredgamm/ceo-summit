@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { generateSecureToken, ACTIVATION_TOKEN_TTL_MS } from "@/lib/tokens";
+import { generateSecureToken } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
-import SignupConfirmEmail from "@/emails/signup-confirm-email";
+import { setPasswordSchema } from "@/lib/validations/auth";
 import CompanyInviteEmail from "@/emails/company-invite-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -72,15 +73,23 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   });
 
   const inviteUrl = `${process.env.NEXTAUTH_URL}/invitation/${token}`;
-  await sendTransactionalEmail({
-    to: email,
-    subject: `${company.name} vous invite à rejoindre CEO Summit`,
-    react: CompanyInviteEmail({
-      inviteeName: parsed.data.name,
-      companyName: company.name,
-      inviteUrl,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: email,
+      subject: `${company.name} vous invite à rejoindre CEO Summit`,
+      react: CompanyInviteEmail({
+        inviteeName: parsed.data.name,
+        companyName: company.name,
+        inviteUrl,
+      }),
+    });
+  } catch (err) {
+    // L'invitation existe déjà en base à ce stade — un échec d'envoi ne doit
+    // pas faire échouer l'action (même bug de classe que celui corrigé sur
+    // signup() le 1er août 2026 : une dépendance Resend synchrone et non
+    // rattrapée bloquait un flux qui n'a pas besoin d'être bloquant).
+    console.error("[inviteTeammate] failed to send invite email", err);
+  }
 
   revalidatePath(`/entreprises/${companyId}`);
   return { success: true, data: undefined };
@@ -109,17 +118,33 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
 }
 
 /**
- * Accepting an invite creates the account (same ActivationToken mechanism as
- * self-service signup — see app/actions/auth.ts::signup) with `companyId`
- * pre-filled, rather than a second parallel account-creation path.
+ * Parcours revu (1er août 2026) — accepter une invitation crée le compte
+ * directement (mot de passe choisi sur cette même page), sans second email
+ * d'activation : l'invité a déjà prouvé posséder cette adresse en suivant le
+ * lien reçu par email pour l'invitation elle-même, un deuxième aller-retour
+ * par email n'apporte rien de plus et ajoute une dépendance Resend inutile.
+ * L'appelant (accept-invite-button.tsx) enchaîne avec un signIn() côté
+ * client pour la connexion automatique.
  */
-export async function acceptCompanyInvite(token: string): Promise<ActionResult> {
+export async function acceptCompanyInvite(
+  token: string,
+  password: string,
+  confirmPassword: string
+): Promise<ActionResult<{ email: string }>> {
   const invite = await prisma.companyInvite.findUnique({ where: { token } });
   if (!invite) return { success: false, error: "Invitation introuvable." };
   if (invite.status === "REVOKED")
     return { success: false, error: "Cette invitation a été révoquée." };
   if (invite.status === "ACCEPTED") {
     return { success: false, error: "Cette invitation a déjà été acceptée." };
+  }
+
+  const parsedPassword = setPasswordSchema.safeParse({ password, confirmPassword });
+  if (!parsedPassword.success) {
+    return {
+      success: false,
+      error: parsedPassword.error.issues[0]?.message ?? "Mot de passe invalide",
+    };
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
@@ -131,37 +156,23 @@ export async function acceptCompanyInvite(token: string): Promise<ActionResult> 
     };
   }
 
-  const user = await prisma.$transaction(async (tx) => {
-    const created = await tx.user.create({
+  const passwordHash = await bcrypt.hash(parsedPassword.data.password, 12);
+
+  await prisma.$transaction([
+    prisma.user.create({
       data: {
         name: invite.name,
         email: invite.email,
         companyId: invite.companyId,
-        status: "PENDING_ACTIVATION",
+        passwordHash,
+        status: "ACTIVE",
       },
-    });
-    await tx.companyInvite.update({
+    }),
+    prisma.companyInvite.update({
       where: { id: invite.id },
       data: { status: "ACCEPTED", acceptedAt: new Date() },
-    });
-    return created;
-  });
+    }),
+  ]);
 
-  const activationToken = generateSecureToken();
-  await prisma.activationToken.create({
-    data: {
-      userId: user.id,
-      token: activationToken,
-      expiresAt: new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS),
-    },
-  });
-
-  const activationUrl = `${process.env.NEXTAUTH_URL}/activer/${activationToken}`;
-  await sendTransactionalEmail({
-    to: user.email,
-    subject: "Confirmez votre inscription CEO Summit",
-    react: SignupConfirmEmail({ memberName: user.name, activationUrl }),
-  });
-
-  return { success: true, data: undefined };
+  return { success: true, data: { email: invite.email } };
 }

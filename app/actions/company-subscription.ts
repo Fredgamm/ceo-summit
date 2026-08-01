@@ -93,15 +93,22 @@ export async function submitPaymentProof(
   ]);
 
   if (process.env.ADMIN_ALERT_EMAIL) {
-    await sendTransactionalEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
-      subject: `Paiement entreprise à valider — ${subscription.company.name}`,
-      react: AdminCompanyPaymentAlertEmail({
-        companyName: subscription.company.name,
-        amount: f.amount,
-        method: f.method,
-      }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Paiement entreprise à valider — ${subscription.company.name}`,
+        react: AdminCompanyPaymentAlertEmail({
+          companyName: subscription.company.name,
+          amount: f.amount,
+          method: f.method,
+        }),
+      });
+    } catch (err) {
+      // Le paiement est déjà enregistré à ce stade — un échec d'envoi de
+      // l'alerte admin ne doit pas faire échouer l'action (même bug de
+      // classe que celui corrigé sur signup() le 1er août 2026).
+      console.error("[submitPaymentProof] failed to send admin alert email", err);
+    }
   }
 
   revalidatePath(`/entreprises/${subscription.companyId}`);

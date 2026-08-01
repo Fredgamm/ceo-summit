@@ -14,14 +14,12 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
-    activationToken: { create: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/company-invite-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/signup-confirm-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -137,9 +135,10 @@ describe("revokeInvite", () => {
 });
 
 describe("acceptCompanyInvite", () => {
+  const PASSWORD = "Password1";
+
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NEXTAUTH_URL = "https://app.ceosummit.mg";
     vi.mocked(prisma.companyInvite.findUnique).mockResolvedValue({
       id: "invite_1",
       companyId: "company_1",
@@ -148,23 +147,13 @@ describe("acceptCompanyInvite", () => {
       status: "PENDING",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
-    vi.mocked(prisma.$transaction).mockImplementation(async (fn: unknown) => {
-      const tx = {
-        user: {
-          create: vi
-            .fn()
-            .mockResolvedValue({ id: "user_new", email: "marie@example.mg", name: "Marie Dupont" }),
-        },
-        companyInvite: { update: vi.fn() },
-      };
-      return (fn as (tx: unknown) => Promise<unknown>)(tx);
-    });
+    vi.mocked(prisma.$transaction).mockResolvedValue(undefined as never);
   });
 
-  it("creates the account with companyId pre-filled", async () => {
-    const result = await acceptCompanyInvite("token_1");
-    expect(result.success).toBe(true);
-    expect(prisma.activationToken.create).toHaveBeenCalled();
+  it("creates the account (ACTIVE, password set immediately) with companyId pre-filled", async () => {
+    const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+    expect(result).toEqual({ success: true, data: { email: "marie@example.mg" } });
+    expect(prisma.$transaction).toHaveBeenCalled();
   });
 
   it("rejects an already-accepted invite", async () => {
@@ -173,14 +162,20 @@ describe("acceptCompanyInvite", () => {
       status: "ACCEPTED",
     } as never);
 
-    const result = await acceptCompanyInvite("token_1");
+    const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
     expect(result.success).toBe(false);
   });
 
   it("rejects when an account already exists for that email", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "existing" } as never);
 
-    const result = await acceptCompanyInvite("token_1");
+    const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
     expect(result.success).toBe(false);
+  });
+
+  it("rejects mismatched passwords", async () => {
+    const result = await acceptCompanyInvite("token_1", PASSWORD, "Different1");
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

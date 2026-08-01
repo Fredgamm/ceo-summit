@@ -4,7 +4,9 @@ import Link from "next/link";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Accès en attente" };
@@ -15,18 +17,28 @@ export const metadata: Metadata = { title: "Accès en attente" };
  * et gratuit. middleware.ts redirige ici tout compte ACTIVE sans tier
  * personnel ni entreprise à l'abonnement actif.
  *
- * Phase 2 offres/paiement (30 juillet 2026) — deux chemins mènent
- * désormais ici : l'ancien flux candidature/Evolia (copie legacy, garde
- * son sens si l'entreprise n'a jamais été mise en place), et le nouveau
- * flux self-service sans entreprise créée — la vraie sortie de cette page
- * pour ce second cas est /entreprise/creer, pas d'attendre un email.
+ * Parcours revu (1er août 2026) — statut de dossier affiché pour que
+ * l'utilisateur sache où il en est sans solliciter l'équipe.
  */
 export default async function PaymentPendingPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const viewer = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: {
+      company: {
+        include: { subscription: true, invites: { select: { id: true }, take: 1 } },
+      },
+    },
+  });
   const hasCompany = Boolean(viewer?.companyId);
+
+  const statusItems = getOnboardingStatus({
+    hasCompany,
+    hasInvites: (viewer?.company?.invites.length ?? 0) > 0,
+    subscriptionStatus: viewer?.company?.subscription?.status,
+  });
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-surface p-6 text-center">
@@ -40,13 +52,23 @@ export default async function PaymentPendingPage() {
         ) : (
           <p className="mb-6 text-sm leading-relaxed text-text-mid">
             Votre compte est confirmé, mais aucune entreprise ni adhésion active n&apos;y est encore
-            rattachée. Créez la fiche de votre entreprise pour inviter vos collaborateurs et choisir
-            une offre.
+            rattachée. Créez la fiche de votre entreprise pour choisir une offre et inviter vos
+            collaborateurs.
           </p>
         )}
+
+        <div className="mb-6 text-left">
+          <OnboardingStatusList items={statusItems} />
+        </div>
+
         {!hasCompany && (
           <Button asChild className="mb-4 w-full justify-center">
             <Link href="/entreprise/creer">Créer mon entreprise</Link>
+          </Button>
+        )}
+        {hasCompany && viewer?.company?.subscription?.status === "PENDING_PAYMENT" && (
+          <Button asChild className="mb-4 w-full justify-center">
+            <Link href="/entreprise/paiement">Soumettre le paiement</Link>
           </Button>
         )}
         <p className="mb-6 text-xs text-text-muted">

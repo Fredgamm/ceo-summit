@@ -1,52 +1,79 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 import { acceptCompanyInvite } from "@/app/actions/company-invites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-export function AcceptInviteButton({ token, email }: { token: string; email: string }) {
+/** Parcours revu (1er août 2026) — mot de passe choisi ici, connexion automatique juste après. */
+export function AcceptInviteButton({ token }: { token: string }) {
+  const router = useRouter();
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const [sent, setSent] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
-  async function handleAccept() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const result = await acceptCompanyInvite(token);
+      const result = await acceptCompanyInvite(token, password, confirmPassword);
       if (!result.success) {
         setError(result.error);
         return;
       }
-      setSent(true);
+      await signIn("credentials", { email: result.data.email, password, redirect: false });
+      router.push("/bienvenue");
+      router.refresh();
     } finally {
       setLoading(false);
     }
   }
 
-  if (sent) {
-    return (
-      <Alert variant="success">
-        <AlertDescription>
-          Un email de confirmation vient d&apos;être envoyé à {email}. Cliquez sur le lien
-          qu&apos;il contient pour choisir votre mot de passe.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="invite-password">Choisissez votre mot de passe</Label>
+        <Input
+          id="invite-password"
+          type="password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+        />
+        <p className="text-xs text-text-muted">
+          Au moins 8 caractères, une majuscule et un chiffre.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="invite-confirm-password">Confirmer le mot de passe</Label>
+        <Input
+          id="invite-confirm-password"
+          type="password"
+          placeholder="••••••••"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          autoComplete="new-password"
+        />
+      </div>
+
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <Button onClick={handleAccept} disabled={loading} className="w-full justify-center">
-        {loading ? "Création…" : "Accepter l'invitation"}
+
+      <Button type="submit" disabled={loading} className="w-full justify-center">
+        {loading ? "Création…" : "Accepter l'invitation et créer mon compte"}
       </Button>
-    </div>
+    </form>
   );
 }

@@ -372,6 +372,14 @@ model Company {
   description String?  @db.Text
   logoUrl     String?
   website     String?
+  /// Coordonnées (parcours revu, 1er août 2026).
+  phone       String?
+  address     String?
+  /// Réseaux sociaux — clé libre (ex: "linkedin", "facebook") -> URL, plutôt
+  /// que des colonnes par plateforme : le formulaire ne fixe pas une liste
+  /// fermée de réseaux.
+  socialLinks Json?
+  additionalInfo String? @db.Text
   createdAt   DateTime @default(now())
 
   /// Phase 2 offres/paiement (30 juillet 2026) — le créateur de la fiche

@@ -6,6 +6,7 @@ import { Briefcase, Globe, Handshake } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { InviteTeammateForm } from "@/components/entreprise/invite-teammate-form";
+import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { initials, tierLabel, formatAriary } from "@/lib/utils";
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
@@ -61,6 +63,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
       },
       subscription: { include: { plan: true } },
       invites: { where: { status: "PENDING" }, select: { id: true, name: true, email: true } },
+      _count: { select: { invites: true } },
     },
   });
   if (!company) notFound();
@@ -160,6 +163,17 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
         {isCompanyAdmin && (
           <TabsContent value="gestion">
             <div className="flex flex-col gap-4">
+              <div className="rounded-lg border border-border bg-white p-5">
+                <h2 className="mb-3 text-sm font-bold text-navy">Statut du dossier</h2>
+                <OnboardingStatusList
+                  items={getOnboardingStatus({
+                    hasCompany: true,
+                    hasInvites: company._count.invites > 0,
+                    subscriptionStatus: company.subscription?.status,
+                  })}
+                />
+              </div>
+
               <div className="rounded-lg border border-border bg-white p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-sm font-bold text-navy">Abonnement</h2>

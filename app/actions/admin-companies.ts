@@ -60,14 +60,21 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
 
   const companyAdmin = payment.companySubscription.company.companyAdmin;
   if (companyAdmin) {
-    await sendTransactionalEmail({
-      to: companyAdmin.email,
-      subject: `Paiement confirmé — ${payment.companySubscription.company.name}`,
-      react: CompanyPaymentConfirmedEmail({
-        adminName: companyAdmin.name,
-        companyName: payment.companySubscription.company.name,
-      }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: companyAdmin.email,
+        subject: `Paiement confirmé — ${payment.companySubscription.company.name}`,
+        react: CompanyPaymentConfirmedEmail({
+          adminName: companyAdmin.name,
+          companyName: payment.companySubscription.company.name,
+        }),
+      });
+    } catch (err) {
+      // Le paiement est déjà confirmé et l'abonnement déjà actif à ce
+      // stade — un échec d'envoi ne doit pas faire échouer l'action (même
+      // bug de classe que celui corrigé sur signup() le 1er août 2026).
+      console.error("[confirmCompanyPayment] failed to send confirmation email", err);
+    }
   }
 
   revalidatePath("/admin/entreprises");
@@ -124,15 +131,20 @@ export async function rejectCompanyPayment(
 
   const companyAdmin = payment.companySubscription.company.companyAdmin;
   if (companyAdmin) {
-    await sendTransactionalEmail({
-      to: companyAdmin.email,
-      subject: `Paiement à corriger — ${payment.companySubscription.company.name}`,
-      react: CompanyPaymentRejectedEmail({
-        adminName: companyAdmin.name,
-        companyName: payment.companySubscription.company.name,
-        reason: reason.trim(),
-      }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: companyAdmin.email,
+        subject: `Paiement à corriger — ${payment.companySubscription.company.name}`,
+        react: CompanyPaymentRejectedEmail({
+          adminName: companyAdmin.name,
+          companyName: payment.companySubscription.company.name,
+          reason: reason.trim(),
+        }),
+      });
+    } catch (err) {
+      // Même rationale que confirmCompanyPayment ci-dessus.
+      console.error("[rejectCompanyPayment] failed to send rejection email", err);
+    }
   }
 
   revalidatePath("/admin/entreprises");

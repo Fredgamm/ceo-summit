@@ -14,23 +14,31 @@ import {
 import { sendTransactionalEmail } from "@/lib/resend";
 import ActivationEmail from "@/emails/activation-email";
 import ResetPasswordEmail from "@/emails/reset-password-email";
-import SignupConfirmEmail from "@/emails/signup-confirm-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 // ═══════════════════════════════════════════════
-// Phase 2 offres/paiement (30 juillet 2026) — inscription self-service
+// Parcours revu (1er août 2026) — inscription self-service
 // ═══════════════════════════════════════════════
 
 /**
- * Porte d'entrée self-service : nom + email seulement, pas de champ
- * entreprise ici (voir app/actions/company.ts pour cette étape, volontairement
- * séparée pour ne pas alourdir le premier écran). Réutilise le mécanisme
- * ActivationToken existant — le mot de passe est choisi via le lien reçu par
- * email, exactement comme pour une candidature approuvée ou un paiement Evolia.
+ * Porte d'entrée self-service : nom, email, mot de passe choisi
+ * immédiatement — pas de champ entreprise ici (voir app/actions/company.ts,
+ * volontairement séparé pour ne pas alourdir le premier écran). Le compte
+ * est actif dès sa création ; l'appelant (signup-form.tsx) enchaîne avec un
+ * signIn() côté client pour la connexion automatique. Contrairement à
+ * `approveApplication`/le webhook Evolia (comptes créés par un tiers, où
+ * prouver la possession de l'email via un lien reçu a du sens),
+ * l'inscription self-service n'a pas besoin de ce détour : l'utilisateur
+ * vient de taper son mot de passe lui-même dans le même formulaire.
  */
-export async function signup(name: string, email: string): Promise<ActionResult> {
-  const parsed = signupSchema.safeParse({ name, email });
+export async function signup(
+  name: string,
+  email: string,
+  password: string,
+  confirmPassword: string
+): Promise<ActionResult> {
+  const parsed = signupSchema.safeParse({ name, email, password, confirmPassword });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
@@ -44,20 +52,14 @@ export async function signup(name: string, email: string): Promise<ActionResult>
     };
   }
 
-  const user = await prisma.user.create({
-    data: { name: parsed.data.name, email: normalizedEmail, status: "PENDING_ACTIVATION" },
-  });
-
-  const token = generateSecureToken();
-  await prisma.activationToken.create({
-    data: { userId: user.id, token, expiresAt: new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS) },
-  });
-
-  const activationUrl = `${process.env.NEXTAUTH_URL}/activer/${token}`;
-  await sendTransactionalEmail({
-    to: user.email,
-    subject: "Confirmez votre inscription CEO Summit",
-    react: SignupConfirmEmail({ memberName: user.name, activationUrl }),
+  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+  await prisma.user.create({
+    data: {
+      name: parsed.data.name,
+      email: normalizedEmail,
+      passwordHash,
+      status: "ACTIVE",
+    },
   });
 
   return { success: true, data: undefined };

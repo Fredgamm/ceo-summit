@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 import { signup } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
@@ -9,12 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-/** Phase 2 offres/paiement — inscription self-service, nom + email seulement. */
+/**
+ * Parcours revu (1er août 2026) — mot de passe choisi immédiatement, puis
+ * connexion automatique et redirection vers l'onboarding, sans email
+ * bloquant entre les deux (voir app/actions/auth.ts::signup).
+ */
 export function SignupForm() {
+  const router = useRouter();
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const [sent, setSent] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -23,26 +31,17 @@ export function SignupForm() {
     setLoading(true);
 
     try {
-      const result = await signup(name, email);
+      const result = await signup(name, email, password, confirmPassword);
       if (!result.success) {
         setError(result.error);
         return;
       }
-      setSent(true);
+      await signIn("credentials", { email, password, redirect: false });
+      router.push("/bienvenue");
+      router.refresh();
     } finally {
       setLoading(false);
     }
-  }
-
-  if (sent) {
-    return (
-      <Alert variant="success">
-        <AlertDescription>
-          Un email de confirmation vient d&apos;être envoyé à {email}. Cliquez sur le lien
-          qu&apos;il contient pour choisir votre mot de passe et accéder à votre espace.
-        </AlertDescription>
-      </Alert>
-    );
   }
 
   return (
@@ -70,6 +69,33 @@ export function SignupForm() {
         />
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="signup-password">Mot de passe</Label>
+        <Input
+          id="signup-password"
+          type="password"
+          placeholder="••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+        />
+        <p className="text-xs text-text-muted">
+          Au moins 8 caractères, une majuscule et un chiffre.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="signup-confirm-password">Confirmer le mot de passe</Label>
+        <Input
+          id="signup-confirm-password"
+          type="password"
+          placeholder="••••••••"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          autoComplete="new-password"
+        />
+      </div>
+
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -77,7 +103,7 @@ export function SignupForm() {
       )}
 
       <Button type="submit" size="lg" className="w-full justify-center" disabled={loading}>
-        {loading ? "Inscription…" : "S'inscrire"}
+        {loading ? "Création du compte…" : "S'inscrire"}
       </Button>
 
       <p className="text-center text-xs text-text-muted">

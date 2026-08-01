@@ -42,7 +42,7 @@ export default async function InvitationPage({ params }: { params: { token: stri
       title={`Rejoindre ${invite.company.name}`}
       subtitle={`Invitation envoyée à ${invite.email}`}
     >
-      <AcceptInviteButton token={params.token} email={invite.email} />
+      <AcceptInviteButton token={params.token} />
     </AuthCard>
   );
 }
