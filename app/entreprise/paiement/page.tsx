@@ -20,12 +20,14 @@ export default async function CompanyPaymentPage() {
 
   const company = await prisma.company.findUnique({
     where: { id: viewer.companyId },
-    include: { subscription: { include: { plan: true } } },
+    include: { subscription: { include: { plan: true } }, users: { select: { id: true } } },
   });
   if (!company) redirect("/entreprise/creer");
   if (company.companyAdminId !== viewer.id) redirect(`/entreprises/${company.id}`);
   if (!company.subscription) redirect("/entreprise/abonnement");
   if (company.subscription.status === "ACTIVE") redirect(`/entreprises/${company.id}`);
+
+  const headcount = company.users.length;
 
   return (
     <div className="mx-auto max-w-lg p-6">
@@ -33,9 +35,9 @@ export default async function CompanyPaymentPage() {
         Paiement — {company.subscription.plan.name}
       </h1>
       <p className="mb-4 text-sm text-text-muted">
-        {formatAriary(company.subscription.plan.priceAr)} / an. Choisissez votre mode de paiement,
-        uploadez une preuve (bordereau, reçu, capture) — l&apos;équipe CEO Summit valide
-        manuellement chaque paiement.
+        {formatAriary(company.subscription.plan.priceAr)} / participant / an. Choisissez votre mode
+        de paiement, uploadez une preuve (bordereau, reçu, capture) — l&apos;équipe CEO Summit
+        valide manuellement chaque paiement.
       </p>
 
       {company.subscription.status === "PENDING_REVIEW" ? (
@@ -47,7 +49,9 @@ export default async function CompanyPaymentPage() {
       ) : (
         <PaymentProofForm
           companySubscriptionId={company.subscription.id}
-          suggestedAmount={company.subscription.plan.priceAr}
+          pricePerParticipant={company.subscription.plan.priceAr}
+          minParticipants={company.subscription.plan.minParticipants}
+          headcount={headcount}
         />
       )}
     </div>

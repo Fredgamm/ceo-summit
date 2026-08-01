@@ -80,7 +80,13 @@ export default async function AdminDashboardPage() {
   const activeMembersCount = activeByRole.reduce((sum, r) => sum + r._count._all, 0);
   const roleCounts = Object.fromEntries(activeByRole.map((r) => [r.role, r._count._all]));
 
-  const mrr = computeMRR(activeMemberships);
+  // Phase 2ter (1er août 2026) — filtre défensif, voir admin/finances/page.tsx.
+  const mrr = computeMRR(
+    activeMemberships.filter(
+      (m): m is typeof m & { startDate: Date; endDate: Date } =>
+        m.startDate != null && m.endDate != null
+    )
+  );
 
   const revenueEntries = [
     ...allMembershipsForRevenue.map((m) => ({ amount: m.price, date: m.createdAt })),

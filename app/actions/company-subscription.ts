@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { submitPaymentProofSchema } from "@/lib/validations/company-payment";
+import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import AdminCompanyPaymentAlertEmail from "@/emails/admin-company-payment-alert-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -56,7 +57,7 @@ export async function submitPaymentProof(
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
-    include: { company: true },
+    include: { company: true, plan: true },
   });
   if (!subscription) return { success: false, error: "Abonnement introuvable." };
   if (subscription.company.companyAdminId !== session.user.id) {
@@ -75,11 +76,28 @@ export async function submitPaymentProof(
   }
   const f = parsed.data;
 
+  /**
+   * Phase 2ter (1er août 2026) — tarification par participant : le montant
+   * n'est plus saisi par l'utilisateur, calculé à partir du nombre réel de
+   * collaborateurs rattachés (propriétaire inclus), pas des invitations
+   * encore en attente. Bloque la soumission tant que le seuil minimum de
+   * l'offre n'est pas atteint.
+   */
+  const headcount = await prisma.user.count({ where: { companyId: subscription.companyId } });
+  if (!meetsMinParticipants(subscription.plan, headcount)) {
+    const missing = (subscription.plan.minParticipants ?? 1) - headcount;
+    return {
+      success: false,
+      error: `Il manque encore ${missing} collaborateur(s) pour atteindre le seuil minimum de cette offre (${subscription.plan.minParticipants}).`,
+    };
+  }
+  const amount = computeDueAmount(subscription.plan, headcount);
+
   await prisma.$transaction([
     prisma.companyPayment.create({
       data: {
         companySubscriptionId,
-        amount: f.amount,
+        amount,
         method: f.method,
         proofFileKey: f.proofFileKey,
         comment: f.comment || null,
@@ -99,7 +117,7 @@ export async function submitPaymentProof(
         subject: `Paiement entreprise à valider — ${subscription.company.name}`,
         react: AdminCompanyPaymentAlertEmail({
           companyName: subscription.company.name,
-          amount: f.amount,
+          amount,
           method: f.method,
         }),
       });

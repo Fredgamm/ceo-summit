@@ -16,9 +16,20 @@ const STEP_COUNT = 2;
  * choix en état local, comme components/onboarding/onboarding-wizard.tsx
  * garde son step index.
  */
-export function CompanyOnboardingWizard({ plans }: { plans: Plan[] }) {
+export function CompanyOnboardingWizard({
+  plans,
+  initialPlanId,
+}: {
+  plans: Plan[];
+  /**
+   * Phase 2ter (1er août 2026) — offre choisie sur le site public
+   * (`User.intendedPlanId`), pré-sélectionnée mais pas imposée : l'étape 1
+   * reste affichée pour confirmation, pas sautée automatiquement.
+   */
+  initialPlanId?: string | null;
+}) {
   const [step, setStep] = React.useState(1);
-  const [planId, setPlanId] = React.useState<string | null>(null);
+  const [planId, setPlanId] = React.useState<string | null>(initialPlanId ?? null);
 
   return (
     <div className="w-full max-w-2xl">
@@ -60,16 +71,21 @@ export function CompanyOnboardingWizard({ plans }: { plans: Plan[] }) {
                   <p className="text-base font-bold text-navy">{plan.name}</p>
                   {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
                   <p className="mt-1 text-lg font-bold text-navy">
-                    {formatAriary(plan.priceAr)} / an
+                    {formatAriary(plan.priceAr)} / participant / an
                   </p>
                   <ul className="flex flex-col gap-1 text-xs text-text-muted">
+                    {plan.minParticipants && (
+                      <li>
+                        Réservé aux entreprises inscrivant ≥ {plan.minParticipants} participants
+                      </li>
+                    )}
                     {plan.maxTeamMembers && (
                       <li>Jusqu&apos;à {plan.maxTeamMembers} collaborateurs</li>
                     )}
                     <li>
                       {plan.hasUnlimitedCredits
                         ? "Crédits Deal Room illimités"
-                        : `${plan.includedCredits} crédits Deal Room inclus`}
+                        : `${plan.includedCredits} crédits Deal Room inclus par participant`}
                     </li>
                   </ul>
                 </button>

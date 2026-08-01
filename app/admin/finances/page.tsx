@@ -95,9 +95,18 @@ export default async function AdminFinancesPage({
     }),
   ]);
 
-  const mrr = computeMRR(activeMemberships);
+  // Phase 2ter (1er août 2026) — startDate/endDate sont devenus nullable
+  // (adhésions PENDING_PAYMENT/PENDING_REVIEW n'ont pas encore de dates
+  // réelles), mais une adhésion ACTIVE en a toujours — filtre défensif,
+  // ne devrait jamais rien retirer en pratique.
+  const activeMembershipsWithDates = activeMemberships.filter(
+    (m): m is typeof m & { startDate: Date; endDate: Date } =>
+      m.startDate != null && m.endDate != null
+  );
+
+  const mrr = computeMRR(activeMembershipsWithDates);
   const arr = mrr * 12;
-  const mrrByPlan = computeMRRByPlan(activeMemberships);
+  const mrrByPlan = computeMRRByPlan(activeMembershipsWithDates);
   const countByPlan = new Map<string, number>();
   for (const m of activeMemberships) {
     const key = m.planId ?? "unknown";

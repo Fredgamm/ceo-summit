@@ -47,6 +47,7 @@ async function ensureLegacyPlans(): Promise<Record<Tier, string>> {
     const created = await prisma.plan.create({
       data: {
         name: tier,
+        slug: tier.toLowerCase(),
         scope: "INDIVIDUAL",
         priceAr: DEFAULT_MEMBERSHIP_PRICES[tier],
         includedCredits: tier === "CHAIRMAN" ? 0 : DEFAULT_INCLUDED_CREDITS[tier],

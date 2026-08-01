@@ -69,7 +69,11 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
     [
       ...member.memberships.map((m) => ({
         type: "membership",
-        message: `Adhésion ${tierLabel(m.tier)} — ${formatAriary(m.price)} (${formatDateFr(m.startDate)} → ${formatDateFr(m.endDate)})`,
+        message: `Adhésion ${tierLabel(m.tier)} — ${formatAriary(m.price)} (${
+          m.startDate && m.endDate
+            ? `${formatDateFr(m.startDate)} → ${formatDateFr(m.endDate)}`
+            : "en attente de paiement"
+        })`,
         date: m.createdAt,
       })),
       ...member.eventRegistrations.map((r) => ({
@@ -195,7 +199,9 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
                       <div>
                         <p className="font-semibold text-navy">{tierLabel(m.tier)}</p>
                         <p className="text-xs text-text-muted">
-                          {formatDateFr(m.startDate)} → {formatDateFr(m.endDate)}
+                          {m.startDate && m.endDate
+                            ? `${formatDateFr(m.startDate)} → ${formatDateFr(m.endDate)}`
+                            : "En attente de paiement"}
                         </p>
                       </div>
                       <span className="font-semibold text-navy">{formatAriary(m.price)}</span>

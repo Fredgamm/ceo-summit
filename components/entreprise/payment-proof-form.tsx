@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import type { PaymentMethod } from "@prisma/client";
 
 import { submitPaymentProof } from "@/app/actions/company-subscription";
+import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import { formatAriary } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,15 +27,25 @@ const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
   { value: "MOBILE_MONEY", label: "Mobile Money" },
 ];
 
+/**
+ * Phase 2ter (1er août 2026) — le montant n'est plus saisi : calculé à
+ * partir du prix par participant de l'offre et du nombre réel de
+ * collaborateurs (voir lib/company-payment-amount.ts, appliqué de la même
+ * façon côté serveur dans submitPaymentProof — ce composant n'affiche
+ * qu'un aperçu, la source de vérité reste le calcul serveur).
+ */
 export function PaymentProofForm({
   companySubscriptionId,
-  suggestedAmount,
+  pricePerParticipant,
+  minParticipants,
+  headcount,
 }: {
   companySubscriptionId: string;
-  suggestedAmount: number;
+  pricePerParticipant: number;
+  minParticipants: number | null;
+  headcount: number;
 }) {
   const router = useRouter();
-  const [amount, setAmount] = React.useState(String(suggestedAmount));
   const [method, setMethod] = React.useState<PaymentMethod>("VIREMENT");
   const [comment, setComment] = React.useState("");
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
@@ -41,6 +53,10 @@ export function PaymentProofForm({
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
+
+  const plan = { priceAr: pricePerParticipant, minParticipants };
+  const meetsThreshold = meetsMinParticipants(plan, headcount);
+  const amount = computeDueAmount(plan, headcount);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -73,7 +89,6 @@ export function PaymentProofForm({
     setSubmitting(true);
     try {
       const result = await submitPaymentProof(companySubscriptionId, {
-        amount: Number(amount),
         method,
         proofFileKey: proof.key,
         comment,
@@ -102,32 +117,33 @@ export function PaymentProofForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="payment-amount">Montant payé (Ar) *</Label>
-          <Input
-            id="payment-amount"
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>Mode de paiement *</Label>
-          <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {METHOD_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="rounded-md border border-border bg-surface p-4">
+        <p className="text-sm text-text-mid">
+          {headcount} participant(s) × {formatAriary(pricePerParticipant)}
+        </p>
+        <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
+        {minParticipants && !meetsThreshold && (
+          <p className="mt-1 text-xs text-red-600">
+            Il manque {minParticipants - headcount} collaborateur(s) pour atteindre le seuil minimum
+            de {minParticipants} de cette offre — invitez-les avant de soumettre.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Mode de paiement *</Label>
+        <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {METHOD_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -160,7 +176,11 @@ export function PaymentProofForm({
         </Alert>
       )}
 
-      <Button type="submit" disabled={submitting || uploading} className="justify-center">
+      <Button
+        type="submit"
+        disabled={submitting || uploading || !meetsThreshold}
+        className="justify-center"
+      >
         {submitting ? "Envoi…" : "Soumettre pour validation"}
       </Button>
     </form>

@@ -32,11 +32,20 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * l'inscription self-service n'a pas besoin de ce détour : l'utilisateur
  * vient de taper son mot de passe lui-même dans le même formulaire.
  */
+/**
+ * `planId` (Phase 2ter, 1er août 2026) — offre choisie sur le site public
+ * via le lien profond `/inscription?offre=<slug>`, résolue et validée côté
+ * serveur (signup-form.tsx ne transmet que l'id, pas le slug). Stockée sur
+ * `User.intendedPlanId`, lue ensuite par /paiement-en-attente pour ne pas
+ * la redemander. Un id invalide/périmé est ignoré silencieusement (pas
+ * d'erreur bloquante sur l'inscription elle-même).
+ */
 export async function signup(
   name: string,
   email: string,
   password: string,
-  confirmPassword: string
+  confirmPassword: string,
+  planId?: string | null
 ): Promise<ActionResult> {
   const parsed = signupSchema.safeParse({ name, email, password, confirmPassword });
   if (!parsed.success) {
@@ -52,6 +61,10 @@ export async function signup(
     };
   }
 
+  const intendedPlan = planId
+    ? await prisma.plan.findFirst({ where: { id: planId, isActive: true, isSelfService: true } })
+    : null;
+
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
   await prisma.user.create({
     data: {
@@ -59,6 +72,7 @@ export async function signup(
       email: normalizedEmail,
       passwordHash,
       status: "ACTIVE",
+      intendedPlanId: intendedPlan?.id,
     },
   });
 
@@ -191,7 +205,7 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
     subject: "Votre nouveau lien d'activation CEO Summit",
     react: ActivationEmail({
       memberName: user.name,
-      tier: tierLabel(latestMembership?.tier),
+      tier: tierLabel(latestMembership?.tier ?? undefined),
       activationUrl,
     }),
   });

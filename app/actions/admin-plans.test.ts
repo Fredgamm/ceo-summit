@@ -6,7 +6,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    plan: { create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    plan: { create: vi.fn(), update: vi.fn(), delete: vi.fn(), findUnique: vi.fn() },
     user: { count: vi.fn() },
     membership: { count: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -22,15 +22,18 @@ const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: t
 
 const VALID_PLAN_INPUT = {
   name: "Sponsor Or",
+  slug: "sponsor-or",
   description: "Offre sponsor niveau or",
   scope: "COMPANY" as const,
   priceAr: 5_000_000,
   maxTeamMembers: 20,
+  minParticipants: null,
   includedCredits: 100,
   hasUnlimitedCredits: false,
   rank: 4,
   eligibilityNote: "",
   isActive: true,
+  isSelfService: true,
   displayOrder: 3,
 };
 
@@ -40,6 +43,7 @@ beforeEach(() => {
   vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
   vi.mocked(prisma.user.count).mockResolvedValue(0);
   vi.mocked(prisma.membership.count).mockResolvedValue(0);
+  vi.mocked(prisma.plan.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
     const list = ops as Promise<unknown>[];
     return Promise.all(list);
@@ -68,6 +72,13 @@ describe("createPlan", () => {
     expect(result.success).toBe(false);
     expect(prisma.plan.create).not.toHaveBeenCalled();
   });
+
+  it("rejects a slug already used by another plan", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ id: "other_plan" } as never);
+    const result = await createPlan(VALID_PLAN_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.plan.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("updatePlan", () => {
@@ -84,6 +95,19 @@ describe("updatePlan", () => {
 
   it("rejects an invalid rank without updating anything", async () => {
     const result = await updatePlan("plan_1", { ...VALID_PLAN_INPUT, rank: 0 });
+    expect(result.success).toBe(false);
+    expect(prisma.plan.update).not.toHaveBeenCalled();
+  });
+
+  it("allows keeping the same slug on the plan being edited", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ id: "plan_1" } as never);
+    const result = await updatePlan("plan_1", VALID_PLAN_INPUT);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a slug already used by a different plan", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ id: "other_plan" } as never);
+    const result = await updatePlan("plan_1", VALID_PLAN_INPUT);
     expect(result.success).toBe(false);
     expect(prisma.plan.update).not.toHaveBeenCalled();
   });

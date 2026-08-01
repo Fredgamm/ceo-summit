@@ -42,6 +42,12 @@ enum PlanScope {
 
 enum MembershipStatus {
   PENDING_ACTIVATION
+  /// Phase 2ter (1er août 2026) — offre individuelle choisie, paiement pas
+  /// encore soumis. Ne s'applique qu'à `Membership.status` (jamais à
+  /// `User.status`, qui partage cet enum mais n'utilise pas ces 2 valeurs).
+  PENDING_PAYMENT
+  /// Preuve de paiement soumise, en attente de revue admin.
+  PENDING_REVIEW
   ACTIVE
   EXPIRED
   SUSPENDED
@@ -193,6 +199,14 @@ model User {
   planId        String?
   plan          Plan?     @relation(fields: [planId], references: [id])
 
+  /// Phase 2ter (1er août 2026) — offre choisie sur le site public avant
+  /// inscription (lien profond `/inscription?offre=<slug>`), portée jusqu'à
+  /// /paiement-en-attente pour ne pas la redemander. Transitoire : jamais
+  /// nettoyé explicitement une fois le vrai Membership/CompanySubscription
+  /// créé, mais plus lu à partir de ce moment-là.
+  intendedPlanId String?
+  intendedPlan   Plan?    @relation("IntendedPlan", fields: [intendedPlanId], references: [id])
+
   companyId     String?
   company       Company?  @relation(fields: [companyId], references: [id])
   /// Phase 2 offres/paiement — non-null uniquement si ce User est l'admin
@@ -311,20 +325,31 @@ model Membership {
   id           String            @id @default(cuid())
   userId       String
   user         User              @relation(fields: [userId], references: [id])
-  tier         Tier
+  /// Devenu nullable (Phase 2ter, 1er août 2026) — une offre librement
+  /// créée par l'admin (ex. "Executive pass" à 2,5M Ar) n'a pas toujours de
+  /// correspondance légitime avec l'un des 3 tiers historiques. Renseigné
+  /// uniquement quand `planId` référence l'une des 3 offres backfillées en
+  /// Phase 0 ; `null` pour toute nouvelle offre créée depuis /admin/plans.
+  tier         Tier?
   /// Nullable during the Tier->Plan transition (Phase 0, 30 juillet 2026) —
   /// backfilled for every existing row from `tier`, and set going forward by
   /// lib/membership-sync.ts::syncUserPlanCache. `tier` itself is left
   /// populated in parallel, read by any not-yet-migrated code path.
   planId       String?
   plan         Plan?             @relation(fields: [planId], references: [id])
-  startDate    DateTime
-  endDate      DateTime
+  /// Nullable (Phase 2ter, 1er août 2026) — un Membership PENDING_PAYMENT/
+  /// PENDING_REVIEW n'a pas encore de dates réelles, calculées seulement à
+  /// la confirmation admin (mêmes raisons que CompanySubscription.startDate/
+  /// endDate, déjà nullable pour la même phase de vie).
+  startDate    DateTime?
+  endDate      DateTime?
   status       MembershipStatus  @default(ACTIVE)
   price        Int // in Ariary
   paymentRef   String?           @unique // Evolia payment reference — unique so a webhook retry (RG-P1-01) can't create a duplicate Membership
   autoRenew    Boolean           @default(false)
   createdAt    DateTime          @default(now())
+
+  payments     MembershipPayment[]
 
   @@index([userId])
   @@index([status, endDate]) // used for "expiring soon" admin queries
@@ -340,23 +365,40 @@ model Membership {
 model Plan {
   id                  String    @id @default(cuid())
   name                String
+  /// Phase 2ter (1er août 2026) — identifiant lisible pour le lien profond
+  /// depuis le site public vitrine (`/inscription?offre=<slug>`), plutôt que
+  /// l'id cuid technique. Éditable dans /admin/plans.
+  slug                String    @unique
   description         String?   @db.Text
   scope               PlanScope @default(INDIVIDUAL)
+  /// Prix unitaire — total pour scope INDIVIDUAL (1 participant), prix PAR
+  /// PARTICIPANT pour scope COMPANY (Phase 2ter : montant dû = priceAr ×
+  /// nombre réel de collaborateurs, voir lib/company-payment-amount.ts).
   priceAr             Int
   /// Only meaningful for scope: COMPANY plans — enforced at invite time, not just payment.
   maxTeamMembers      Int?
+  /// Phase 2ter (1er août 2026) — seuil minimum de participants pour
+  /// bénéficier de ce tarif dégressif (scope COMPANY uniquement, ex. "Light
+  /// corporate pass" exige ≥10 collaborateurs). `null` = aucun seuil.
+  minParticipants     Int?
   includedCredits     Int       @default(0)
   /// Replaces the scattered `=== "CHAIRMAN"` unlimited-credits checks.
   hasUnlimitedCredits Boolean   @default(false)
   rank                Int
   eligibilityNote     String?   @db.Text
   isActive            Boolean   @default(true)
+  /// Phase 2ter (1er août 2026) — offres de sponsoring créées pour le suivi
+  /// admin mais sans parcours self-service (aucun prix public, deal négocié
+  /// manuellement) : exclues de getActivePlans({selfServiceOnly:true}) et de
+  /// la résolution de lien profond, mais toujours listées à l'admin.
+  isSelfService       Boolean   @default(true)
   displayOrder        Int       @default(0)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   memberships         Membership[]
   users               User[]
+  usersIntending      User[]        @relation("IntendedPlan")
   eventsAsMinPlan     Event[]       @relation("EventMinPlan")
   opportunitiesAsVisibilityPlan Opportunity[] @relation("OpportunityVisibilityPlan")
   companySubscriptions CompanySubscription[]
@@ -460,6 +502,27 @@ model CompanyPayment {
   reviewedAt            DateTime?
   rejectionReason       String?  @db.Text
   createdAt             DateTime @default(now())
+
+  @@index([status])
+}
+
+/// Phase 2ter (1er août 2026) — miroir exact de CompanyPayment pour les
+/// adhésions individuelles (Evolia définitivement écarté aussi pour ce
+/// chemin). Réutilise les mêmes enums PaymentMethod/PaymentReviewStatus.
+model MembershipPayment {
+  id             String   @id @default(cuid())
+  membershipId   String
+  membership     Membership @relation(fields: [membershipId], references: [id])
+  amount         Int
+  method         PaymentMethod
+  proofFileKey   String
+  comment        String?  @db.Text
+  status         PaymentReviewStatus @default(PENDING)
+  submittedById  String
+  reviewedById   String?
+  reviewedAt     DateTime?
+  rejectionReason String? @db.Text
+  createdAt      DateTime @default(now())
 
   @@index([status])
 }

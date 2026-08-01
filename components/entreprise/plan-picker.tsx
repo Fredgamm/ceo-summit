@@ -53,8 +53,13 @@ export function PlanPicker({
           >
             <p className="text-base font-bold text-navy">{plan.name}</p>
             {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
-            <p className="mt-1 text-lg font-bold text-navy">{formatAriary(plan.priceAr)} / an</p>
+            <p className="mt-1 text-lg font-bold text-navy">
+              {formatAriary(plan.priceAr)} / participant / an
+            </p>
             <ul className="flex flex-col gap-1 text-xs text-text-muted">
+              {plan.minParticipants && (
+                <li>Réservé aux entreprises inscrivant ≥ {plan.minParticipants} participants</li>
+              )}
               {plan.maxTeamMembers && <li>Jusqu&apos;à {plan.maxTeamMembers} collaborateurs</li>}
               <li>
                 {plan.hasUnlimitedCredits

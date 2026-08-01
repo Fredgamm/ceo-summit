@@ -9,6 +9,7 @@ vi.mock("@/lib/prisma", () => ({
     plan: { findUnique: vi.fn() },
     companySubscription: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     companyPayment: { create: vi.fn() },
+    user: { count: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -86,7 +87,6 @@ describe("selectPlan", () => {
 
 describe("submitPaymentProof", () => {
   const VALID_INPUT = {
-    amount: 5_000_000,
     method: "VIREMENT" as const,
     proofFileKey: "company-payments/admin_user_1/proof.pdf",
     comment: "",
@@ -100,14 +100,27 @@ describe("submitPaymentProof", () => {
       companyId: "company_1",
       status: "PENDING_PAYMENT",
       company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: { priceAr: 2_250_000, minParticipants: 10 },
     } as never);
+    vi.mocked(prisma.user.count).mockResolvedValue(10);
     vi.mocked(prisma.$transaction).mockResolvedValue(undefined as never);
   });
 
-  it("creates the payment and flips the subscription to PENDING_REVIEW", async () => {
+  it("creates the payment (amount computed from headcount × unit price) and flips the subscription to PENDING_REVIEW", async () => {
     const result = await submitPaymentProof("sub_1", VALID_INPUT);
     expect(result.success).toBe(true);
     expect(prisma.$transaction).toHaveBeenCalled();
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 22_500_000 }) })
+    );
+  });
+
+  it("rejects when headcount is below the plan's minParticipants threshold", async () => {
+    vi.mocked(prisma.user.count).mockResolvedValue(3);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects when the subscription isn't PENDING_PAYMENT", async () => {
@@ -115,6 +128,7 @@ describe("submitPaymentProof", () => {
       id: "sub_1",
       status: "PENDING_REVIEW",
       company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: { priceAr: 2_250_000, minParticipants: 10 },
     } as never);
 
     const result = await submitPaymentProof("sub_1", VALID_INPUT);
@@ -127,6 +141,7 @@ describe("submitPaymentProof", () => {
       id: "sub_1",
       status: "PENDING_PAYMENT",
       company: { companyAdminId: "someone_else", name: "Rakoto Holding" },
+      plan: { priceAr: 2_250_000, minParticipants: 10 },
     } as never);
 
     const result = await submitPaymentProof("sub_1", VALID_INPUT);
@@ -134,7 +149,7 @@ describe("submitPaymentProof", () => {
   });
 
   it("rejects invalid input", async () => {
-    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, amount: 0 });
+    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "INVALID" });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

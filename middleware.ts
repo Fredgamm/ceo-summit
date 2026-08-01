@@ -37,7 +37,13 @@ function isPublicRoute(pathname: string) {
  * bounce them to /paiement-en-attente before they could ever reach the flow
  * meant to get them out of it.
  */
-const ACCOUNT_SETUP_PREFIXES = ["/entreprise", "/entreprises", "/bienvenue", "/profil"];
+const ACCOUNT_SETUP_PREFIXES = [
+  "/entreprise",
+  "/entreprises",
+  "/bienvenue",
+  "/profil",
+  "/adhesion",
+];
 
 function isAccountSetupRoute(pathname: string) {
   return ACCOUNT_SETUP_PREFIXES.some(

@@ -20,11 +20,15 @@ export default async function CreateCompanyPage() {
   if (!viewer) redirect("/login");
   if (viewer.companyId) redirect(`/entreprises/${viewer.companyId}`);
 
-  const plans = await getActivePlans("COMPANY");
+  const plans = await getActivePlans("COMPANY", { selfServiceOnly: true });
+  const initialPlanId =
+    viewer.intendedPlanId && plans.some((p) => p.id === viewer.intendedPlanId)
+      ? viewer.intendedPlanId
+      : null;
 
   return (
     <div className="flex min-h-screen justify-center bg-surface p-6 pt-16">
-      <CompanyOnboardingWizard plans={plans} />
+      <CompanyOnboardingWizard plans={plans} initialPlanId={initialPlanId} />
     </div>
   );
 }

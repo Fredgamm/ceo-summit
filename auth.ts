@@ -86,7 +86,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // couvre le cas le plus critique : se reconnecter après expiration.
         const activeMembership = user.memberships[0];
         let status = user.status;
-        if (status === "ACTIVE" && activeMembership && activeMembership.endDate < new Date()) {
+        if (
+          status === "ACTIVE" &&
+          activeMembership?.endDate &&
+          activeMembership.endDate < new Date()
+        ) {
           await prisma.$transaction([
             prisma.membership.update({
               where: { id: activeMembership.id },

@@ -18,15 +18,18 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
 function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
   return {
     name: f.name,
+    slug: f.slug,
     description: f.description || null,
     scope: f.scope,
     priceAr: f.priceAr,
     maxTeamMembers: f.maxTeamMembers ?? null,
+    minParticipants: f.minParticipants ?? null,
     includedCredits: f.includedCredits,
     hasUnlimitedCredits: f.hasUnlimitedCredits,
     rank: f.rank,
     eligibilityNote: f.eligibilityNote || null,
     isActive: f.isActive,
+    isSelfService: f.isSelfService,
     displayOrder: f.displayOrder,
   };
 }
@@ -37,6 +40,11 @@ export async function createPlan(input: unknown): Promise<ActionResult<{ id: str
   const parsed = planFormSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+
+  const existingSlug = await prisma.plan.findUnique({ where: { slug: parsed.data.slug } });
+  if (existingSlug) {
+    return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
   const plan = await prisma.plan.create({ data: toPlanData(parsed.data) });
@@ -54,6 +62,11 @@ export async function updatePlan(planId: string, input: unknown): Promise<Action
   const parsed = planFormSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+
+  const existingSlug = await prisma.plan.findUnique({ where: { slug: parsed.data.slug } });
+  if (existingSlug && existingSlug.id !== planId) {
+    return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
   await prisma.plan.update({ where: { id: planId }, data: toPlanData(parsed.data) });

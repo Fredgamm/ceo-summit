@@ -21,31 +21,46 @@ import {
 
 export interface PlanFormValues {
   name: string;
+  slug: string;
   description: string;
   scope: PlanScope;
   priceAr: number;
   maxTeamMembers: number | null;
+  minParticipants: number | null;
   includedCredits: number;
   hasUnlimitedCredits: boolean;
   rank: number;
   eligibilityNote: string;
   isActive: boolean;
+  isSelfService: boolean;
   displayOrder: number;
 }
 
 const EMPTY_VALUES: PlanFormValues = {
   name: "",
+  slug: "",
   description: "",
   scope: "INDIVIDUAL",
   priceAr: 0,
   maxTeamMembers: null,
+  minParticipants: null,
   includedCredits: 0,
   hasUnlimitedCredits: false,
   rank: 1,
   eligibilityNote: "",
   isActive: true,
+  isSelfService: true,
   displayOrder: 0,
 };
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 interface PlanFormProps {
   mode: "create" | "edit";
@@ -88,10 +103,36 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
           <Label htmlFor="plan-name">Nom de l&apos;offre *</Label>
           <Input
             id="plan-name"
-            placeholder="ex. Sponsor Or"
+            placeholder="ex. Executive pass"
             value={values.name}
-            onChange={(e) => set("name", e.target.value)}
+            onChange={(e) => {
+              const name = e.target.value;
+              set("name", name);
+              // Auto-suggestion du slug tant que l'admin ne l'a pas édité
+              // lui-même (mode création uniquement — ne jamais réécrire un
+              // slug existant en édition, des liens publics en dépendent).
+              if (
+                mode === "create" &&
+                (values.slug === "" || values.slug === slugify(values.name))
+              ) {
+                set("slug", slugify(name));
+              }
+            }}
             maxLength={60}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="plan-slug">
+            Identifiant public (slug) * —{" "}
+            <span className="font-normal text-text-muted">/inscription?offre=...</span>
+          </Label>
+          <Input
+            id="plan-slug"
+            placeholder="ex. executive-pass-2025"
+            value={values.slug}
+            onChange={(e) => set("slug", slugify(e.target.value))}
+            maxLength={80}
           />
         </div>
 
@@ -143,17 +184,36 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
         </div>
 
         {values.scope === "COMPANY" && (
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-max-members">Nombre max de collaborateurs</Label>
-            <Input
-              id="plan-max-members"
-              type="number"
-              min={1}
-              value={values.maxTeamMembers ?? ""}
-              onChange={(e) =>
-                set("maxTeamMembers", e.target.value ? Number(e.target.value) : null)
-              }
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="plan-max-members">Nombre max de collaborateurs</Label>
+              <Input
+                id="plan-max-members"
+                type="number"
+                min={1}
+                value={values.maxTeamMembers ?? ""}
+                onChange={(e) =>
+                  set("maxTeamMembers", e.target.value ? Number(e.target.value) : null)
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="plan-min-participants">
+                Seuil minimum de participants (prix dégressif)
+              </Label>
+              <Input
+                id="plan-min-participants"
+                type="number"
+                min={1}
+                value={values.minParticipants ?? ""}
+                onChange={(e) =>
+                  set("minParticipants", e.target.value ? Number(e.target.value) : null)
+                }
+              />
+              <p className="text-xs text-text-muted">
+                Le prix (Ar) ci-dessus s&apos;applique par participant, pas au total.
+              </p>
+            </div>
           </div>
         )}
 
@@ -211,6 +271,15 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
             </label>
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-text-mid">
+          <Checkbox
+            checked={values.isSelfService}
+            onCheckedChange={(c) => set("isSelfService", c === true)}
+          />
+          Parcours self-service (décocher pour le sponsoring — suivi admin uniquement, pas de
+          paiement en ligne)
+        </label>
 
         {error && (
           <Alert variant="destructive">

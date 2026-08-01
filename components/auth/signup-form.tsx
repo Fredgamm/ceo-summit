@@ -4,19 +4,25 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import type { Plan } from "@prisma/client";
 
 import { signup } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formatAriary } from "@/lib/utils";
 
 /**
  * Parcours revu (1er août 2026) — mot de passe choisi immédiatement, puis
  * connexion automatique et redirection vers l'onboarding, sans email
  * bloquant entre les deux (voir app/actions/auth.ts::signup).
+ *
+ * `intendedPlan` (Phase 2ter, 1er août 2026) — résolu et validé côté
+ * serveur (page.tsx) depuis `?offre=<slug>`, transmis ici seulement pour
+ * l'affichage et le renvoi de son id à signup().
  */
-export function SignupForm() {
+export function SignupForm({ intendedPlan }: { intendedPlan?: Plan | null }) {
   const router = useRouter();
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -31,7 +37,7 @@ export function SignupForm() {
     setLoading(true);
 
     try {
-      const result = await signup(name, email, password, confirmPassword);
+      const result = await signup(name, email, password, confirmPassword, intendedPlan?.id);
       if (!result.success) {
         setError(result.error);
         return;
@@ -46,6 +52,16 @@ export function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      {intendedPlan && (
+        <Alert variant="gold">
+          <AlertDescription>
+            Vous vous inscrivez pour : <strong>{intendedPlan.name}</strong> —{" "}
+            {formatAriary(intendedPlan.priceAr)}
+            {intendedPlan.scope === "COMPANY" ? " / participant / an" : " / an"}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="signup-name">Nom complet</Label>
         <Input

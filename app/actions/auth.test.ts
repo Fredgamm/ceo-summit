@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: vi.fn(), create: vi.fn() },
+    plan: { findFirst: vi.fn() },
   },
 }));
 
@@ -81,5 +82,35 @@ describe("signup", () => {
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { email: "jean.rakoto@example.mg" },
     });
+  });
+
+  it("stores a valid intended plan id from a deep link", async () => {
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ id: "plan_1" } as never);
+
+    await signup(VALID.name, VALID.email, VALID.password, VALID.confirmPassword, "plan_1");
+
+    expect(prisma.plan.findFirst).toHaveBeenCalledWith({
+      where: { id: "plan_1", isActive: true, isSelfService: true },
+    });
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ intendedPlanId: "plan_1" }) })
+    );
+  });
+
+  it("silently ignores an invalid/inactive intended plan id", async () => {
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue(null);
+
+    const result = await signup(
+      VALID.name,
+      VALID.email,
+      VALID.password,
+      VALID.confirmPassword,
+      "not_a_real_plan"
+    );
+
+    expect(result.success).toBe(true);
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ intendedPlanId: undefined }) })
+    );
   });
 });

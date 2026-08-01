@@ -26,7 +26,7 @@ export default async function CompanyPlanPage() {
   if (company.subscription?.status === "ACTIVE") redirect(`/entreprises/${company.id}`);
   if (company.subscription?.status === "PENDING_REVIEW") redirect("/entreprise/paiement");
 
-  const plans = await getActivePlans("COMPANY");
+  const plans = await getActivePlans("COMPANY", { selfServiceOnly: true });
 
   return (
     <div className="mx-auto max-w-4xl p-6">

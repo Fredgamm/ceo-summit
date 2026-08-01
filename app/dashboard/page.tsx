@@ -223,7 +223,7 @@ export default async function DashboardPage() {
               <div className="rounded-lg border border-gold-light bg-gold-pale px-3.5 py-3">
                 <div className="text-sm font-bold text-navy">{tierLabel(membership.tier)}</div>
                 <div className="mt-1 text-xs text-text-muted">
-                  Valide jusqu&apos;au {formatDateFr(membership.endDate)}
+                  Valide jusqu&apos;au {formatDateFr(membership.endDate!)}
                 </div>
               </div>
             </div>

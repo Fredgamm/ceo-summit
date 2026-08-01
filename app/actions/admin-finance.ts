@@ -100,18 +100,26 @@ export async function sendRenewalReminders(
     include: { user: { select: { name: true, email: true } } },
   });
 
+  // Phase 2ter (1er août 2026) — une adhésion issue d'une offre librement
+  // créée par l'admin (pas l'un des 3 tiers historiques) n'a pas de `tier`
+  // : ce template email hardcode encore l'affichage par tier legacy, donc
+  // on ne relance que les adhésions qui en ont un pour l'instant plutôt
+  // que de planter — un rework du template pour afficher `plan.name`
+  // reste à faire séparément si le besoin se confirme.
   await Promise.all(
-    members.map((m) =>
-      sendTransactionalEmail({
-        to: m.user.email,
-        subject: `Votre adhésion CEO Summit ${m.tier} arrive à échéance`,
-        react: MembershipRenewalReminderEmail({
-          memberName: m.user.name,
-          tier: m.tier,
-          endDateLabel: formatDateFr(m.endDate),
-        }),
-      })
-    )
+    members
+      .filter((m): m is typeof m & { tier: NonNullable<(typeof m)["tier"]> } => m.tier != null)
+      .map((m) =>
+        sendTransactionalEmail({
+          to: m.user.email,
+          subject: `Votre adhésion CEO Summit ${m.tier} arrive à échéance`,
+          react: MembershipRenewalReminderEmail({
+            memberName: m.user.name,
+            tier: m.tier,
+            endDateLabel: formatDateFr(m.endDate!),
+          }),
+        })
+      )
   );
 
   return { success: true, data: { sent: members.length } };

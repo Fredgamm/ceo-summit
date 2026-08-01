@@ -26,15 +26,18 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
         planId={plan.id}
         initialValues={{
           name: plan.name,
+          slug: plan.slug,
           description: plan.description ?? "",
           scope: plan.scope,
           priceAr: plan.priceAr,
           maxTeamMembers: plan.maxTeamMembers,
+          minParticipants: plan.minParticipants,
           includedCredits: plan.includedCredits,
           hasUnlimitedCredits: plan.hasUnlimitedCredits,
           rank: plan.rank,
           eligibilityNote: plan.eligibilityNote ?? "",
           isActive: plan.isActive,
+          isSelfService: plan.isSelfService,
           displayOrder: plan.displayOrder,
         }}
       />

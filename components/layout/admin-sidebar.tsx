@@ -18,6 +18,7 @@ import {
   Settings,
   Tag,
   Building2,
+  IdCard,
   ArrowLeft,
 } from "lucide-react";
 
@@ -76,6 +77,7 @@ const SECTIONS: {
     items: [
       { href: "/admin/credits", label: "Crédits", icon: CreditCard, section: "credits" },
       { href: "/admin/entreprises", label: "Entreprises", icon: Building2, section: "entreprises" },
+      { href: "/admin/adhesions", label: "Adhésions", icon: IdCard, section: "adhesions" },
       {
         href: "/admin/communications",
         label: "Communications",
