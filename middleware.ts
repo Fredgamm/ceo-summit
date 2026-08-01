@@ -16,16 +16,33 @@ const PUBLIC_ROUTES = [
   "/login",
   "/mot-de-passe-oublie",
   "/demande-acces",
+  "/inscription",
   "/cgu",
   "/confidentialite",
   "/",
   "/~offline",
 ];
-const PUBLIC_PREFIXES = ["/activer/", "/reinitialiser/"];
+const PUBLIC_PREFIXES = ["/activer/", "/reinitialiser/", "/invitation/"];
 
 function isPublicRoute(pathname: string) {
   if (PUBLIC_ROUTES.includes(pathname)) return true;
   return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+/**
+ * Phase 2 offres/paiement (30 juillet 2026) — reachable even before any
+ * personal tier or active company subscription exists: an ungated user must
+ * be able to finish onboarding, create/manage a company, invite teammates,
+ * choose an offer and pay. Without this carve-out, the gate below would
+ * bounce them to /paiement-en-attente before they could ever reach the flow
+ * meant to get them out of it.
+ */
+const ACCOUNT_SETUP_PREFIXES = ["/entreprise", "/entreprises", "/bienvenue", "/profil"];
+
+function isAccountSetupRoute(pathname: string) {
+  return ACCOUNT_SETUP_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
+  );
 }
 
 export default auth((req) => {
@@ -64,11 +81,21 @@ export default auth((req) => {
   // pas de tier : avant ce correctif, il gardait un accès plateforme complet
   // et gratuit indéfiniment. Les admins n'ont jamais de Membership non plus
   // (rôle distinct des tiers) — explicitement exclus ici.
+  //
+  // Phase 2 offres/paiement (30 juillet 2026) — un membre invité par une
+  // entreprise n'a pas non plus de tier personnel : `hasCompanyAccess`
+  // (vrai si l'entreprise a un CompanySubscription ACTIVE) couvre ce cas
+  // pour tous ses collaborateurs, pas seulement l'admin entreprise. Les
+  // routes de mise en place du compte (entreprise, bienvenue, profil)
+  // restent atteignables même sans accès — sinon impossible de jamais en
+  // sortir.
   if (
     !isAdminRoute &&
     !isPublic &&
+    !isAccountSetupRoute(pathname) &&
     !session.user.isPlatformAdmin &&
     session.user.tier == null &&
+    !session.user.hasCompanyAccess &&
     pathname !== "/paiement-en-attente"
   ) {
     return NextResponse.redirect(new URL("/paiement-en-attente", req.nextUrl.origin));

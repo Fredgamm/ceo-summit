@@ -17,6 +17,7 @@ import {
   Landmark,
   Settings,
   Tag,
+  Building2,
   ArrowLeft,
 } from "lucide-react";
 
@@ -74,6 +75,7 @@ const SECTIONS: {
     title: "Opérations",
     items: [
       { href: "/admin/credits", label: "Crédits", icon: CreditCard, section: "credits" },
+      { href: "/admin/entreprises", label: "Entreprises", icon: Building2, section: "entreprises" },
       {
         href: "/admin/communications",
         label: "Communications",

@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
-import { setPasswordSchema, emailSchema } from "@/lib/validations/auth";
+import { setPasswordSchema, emailSchema, signupSchema } from "@/lib/validations/auth";
 import {
   generateSecureToken,
   ACTIVATION_TOKEN_TTL_MS,
@@ -14,8 +14,54 @@ import {
 import { sendTransactionalEmail } from "@/lib/resend";
 import ActivationEmail from "@/emails/activation-email";
 import ResetPasswordEmail from "@/emails/reset-password-email";
+import SignupConfirmEmail from "@/emails/signup-confirm-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+// ═══════════════════════════════════════════════
+// Phase 2 offres/paiement (30 juillet 2026) — inscription self-service
+// ═══════════════════════════════════════════════
+
+/**
+ * Porte d'entrée self-service : nom + email seulement, pas de champ
+ * entreprise ici (voir app/actions/company.ts pour cette étape, volontairement
+ * séparée pour ne pas alourdir le premier écran). Réutilise le mécanisme
+ * ActivationToken existant — le mot de passe est choisi via le lien reçu par
+ * email, exactement comme pour une candidature approuvée ou un paiement Evolia.
+ */
+export async function signup(name: string, email: string): Promise<ActionResult> {
+  const parsed = signupSchema.safeParse({ name, email });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+  const normalizedEmail = parsed.data.email.toLowerCase();
+
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  if (existing) {
+    return {
+      success: false,
+      error: "Un compte existe déjà avec cet email. Connectez-vous plutôt.",
+    };
+  }
+
+  const user = await prisma.user.create({
+    data: { name: parsed.data.name, email: normalizedEmail, status: "PENDING_ACTIVATION" },
+  });
+
+  const token = generateSecureToken();
+  await prisma.activationToken.create({
+    data: { userId: user.id, token, expiresAt: new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS) },
+  });
+
+  const activationUrl = `${process.env.NEXTAUTH_URL}/activer/${token}`;
+  await sendTransactionalEmail({
+    to: user.email,
+    subject: "Confirmez votre inscription CEO Summit",
+    react: SignupConfirmEmail({ memberName: user.name, activationUrl }),
+  });
+
+  return { success: true, data: undefined };
+}
 
 // ═══════════════════════════════════════════════
 // E1-T03 — Activation de compte
@@ -56,7 +102,10 @@ export async function activateAccount(
   if (!record) return { success: false, error: "Lien d'activation introuvable." };
   if (record.usedAt) return { success: false, error: "Ce lien a déjà été utilisé." };
   if (record.expiresAt < new Date()) {
-    return { success: false, error: "Ce lien a expiré. Demandez-en un nouveau depuis la connexion." };
+    return {
+      success: false,
+      error: "Ce lien a expiré. Demandez-en un nouveau depuis la connexion.",
+    };
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
@@ -82,8 +131,7 @@ export async function activateAccount(
 // ═══════════════════════════════════════════════
 
 type ResendActivationResult =
-  | { success: true; data: undefined }
-  | { success: false; error: string };
+  { success: true; data: undefined } | { success: false; error: string };
 
 /**
  * Unlike password reset, the spec explicitly wants "no account found" and
@@ -100,7 +148,10 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
   const user = await prisma.user.findUnique({ where: { email: parsed.data.toLowerCase() } });
 
   if (!user) {
-    return { success: false, error: "Aucun compte trouvé pour cet email. Contactez l'équipe CEO Summit." };
+    return {
+      success: false,
+      error: "Aucun compte trouvé pour cet email. Contactez l'équipe CEO Summit.",
+    };
   }
 
   if (user.status !== "PENDING_ACTIVATION") {
@@ -109,12 +160,16 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
 
   // RG-P1-04 — max 3 resends per email per 24h.
   const recentCount = await prisma.activationToken.count({
-    where: { userId: user.id, createdAt: { gte: new Date(Date.now() - ACTIVATION_RESEND_WINDOW_MS) } },
+    where: {
+      userId: user.id,
+      createdAt: { gte: new Date(Date.now() - ACTIVATION_RESEND_WINDOW_MS) },
+    },
   });
   if (recentCount >= MAX_ACTIVATION_RESENDS_PER_DAY) {
     return {
       success: false,
-      error: "Trop de demandes de renvoi pour cet email. Réessayez dans 24h ou contactez l'équipe CEO Summit.",
+      error:
+        "Trop de demandes de renvoi pour cet email. Réessayez dans 24h ou contactez l'équipe CEO Summit.",
     };
   }
 

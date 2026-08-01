@@ -195,6 +195,9 @@ model User {
 
   companyId     String?
   company       Company?  @relation(fields: [companyId], references: [id])
+  /// Phase 2 offres/paiement — non-null uniquement si ce User est l'admin
+  /// fonctionnel d'une entreprise (voir Company.companyAdminId).
+  companyAdminOf Company? @relation("CompanyAdmin")
 
   sponsorId     String? // parrain (RG parrainage cercle privé)
   sponsor       User?     @relation("Sponsorship", fields: [sponsorId], references: [id])
@@ -350,6 +353,7 @@ model Plan {
   users               User[]
   eventsAsMinPlan     Event[]       @relation("EventMinPlan")
   opportunitiesAsVisibilityPlan Opportunity[] @relation("OpportunityVisibilityPlan")
+  companySubscriptions CompanySubscription[]
 
   @@index([scope, isActive, displayOrder])
 }
@@ -364,11 +368,110 @@ model Company {
   website     String?
   createdAt   DateTime @default(now())
 
+  /// Phase 2 offres/paiement (30 juillet 2026) — le créateur de la fiche
+  /// entreprise devient admin entreprise par défaut (rôle fonctionnel,
+  /// indépendant de son titre réel) ; réassignable depuis le back-office
+  /// (app/actions/admin-companies.ts::reassignCompanyAdmin).
+  companyAdminId String?  @unique
+  companyAdmin   User?    @relation("CompanyAdmin", fields: [companyAdminId], references: [id])
+
   users            User[]
   serviceListings  ServiceListing[]
+  subscription     CompanySubscription?
+  invites          CompanyInvite[]
 
   @@index([sector])
   @@index([country])
+}
+
+enum CompanySubscriptionStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PENDING_REVIEW
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+/// Phase 2 offres/paiement — abonnement d'une entreprise à un Plan
+/// (scope: COMPANY). Statut scindé entre l'abonnement (ce modèle) et la
+/// tentative de paiement (CompanyPayment) en miroir volontaire du pattern
+/// déjà en place EventRegistration.status/.paymentStatus.
+model CompanySubscription {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  company   Company  @relation(fields: [companyId], references: [id])
+  planId    String
+  plan      Plan     @relation(fields: [planId], references: [id])
+  status    CompanySubscriptionStatus @default(DRAFT)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments  CompanyPayment[]
+
+  @@index([status])
+}
+
+enum PaymentMethod {
+  VIREMENT
+  CHEQUE
+  CARTE_BANCAIRE
+  MOBILE_MONEY
+}
+
+enum PaymentReviewStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+/// Phase 2 offres/paiement — une tentative de paiement pour un
+/// CompanySubscription. Tous les modes passent par la revue manuelle admin
+/// en V1 (y compris carte bancaire — décision produit du 30 juillet 2026,
+/// pas de gateway intégré pour l'instant).
+model CompanyPayment {
+  id                    String   @id @default(cuid())
+  companySubscriptionId String
+  companySubscription   CompanySubscription @relation(fields: [companySubscriptionId], references: [id])
+  amount                Int
+  method                PaymentMethod
+  proofFileKey          String // clé R2 privée — preuve de paiement uploadée
+  comment               String?  @db.Text
+  status                PaymentReviewStatus @default(PENDING)
+  submittedById         String
+  reviewedById          String?
+  reviewedAt            DateTime?
+  rejectionReason       String?  @db.Text
+  createdAt             DateTime @default(now())
+
+  @@index([status])
+}
+
+enum CompanyInviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+/// Phase 2 offres/paiement — invitation d'un collaborateur par l'admin
+/// entreprise. Devient un vrai User (companyId prérempli) via le même
+/// mécanisme ActivationToken que l'inscription self-service, à l'acceptation.
+model CompanyInvite {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  email       String
+  name        String
+  invitedById String
+  token       String   @unique
+  status      CompanyInviteStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  acceptedAt  DateTime?
+
+  @@index([companyId, status])
 }
 
 // ═══════════════════════════════════════════════

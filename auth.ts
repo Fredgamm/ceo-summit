@@ -55,6 +55,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               orderBy: { endDate: "desc" },
               take: 1,
             },
+            company: { include: { subscription: { select: { status: true } } } },
           },
         });
 
@@ -108,6 +109,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
+        // Phase 2 offres/paiement (30 juillet 2026) — un membre invité par
+        // une entreprise n'a pas de Membership personnel (tier == null),
+        // mais doit avoir le même accès que les autres une fois
+        // l'abonnement de l'entreprise ACTIVE. Calculé au login, même
+        // fraîcheur/limite que `tier` ci-dessus (rafraîchi à la prochaine
+        // connexion, pas en temps réel dans une session déjà ouverte).
+        const hasCompanyAccess = user.company?.subscription?.status === "ACTIVE";
+
         return {
           id: user.id,
           email: user.email,
@@ -116,6 +125,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: user.role,
           isPlatformAdmin: user.isPlatformAdmin,
           tier: activeMembership?.tier ?? null,
+          hasCompanyAccess,
           status,
         };
       },
@@ -129,6 +139,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.isPlatformAdmin = user.isPlatformAdmin;
         token.tier = user.tier;
+        token.hasCompanyAccess = user.hasCompanyAccess;
         token.status = user.status;
       }
       return token;
@@ -141,6 +152,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.role = token.role as (typeof session.user)["role"];
       session.user.isPlatformAdmin = token.isPlatformAdmin as boolean;
       session.user.tier = token.tier as string | null;
+      session.user.hasCompanyAccess = token.hasCompanyAccess as boolean;
       session.user.status = token.status as string;
       return session;
     },

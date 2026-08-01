@@ -275,6 +275,21 @@ docker compose -f docker-compose.prod.yml down
 docker compose -f docker-compose.prod.yml ps
 ```
 
+## Bascule Evolia → paiement in-app (Phase 2 offres/paiement, 30 juillet 2026)
+
+Depuis la Phase 2, l'adhésion peut être payée directement dans la
+plateforme (création d'entreprise → invitation → choix d'offre →
+upload preuve → validation admin), sans passer par Evolia. La route
+webhook (`app/api/webhooks/evolia/route.ts`) **reste en place et
+fonctionnelle** — aucune donnée historique n'est touchée — mais n'est
+plus le chemin recommandé pour un nouveau paiement.
+
+Pour couper Evolia proprement une fois le nouveau parcours validé en
+production : **arrêter de pointer Evolia vers cette URL de webhook**
+côté configuration Evolia elle-même — aucun changement de code n'est
+nécessaire ici. La route continue de répondre (idempotence testée)
+si un appel tardif arrive malgré tout.
+
 ## Limites connues de ce déploiement
 
 - **CI/CD en place** (`E0-T04`) mais nécessite la configuration manuelle

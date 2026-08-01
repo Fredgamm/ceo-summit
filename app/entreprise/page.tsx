@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Building2 } from "lucide-react";
 
@@ -7,15 +8,16 @@ import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Mon entreprise" };
 
 /**
- * "Mon Entreprise" in the sidebar needs a destination. There's no
- * create/edit-company task in the current backlog (E2-T05 is a view page
- * only), so this just resolves to the viewer's own /entreprises/[id] when
- * linked, or explains there's none yet — no fake "add company" flow.
+ * "Mon Entreprise" resolves to the viewer's own /entreprises/[id] when
+ * already linked. Phase 2 offres/paiement (30 juillet 2026) — désormais un
+ * vrai point d'entrée vers /entreprise/creer, plus un cul-de-sac
+ * "fonctionnalité pas encore disponible".
  */
 export default async function MyCompanyPage() {
   const session = await auth();
@@ -46,7 +48,12 @@ export default async function MyCompanyPage() {
       <EmptyState
         icon={Building2}
         title="Aucune entreprise associée à votre compte"
-        description="Cette fonctionnalité n'est pas encore disponible depuis la plateforme — contactez l'équipe CEO Summit pour associer votre entreprise."
+        description="Créez la fiche de votre entreprise pour inviter vos collaborateurs et choisir une offre."
+        action={
+          <Button asChild>
+            <Link href="/entreprise/creer">Créer mon entreprise</Link>
+          </Button>
+        }
       />
     </AppShell>
   );

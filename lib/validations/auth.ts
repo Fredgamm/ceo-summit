@@ -22,3 +22,15 @@ export const setPasswordSchema = z
   });
 
 export const emailSchema = z.string().min(1, "L'email est requis").email("Adresse email invalide");
+
+/**
+ * Phase 2 offres/paiement (30 juillet 2026) — inscription self-service
+ * volontairement légère (nom + email seulement, pas de mot de passe ici) :
+ * le mot de passe est choisi à l'étape d'activation, comme pour les comptes
+ * créés par candidature approuvée ou par le webhook Evolia — même mécanisme
+ * ActivationToken réutilisé tel quel, pas un second système parallèle.
+ */
+export const signupSchema = z.object({
+  name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
+  email: emailSchema,
+});
