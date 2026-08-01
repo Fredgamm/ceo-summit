@@ -150,11 +150,14 @@ export function LoginForm() {
 
       <div className="mt-6 border-t border-border pt-6 text-center">
         <p className="text-sm text-text-muted">Pas encore membre ?</p>
+        <Link href="/inscription" className="mt-1 block text-[13.5px] font-semibold text-navy-mid">
+          Créer mon compte →
+        </Link>
         <Link
           href="/demande-acces"
-          className="mt-1 block text-[13.5px] font-semibold text-navy-mid"
+          className="mt-2 block text-xs text-text-muted underline-offset-2 hover:underline"
         >
-          Demander l&apos;accès au CEO Summit →
+          Vous avez été invité personnellement ? Déposez une candidature
         </Link>
       </div>
 

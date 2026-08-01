@@ -22,8 +22,6 @@ function makeInput(overrides: Partial<Record<string, unknown>> = {}) {
     sector: "Finance & Banque",
     country: "Madagascar",
     requestedTier: "EXECUTIVE",
-    sponsorName: undefined,
-    motivation: "Je souhaite rejoindre le cercle pour développer des partenariats régionaux.",
     consent: true,
     ...overrides,
   } as never;
@@ -76,13 +74,6 @@ describe("submitApplication", () => {
 
   it("rejects when consent is not given", async () => {
     const result = await submitApplication(makeInput({ consent: false }));
-
-    expect(result.success).toBe(false);
-    expect(prisma.membershipApplication.create).not.toHaveBeenCalled();
-  });
-
-  it("rejects a motivation that is too short", async () => {
-    const result = await submitApplication(makeInput({ motivation: "Trop court." }));
 
     expect(result.success).toBe(false);
     expect(prisma.membershipApplication.create).not.toHaveBeenCalled();

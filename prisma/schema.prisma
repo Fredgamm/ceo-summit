@@ -283,7 +283,13 @@ model MembershipApplication {
   title        String
   sector       String
   country      String
-  motivation   String             @db.Text
+  /// Rendu optionnel (30 juillet 2026) — le formulaire /demande-acces ne
+  /// collecte plus de message de motivation, formulaire simplifié. Reste
+  /// nullable plutôt que supprimé : les candidatures historiques gardent
+  /// leur texte.
+  motivation   String?            @db.Text
+  /// Parrainage jamais activé (30 juillet 2026) — champ retiré du
+  /// formulaire, gardé nullable pour l'historique.
   sponsorName  String?
   attachments  String[] // R2 URLs (CV, lettre de motivation...)
   requestedTier Tier              @default(MEMBER)

@@ -9,7 +9,6 @@ import { COUNTRIES } from "@/lib/countries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -38,8 +37,6 @@ export function ApplicationForm() {
   const [requestedTier, setRequestedTier] = React.useState<"MEMBER" | "EXECUTIVE" | "CHAIRMAN">(
     "EXECUTIVE"
   );
-  const [sponsorName, setSponsorName] = React.useState("");
-  const [motivation, setMotivation] = React.useState("");
   const [consent, setConsent] = React.useState(false);
 
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -59,8 +56,6 @@ export function ApplicationForm() {
         sector: sector as never,
         country: country as never,
         requestedTier,
-        sponsorName: sponsorName || undefined,
-        motivation,
         consent: consent as true,
       });
       if (!result.success) {
@@ -215,31 +210,6 @@ export function ApplicationForm() {
           ))}
         </div>
       </fieldset>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="app-sponsor">Membre parrain (optionnel)</Label>
-        <Input
-          id="app-sponsor"
-          value={sponsorName}
-          onChange={(e) => setSponsorName(e.target.value)}
-          placeholder="Nom du membre qui vous recommande"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="app-motivation">
-          Message de motivation <span aria-hidden="true">*</span>
-        </Label>
-        <Textarea
-          id="app-motivation"
-          rows={4}
-          value={motivation}
-          onChange={(e) => setMotivation(e.target.value)}
-          placeholder="Décrivez en quelques lignes ce que vous apportez au cercle, vos objectifs de networking et pourquoi CEO Summit est pertinent pour votre activité…"
-          required
-          aria-required="true"
-        />
-      </div>
 
       <div className="flex items-start gap-2.5">
         <Checkbox

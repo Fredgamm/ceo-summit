@@ -112,12 +112,14 @@ export default async function AdminCandidatureDetailPage({ params }: { params: {
             </dl>
           </div>
 
-          <div className="rounded-lg border border-border bg-white p-6">
-            <h2 className="mb-3 text-base font-bold text-navy">Lettre de motivation</h2>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-text-mid">
-              {application.motivation}
-            </p>
-          </div>
+          {application.motivation && (
+            <div className="rounded-lg border border-border bg-white p-6">
+              <h2 className="mb-3 text-base font-bold text-navy">Lettre de motivation</h2>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-text-mid">
+                {application.motivation}
+              </p>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border bg-white p-6">
             <h2 className="mb-3 text-base font-bold text-navy">Pièces jointes</h2>

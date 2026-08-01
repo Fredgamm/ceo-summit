@@ -51,8 +51,6 @@ export async function submitApplication(input: ApplicationInput): Promise<Action
       sector: parsed.data.sector,
       country: parsed.data.country,
       requestedTier: parsed.data.requestedTier,
-      sponsorName: parsed.data.sponsorName || null,
-      motivation: parsed.data.motivation,
       consentedAt: new Date(),
     },
   });

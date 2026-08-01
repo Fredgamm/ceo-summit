@@ -91,39 +91,6 @@ export default function RequestAccessPage() {
             </p>
           </div>
 
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-border bg-white p-3.5">
-              <strong className="block text-[12.5px] font-bold text-navy">
-                Dirigeant confirmé
-              </strong>
-              <span className="text-xs text-text-muted">
-                PDG, DG, CEO, Président, Directeur associé
-              </span>
-            </div>
-            <div className="rounded-md border border-border bg-white p-3.5">
-              <strong className="block text-[12.5px] font-bold text-navy">
-                Entreprise établie
-              </strong>
-              <span className="text-xs text-text-muted">
-                Minimum 3 ans d&apos;activité, chiffre d&apos;affaires significatif
-              </span>
-            </div>
-            <div className="rounded-md border border-border bg-white p-3.5">
-              <strong className="block text-[12.5px] font-bold text-navy">Ancrage régional</strong>
-              <span className="text-xs text-text-muted">
-                Opérations dans l&apos;Océan Indien (Madagascar, Maurice, Réunion, Comores…)
-              </span>
-            </div>
-            <div className="rounded-md border border-border bg-white p-3.5">
-              <strong className="block text-[12.5px] font-bold text-navy">
-                Parrainage recommandé
-              </strong>
-              <span className="text-xs text-text-muted">
-                La recommandation d&apos;un membre actif accélère l&apos;admission
-              </span>
-            </div>
-          </div>
-
           <ApplicationForm />
         </div>
       </div>

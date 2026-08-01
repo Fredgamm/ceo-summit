@@ -18,12 +18,6 @@ export const applicationSchema = z.object({
   sector: z.enum(SECTORS, { errorMap: () => ({ message: "Secteur invalide" }) }),
   country: z.enum(COUNTRIES, { errorMap: () => ({ message: "Pays invalide" }) }),
   requestedTier: z.enum(["MEMBER", "EXECUTIVE", "CHAIRMAN"]),
-  sponsorName: z.string().trim().max(120).optional(),
-  motivation: z
-    .string()
-    .trim()
-    .min(30, "Décrivez votre motivation en quelques phrases (30 caractères minimum)")
-    .max(2000),
   consent: z.literal(true, {
     errorMap: () => ({
       message:

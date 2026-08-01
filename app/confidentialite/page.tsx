@@ -30,9 +30,9 @@ export default function PrivacyPolicyPage() {
           <h2 className="mb-2 text-base font-bold text-navy">Données collectées</h2>
           <p>
             Nous collectons les données que vous nous transmettez lors de votre candidature (nom,
-            fonction, entreprise, email, secteur, pays, motivation) et, une fois membre, les données
-            de votre profil, vos messages privés (chiffrés au repos), vos inscriptions aux
-            événements et vos échanges au sein de la Deal Room et des salles thématiques.
+            fonction, entreprise, email, secteur, pays) et, une fois membre, les données de votre
+            profil, vos messages privés (chiffrés au repos), vos inscriptions aux événements et vos
+            échanges au sein de la Deal Room et des salles thématiques.
           </p>
         </section>
         <section>
