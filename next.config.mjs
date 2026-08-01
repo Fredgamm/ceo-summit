@@ -9,6 +9,13 @@ import withPWAInit from "@ducanh2912/next-pwa";
  * un chantier séparé qu'on ne peut pas vérifier sans navigateur réel ici.
  * À durcir (nonces, suppression de 'unsafe-inline') une fois vérifié en
  * conditions réelles (console devtools, violations CSP réelles).
+ *
+ * Vérifié en conditions réelles le 1er août 2026 : cette CSP casse
+ * entièrement `next dev` (aucun clic ne fait quoi que ce soit sur aucune
+ * page) — le runtime Fast Refresh/HMR de Next.js exécute du code via `eval`,
+ * que `script-src` sans `'unsafe-eval'` bloque (`Uncaught EvalError` dans la
+ * console). `next build`/`next start` (production) ne s'appuient pas sur ce
+ * mécanisme, donc `'unsafe-eval'` n'est ajouté qu'en développement.
  */
 const r2Origin = (() => {
   try {
@@ -25,9 +32,14 @@ const IMG_SRC = ["'self'", "data:", "blob:", r2Origin, "https://*.r2.cloudflares
   .filter(Boolean)
   .join(" ");
 
+const SCRIPT_SRC =
+  process.env.NODE_ENV === "development"
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    : "script-src 'self' 'unsafe-inline'";
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  SCRIPT_SRC,
   "style-src 'self' 'unsafe-inline'",
   `img-src ${IMG_SRC}`,
   "font-src 'self' data:",
