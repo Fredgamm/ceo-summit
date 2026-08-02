@@ -38,7 +38,10 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
     include: {
       registrations: {
         orderBy: { createdAt: "asc" },
-        include: { user: { select: { name: true, email: true, role: true, title: true } } },
+        include: {
+          user: { select: { name: true, email: true, role: true, title: true } },
+          plan: { select: { name: true, priceAr: true } },
+        },
       },
     },
   });
@@ -106,6 +109,7 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
               <tr>
                 <th className="px-4 py-2.5 text-left">Participant</th>
                 <th className="px-4 py-2.5 text-left">Tier</th>
+                <th className="px-4 py-2.5 text-left">Offre</th>
                 <th className="px-4 py-2.5 text-left">Inscrit le</th>
                 <th className="px-4 py-2.5 text-left">Paiement</th>
                 <th className="px-4 py-2.5 text-left">Check-in</th>
@@ -123,6 +127,7 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                       <Badge variant={TIER_BADGE[r.user.role]}>{tierLabel(r.user.role)}</Badge>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-text-mid">{r.plan?.name ?? "—"}</td>
                   <td className="px-4 py-3 text-text-muted">{formatDateFr(r.createdAt)}</td>
                   <td className="px-4 py-3">
                     <span
@@ -130,8 +135,9 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                     >
                       {PAYMENT_LABEL[r.paymentStatus]}
                       {r.paymentStatus === "PAID" &&
-                        event.price > 0 &&
-                        ` · ${formatAriary(event.price)}`}
+                        (r.plan
+                          ? ` · ${formatAriary(r.plan.priceAr)}`
+                          : event.price > 0 && ` · ${formatAriary(event.price)}`)}
                     </span>
                   </td>
                   <td className="px-4 py-3">

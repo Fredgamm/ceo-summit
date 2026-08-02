@@ -33,6 +33,9 @@ export const planFormSchema = z.object({
   isActive: z.coerce.boolean().default(true),
   isSelfService: z.coerce.boolean().default(true),
   displayOrder: z.coerce.number().int().default(0),
+  /// Phase 2quater (1er août 2026) — rattache l'offre à un évènement
+  /// précis ; chaîne vide = offre standard plateforme (eventId: null).
+  eventId: z.string().trim().optional().default(""),
 });
 
 export type PlanFormInput = z.input<typeof planFormSchema>;

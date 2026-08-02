@@ -95,12 +95,19 @@ export default auth((req) => {
   // routes de mise en place du compte (entreprise, bienvenue, profil)
   // restent atteignables même sans accès — sinon impossible de jamais en
   // sortir.
+  //
+  // Phase 2ter (1er août 2026) — `session.user.tier == null` ne suffit
+  // plus comme signal d'accès : une offre librement créée par l'admin
+  // (ex. "Executive pass") n'a pas de tier legacy correspondant, un
+  // Membership ACTIVE peut donc avoir `tier: null` légitimement.
+  // `hasIndividualAccess` (voir auth.ts/types/next-auth.d.ts) est le vrai
+  // signal, calculé indépendamment de `tier`.
   if (
     !isAdminRoute &&
     !isPublic &&
     !isAccountSetupRoute(pathname) &&
     !session.user.isPlatformAdmin &&
-    session.user.tier == null &&
+    !session.user.hasIndividualAccess &&
     !session.user.hasCompanyAccess &&
     pathname !== "/paiement-en-attente"
   ) {

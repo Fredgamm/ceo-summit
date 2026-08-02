@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getAllPlans } from "@/lib/plans-query";
 import { formatAriary } from "@/lib/utils";
@@ -14,8 +15,16 @@ export const metadata: Metadata = { title: "Admin — Offres" };
 
 const SCOPE_LABEL = { INDIVIDUAL: "Individuelle", COMPANY: "Entreprise" } as const;
 
-/** Phase 1 offres dynamiques — catalogue d'offres créables librement par l'admin. */
-export default async function AdminPlansPage() {
+/**
+ * Phase 1 offres dynamiques — catalogue d'offres créables librement par
+ * l'admin. `?eventId=` (Phase 2quater, 1er août 2026) filtre aux offres
+ * d'un évènement précis, arrivée depuis sa fiche admin.
+ */
+export default async function AdminPlansPage({
+  searchParams,
+}: {
+  searchParams: { eventId?: string };
+}) {
   try {
     await requireAdmin("plans");
   } catch (err) {
@@ -23,17 +32,42 @@ export default async function AdminPlansPage() {
     throw err;
   }
 
-  const plans = await getAllPlans();
+  const [plans, event] = await Promise.all([
+    getAllPlans(searchParams.eventId),
+    searchParams.eventId
+      ? prisma.event.findUnique({ where: { id: searchParams.eventId }, select: { title: true } })
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-navy">Offres</h1>
-          <p className="text-sm text-text-muted">{plans.length} offre(s)</p>
+          <h1 className="text-xl font-bold text-navy">
+            {event ? `Offres — ${event.title}` : "Offres"}
+          </h1>
+          <p className="text-sm text-text-muted">
+            {plans.length} offre(s)
+            {event && (
+              <>
+                {" · "}
+                <Link href="/admin/plans" className="text-navy-mid">
+                  Voir toutes les offres
+                </Link>
+              </>
+            )}
+          </p>
         </div>
         <Button asChild>
-          <Link href="/admin/plans/nouveau">+ Créer une offre</Link>
+          <Link
+            href={
+              searchParams.eventId
+                ? `/admin/plans/nouveau?eventId=${searchParams.eventId}`
+                : "/admin/plans/nouveau"
+            }
+          >
+            + Créer une offre
+          </Link>
         </Button>
       </div>
 

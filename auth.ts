@@ -129,6 +129,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           role: user.role,
           isPlatformAdmin: user.isPlatformAdmin,
           tier: activeMembership?.tier ?? null,
+          // Phase 2ter (1er août 2026) — voir types/next-auth.d.ts : signal
+          // d'accès distinct de `tier`, qui peut être null même avec un
+          // Membership ACTIVE (offre librement créée par l'admin).
+          hasIndividualAccess: Boolean(activeMembership),
           hasCompanyAccess,
           status,
         };
@@ -143,6 +147,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.isPlatformAdmin = user.isPlatformAdmin;
         token.tier = user.tier;
+        token.hasIndividualAccess = user.hasIndividualAccess;
         token.hasCompanyAccess = user.hasCompanyAccess;
         token.status = user.status;
       }
@@ -156,6 +161,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.role = token.role as (typeof session.user)["role"];
       session.user.isPlatformAdmin = token.isPlatformAdmin as boolean;
       session.user.tier = token.tier as string | null;
+      session.user.hasIndividualAccess = token.hasIndividualAccess as boolean;
       session.user.hasCompanyAccess = token.hasCompanyAccess as boolean;
       session.user.status = token.status as string;
       return session;

@@ -393,6 +393,16 @@ model Plan {
   /// la résolution de lien profond, mais toujours listées à l'admin.
   isSelfService       Boolean   @default(true)
   displayOrder        Int       @default(0)
+  /// Phase 2quater (1er août 2026) — rattache cette offre à un évènement
+  /// précis (ex. les pass "Engagement 2025 — CEO Summit") plutôt qu'à la
+  /// plateforme en général. `null` = offre standard plateforme (mécanisme
+  /// de renouvellement une fois les crédits d'une offre d'évènement
+  /// épuisés). Payer une offre d'évènement crée automatiquement la ou les
+  /// `EventRegistration` correspondantes à la confirmation admin — voir
+  /// app/actions/admin-memberships.ts::confirmMembershipPayment et
+  /// app/actions/admin-companies.ts::confirmCompanyPayment.
+  eventId             String?
+  event               Event?    @relation("EventOffers", fields: [eventId], references: [id])
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -402,8 +412,10 @@ model Plan {
   eventsAsMinPlan     Event[]       @relation("EventMinPlan")
   opportunitiesAsVisibilityPlan Opportunity[] @relation("OpportunityVisibilityPlan")
   companySubscriptions CompanySubscription[]
+  eventRegistrations  EventRegistration[]
 
   @@index([scope, isActive, displayOrder])
+  @@index([eventId])
 }
 
 model Company {
@@ -580,6 +592,10 @@ model Event {
   updatedAt      DateTime     @updatedAt
 
   registrations  EventRegistration[]
+  /// Phase 2quater (1er août 2026) — catalogue d'offres propre à cet
+  /// évènement (ex. Executive pass, Light/Medium/Premium/Ultimate
+  /// corporate), créées librement par l'admin depuis /admin/plans.
+  offers         Plan[]              @relation("EventOffers")
 
   @@index([status, date])
   @@index([type])
@@ -596,6 +612,11 @@ model EventRegistration {
   paymentStatus  PaymentStatus       @default(PENDING)
   paymentMethod  EventPaymentMethod?
   paymentRef     String?
+  /// Phase 2quater (1er août 2026) — offre d'évènement utilisée (Plan avec
+  /// eventId défini). `null` = créée via l'ancien flux simple
+  /// (registerForEvent, virement/mobile money, sans preuve).
+  planId         String?
+  plan           Plan?               @relation(fields: [planId], references: [id])
   badgeQrCode    String              @unique @default(cuid())
   checkedIn      Boolean             @default(false)
   checkedInAt    DateTime?
@@ -604,6 +625,7 @@ model EventRegistration {
   @@unique([eventId, userId])
   @@index([eventId, status])
   @@index([badgeQrCode])
+  @@index([planId])
 }
 
 // ═══════════════════════════════════════════════

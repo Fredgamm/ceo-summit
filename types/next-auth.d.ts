@@ -19,6 +19,15 @@ declare module "next-auth" {
       role: Role;
       isPlatformAdmin: boolean;
       tier: string | null;
+      /**
+       * Phase 2ter (1er août 2026) — un Membership ACTIVE peut avoir
+       * `tier: null` (offre librement créée par l'admin, sans
+       * correspondance avec MEMBER/EXECUTIVE/CHAIRMAN) : `tier == null`
+       * seul ne peut donc plus servir de signal d'accès, seulement
+       * d'affichage. Vrai dès qu'un Membership ACTIVE existe, quel que
+       * soit son `tier`.
+       */
+      hasIndividualAccess: boolean;
       hasCompanyAccess: boolean;
       status: string;
     } & DefaultSession["user"];
@@ -28,6 +37,7 @@ declare module "next-auth" {
     role: Role;
     isPlatformAdmin: boolean;
     tier: string | null;
+    hasIndividualAccess: boolean;
     hasCompanyAccess: boolean;
     status: string;
   }
@@ -39,6 +49,7 @@ declare module "next-auth/jwt" {
     role: Role;
     isPlatformAdmin: boolean;
     tier: string | null;
+    hasIndividualAccess: boolean;
     hasCompanyAccess: boolean;
     status: string;
   }

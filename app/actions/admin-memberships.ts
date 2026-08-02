@@ -69,6 +69,26 @@ export async function confirmMembershipPayment(membershipPaymentId: string): Pro
     },
   });
 
+  /**
+   * Phase 2quater (1er août 2026) — une offre rattachée à un évènement
+   * (Plan.eventId) inscrit automatiquement l'acheteur à cet évènement,
+   * sans étape séparée à refaire. upsert plutôt que create : idempotent
+   * sur la contrainte [eventId, userId] si jamais déjà inscrit autrement.
+   */
+  if (plan.eventId) {
+    await prisma.eventRegistration.upsert({
+      where: { eventId_userId: { eventId: plan.eventId, userId: payment.membership.userId } },
+      update: { status: "CONFIRMED", paymentStatus: "PAID", planId: plan.id },
+      create: {
+        eventId: plan.eventId,
+        userId: payment.membership.userId,
+        status: "CONFIRMED",
+        paymentStatus: "PAID",
+        planId: plan.id,
+      },
+    });
+  }
+
   await prisma.auditLog.create({
     data: {
       actorId: adminId,

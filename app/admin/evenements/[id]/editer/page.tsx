@@ -23,7 +23,10 @@ export default async function EditEventPage({ params }: { params: { id: string }
     throw err;
   }
 
-  const event = await prisma.event.findUnique({ where: { id: params.id } });
+  const [event, offersCount] = await Promise.all([
+    prisma.event.findUnique({ where: { id: params.id } }),
+    prisma.plan.count({ where: { eventId: params.id } }),
+  ]);
   if (!event) notFound();
 
   return (
@@ -35,7 +38,13 @@ export default async function EditEventPage({ params }: { params: { id: string }
           </Link>
           <h1 className="text-xl font-bold text-navy">{event.title}</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-4">
+          <Link
+            href={`/admin/plans?eventId=${event.id}`}
+            className="text-sm font-semibold text-navy-mid"
+          >
+            Offres de cet évènement ({offersCount}) →
+          </Link>
           <Link
             href={`/admin/evenements/${event.id}/inscrits`}
             className="text-sm font-semibold text-navy-mid"

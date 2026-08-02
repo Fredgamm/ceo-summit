@@ -25,7 +25,10 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
     where: { id: companyPaymentId },
     include: {
       companySubscription: {
-        include: { company: { include: { companyAdmin: true } } },
+        include: {
+          plan: true,
+          company: { include: { companyAdmin: true, users: { select: { id: true } } } },
+        },
       },
     },
   });
@@ -48,6 +51,33 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
       data: { status: "ACTIVE", startDate: now, endDate: oneYearLater },
     }),
   ]);
+
+  /**
+   * Phase 2quater (1er août 2026) — même effet de bord que
+   * confirmMembershipPayment, mais pour chaque membre déjà rattaché à
+   * l'entreprise au moment de la confirmation (pas les invitations encore
+   * en attente) — un collaborateur invité après coup n'est pas
+   * rétroactivement inscrit à l'évènement.
+   */
+  const plan = payment.companySubscription.plan;
+  if (plan.eventId) {
+    const eventId = plan.eventId;
+    await Promise.all(
+      payment.companySubscription.company.users.map((u) =>
+        prisma.eventRegistration.upsert({
+          where: { eventId_userId: { eventId, userId: u.id } },
+          update: { status: "CONFIRMED", paymentStatus: "PAID", planId: plan.id },
+          create: {
+            eventId,
+            userId: u.id,
+            status: "CONFIRMED",
+            paymentStatus: "PAID",
+            planId: plan.id,
+          },
+        })
+      )
+    );
+  }
 
   await prisma.auditLog.create({
     data: {

@@ -10,6 +10,7 @@ vi.mock("@/lib/prisma", () => ({
     membership: { update: vi.fn() },
     user: { update: vi.fn() },
     creditBalance: { upsert: vi.fn() },
+    eventRegistration: { upsert: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -33,7 +34,13 @@ const PAYMENT_BASE = {
     id: "membership_1",
     userId: "user_1",
     user: { name: "Jean Rakoto", email: "jean@example.mg" },
-    plan: { id: "plan_1", name: "Executive pass", includedCredits: 10, hasUnlimitedCredits: false },
+    plan: {
+      id: "plan_1",
+      name: "Executive pass",
+      includedCredits: 10,
+      hasUnlimitedCredits: false,
+      eventId: null,
+    },
   },
 };
 
@@ -96,6 +103,31 @@ describe("confirmMembershipPayment", () => {
     const result = await confirmMembershipPayment("payment_1");
     expect(result.success).toBe(false);
     expect(prisma.membership.update).not.toHaveBeenCalled();
+  });
+
+  it("registers the buyer to the linked event when the plan is event-scoped", async () => {
+    vi.mocked(prisma.membershipPayment.findUnique).mockResolvedValue({
+      ...PAYMENT_BASE,
+      membership: {
+        ...PAYMENT_BASE.membership,
+        plan: { ...PAYMENT_BASE.membership.plan, eventId: "event_1" },
+      },
+    } as never);
+
+    await confirmMembershipPayment("payment_1");
+    expect(prisma.eventRegistration.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventId_userId: { eventId: "event_1", userId: "user_1" } },
+        create: expect.objectContaining({ eventId: "event_1", userId: "user_1", planId: "plan_1" }),
+      })
+    );
+  });
+
+  it("does not touch EventRegistration for a standard (non-event) plan", async () => {
+    vi.mocked(prisma.membershipPayment.findUnique).mockResolvedValue(PAYMENT_BASE as never);
+
+    await confirmMembershipPayment("payment_1");
+    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
   });
 });
 

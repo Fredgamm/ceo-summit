@@ -15,7 +15,10 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
     throw err;
   }
 
-  const plan = await prisma.plan.findUnique({ where: { id: params.id } });
+  const [plan, events] = await Promise.all([
+    prisma.plan.findUnique({ where: { id: params.id } }),
+    prisma.event.findMany({ select: { id: true, title: true }, orderBy: { date: "desc" } }),
+  ]);
   if (!plan) notFound();
 
   return (
@@ -24,6 +27,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
       <PlanForm
         mode="edit"
         planId={plan.id}
+        events={events}
         initialValues={{
           name: plan.name,
           slug: plan.slug,
@@ -39,6 +43,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           isActive: plan.isActive,
           isSelfService: plan.isSelfService,
           displayOrder: plan.displayOrder,
+          eventId: plan.eventId ?? "",
         }}
       />
     </div>

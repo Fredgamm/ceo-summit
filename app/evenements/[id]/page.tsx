@@ -6,12 +6,15 @@ import type { RegistrationStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
+import { getActivePlans } from "@/lib/plans-query";
 import { parseProgram, parseSpeakers } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IndividualPlanPicker } from "@/components/adhesion/individual-plan-picker";
+import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { formatAriary, formatDateFr, initials, meetsMinTier, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail événement" };
@@ -29,7 +32,10 @@ export default async function EventDetailPage({ params }: { params: { id: string
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: {
+      memberships: { where: { status: "ACTIVE" }, take: 1 },
+      company: { select: { id: true, companyAdminId: true } },
+    },
   });
   if (!viewer) redirect("/login");
 
@@ -45,6 +51,16 @@ export default async function EventDetailPage({ params }: { params: { id: string
     },
   });
   if (!event || event.status !== "PUBLISHED") notFound();
+
+  /**
+   * Phase 2quater (1er août 2026) — si cet évènement a des offres
+   * configurées, elles remplacent l'ancien bouton simple d'inscription
+   * (virement/mobile money, sans preuve) pour éviter un double mécanisme.
+   */
+  const eventOffers = await getActivePlans(undefined, { selfServiceOnly: true, eventId: event.id });
+  const individualOffers = eventOffers.filter((p) => p.scope === "INDIVIDUAL");
+  const companyOffers = eventOffers.filter((p) => p.scope === "COMPANY");
+  const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
 
   const viewerTier = viewer.memberships[0]?.tier;
   const tierOk = meetsMinTier(viewerTier, event.minTier);
@@ -151,49 +167,88 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </div>
 
         <aside className="flex flex-col gap-4">
-          <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5 text-center">
-            <p className="text-xl font-bold text-navy">
-              {event.price === 0 ? "Gratuit" : formatAriary(event.price)}
-            </p>
-            <p className="mt-1 text-xs text-text-muted">
-              {event.price === 0 ? "Inclus membership" : "par participant"}
-            </p>
-
-            {isRegistered ? (
-              <>
-                <Badge variant="approved" className="mt-4 w-full justify-center py-2">
-                  Inscrit ✓
-                </Badge>
-                <Button asChild variant="outline" className="mt-2 w-full justify-center">
-                  <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
-                </Button>
-              </>
-            ) : isPast ? (
-              <Button disabled className="mt-4 w-full justify-center">
-                Événement passé
-              </Button>
-            ) : !tierOk ? (
-              <Button disabled className="mt-4 w-full justify-center">
-                Accès {tierLabel(event.minTier)} requis
-              </Button>
-            ) : capacity === "complet" ? (
-              <Button disabled className="mt-4 w-full justify-center">
-                Complet
-              </Button>
-            ) : (
-              <Button asChild size="lg" className="mt-4 w-full justify-center">
-                <Link href={`/evenements/${event.id}/inscrire`}>S&apos;inscrire maintenant</Link>
-              </Button>
-            )}
-
-            {!isRegistered && tierOk && !isPast && capacity !== "complet" && (
-              <p className="mt-2 text-xs text-text-muted">
-                {capacity === "limite"
-                  ? `⚡ Plus que ${spotsLeft} places`
-                  : `${spotsLeft} places disponibles`}
+          {eventOffers.length > 0 && !isRegistered && !isPast ? (
+            <div className="flex flex-col gap-4">
+              {individualOffers.length > 0 && (
+                <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
+                    Pass individuel
+                  </p>
+                  <IndividualPlanPicker plans={individualOffers} />
+                </div>
+              )}
+              {companyOffers.length > 0 && (
+                <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
+                    Pass entreprise
+                  </p>
+                  {viewer.company ? (
+                    isCompanyAdmin ? (
+                      <PlanPicker companyId={viewer.company.id} plans={companyOffers} />
+                    ) : (
+                      <p className="text-sm text-text-muted">
+                        Seul l&apos;admin de votre entreprise peut choisir un pass entreprise.
+                      </p>
+                    )
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {companyOffers.map((plan) => (
+                        <Button key={plan.id} asChild variant="outline" className="justify-center">
+                          <Link href={`/entreprise/creer?offre=${plan.slug}`}>
+                            {plan.name} — {formatAriary(plan.priceAr)}/participant
+                          </Link>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5 text-center">
+              <p className="text-xl font-bold text-navy">
+                {event.price === 0 ? "Gratuit" : formatAriary(event.price)}
               </p>
-            )}
-          </div>
+              <p className="mt-1 text-xs text-text-muted">
+                {event.price === 0 ? "Inclus membership" : "par participant"}
+              </p>
+
+              {isRegistered ? (
+                <>
+                  <Badge variant="approved" className="mt-4 w-full justify-center py-2">
+                    Inscrit ✓
+                  </Badge>
+                  <Button asChild variant="outline" className="mt-2 w-full justify-center">
+                    <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
+                  </Button>
+                </>
+              ) : isPast ? (
+                <Button disabled className="mt-4 w-full justify-center">
+                  Événement passé
+                </Button>
+              ) : !tierOk ? (
+                <Button disabled className="mt-4 w-full justify-center">
+                  Accès {tierLabel(event.minTier)} requis
+                </Button>
+              ) : capacity === "complet" ? (
+                <Button disabled className="mt-4 w-full justify-center">
+                  Complet
+                </Button>
+              ) : (
+                <Button asChild size="lg" className="mt-4 w-full justify-center">
+                  <Link href={`/evenements/${event.id}/inscrire`}>S&apos;inscrire maintenant</Link>
+                </Button>
+              )}
+
+              {!isRegistered && tierOk && !isPast && capacity !== "complet" && (
+                <p className="mt-2 text-xs text-text-muted">
+                  {capacity === "limite"
+                    ? `⚡ Plus que ${spotsLeft} places`
+                    : `${spotsLeft} places disponibles`}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-3 text-xs font-bold uppercase text-text-muted">Détails pratiques</p>

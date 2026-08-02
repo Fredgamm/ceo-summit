@@ -31,6 +31,7 @@ function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     isActive: f.isActive,
     isSelfService: f.isSelfService,
     displayOrder: f.displayOrder,
+    eventId: f.eventId || null,
   };
 }
 

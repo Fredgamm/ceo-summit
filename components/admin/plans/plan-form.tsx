@@ -34,6 +34,7 @@ export interface PlanFormValues {
   isActive: boolean;
   isSelfService: boolean;
   displayOrder: number;
+  eventId: string;
 }
 
 const EMPTY_VALUES: PlanFormValues = {
@@ -51,6 +52,7 @@ const EMPTY_VALUES: PlanFormValues = {
   isActive: true,
   isSelfService: true,
   displayOrder: 0,
+  eventId: "",
 };
 
 function slugify(name: string): string {
@@ -66,10 +68,12 @@ interface PlanFormProps {
   mode: "create" | "edit";
   planId?: string;
   initialValues?: Partial<PlanFormValues>;
+  /** Phase 2quater (1er août 2026) — évènements disponibles pour le sélecteur. */
+  events?: { id: string; title: string }[];
 }
 
 /** Phase 1 offres dynamiques — "offres créables librement par l'admin". */
-export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
+export function PlanForm({ mode, planId, initialValues, events = [] }: PlanFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<PlanFormValues>({ ...EMPTY_VALUES, ...initialValues });
   const [error, setError] = React.useState<string | null>(null);
@@ -158,6 +162,31 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
               <SelectItem value="COMPANY">Entreprise</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Évènement</Label>
+          <Select
+            value={values.eventId || "none"}
+            onValueChange={(v) => set("eventId", v === "none" ? "" : v)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Aucun — offre standard plateforme</SelectItem>
+              {events.map((event) => (
+                <SelectItem key={event.id} value={event.id}>
+                  {event.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-text-muted">
+            Rattachée à un évènement, cette offre inscrit automatiquement l&apos;acheteur (ou les
+            collaborateurs déjà rattachés, pour une entreprise) à cet évènement une fois le paiement
+            validé.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">

@@ -14,16 +14,25 @@ import { prisma } from "@/lib/prisma";
  * utilisateur choisit lui-même une offre (wizard entreprise, sélection
  * individuelle, résolution de lien profond) ; laisser à `false`/omis pour
  * les vues admin qui doivent tout voir.
+ *
+ * `eventId` (Phase 2quater, 1er août 2026) — une offre peut être rattachée
+ * à un évènement précis (`Plan.eventId`) plutôt qu'être une offre standard
+ * plateforme. Non précisé : ne renvoie que les offres **standard**
+ * (`eventId: null`) — les sélecteurs génériques (wizard entreprise, fourche
+ * individuelle) ne doivent pas se retrouver mélangés avec le catalogue d'un
+ * évènement passé. Passer un id explicite pour lister les offres d'un
+ * évènement précis (page publique de l'évènement, admin évènement).
  */
 export async function getActivePlans(
   scope?: PlanScope,
-  opts?: { selfServiceOnly?: boolean }
+  opts?: { selfServiceOnly?: boolean; eventId?: string }
 ): Promise<Plan[]> {
   return prisma.plan.findMany({
     where: {
       isActive: true,
       ...(scope ? { scope } : {}),
       ...(opts?.selfServiceOnly ? { isSelfService: true } : {}),
+      eventId: opts?.eventId ?? null,
     },
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
   });
@@ -44,7 +53,15 @@ export async function getPlanBySlug(slug: string): Promise<Plan | null> {
   return prisma.plan.findFirst({ where: { slug, isActive: true, isSelfService: true } });
 }
 
-/** All plans (active + inactive), for the admin list — same ordering as getActivePlans. */
-export async function getAllPlans(): Promise<Plan[]> {
-  return prisma.plan.findMany({ orderBy: [{ displayOrder: "asc" }, { rank: "asc" }] });
+/**
+ * All plans (active + inactive), for the admin list — same ordering as
+ * getActivePlans. `eventId` (Phase 2quater) filters to one event's offers
+ * when provided; omitted returns every plan regardless of event scope
+ * (unlike getActivePlans, the admin list should show everything by default).
+ */
+export async function getAllPlans(eventId?: string): Promise<Plan[]> {
+  return prisma.plan.findMany({
+    where: eventId ? { eventId } : undefined,
+    orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
+  });
 }
