@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -20,6 +21,12 @@ const LOGIN_RATE_WINDOW_SEC = 15 * 60;
  *
  * Session strategy is "jwt" (not "database") because Credentials provider
  * doesn't support the database session strategy in NextAuth v5.
+ *
+ * `session`/`pages`/`callbacks` viennent de `auth.config.ts` (sprint de
+ * correction du 5 août 2026, EX-T01) — seul ce fichier-ci ajoute le
+ * provider Credentials et ses dépendances Node.js (bcrypt, Prisma,
+ * `checkRateLimit`/ioredis), volontairement absentes de la config
+ * edge-compatible que `middleware.ts` utilise.
  */
 
 const credentialsSchema = z.object({
@@ -28,19 +35,13 @@ const credentialsSchema = z.object({
 });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   // Déploiement auto-hébergé derrière Nginx (pas Vercel, qui définit ça
   // automatiquement) — sans ça, NextAuth v5 rejette toute requête en mode
   // production (`next start`) avec une erreur "UntrustedHost", même quand
   // le Host correspond exactement à NEXTAUTH_URL. Trouvé en testant le
   // sprint de sécurité du 29 juillet 2026 en conditions de production.
   trustHost: true,
-  session: {
-    strategy: "jwt",
-    maxAge: 24 * 60 * 60, // 24h — matches architecture doc
-  },
-  pages: {
-    signIn: "/login",
-  },
   providers: [
     Credentials({
       credentials: {
@@ -128,30 +129,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      // Only runs on sign-in (user is defined) — subsequent requests reuse the token.
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.isPlatformAdmin = user.isPlatformAdmin;
-        token.tier = user.tier;
-        token.hasCompanyAccess = user.hasCompanyAccess;
-        token.status = user.status;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      // NextAuth v5's built-in JWT type doesn't always merge cleanly with our
-      // module augmentation (types/next-auth.d.ts) depending on TS resolution
-      // order, so we assert here rather than fight the inference.
-      session.user.id = token.id as string;
-      session.user.role = token.role as (typeof session.user)["role"];
-      session.user.isPlatformAdmin = token.isPlatformAdmin as boolean;
-      session.user.tier = token.tier as string | null;
-      session.user.hasCompanyAccess = token.hasCompanyAccess as boolean;
-      session.user.status = token.status as string;
-      return session;
-    },
-  },
 });

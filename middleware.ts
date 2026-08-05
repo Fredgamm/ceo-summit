@@ -1,6 +1,7 @@
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
+import { authConfig } from "@/auth.config";
 
 /**
  * RBAC middleware — runs on every request matched by `config.matcher` below.
@@ -10,7 +11,17 @@ import { auth } from "@/auth";
  * This is the coarse-grained wall: authenticated vs not, member-space vs admin-space.
  * Fine-grained tier checks (e.g. "this Deal Room opportunity requires Executive+")
  * happen inside the page/server action itself, close to the data being gated.
+ *
+ * Sprint de correction (5 août 2026, EX-T01) — instance NextAuth séparée à
+ * partir de `auth.config.ts` (pas `@/auth`) : le middleware tourne sur le
+ * runtime edge, qui ne peut pas bundler les dépendances Node.js du provider
+ * Credentials (bcrypt, Prisma, et depuis ce sprint `ioredis` via le rate
+ * limiting — son import fait planter le build webpack edge sur
+ * `node:diagnostics_channel`, un échec de compilation, pas seulement
+ * d'exécution). Le middleware n'a de toute façon besoin que de décoder le
+ * JWT existant, jamais d'exécuter `authorize()`.
  */
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_ROUTES = [
   "/login",
