@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { SECTORS } from "@/lib/sectors";
+import { getReferentialLabels } from "@/lib/referentials-query";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -54,7 +54,8 @@ export async function saveOnboardingProfileStep(title: string, bio: string): Pro
 }
 
 export async function saveOnboardingSectorsStep(sectors: string[]): Promise<ActionResult> {
-  const valid = sectors.filter((s): s is (typeof SECTORS)[number] => SECTORS.includes(s as never));
+  const validSectors = await getReferentialLabels("sector");
+  const valid = sectors.filter((s) => validSectors.includes(s));
   if (valid.length !== sectors.length) {
     return { success: false, error: "Secteur inconnu." };
   }

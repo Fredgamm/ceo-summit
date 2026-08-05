@@ -8,7 +8,6 @@ import { allowedVisibilities } from "@/lib/deal-room-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getSignedDownloadUrl } from "@/lib/r2";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
-import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -110,7 +109,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
       </Link>
 
       <div className="flex flex-wrap gap-1.5">
-        <Badge variant="secondary">{OPPORTUNITY_TYPE_LABEL[opportunity.type]}</Badge>
+        <Badge variant="secondary">{opportunity.type}</Badge>
         <Badge variant="secondary">{opportunity.sector}</Badge>
       </div>
 

@@ -8,6 +8,10 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/referentials-query", () => ({
+  getReferentialLabels: vi.fn().mockResolvedValue(["Finance & Banque", "Technologie & Digital"]),
+}));
+
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {

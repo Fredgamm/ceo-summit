@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getSignedDownloadUrl } from "@/lib/r2";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
-import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { OpportunityChecklist } from "@/components/admin/deal-room/opportunity-checklist";
 import { OpportunityDecisionPanel } from "@/components/admin/deal-room/opportunity-decision-panel";
 import { ModerationNoteForm } from "@/components/admin/deal-room/moderation-note-form";
@@ -99,7 +98,7 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-border bg-white p-6">
             <div className="mb-3 flex flex-wrap gap-1.5">
-              <Badge variant="secondary">{OPPORTUNITY_TYPE_LABEL[opportunity.type]}</Badge>
+              <Badge variant="secondary">{opportunity.type}</Badge>
               <Badge variant="secondary">{opportunity.sector}</Badge>
               <Badge variant="secondary">{opportunity.country}</Badge>
             </div>

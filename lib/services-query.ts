@@ -1,7 +1,6 @@
 import type { Prisma, Tier } from "@prisma/client";
 
 import { SERVICE_CATEGORIES } from "@/lib/service-categories";
-import { COUNTRIES } from "@/lib/countries";
 import { legacyTierRank } from "@/lib/plan-access";
 
 /** E5-T01 — pure filter/pagination logic for `/catalogue/services`, same rationale as lib/deal-room-query.ts. */
@@ -31,7 +30,10 @@ export interface ServicesQuery {
  * ServiceListing has no country/tier field of its own. "pays" falls back to
  * the author's own country when the listing isn't tied to a company.
  */
-export function buildServicesQuery(params: ServicesSearchParams): ServicesQuery {
+export function buildServicesQuery(
+  params: ServicesSearchParams,
+  validCountries: readonly string[]
+): ServicesQuery {
   const parsedPage = parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
@@ -41,7 +43,7 @@ export function buildServicesQuery(params: ServicesSearchParams): ServicesQuery 
     where.category = params.categorie;
   }
 
-  if (params.pays && (COUNTRIES as readonly string[]).includes(params.pays)) {
+  if (params.pays && validCountries.includes(params.pays)) {
     where.OR = [
       { company: { country: params.pays } },
       { companyId: null, author: { country: params.pays } },

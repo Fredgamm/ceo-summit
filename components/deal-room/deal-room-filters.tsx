@@ -4,8 +4,6 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import {
   Select,
   SelectContent,
@@ -13,12 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { cn } from "@/lib/utils";
 
 const ALL = "__all__";
-
-const TYPES = Object.entries(OPPORTUNITY_TYPE_LABEL);
 
 const BUDGETS = [
   { value: ALL, label: "Budget : tous" },
@@ -34,8 +29,19 @@ const SORTS = [
   { value: "deadline", label: "Date limite" },
 ];
 
-/** E6-T01 — filtres type/secteur/pays/budget + tri. */
-export function DealRoomFilters() {
+interface DealRoomFiltersProps {
+  types: string[];
+  sectors: string[];
+  countries: string[];
+}
+
+/**
+ * E6-T01 — filtres type/secteur/pays/budget + tri.
+ * `types`/`sectors`/`countries` (référentiels admin-éditables depuis le 5
+ * août 2026, E8-T11) viennent du Server Component parent (`/deal-room`) —
+ * ce composant client ne peut pas les lire lui-même.
+ */
+export function DealRoomFilters({ types, sectors, countries }: DealRoomFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -69,9 +75,9 @@ export function DealRoomFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tous les types</SelectItem>
-            {TYPES.map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
+            {types.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
               </SelectItem>
             ))}
           </SelectContent>
@@ -86,7 +92,7 @@ export function DealRoomFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tous les secteurs</SelectItem>
-            {SECTORS.map((s) => (
+            {sectors.map((s) => (
               <SelectItem key={s} value={s}>
                 {s}
               </SelectItem>
@@ -103,7 +109,7 @@ export function DealRoomFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Toutes zones</SelectItem>
-            {COUNTRIES.map((c) => (
+            {countries.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
               </SelectItem>

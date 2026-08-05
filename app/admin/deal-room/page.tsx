@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { buildActiveOpportunitiesWhere } from "@/lib/admin-deal-room-query";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
-import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import {
   QuickApproveButton,
   RepublishButton,
@@ -62,12 +62,17 @@ export default async function AdminDealRoomPage({
   const activeTab = TABS.find((t) => t.key === searchParams.tab)?.key ?? "moderation";
   const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-  const [pendingCount, activeCount, contactsThisMonth, refusedThisMonth] = await Promise.all([
-    prisma.opportunity.count({ where: { status: "PENDING_MODERATION" } }),
-    prisma.opportunity.count({ where: { status: "PUBLISHED" } }),
-    prisma.opportunityContact.count({ where: { createdAt: { gte: startOfMonth } } }),
-    prisma.opportunity.count({ where: { status: "REFUSED", moderatedAt: { gte: startOfMonth } } }),
-  ]);
+  const [pendingCount, activeCount, contactsThisMonth, refusedThisMonth, validTypes, validSectors] =
+    await Promise.all([
+      prisma.opportunity.count({ where: { status: "PENDING_MODERATION" } }),
+      prisma.opportunity.count({ where: { status: "PUBLISHED" } }),
+      prisma.opportunityContact.count({ where: { createdAt: { gte: startOfMonth } } }),
+      prisma.opportunity.count({
+        where: { status: "REFUSED", moderatedAt: { gte: startOfMonth } },
+      }),
+      getReferentialLabels("opportunity_type"),
+      getReferentialLabels("sector"),
+    ]);
 
   const authorSelect = {
     select: {
@@ -90,7 +95,7 @@ export default async function AdminDealRoomPage({
   const active =
     activeTab === "actives"
       ? await prisma.opportunity.findMany({
-          where: buildActiveOpportunitiesWhere(searchParams),
+          where: buildActiveOpportunitiesWhere(searchParams, { validTypes, validSectors }),
           orderBy: { createdAt: "desc" },
           include: { author: { select: { name: true } }, _count: { select: { contacts: true } } },
         })
@@ -155,7 +160,7 @@ export default async function AdminDealRoomPage({
               >
                 <div className="flex-1">
                   <div className="mb-2 flex flex-wrap gap-1.5">
-                    <Badge variant="secondary">{OPPORTUNITY_TYPE_LABEL[opp.type]}</Badge>
+                    <Badge variant="secondary">{opp.type}</Badge>
                     <Badge variant="secondary">{opp.sector}</Badge>
                     <Badge variant="secondary">{opp.country}</Badge>
                   </div>
@@ -208,7 +213,7 @@ export default async function AdminDealRoomPage({
                   <tr key={opp.id}>
                     <td className="px-4 py-3 font-semibold text-navy">{opp.title}</td>
                     <td className="px-4 py-3">
-                      <Badge variant="secondary">{OPPORTUNITY_TYPE_LABEL[opp.type]}</Badge>
+                      <Badge variant="secondary">{opp.type}</Badge>
                     </td>
                     <td className="px-4 py-3 text-text-muted">{opp.author.name}</td>
                     <td className="px-4 py-3 text-text-muted">{formatDateFr(opp.createdAt)}</td>

@@ -26,27 +26,31 @@ describe("meetsRoomAccess", () => {
   });
 });
 
+const VALID_SECTORS = ["Énergie & Environnement"];
+
 describe("buildRoomsWhere", () => {
   it("always scopes to ACTIVE rooms with no filters", () => {
-    expect(buildRoomsWhere({})).toEqual({ status: "ACTIVE" });
+    expect(buildRoomsWhere({}, VALID_SECTORS)).toEqual({ status: "ACTIVE" });
   });
 
   it("filters by a known sector", () => {
-    expect(buildRoomsWhere({ secteur: "Énergie & Environnement" }).sector).toBe(
+    expect(buildRoomsWhere({ secteur: "Énergie & Environnement" }, VALID_SECTORS).sector).toBe(
       "Énergie & Environnement"
     );
   });
 
   it("ignores an unknown sector", () => {
-    expect(buildRoomsWhere({ secteur: "Bidon" }).sector).toBeUndefined();
+    expect(buildRoomsWhere({ secteur: "Bidon" }, VALID_SECTORS).sector).toBeUndefined();
   });
 
   it("filters by a known access level", () => {
-    expect(buildRoomsWhere({ acces: "CHAIRMAN_ONLY" }).minTier).toBe("CHAIRMAN_ONLY");
+    expect(buildRoomsWhere({ acces: "CHAIRMAN_ONLY" }, VALID_SECTORS).minTier).toBe(
+      "CHAIRMAN_ONLY"
+    );
   });
 
   it("ignores an unknown access level", () => {
-    expect(buildRoomsWhere({ acces: "BIDON" }).minTier).toBeUndefined();
+    expect(buildRoomsWhere({ acces: "BIDON" }, VALID_SECTORS).minTier).toBeUndefined();
   });
 });
 

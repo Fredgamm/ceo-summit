@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { CompanyForm } from "@/components/entreprise/company-form";
 
 export const metadata: Metadata = { title: "Créer mon entreprise" };
@@ -34,9 +35,19 @@ export default async function CreateCompanyPage({
   if (!viewer) redirect("/login");
   if (viewer.companyId) redirect(`/entreprises/${viewer.companyId}`);
 
+  const [sectors, countries] = await Promise.all([
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+
   return (
     <div className="flex min-h-screen justify-center bg-surface p-6 pt-16">
-      <CompanyForm mode="create" offerSlug={searchParams.offre} />
+      <CompanyForm
+        mode="create"
+        offerSlug={searchParams.offre}
+        sectors={sectors}
+        countries={countries}
+      />
     </div>
   );
 }

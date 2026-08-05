@@ -50,7 +50,7 @@ import {
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
 
 const VALID_PUBLISH_INPUT = {
-  type: "PARTENARIAT" as const,
+  type: "Partenariat",
   sector: "Logistique & Transport",
   country: "Madagascar",
   title: "Recherche partenaire logistique — Nord Madagascar",

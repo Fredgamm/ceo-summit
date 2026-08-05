@@ -11,8 +11,6 @@ import {
   sendTestBroadcast,
 } from "@/app/actions/broadcasts";
 import { SEGMENT_LABEL } from "@/lib/broadcast-segments";
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -29,8 +27,18 @@ import {
 
 const ALL = "__all__";
 
-/** E8-T09 — composer un broadcast : segment, aperçu, envoi test, envoi réel. */
-export function BroadcastComposer() {
+/**
+ * E8-T09 — composer un broadcast : segment, aperçu, envoi test, envoi réel.
+ * `sectors`/`countries` (E8-T11, 5 août 2026) fournis par la page serveur
+ * parente, pour le sous-filtre du segment CUSTOM.
+ */
+export function BroadcastComposer({
+  sectors,
+  countries,
+}: {
+  sectors: string[];
+  countries: string[];
+}) {
   const router = useRouter();
   const [subject, setSubject] = React.useState("");
   const [body, setBody] = React.useState("");
@@ -179,7 +187,7 @@ export function BroadcastComposer() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Tous pays</SelectItem>
-                  {COUNTRIES.map((c) => (
+                  {countries.map((c) => (
                     <SelectItem key={c} value={c}>
                       {c}
                     </SelectItem>
@@ -192,7 +200,7 @@ export function BroadcastComposer() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Tous secteurs</SelectItem>
-                  {SECTORS.map((s) => (
+                  {sectors.map((s) => (
                     <SelectItem key={s} value={s}>
                       {s}
                     </SelectItem>

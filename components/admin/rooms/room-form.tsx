@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { RoomAccessLevel } from "@prisma/client";
 
 import { createRoom, updateRoom } from "@/app/actions/admin-rooms";
-import { SECTORS } from "@/lib/sectors";
 import { ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -40,10 +39,12 @@ interface RoomFormProps {
   mode: "create" | "edit";
   roomId?: string;
   initialValues?: Partial<RoomFormValues>;
+  /** Référentiel admin-éditable (E8-T11, 5 août 2026) — fourni par la page serveur parente. */
+  sectors: string[];
 }
 
 /** E8-T08 — "CRUD salles + gestion accès tier". */
-export function RoomForm({ mode, roomId, initialValues }: RoomFormProps) {
+export function RoomForm({ mode, roomId, initialValues, sectors }: RoomFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<RoomFormValues>({ ...EMPTY_VALUES, ...initialValues });
   const [error, setError] = React.useState<string | null>(null);
@@ -111,7 +112,7 @@ export function RoomForm({ mode, roomId, initialValues }: RoomFormProps) {
               <SelectValue placeholder="Sélectionner…" />
             </SelectTrigger>
             <SelectContent>
-              {SECTORS.map((s) => (
+              {sectors.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>

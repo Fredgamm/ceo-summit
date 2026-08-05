@@ -2,6 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import { allowedVisibilities, buildDealRoomQuery, DEAL_ROOM_PAGE_SIZE } from "./deal-room-query";
 
+const REFERENTIALS = {
+  validTypes: [
+    "Partenariat",
+    "Investissement",
+    "Appel à offres",
+    "Levée de fonds",
+    "Joint-venture",
+  ],
+  validSectors: ["Finance & Banque"],
+  validCountries: ["Madagascar"],
+};
+
 describe("allowedVisibilities", () => {
   it("lets a MEMBER see only MEMBER-visibility opportunities", () => {
     expect(allowedVisibilities("MEMBER")).toEqual(["MEMBER"]);
@@ -23,7 +35,7 @@ describe("allowedVisibilities", () => {
 
 describe("buildDealRoomQuery", () => {
   it("defaults to published opportunities visible to the viewer's tier, recent-first", () => {
-    const query = buildDealRoomQuery({}, "EXECUTIVE");
+    const query = buildDealRoomQuery({}, "EXECUTIVE", REFERENTIALS);
     expect(query.where).toEqual({
       status: "PUBLISHED",
       visibility: { in: ["MEMBER", "EXECUTIVE"] },
@@ -34,19 +46,22 @@ describe("buildDealRoomQuery", () => {
   });
 
   it("filters by a known type", () => {
-    expect(buildDealRoomQuery({ type: "INVESTISSEMENT" }, "CHAIRMAN").where.type).toBe(
-      "INVESTISSEMENT"
-    );
+    expect(
+      buildDealRoomQuery({ type: "Investissement" }, "CHAIRMAN", REFERENTIALS).where.type
+    ).toBe("Investissement");
   });
 
   it("ignores an unknown type", () => {
-    expect(buildDealRoomQuery({ type: "PIZZA" }, "CHAIRMAN").where.type).toBeUndefined();
+    expect(
+      buildDealRoomQuery({ type: "PIZZA" }, "CHAIRMAN", REFERENTIALS).where.type
+    ).toBeUndefined();
   });
 
   it("filters by a known sector and country", () => {
     const query = buildDealRoomQuery(
       { sector: "Finance & Banque", pays: "Madagascar" },
-      "CHAIRMAN"
+      "CHAIRMAN",
+      REFERENTIALS
     );
     expect(query.where.sector).toBe("Finance & Banque");
     expect(query.where.country).toBe("Madagascar");
@@ -57,7 +72,9 @@ describe("buildDealRoomQuery", () => {
     ["50-200m", { gte: 50_000_000, lte: 200_000_000 }],
     ["gt200m", { gt: 200_000_000 }],
   ])("maps budget preset %s to %o", (preset, expected) => {
-    expect(buildDealRoomQuery({ budget: preset }, "CHAIRMAN").where.budget).toEqual(expected);
+    expect(buildDealRoomQuery({ budget: preset }, "CHAIRMAN", REFERENTIALS).where.budget).toEqual(
+      expected
+    );
   });
 
   it.each([
@@ -65,11 +82,11 @@ describe("buildDealRoomQuery", () => {
     ["budget_desc", { budget: "desc" }],
     ["deadline", { deadline: "asc" }],
   ])("maps sort %s to %o", (tri, expected) => {
-    expect(buildDealRoomQuery({ tri }, "CHAIRMAN").orderBy).toEqual(expected);
+    expect(buildDealRoomQuery({ tri }, "CHAIRMAN", REFERENTIALS).orderBy).toEqual(expected);
   });
 
   it("paginates: page 2 skips one page's worth of results", () => {
-    const query = buildDealRoomQuery({ page: "2" }, "CHAIRMAN");
+    const query = buildDealRoomQuery({ page: "2" }, "CHAIRMAN", REFERENTIALS);
     expect(query.skip).toBe(DEAL_ROOM_PAGE_SIZE);
     expect(query.page).toBe(2);
   });

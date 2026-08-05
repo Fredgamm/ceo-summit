@@ -1,8 +1,16 @@
 import { z } from "zod";
 
-/** E6-T03 — publication d'opportunité Deal Room, en 4 étapes côté formulaire. */
+/**
+ * E6-T03 — publication d'opportunité Deal Room, en 4 étapes côté formulaire.
+ *
+ * `type` (E8-T11, 5 août 2026) — était un enum Zod figé sur les 5 codes de
+ * l'ex-enum Prisma `OpportunityType` ; validé comme `sector`/`country`
+ * juste en dessous (chaîne non vide) depuis que ces trois champs sont des
+ * référentiels admin-éditables (lib/referentials-query.ts), pas des
+ * énumérations connues à la compilation.
+ */
 export const opportunityFormSchema = z.object({
-  type: z.enum(["PARTENARIAT", "INVESTISSEMENT", "APPEL_OFFRES", "LEVEE_FONDS", "JOINT_VENTURE"]),
+  type: z.string().trim().min(1, "Le type d'opportunité est requis"),
   sector: z.string().trim().min(1, "Le secteur est requis"),
   country: z.string().trim().min(1, "La zone géographique est requise"),
   title: z.string().trim().min(10, "Le titre doit contenir au moins 10 caractères").max(140),

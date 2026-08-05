@@ -2,17 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { OpportunityType, Tier } from "@prisma/client";
+import type { Tier } from "@prisma/client";
 
 import { publishOpportunity, resubmitOpportunity } from "@/app/actions/deal-room";
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import {
   OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES,
   OPPORTUNITY_ATTACHMENT_MAX_BYTES,
   OPPORTUNITY_ATTACHMENT_MAX_COUNT,
 } from "@/lib/validations/opportunity";
-import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,7 +34,7 @@ const TIERS: { value: Tier; label: string }[] = [
 ];
 
 interface FormValues {
-  type: OpportunityType;
+  type: string;
   sector: string;
   country: string;
   title: string;
@@ -49,7 +46,7 @@ interface FormValues {
 }
 
 const EMPTY_VALUES: FormValues = {
-  type: "PARTENARIAT",
+  type: "",
   sector: "",
   country: "",
   title: "",
@@ -73,11 +70,18 @@ export function PublishWizard({
   authorTitle,
   editOpportunityId,
   initialValues,
+  types,
+  sectors,
+  countries,
 }: {
   authorName: string;
   authorTitle: string;
   editOpportunityId?: string;
   initialValues?: FormValues;
+  /** Référentiels admin-éditables (E8-T11, 5 août 2026) — fournis par la page serveur parente. */
+  types: string[];
+  sectors: string[];
+  countries: string[];
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
@@ -93,6 +97,7 @@ export function PublishWizard({
 
   function canAdvanceFrom(currentStep: number): string | null {
     if (currentStep === 1) {
+      if (!values.type) return "Le type d'opportunité est requis.";
       if (!values.sector) return "Le secteur est requis.";
       if (!values.country) return "La zone géographique est requise.";
     }
@@ -217,20 +222,20 @@ export function PublishWizard({
           <div className="rounded-lg border border-border bg-white p-6">
             <h2 className="mb-4 text-base font-bold text-navy">Type d&apos;opportunité</h2>
             <div className="grid grid-cols-2 gap-3">
-              {Object.entries(OPPORTUNITY_TYPE_LABEL).map(([value, label]) => (
+              {types.map((t) => (
                 <label
-                  key={value}
+                  key={t}
                   className={`cursor-pointer rounded-md border-2 p-3 text-sm ${
-                    values.type === value ? "border-navy bg-surface" : "border-border"
+                    values.type === t ? "border-navy bg-surface" : "border-border"
                   }`}
                 >
                   <input
                     type="radio"
                     className="hidden"
-                    checked={values.type === value}
-                    onChange={() => set("type", value as OpportunityType)}
+                    checked={values.type === t}
+                    onChange={() => set("type", t)}
                   />
-                  <span className="font-semibold text-navy">{label}</span>
+                  <span className="font-semibold text-navy">{t}</span>
                 </label>
               ))}
             </div>
@@ -246,7 +251,7 @@ export function PublishWizard({
                     <SelectValue placeholder="Sélectionner…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {SECTORS.map((s) => (
+                    {sectors.map((s) => (
                       <SelectItem key={s} value={s}>
                         {s}
                       </SelectItem>
@@ -261,7 +266,7 @@ export function PublishWizard({
                     <SelectValue placeholder="Sélectionner…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {COUNTRIES.map((c) => (
+                    {countries.map((c) => (
                       <SelectItem key={c} value={c}>
                         {c}
                       </SelectItem>
@@ -394,7 +399,7 @@ export function PublishWizard({
           <div className="rounded-lg border-2 border-border bg-white p-5">
             <div className="mb-2 flex flex-wrap gap-1.5">
               <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-navy">
-                {OPPORTUNITY_TYPE_LABEL[values.type]}
+                {values.type}
               </span>
               {values.sector && (
                 <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-semibold text-navy">

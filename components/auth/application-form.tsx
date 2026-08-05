@@ -4,8 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 
 import { submitApplication } from "@/app/actions/apply";
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,8 +24,18 @@ const TIERS = [
   { value: "CHAIRMAN" as const, price: "1 500 000 Ar/an" },
 ];
 
-/** B1 (audit du 29 juillet 2026) — formulaire public de candidature, wireframe/demande-acces.html. */
-export function ApplicationForm() {
+/**
+ * B1 (audit du 29 juillet 2026) — formulaire public de candidature,
+ * wireframe/demande-acces.html. `sectors`/`countries` (E8-T11, 5 août
+ * 2026) fournis par la page serveur parente.
+ */
+export function ApplicationForm({
+  sectors,
+  countries,
+}: {
+  sectors: string[];
+  countries: string[];
+}) {
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
@@ -153,7 +161,7 @@ export function ApplicationForm() {
               <SelectValue placeholder="Sélectionner…" />
             </SelectTrigger>
             <SelectContent>
-              {COUNTRIES.map((c) => (
+              {countries.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
                 </SelectItem>
@@ -170,7 +178,7 @@ export function ApplicationForm() {
               <SelectValue placeholder="Sélectionner votre secteur…" />
             </SelectTrigger>
             <SelectContent>
-              {SECTORS.map((s) => (
+              {sectors.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
                 </SelectItem>

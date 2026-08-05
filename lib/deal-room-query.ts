@@ -1,20 +1,16 @@
-import type { Prisma, Tier, OpportunityType } from "@prisma/client";
+import type { Prisma, Tier } from "@prisma/client";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { LEGACY_TIER_ORDER } from "@/lib/plan-access";
 
 /** E6-T01 — pure filter/sort/visibility logic for `/deal-room`, same rationale as lib/catalogue.ts. */
 
 export const DEAL_ROOM_PAGE_SIZE = 12;
 
-const VALID_TYPES: OpportunityType[] = [
-  "PARTENARIAT",
-  "INVESTISSEMENT",
-  "APPEL_OFFRES",
-  "LEVEE_FONDS",
-  "JOINT_VENTURE",
-];
+export interface DealRoomReferentials {
+  validTypes: readonly string[];
+  validSectors: readonly string[];
+  validCountries: readonly string[];
+}
 
 export interface DealRoomSearchParams {
   type?: string;
@@ -47,7 +43,8 @@ export function allowedVisibilities(viewerTier: Tier | null | undefined): Tier[]
 
 export function buildDealRoomQuery(
   params: DealRoomSearchParams,
-  viewerTier: Tier | null | undefined
+  viewerTier: Tier | null | undefined,
+  referentials: DealRoomReferentials
 ): DealRoomQuery {
   const parsedPage = parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
@@ -57,13 +54,13 @@ export function buildDealRoomQuery(
     visibility: { in: allowedVisibilities(viewerTier) },
   };
 
-  if (params.type && VALID_TYPES.includes(params.type as OpportunityType)) {
-    where.type = params.type as OpportunityType;
+  if (params.type && referentials.validTypes.includes(params.type)) {
+    where.type = params.type;
   }
-  if (params.sector && (SECTORS as readonly string[]).includes(params.sector)) {
+  if (params.sector && referentials.validSectors.includes(params.sector)) {
     where.sector = params.sector;
   }
-  if (params.pays && (COUNTRIES as readonly string[]).includes(params.pays)) {
+  if (params.pays && referentials.validCountries.includes(params.pays)) {
     where.country = params.pays;
   }
 

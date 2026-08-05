@@ -4,8 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { createCompany, updateCompany } from "@/app/actions/company";
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -61,10 +59,20 @@ interface CompanyFormProps {
    * app/entreprise/paiement/page.tsx).
    */
   offerSlug?: string;
+  /** Référentiels admin-éditables (E8-T11, 5 août 2026) — fournis par la page serveur parente. */
+  sectors: string[];
+  countries: string[];
 }
 
 /** Parcours revu (1er août 2026) — coordonnées, réseaux sociaux et logo ajoutés. */
-export function CompanyForm({ mode, companyId, initialValues, offerSlug }: CompanyFormProps) {
+export function CompanyForm({
+  mode,
+  companyId,
+  initialValues,
+  offerSlug,
+  sectors,
+  countries,
+}: CompanyFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<CompanyFormValues>({
     ...EMPTY_VALUES,
@@ -162,7 +170,7 @@ export function CompanyForm({ mode, companyId, initialValues, offerSlug }: Compa
                 <SelectValue placeholder="Sélectionner…" />
               </SelectTrigger>
               <SelectContent>
-                {SECTORS.map((s) => (
+                {sectors.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s}
                   </SelectItem>
@@ -177,7 +185,7 @@ export function CompanyForm({ mode, companyId, initialValues, offerSlug }: Compa
                 <SelectValue placeholder="Sélectionner…" />
               </SelectTrigger>
               <SelectContent>
-                {COUNTRIES.map((c) => (
+                {countries.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
                   </SelectItem>

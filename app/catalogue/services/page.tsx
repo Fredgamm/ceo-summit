@@ -12,6 +12,7 @@ import {
 } from "@/lib/services-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceFilters } from "@/components/catalogue-services/service-filters";
 import { ServiceCard } from "@/components/catalogue-services/service-card";
@@ -36,7 +37,8 @@ export default async function ServicesCataloguePage({
   });
   if (!viewer) redirect("/login");
 
-  const { where, skip, take, page } = buildServicesQuery(searchParams);
+  const validCountries = await getReferentialLabels("country");
+  const { where, skip, take, page } = buildServicesQuery(searchParams, validCountries);
 
   const [listings, total] = await Promise.all([
     prisma.serviceListing.findMany({
@@ -72,7 +74,7 @@ export default async function ServicesCataloguePage({
         </Button>
       </div>
 
-      <ServiceFilters />
+      <ServiceFilters countries={validCountries} />
 
       {listings.length === 0 ? (
         <EmptyState

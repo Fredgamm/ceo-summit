@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { buildRoomsWhere, meetsRoomAccess, type RoomsSearchParams } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomsFilters } from "@/components/rooms/rooms-filters";
 import { RoomsGrid } from "@/components/rooms/rooms-grid";
@@ -27,7 +28,8 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
   if (!viewer) redirect("/login");
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
-  const where = buildRoomsWhere(searchParams);
+  const validSectors = await getReferentialLabels("sector");
+  const where = buildRoomsWhere(searchParams, validSectors);
 
   const rooms = await prisma.room.findMany({ where, orderBy: { name: "asc" } });
   const roomIds = rooms.map((r) => r.id);
@@ -80,7 +82,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
         </p>
       </div>
 
-      <RoomsFilters />
+      <RoomsFilters sectors={validSectors} />
 
       {roomCards.length === 0 ? (
         <EmptyState

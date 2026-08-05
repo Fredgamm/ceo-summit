@@ -1,8 +1,5 @@
 import type { Prisma, MembershipStatus } from "@prisma/client";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
-
 /** E8-T04 — pure query-building logic for `/admin/membres`, same rationale as lib/catalogue.ts. */
 
 export const ADMIN_MEMBERS_PAGE_SIZE = 20;
@@ -32,7 +29,10 @@ export interface AdminMembersQuery {
   page: number;
 }
 
-export function buildAdminMembersQuery(params: AdminMembersSearchParams): AdminMembersQuery {
+export function buildAdminMembersQuery(
+  params: AdminMembersSearchParams,
+  referentials: { validSectors: readonly string[]; validCountries: readonly string[] }
+): AdminMembersQuery {
   const parsedPage = parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
@@ -41,10 +41,10 @@ export function buildAdminMembersQuery(params: AdminMembersSearchParams): AdminM
   if (params.tier && VALID_TIERS.includes(params.tier)) {
     where.role = params.tier as Prisma.UserWhereInput["role"];
   }
-  if (params.pays && (COUNTRIES as readonly string[]).includes(params.pays)) {
+  if (params.pays && referentials.validCountries.includes(params.pays)) {
     where.country = params.pays;
   }
-  if (params.secteur && (SECTORS as readonly string[]).includes(params.secteur)) {
+  if (params.secteur && referentials.validSectors.includes(params.secteur)) {
     where.sectors = { has: params.secteur };
   }
   if (params.statut && VALID_STATUSES.includes(params.statut as MembershipStatus)) {

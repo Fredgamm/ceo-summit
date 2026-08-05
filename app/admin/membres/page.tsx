@@ -9,6 +9,7 @@ import {
   ADMIN_MEMBERS_PAGE_SIZE,
   type AdminMembersSearchParams,
 } from "@/lib/admin-members-query";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,7 +54,14 @@ export default async function AdminMembresPage({
     throw err;
   }
 
-  const { where, skip, take, page } = buildAdminMembersQuery(searchParams);
+  const [validSectors, validCountries] = await Promise.all([
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+  const { where, skip, take, page } = buildAdminMembersQuery(searchParams, {
+    validSectors,
+    validCountries,
+  });
 
   const [members, total] = await Promise.all([
     prisma.user.findMany({
@@ -71,7 +79,7 @@ export default async function AdminMembresPage({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <MemberFilters />
+        <MemberFilters sectors={validSectors} countries={validCountries} />
         <span className="text-sm text-text-muted">{total} membres</span>
       </div>
 

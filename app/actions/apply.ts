@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { applicationSchema, type ApplicationInput } from "@/lib/validations/application";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { sendTransactionalEmail } from "@/lib/resend";
 import ApplicationReceivedEmail from "@/emails/application-received-email";
 
@@ -20,6 +21,20 @@ export async function submitApplication(input: ApplicationInput): Promise<Action
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
+  }
+
+  // E8-T11 (5 août 2026) — `sector`/`country` sont des référentiels
+  // admin-éditables (lib/referentials-query.ts), plus des enums figés à la
+  // compilation : vérifiés ici contre la liste actuelle.
+  const [validSectors, validCountries] = await Promise.all([
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+  if (!validSectors.includes(parsed.data.sector)) {
+    return { success: false, error: "Secteur invalide." };
+  }
+  if (!validCountries.includes(parsed.data.country)) {
+    return { success: false, error: "Pays invalide." };
   }
 
   const email = parsed.data.email.toLowerCase();

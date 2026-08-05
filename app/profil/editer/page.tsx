@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfileEditForm } from "@/components/profile/profile-edit-form";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,11 @@ export default async function EditProfilePage() {
   });
   if (!user) redirect("/login");
 
-  const unreadMessages = await countUnreadMessages(user.id);
+  const [unreadMessages, availableCountries, availableSectors] = await Promise.all([
+    countUnreadMessages(user.id),
+    getReferentialLabels("country"),
+    getReferentialLabels("sector"),
+  ]);
 
   return (
     <AppShell
@@ -55,6 +60,8 @@ export default async function EditProfilePage() {
           initialCountry={user.country ?? ""}
           initialSectors={user.sectors}
           initialAvatarUrl={user.avatarUrl}
+          availableCountries={availableCountries}
+          availableSectors={availableSectors}
         />
       </div>
     </AppShell>

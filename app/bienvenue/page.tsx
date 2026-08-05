@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 
 export const metadata: Metadata = { title: "Bienvenue" };
@@ -23,6 +24,8 @@ export default async function WelcomePage() {
   if (!user) redirect("/login");
   if (user.onboardingCompletedAt) redirect("/dashboard");
 
+  const availableSectors = await getReferentialLabels("sector");
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface p-6">
       <OnboardingWizard
@@ -30,6 +33,7 @@ export default async function WelcomePage() {
         initialTitle={user.title ?? ""}
         initialBio={user.bio ?? ""}
         initialSectors={user.sectors}
+        availableSectors={availableSectors}
       />
     </div>
   );

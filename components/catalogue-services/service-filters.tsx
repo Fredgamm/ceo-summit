@@ -3,7 +3,6 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { SERVICE_CATEGORIES } from "@/lib/service-categories";
-import { COUNTRIES } from "@/lib/countries";
 import {
   Select,
   SelectContent,
@@ -20,8 +19,8 @@ const TIERS = [
   { value: "CHAIRMAN", label: "Chairman" },
 ];
 
-/** E5-T01 — filtres catégorie/pays/tier du prestataire. */
-export function ServiceFilters() {
+/** E5-T01 — filtres catégorie/pays/tier du prestataire. `countries` fourni par la page serveur parente (E8-T11). */
+export function ServiceFilters({ countries }: { countries: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -59,7 +58,7 @@ export function ServiceFilters() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>Toutes zones</SelectItem>
-          {COUNTRIES.map((c) => (
+          {countries.map((c) => (
             <SelectItem key={c} value={c}>
               {c}
             </SelectItem>

@@ -87,14 +87,6 @@ enum EventPaymentMethod {
   INCLUS
 }
 
-enum OpportunityType {
-  PARTENARIAT
-  INVESTISSEMENT
-  APPEL_OFFRES
-  LEVEE_FONDS
-  JOINT_VENTURE
-}
-
 enum OpportunityStatus {
   PENDING_MODERATION
   PUBLISHED
@@ -608,7 +600,14 @@ model Opportunity {
   authorId         String
   author           User              @relation("OpportunityAuthor", fields: [authorId], references: [id])
   title            String
-  type             OpportunityType
+  /// Chaîne libre validée contre `Referential(type: "opportunity_type")`
+  /// (5 août 2026 — était l'enum `OpportunityType`, retiré : le référentiel
+  /// admin-éditable en est désormais l'unique source, comme `sector`/
+  /// `country` juste en dessous). Stocke directement le libellé affiché
+  /// ("Partenariat", pas un code SCREAMING_CASE) — voir la migration
+  /// 20260805..._opportunity_type_to_referential pour le mapping de
+  /// conversion des données existantes.
+  type             String
   sector           String
   country          String
   description      String            @db.Text

@@ -12,6 +12,7 @@ import {
 } from "@/lib/catalogue";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { CatalogueFilters } from "@/components/catalogue/catalogue-filters";
 import { MemberCard } from "@/components/catalogue/member-card";
@@ -40,7 +41,14 @@ export default async function CataloguePage({
   });
   if (!viewer) redirect("/login");
 
-  const { where, orderBy, skip, take, page } = buildCatalogueQuery(searchParams);
+  const [validSectors, validCountries] = await Promise.all([
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+  const { where, orderBy, skip, take, page } = buildCatalogueQuery(searchParams, {
+    validSectors,
+    validCountries,
+  });
 
   const [members, total] = await Promise.all([
     prisma.user.findMany({
@@ -73,7 +81,7 @@ export default async function CataloguePage({
         </span>
       </div>
 
-      <CatalogueFilters />
+      <CatalogueFilters sectors={validSectors} countries={validCountries} />
 
       {members.length === 0 ? (
         <EmptyState

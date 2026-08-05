@@ -12,6 +12,7 @@ import {
 } from "@/lib/deal-room-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { DealRoomFilters } from "@/components/deal-room/deal-room-filters";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
@@ -38,7 +39,16 @@ export default async function DealRoomPage({
   if (!viewer) redirect("/login");
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
-  const { where, orderBy, skip, take, page } = buildDealRoomQuery(searchParams, viewerTier);
+  const [validTypes, validSectors, validCountries] = await Promise.all([
+    getReferentialLabels("opportunity_type"),
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+  const { where, orderBy, skip, take, page } = buildDealRoomQuery(searchParams, viewerTier, {
+    validTypes,
+    validSectors,
+    validCountries,
+  });
 
   const [opportunities, total] = await Promise.all([
     prisma.opportunity.findMany({
@@ -98,7 +108,7 @@ export default async function DealRoomPage({
         </AlertDescription>
       </Alert>
 
-      <DealRoomFilters />
+      <DealRoomFilters types={validTypes} sectors={validSectors} countries={validCountries} />
 
       {opportunities.length === 0 ? (
         <EmptyState

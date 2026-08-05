@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { PublishWizard } from "@/components/deal-room/publish-wizard";
 import { tierLabel } from "@/lib/utils";
@@ -21,7 +22,12 @@ export default async function PublishOpportunityPage() {
   });
   if (!viewer) redirect("/login");
 
-  const unreadMessages = await countUnreadMessages(viewer.id);
+  const [unreadMessages, types, sectors, countries] = await Promise.all([
+    countUnreadMessages(viewer.id),
+    getReferentialLabels("opportunity_type"),
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
 
   return (
     <AppShell
@@ -33,7 +39,13 @@ export default async function PublishOpportunityPage() {
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      <PublishWizard authorName={viewer.name} authorTitle={viewer.title ?? ""} />
+      <PublishWizard
+        authorName={viewer.name}
+        authorTitle={viewer.title ?? ""}
+        types={types}
+        sectors={sectors}
+        countries={countries}
+      />
     </AppShell>
   );
 }

@@ -4,8 +4,6 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search } from "lucide-react";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -35,7 +33,13 @@ const SORTS = [
  * component re-fetches on navigation) rather than client-side state, so
  * the catalogue stays a plain server-rendered page with no client data cache.
  */
-export function CatalogueFilters() {
+export function CatalogueFilters({
+  sectors,
+  countries,
+}: {
+  sectors: string[];
+  countries: string[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -85,7 +89,7 @@ export function CatalogueFilters() {
         >
           Tous
         </button>
-        {SECTORS.map((sector) => (
+        {sectors.map((sector) => (
           <button
             key={sector}
             type="button"
@@ -112,7 +116,7 @@ export function CatalogueFilters() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tous pays</SelectItem>
-            {COUNTRIES.map((c) => (
+            {countries.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
               </SelectItem>

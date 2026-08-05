@@ -8,6 +8,11 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/application-received-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("@/lib/referentials-query", () => ({
+  getReferentialLabels: vi.fn((type: string) =>
+    Promise.resolve(type === "sector" ? ["Finance & Banque"] : ["Madagascar"])
+  ),
+}));
 
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";

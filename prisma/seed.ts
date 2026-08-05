@@ -30,33 +30,40 @@ async function main() {
   });
 
   // ── Référentiels ──
+  // 5 août 2026 (E8-T11) — alignés mot pour mot sur lib/sectors.ts et
+  // lib/countries.ts (secteur/pays membre-facing en lisent désormais les
+  // référentiels au lieu des tableaux statiques, voir lib/referentials-
+  // query.ts) : un seed avec un vocabulaire différent désynchroniserait
+  // silencieusement les filtres et les données déjà en base
+  // (Company.sector, Opportunity.sector...), qui utilisent ce vocabulaire.
+  // `opportunityTypes` aligné sur les libellés historiquement affichés
+  // (anciennement `OPPORTUNITY_TYPE_LABEL`, l'enum `OpportunityType` a été
+  // retiré au profit de ce référentiel, voir Opportunity.type).
   const sectors = [
     "Énergie & Environnement",
-    "Finance & Investissement",
-    "Technologie & Innovation",
-    "BTP & Infrastructure",
-    "Agriculture & Alimentation",
-    "Santé & Médecine",
+    "Finance & Banque",
+    "Technologie & Digital",
+    "Agroalimentaire & Agriculture",
+    "Logistique & Transport",
+    "Immobilier & BTP",
+    "Santé & Pharmaceutique",
     "Tourisme & Hôtellerie",
-    "Transport & Logistique",
-    "Télécommunications",
-    "Éducation & Formation",
+    "Industrie & Manufacturing",
+    "Autre",
   ];
   const countries = [
     "Madagascar",
-    "Maurice",
+    "Île Maurice",
     "La Réunion",
     "Comores",
-    "Maldives",
+    "Mayotte",
     "Seychelles",
-    "Djibouti",
-    "Mozambique",
-    "Afrique du Sud",
+    "Autre",
   ];
   const opportunityTypes = [
     "Partenariat",
     "Investissement",
-    "Appel d'offres",
+    "Appel à offres",
     "Levée de fonds",
     "Joint-venture",
   ];
@@ -135,7 +142,7 @@ async function main() {
     create: {
       id: "demo-company-seed",
       name: "Razanamahery Group",
-      sector: "Finance",
+      sector: "Finance & Banque",
       country: "Madagascar",
       companyAdminId: demoMember.id,
     },
@@ -299,7 +306,7 @@ async function main() {
       id: "opp_energie_solaire",
       authorId: admin.id,
       title: "Recherche partenaire pour ferme solaire de 50MW à Toliara",
-      type: "PARTENARIAT",
+      type: "Partenariat",
       sector: "Énergie & Environnement",
       country: "Madagascar",
       description:
@@ -318,8 +325,8 @@ async function main() {
       id: "opp_levee_fintech",
       authorId: admin.id,
       title: "Levée de fonds Série A — plateforme fintech mobile money",
-      type: "LEVEE_FONDS",
-      sector: "Finance & Investissement",
+      type: "Levée de fonds",
+      sector: "Finance & Banque",
       country: "Comores",
       description:
         "Fintech en forte croissance (150 000 utilisateurs actifs) lançant sa Série A pour financer l'expansion régionale et l'obtention de licences bancaires additionnelles.",
@@ -337,8 +344,8 @@ async function main() {
       id: "opp_appel_offres_port",
       authorId: admin.id,
       title: "Appel à offres — modernisation infrastructure portuaire",
-      type: "APPEL_OFFRES",
-      sector: "BTP & Infrastructure",
+      type: "Appel à offres",
+      sector: "Immobilier & BTP",
       country: "Île Maurice",
       description:
         "Appel à offres pour la modernisation des équipements de manutention et la digitalisation des opérations du port. Réservé aux membres Chairman en raison de la confidentialité du cahier des charges.",
@@ -356,8 +363,8 @@ async function main() {
       id: "opp_joint_venture_agri",
       authorId: demoMember.id,
       title: "Joint-venture transformation agroalimentaire — export vanille & épices",
-      type: "JOINT_VENTURE",
-      sector: "Agriculture & Alimentation",
+      type: "Joint-venture",
+      sector: "Agroalimentaire & Agriculture",
       country: "Madagascar",
       description:
         "Recherche de partenaire régional pour la création d'une unité de transformation et de conditionnement dédiée à l'export de vanille et d'épices vers l'Europe et les Émirats.",

@@ -3,9 +3,21 @@ import Link from "next/link";
 import Image from "next/image";
 import { Diamond, CalendarDays, Users, LineChart } from "lucide-react";
 
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { ApplicationForm } from "@/components/auth/application-form";
 
 export const metadata: Metadata = { title: "Demander l'accès" };
+
+/**
+ * E8-T11 (5 août 2026) — cette page lisait jusqu'ici des tableaux statiques
+ * (secteur/pays), ce qui permettait sa génération 100% statique (voir
+ * AUDIT_SECURITE_CONFORMITE_ACCESSIBILITE.md sur l'importance de garder
+ * `/demande-acces` statique). Elle lit maintenant les référentiels en base
+ * — revalidation ISR toutes les heures plutôt qu'un rendu dynamique à
+ * chaque requête, pour rester proche de la performance d'une page statique
+ * (le contenu ne dépend d'aucune donnée de requête, cookies/session).
+ */
+export const revalidate = 3600;
 
 const PILLARS = [
   {
@@ -36,7 +48,12 @@ const PILLARS = [
  * déclare public : le seul canal d'acquisition de nouveaux membres était
  * cassé. Layout aligné sur wireframe/demande-acces.html.
  */
-export default function RequestAccessPage() {
+export default async function RequestAccessPage() {
+  const [sectors, countries] = await Promise.all([
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <div className="hidden w-[42%] flex-col justify-between bg-navy p-12 md:flex">
@@ -91,7 +108,7 @@ export default function RequestAccessPage() {
             </p>
           </div>
 
-          <ApplicationForm />
+          <ApplicationForm sectors={sectors} countries={countries} />
         </div>
       </div>
     </div>

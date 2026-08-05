@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { profileSchema } from "@/lib/validations/profile";
+import { getReferentialLabels } from "@/lib/referentials-query";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -19,11 +20,24 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
+  const { name, title, bio, linkedinUrl, country, sectors } = parsed.data;
+
+  // E8-T11 (5 août 2026) — `country`/`sectors` sont des référentiels
+  // admin-éditables (lib/referentials-query.ts), plus des enums figés à la
+  // compilation : vérifiés ici contre la liste actuelle.
+  const [validCountries, validSectors] = await Promise.all([
+    getReferentialLabels("country"),
+    getReferentialLabels("sector"),
+  ]);
+  if (country && !validCountries.includes(country)) {
+    return { success: false, error: "Pays invalide." };
+  }
+  if (sectors.some((s) => !validSectors.includes(s))) {
+    return { success: false, error: "Secteur invalide." };
+  }
 
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
-
-  const { name, title, bio, linkedinUrl, country, sectors } = parsed.data;
   await prisma.user.update({
     where: { id: session.user.id },
     data: {

@@ -8,7 +8,6 @@ import {
   saveOnboardingProfileStep,
   saveOnboardingSectorsStep,
 } from "@/app/actions/onboarding";
-import { SECTORS } from "@/lib/sectors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +22,8 @@ interface OnboardingWizardProps {
   initialTitle: string;
   initialBio: string;
   initialSectors: string[];
+  /** Référentiel admin-éditable (E8-T11, 5 août 2026) — fourni par la page serveur parente. */
+  availableSectors: string[];
 }
 
 /**
@@ -35,6 +36,7 @@ export function OnboardingWizard({
   initialTitle,
   initialBio,
   initialSectors,
+  availableSectors,
 }: OnboardingWizardProps) {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
@@ -110,7 +112,9 @@ export function OnboardingWizard({
       {step === 2 && (
         <ProfileStep title={title} bio={bio} onTitleChange={setTitle} onBioChange={setBio} />
       )}
-      {step === 3 && <SectorsStep selected={sectors} onToggle={toggleSector} />}
+      {step === 3 && (
+        <SectorsStep selected={sectors} onToggle={toggleSector} available={availableSectors} />
+      )}
       {step === 4 && <ClosingStep />}
 
       {error && (
@@ -226,9 +230,11 @@ function ProfileStep({
 function SectorsStep({
   selected,
   onToggle,
+  available,
 }: {
   selected: string[];
   onToggle: (sector: string) => void;
+  available: string[];
 }) {
   return (
     <div>
@@ -238,7 +244,7 @@ function SectorsStep({
         Deal Room et le Catalogue.
       </p>
       <div className="grid grid-cols-2 gap-3">
-        {SECTORS.map((sector) => (
+        {available.map((sector) => (
           <label
             key={sector}
             className="flex items-center gap-2 rounded-md border border-border p-2.5 text-sm"

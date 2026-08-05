@@ -1,8 +1,5 @@
 import type { Prisma, Role } from "@prisma/client";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
-
 /**
  * E2-T03 — pure query-building logic for `/catalogue`, kept separate from
  * the page component so the filter/sort/pagination rules are unit-testable
@@ -33,16 +30,19 @@ export interface CatalogueQuery {
   page: number;
 }
 
-export function buildCatalogueQuery(params: CatalogueSearchParams): CatalogueQuery {
+export function buildCatalogueQuery(
+  params: CatalogueSearchParams,
+  referentials: { validSectors: readonly string[]; validCountries: readonly string[] }
+): CatalogueQuery {
   const parsedPage = parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
   const where: Prisma.UserWhereInput = { status: "ACTIVE" };
 
-  if (params.secteur && (SECTORS as readonly string[]).includes(params.secteur)) {
+  if (params.secteur && referentials.validSectors.includes(params.secteur)) {
     where.sectors = { has: params.secteur };
   }
-  if (params.pays && (COUNTRIES as readonly string[]).includes(params.pays)) {
+  if (params.pays && referentials.validCountries.includes(params.pays)) {
     where.country = params.pays;
   }
   if (params.tier && (VALID_TIERS as readonly string[]).includes(params.tier)) {

@@ -1,11 +1,12 @@
 import { z } from "zod";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
-
 /**
  * E2-T02 — édition profil. Bio limit mirrors the onboarding step (E1-T05)
  * and the wireframe's "150 mots max" rule (~750 caractères).
+ *
+ * `country`/`sectors` (E8-T11, 5 août 2026) — référentiels admin-éditables
+ * désormais (lib/referentials-query.ts), validés en chaîne(s) non vide(s)
+ * plutôt qu'en enum figé sur lib/countries.ts/lib/sectors.ts.
  */
 export const profileSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),
@@ -27,8 +28,8 @@ export const profileSchema = z.object({
     .optional()
     .or(z.literal(""))
     .default(""),
-  country: z.enum(COUNTRIES).optional().or(z.literal("")).default(""),
-  sectors: z.array(z.enum(SECTORS)).default([]),
+  country: z.string().trim().optional().or(z.literal("")).default(""),
+  sectors: z.array(z.string().trim().min(1)).default([]),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

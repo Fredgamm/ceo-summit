@@ -9,6 +9,12 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/referentials-query", () => ({
+  getReferentialLabels: vi.fn((type: string) =>
+    Promise.resolve(type === "sector" ? ["Finance & Banque"] : ["Madagascar"])
+  ),
+}));
+
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { updateProfile } from "./profile";

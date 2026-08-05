@@ -5,8 +5,25 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { companyFormSchema } from "@/lib/validations/company";
+import { getReferentialLabels } from "@/lib/referentials-query";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+/**
+ * E8-T11 (5 août 2026) — `sector`/`country` sont des référentiels
+ * admin-éditables (lib/referentials-query.ts), plus des enums figés à la
+ * compilation : vérifiés ici contre la liste actuelle, partagé entre
+ * `createCompany` et `updateCompany` (même contrainte dans les deux cas).
+ */
+async function validateSectorAndCountry(sector: string, country: string): Promise<string | null> {
+  const [validSectors, validCountries] = await Promise.all([
+    getReferentialLabels("sector"),
+    getReferentialLabels("country"),
+  ]);
+  if (!validSectors.includes(sector)) return "Secteur invalide.";
+  if (!validCountries.includes(country)) return "Pays invalide.";
+  return null;
+}
 
 function companyData(f: {
   name: string;
@@ -72,6 +89,9 @@ export async function createCompany(input: unknown): Promise<ActionResult<{ id: 
   }
   const f = parsed.data;
 
+  const referentialError = await validateSectorAndCountry(f.sector, f.country);
+  if (referentialError) return { success: false, error: referentialError };
+
   const company = await prisma.$transaction(async (tx) => {
     const created = await tx.company.create({
       data: { ...companyData(f), companyAdminId: viewer.id },
@@ -101,6 +121,9 @@ export async function updateCompany(companyId: string, input: unknown): Promise<
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+
+  const referentialError = await validateSectorAndCountry(f.sector, f.country);
+  if (referentialError) return { success: false, error: referentialError };
 
   await prisma.company.update({
     where: { id: companyId },

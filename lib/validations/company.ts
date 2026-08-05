@@ -1,19 +1,20 @@
 import { z } from "zod";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
-
 /**
  * Parcours revu (1er août 2026) — coordonnées, réseaux sociaux et logo
  * ajoutés au formulaire d'entreprise. Réseaux sociaux limités à 3 plateformes
  * concrètes (LinkedIn/Facebook/Instagram) plutôt qu'une liste ouverte —
  * couvre l'usage réel sans complexifier le formulaire ; stockés en JSON
  * (Company.socialLinks) pour ne pas figer le schéma si une 4e s'ajoute.
+ *
+ * `sector`/`country` (E8-T11, 5 août 2026) — voir la même note dans
+ * lib/validations/application.ts : référentiels admin-éditables désormais,
+ * validés en chaîne non vide plutôt qu'en enum figé.
  */
 export const companyFormSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),
-  sector: z.enum(SECTORS, { errorMap: () => ({ message: "Secteur invalide" }) }),
-  country: z.enum(COUNTRIES, { errorMap: () => ({ message: "Pays invalide" }) }),
+  sector: z.string().trim().min(1, "Le secteur est requis"),
+  country: z.string().trim().min(1, "Le pays est requis"),
   description: z.string().trim().max(1000).optional().default(""),
   website: z.string().trim().max(200).optional().default(""),
   logoUrl: z.string().trim().max(500).optional().default(""),

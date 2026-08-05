@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { RoomForm } from "@/components/admin/rooms/room-form";
 
 export const metadata: Metadata = { title: "Admin — Éditer une salle" };
@@ -15,7 +16,10 @@ export default async function EditRoomPage({ params }: { params: { id: string } 
     throw err;
   }
 
-  const room = await prisma.room.findUnique({ where: { id: params.id } });
+  const [room, sectors] = await Promise.all([
+    prisma.room.findUnique({ where: { id: params.id } }),
+    getReferentialLabels("sector"),
+  ]);
   if (!room) notFound();
 
   return (
@@ -24,6 +28,7 @@ export default async function EditRoomPage({ params }: { params: { id: string } 
       <RoomForm
         mode="edit"
         roomId={room.id}
+        sectors={sectors}
         initialValues={{
           name: room.name,
           description: room.description ?? "",

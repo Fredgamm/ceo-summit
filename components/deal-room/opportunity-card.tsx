@@ -1,17 +1,9 @@
 import Link from "next/link";
-import type { OpportunityType, Tier } from "@prisma/client";
+import type { Tier } from "@prisma/client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
-
-export const OPPORTUNITY_TYPE_LABEL: Record<OpportunityType, string> = {
-  PARTENARIAT: "Partenariat",
-  INVESTISSEMENT: "Investissement",
-  APPEL_OFFRES: "Appel à offres",
-  LEVEE_FONDS: "Levée de fonds",
-  JOINT_VENTURE: "Joint-venture",
-};
 
 const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
   MEMBER: "member",
@@ -23,7 +15,7 @@ interface OpportunityCardProps {
   id: string;
   title: string;
   description: string;
-  type: OpportunityType;
+  type: string;
   sector: string;
   budget: number | null;
   deadline: Date | null;
@@ -50,7 +42,7 @@ export function OpportunityCard({
       className="flex flex-col gap-3 rounded-lg border border-border bg-white p-5 transition-shadow hover:shadow-card-md"
     >
       <div className="flex flex-wrap gap-1.5">
-        <Badge variant="secondary">{OPPORTUNITY_TYPE_LABEL[type]}</Badge>
+        <Badge variant="secondary">{type}</Badge>
         <Badge variant="secondary">{sector}</Badge>
       </div>
 

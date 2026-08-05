@@ -3,8 +3,6 @@
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -30,8 +28,12 @@ const STATUSES = [
   { value: "EXPIRED", label: "Expiré" },
 ];
 
-/** E8-T04 — dense select-based filters, matching the bo-* admin table aesthetic (vs. the member-facing pill filters). */
-export function MemberFilters() {
+/**
+ * E8-T04 — dense select-based filters, matching the bo-* admin table
+ * aesthetic (vs. the member-facing pill filters). `sectors`/`countries`
+ * (E8-T11, 5 août 2026) fournis par la page serveur parente.
+ */
+export function MemberFilters({ sectors, countries }: { sectors: string[]; countries: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -83,7 +85,7 @@ export function MemberFilters() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>Tous pays</SelectItem>
-          {COUNTRIES.map((c) => (
+          {countries.map((c) => (
             <SelectItem key={c} value={c}>
               {c}
             </SelectItem>
@@ -100,7 +102,7 @@ export function MemberFilters() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ALL}>Tous secteurs</SelectItem>
-          {SECTORS.map((s) => (
+          {sectors.map((s) => (
             <SelectItem key={s} value={s}>
               {s}
             </SelectItem>

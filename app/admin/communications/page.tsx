@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { SEGMENT_LABEL } from "@/lib/broadcast-segments";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { BroadcastComposer } from "@/components/admin/communications/broadcast-composer";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -83,6 +84,11 @@ export default async function AdminCommunicationsPage({
       ? await prisma.broadcast.findMany({ orderBy: { createdAt: "desc" }, take: 50 })
       : [];
 
+  const [sectors, countries] =
+    activeTab === "broadcast"
+      ? await Promise.all([getReferentialLabels("sector"), getReferentialLabels("country")])
+      : [[], []];
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-bold text-navy">Communications</h1>
@@ -101,7 +107,7 @@ export default async function AdminCommunicationsPage({
         ))}
       </div>
 
-      {activeTab === "broadcast" && <BroadcastComposer />}
+      {activeTab === "broadcast" && <BroadcastComposer sectors={sectors} countries={countries} />}
 
       {activeTab === "templates" && (
         <div className="flex flex-col gap-2.5">

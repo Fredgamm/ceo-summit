@@ -4,8 +4,6 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { updateProfile } from "@/app/actions/profile";
-import { SECTORS } from "@/lib/sectors";
-import { COUNTRIES } from "@/lib/countries";
 import { AVATAR_ALLOWED_MIME_TYPES, AVATAR_MAX_BYTES } from "@/lib/validations/profile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -33,6 +31,9 @@ interface ProfileEditFormProps {
   initialCountry: string;
   initialSectors: string[];
   initialAvatarUrl: string | null;
+  /** Référentiels admin-éditables (E8-T11, 5 août 2026) — fournis par la page serveur parente. */
+  availableCountries: string[];
+  availableSectors: string[];
 }
 
 /**
@@ -50,6 +51,8 @@ export function ProfileEditForm({
   initialCountry,
   initialSectors,
   initialAvatarUrl,
+  availableCountries,
+  availableSectors,
 }: ProfileEditFormProps) {
   const router = useRouter();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -177,7 +180,7 @@ export function ProfileEditForm({
                 <SelectValue placeholder="Sélectionner…" />
               </SelectTrigger>
               <SelectContent>
-                {COUNTRIES.map((c) => (
+                {availableCountries.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
                   </SelectItem>
@@ -215,7 +218,7 @@ export function ProfileEditForm({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
-            {SECTORS.map((sector) => (
+            {availableSectors.map((sector) => (
               <label
                 key={sector}
                 className="flex items-center gap-2 rounded-md border border-border p-2.5 text-sm"
