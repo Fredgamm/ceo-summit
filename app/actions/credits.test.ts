@@ -34,7 +34,21 @@ describe("requestCreditPurchase", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user_1",
       name: "Jean-Pierre Rakoto",
+      company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     } as never);
+  });
+
+  it("rejects a member below Executive rank", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      name: "Jean-Pierre Rakoto",
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
+    } as never);
+
+    const result = await requestCreditPurchase(5, "VIREMENT");
+
+    expect(result.success).toBe(false);
+    expect(prisma.creditPurchase.create).not.toHaveBeenCalled();
   });
 
   it("creates a pending purchase and alerts the admin", async () => {

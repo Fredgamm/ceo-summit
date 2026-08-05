@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -10,6 +11,9 @@ import OpportunityChangesRequestedEmail from "@/emails/opportunity-changes-reque
 import OpportunityRefusedEmail from "@/emails/opportunity-refused-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+const freeTextSchema = z.string().trim().min(1).max(2000);
+const noteSchema = z.string().trim().max(5000);
 
 async function loadPendingOpportunity(opportunityId: string) {
   const opportunity = await prisma.opportunity.findUnique({
@@ -66,7 +70,9 @@ export async function requestOpportunityChanges(
   message: string
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("deal-room");
-  if (!message.trim()) return { success: false, error: "Le message est requis." };
+  const parsed = freeTextSchema.safeParse(message);
+  if (!parsed.success) return { success: false, error: "Le message est requis." };
+  message = parsed.data;
 
   const loaded = await loadPendingOpportunity(opportunityId);
   if (!loaded.ok) return { success: false, error: loaded.error };
@@ -101,7 +107,9 @@ export async function rejectOpportunity(
   reason: string
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("deal-room");
-  if (!reason.trim()) return { success: false, error: "Le motif est requis." };
+  const parsed = freeTextSchema.safeParse(reason);
+  if (!parsed.success) return { success: false, error: "Le motif est requis." };
+  reason = parsed.data;
 
   const loaded = await loadPendingOpportunity(opportunityId);
   if (!loaded.ok) return { success: false, error: loaded.error };
@@ -188,10 +196,12 @@ export async function saveModerationNote(
   note: string
 ): Promise<ActionResult> {
   await requireAdmin("deal-room");
+  const parsed = noteSchema.safeParse(note);
+  if (!parsed.success) return { success: false, error: "Note invalide." };
 
   await prisma.opportunity.update({
     where: { id: opportunityId },
-    data: { moderationNote: note.trim() || null },
+    data: { moderationNote: parsed.data || null },
   });
 
   revalidatePath(`/admin/deal-room/${opportunityId}`);

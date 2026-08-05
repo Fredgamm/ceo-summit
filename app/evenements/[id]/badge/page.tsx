@@ -76,7 +76,7 @@ export default async function EventBadgePage({ params }: { params: { id: string 
           />
         </div>
 
-        <p className="mt-4 text-center text-xs text-white/40">
+        <p className="mt-4 text-center text-xs text-white/60">
           Présentez ce QR code à l&apos;accueil de l&apos;événement.
         </p>
       </div>

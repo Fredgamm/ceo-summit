@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { BroadcastSegment } from "@prisma/client";
 
 import { auth } from "@/auth";
@@ -14,6 +15,12 @@ import { tierLabel } from "@/lib/utils";
 import BroadcastEmail from "@/emails/broadcast-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+const broadcastContentSchema = z.object({
+  subject: z.string().trim().min(1, "L'objet est requis").max(200),
+  body: z.string().trim().min(1, "Le corps du message est requis").max(20_000),
+});
+const broadcastSegmentSchema = z.enum(["ALL_ACTIVE", "CHAIRMAN", "EXECUTIVE", "CUSTOM"]);
 
 function splitName(name: string): { prenom: string; nom: string } {
   const [prenom, ...rest] = name.trim().split(" ");
@@ -56,9 +63,11 @@ export async function sendTestBroadcast(subject: string, body: string): Promise<
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
   await requireAdmin("communications");
 
-  if (!subject.trim() || !body.trim()) {
-    return { success: false, error: "L'objet et le corps du message sont requis." };
+  const parsedContent = broadcastContentSchema.safeParse({ subject, body });
+  if (!parsedContent.success) {
+    return { success: false, error: parsedContent.error.issues[0]?.message ?? "Champs invalides" };
   }
+  ({ subject, body } = parsedContent.data);
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -93,9 +102,16 @@ export async function sendBroadcast(
 ): Promise<ActionResult<{ id: string; recipientCount: number }>> {
   const { userId: adminId } = await requireAdmin("communications");
 
-  if (!subject.trim() || !body.trim()) {
-    return { success: false, error: "L'objet et le corps du message sont requis." };
+  const parsedContent = broadcastContentSchema.safeParse({ subject, body });
+  const parsedSegment = broadcastSegmentSchema.safeParse(segment);
+  if (!parsedContent.success || !parsedSegment.success) {
+    return {
+      success: false,
+      error: parsedContent.error?.issues[0]?.message ?? "Segment invalide.",
+    };
   }
+  ({ subject, body } = parsedContent.data);
+  segment = parsedSegment.data;
 
   const recipients = await prisma.user.findMany({
     where: buildBroadcastRecipientsWhere(segment, { country, sector }),

@@ -1,11 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+const grantCreditsSchema = z.object({
+  amount: z.number().int().positive().max(1_000_000),
+  reason: z.string().trim().max(500).optional().default(""),
+});
+const noteSchema = z.string().trim().max(5000);
 
 /**
  * E8-T04 — gestion membres : suspendre/exclure/réactiver, attribuer des
@@ -50,9 +57,11 @@ export async function grantCredits(
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("membres");
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { success: false, error: "Le nombre de crédits doit être positif." };
+  const parsed = grantCreditsSchema.safeParse({ amount, reason });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
+  ({ amount, reason } = parsed.data);
 
   await prisma.creditBalance.upsert({
     where: { userId },
@@ -81,7 +90,10 @@ export async function grantCredits(
 export async function saveMemberNote(userId: string, note: string): Promise<ActionResult> {
   await requireAdmin("membres");
 
-  await prisma.user.update({ where: { id: userId }, data: { adminNote: note } });
+  const parsed = noteSchema.safeParse(note);
+  if (!parsed.success) return { success: false, error: "Note invalide." };
+
+  await prisma.user.update({ where: { id: userId }, data: { adminNote: parsed.data } });
 
   revalidatePath(`/admin/membres/${userId}`);
   return { success: true, data: undefined };

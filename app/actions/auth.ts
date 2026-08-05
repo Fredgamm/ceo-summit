@@ -12,10 +12,14 @@ import {
   PASSWORD_RESET_TOKEN_TTL_MS,
 } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import ActivationEmail from "@/emails/activation-email";
 import ResetPasswordEmail from "@/emails/reset-password-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+const RATE_LIMITED_ERROR = "Trop de tentatives depuis cette adresse. Réessayez plus tard.";
 
 // ═══════════════════════════════════════════════
 // Parcours revu (1er août 2026) — inscription self-service
@@ -47,6 +51,14 @@ export async function signup(
   confirmPassword: string,
   planId?: string | null
 ): Promise<ActionResult> {
+  // Sprint de correction (5 août 2026, EX-T01) — anti-spam par IP : rien
+  // n'empêchait sinon de créer des comptes en boucle (aucune vérification
+  // d'email requise dans ce parcours self-service, voir plus haut).
+  const rateLimit = await checkRateLimit(`signup:${getClientIp()}`, 5, 60 * 60);
+  if (!rateLimit.allowed) {
+    return { success: false, error: RATE_LIMITED_ERROR };
+  }
+
   const parsed = signupSchema.safeParse({ name, email, password, confirmPassword });
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
@@ -222,6 +234,14 @@ function tierLabel(tier?: "MEMBER" | "EXECUTIVE" | "CHAIRMAN") {
  * activatable account is found.
  */
 export async function requestPasswordReset(email: string): Promise<ActionResult> {
+  // Sprint de correction (5 août 2026, EX-T01) — anti-spam par IP : sans
+  // ça, un même visiteur pouvait déclencher un envoi Resend illimité vers
+  // n'importe quel email existant.
+  const rateLimit = await checkRateLimit(`password-reset:${getClientIp()}`, 5, 60 * 60);
+  if (!rateLimit.allowed) {
+    return { success: false, error: RATE_LIMITED_ERROR };
+  }
+
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Email invalide" };

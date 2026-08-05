@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ContactPanel } from "@/components/deal-room/contact-panel";
 import { ReceivedContactActions } from "@/components/deal-room/received-contact-actions";
+import { WithdrawContactButton } from "@/components/deal-room/withdraw-contact-button";
 import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail opportunité" };
@@ -187,15 +188,28 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
             </Link>
 
             {isAuthor ? (
-              <p className="text-sm text-text-muted">C&apos;est votre opportunité.</p>
+              <>
+                <p className="text-sm text-text-muted">C&apos;est votre opportunité.</p>
+                {(opportunity.status === "REFUSED" ||
+                  opportunity.status === "CHANGES_REQUESTED") && (
+                  <Button asChild variant="outline" className="mt-3 w-full justify-center">
+                    <Link href={`/deal-room/${opportunity.id}/modifier`}>
+                      Modifier et soumettre à nouveau
+                    </Link>
+                  </Button>
+                )}
+              </>
             ) : myContact?.status === "ACCEPTED" ? (
               <Button asChild className="w-full justify-center">
                 <Link href={`/messagerie/${myContact.conversationId}`}>Voir la conversation</Link>
               </Button>
             ) : myContact?.status === "PENDING" ? (
-              <Badge variant="pending" className="w-full justify-center py-2">
-                En attente d&apos;acceptation
-              </Badge>
+              <>
+                <Badge variant="pending" className="w-full justify-center py-2">
+                  En attente d&apos;acceptation
+                </Badge>
+                <WithdrawContactButton contactId={myContact.id} />
+              </>
             ) : myContact?.status === "DECLINED" ? (
               <Badge variant="refused" className="w-full justify-center py-2">
                 Demande refusée

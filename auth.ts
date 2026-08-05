@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const LOGIN_RATE_LIMIT = 10;
+const LOGIN_RATE_WINDOW_SEC = 15 * 60;
 
 /**
  * NextAuth v5 config — Credentials provider only (email + password).
@@ -47,6 +51,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const parsed = credentialsSchema.safeParse(rawCredentials);
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
+
+        // Sprint de correction (5 août 2026, EX-T01) — anti-brute-force :
+        // 10 tentatives / 15 min par email, avant même la requête Prisma
+        // (protège aussi contre la charge d'un brute-force, pas seulement
+        // le compte visé).
+        const rateLimit = await checkRateLimit(
+          `login:${email.toLowerCase()}`,
+          LOGIN_RATE_LIMIT,
+          LOGIN_RATE_WINDOW_SEC
+        );
+        if (!rateLimit.allowed) {
+          throw new Error("RATE_LIMITED");
+        }
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },

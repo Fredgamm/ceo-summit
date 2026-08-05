@@ -10,6 +10,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -36,7 +37,7 @@ import {
   RegistrationLockBusyError,
 } from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { registerForEvent } from "./events";
+import { registerForEvent, cancelEventRegistration } from "./events";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
 const FUTURE_DATE = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -186,5 +187,76 @@ describe("registerForEvent", () => {
 
     expect(result.success).toBe(false);
     expect(prisma.eventRegistration.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelEventRegistration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent());
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+      id: "reg_1",
+      status: "CONFIRMED",
+      checkedIn: false,
+    } as never);
+  });
+
+  it("cancels a confirmed registration for an upcoming event", async () => {
+    const result = await cancelEventRegistration("event_1");
+
+    expect(result.success).toBe(true);
+    expect(prisma.eventRegistration.update).toHaveBeenCalledWith({
+      where: { id: "reg_1" },
+      data: { status: "CANCELLED" },
+    });
+  });
+
+  it("rejects when there is no registration to cancel", async () => {
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue(null);
+
+    const result = await cancelEventRegistration("event_1");
+
+    expect(result.success).toBe(false);
+    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an already-cancelled registration", async () => {
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+      id: "reg_1",
+      status: "CANCELLED",
+      checkedIn: false,
+    } as never);
+
+    const result = await cancelEventRegistration("event_1");
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects cancelling once checked in on-site", async () => {
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+      id: "reg_1",
+      status: "CONFIRMED",
+      checkedIn: true,
+    } as never);
+
+    const result = await cancelEventRegistration("event_1");
+    expect(result.success).toBe(false);
+    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects cancelling a past event", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(
+      makeEvent({ date: new Date("2020-01-01") })
+    );
+
+    const result = await cancelEventRegistration("event_1");
+    expect(result.success).toBe(false);
+    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
+  });
+
+  it("requires authentication", async () => {
+    vi.mocked(auth).mockResolvedValue(null as never);
+    const result = await cancelEventRegistration("event_1");
+    expect(result.success).toBe(false);
   });
 });

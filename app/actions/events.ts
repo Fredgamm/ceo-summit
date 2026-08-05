@@ -134,3 +134,45 @@ export async function registerForEvent(
 
   return { success: true, data: { registrationId: registration.id } };
 }
+
+/**
+ * Sprint de correction (5 août 2026, EX-T01) — un membre inscrit n'avait
+ * auparavant aucun moyen de se désinscrire lui-même. `RegistrationStatus.
+ * CANCELLED` existait déjà dans le schéma mais n'était jamais posé nulle
+ * part. Ne rembourse pas automatiquement un paiement déjà effectué (virement/
+ * mobile money hors plateforme, sans passerelle de paiement en ligne) — un
+ * remboursement reste, comme le paiement lui-même, une démarche manuelle
+ * avec l'équipe CEO Summit.
+ */
+export async function cancelEventRegistration(eventId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return { success: false, error: "Événement introuvable." };
+  if (event.date < new Date()) {
+    return { success: false, error: "Impossible d'annuler une inscription à un évènement passé." };
+  }
+
+  const registration = await prisma.eventRegistration.findUnique({
+    where: { eventId_userId: { eventId, userId: session.user.id } },
+  });
+  if (!registration)
+    return { success: false, error: "Vous n'êtes pas inscrit(e) à cet évènement." };
+  if (registration.status === "CANCELLED") {
+    return { success: false, error: "Cette inscription est déjà annulée." };
+  }
+  if (registration.checkedIn) {
+    return {
+      success: false,
+      error: "Impossible d'annuler une inscription déjà enregistrée sur place.",
+    };
+  }
+
+  await prisma.eventRegistration.update({
+    where: { id: registration.id },
+    data: { status: "CANCELLED" },
+  });
+
+  return { success: true, data: undefined };
+}

@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { OpportunityType, Tier } from "@prisma/client";
 
-import { publishOpportunity } from "@/app/actions/deal-room";
+import { publishOpportunity, resubmitOpportunity } from "@/app/actions/deal-room";
 import { SECTORS } from "@/lib/sectors";
 import { COUNTRIES } from "@/lib/countries";
 import {
@@ -60,17 +60,28 @@ const EMPTY_VALUES: FormValues = {
   attachments: [],
 };
 
-/** E6-T03 — stepper 4 étapes : type+secteur+pays, titre+description, budget+échéance+visibilité+documents, récap. */
+/**
+ * E6-T03 — stepper 4 étapes : type+secteur+pays, titre+description, budget+échéance+visibilité+documents, récap.
+ *
+ * `editOpportunityId`/`initialValues` (sprint de correction du 5 août 2026,
+ * EX-T01) — réédition d'une opportunité REFUSED/CHANGES_REQUESTED : même
+ * formulaire, soumission vers `resubmitOpportunity` au lieu de
+ * `publishOpportunity`, pré-rempli avec les valeurs existantes.
+ */
 export function PublishWizard({
   authorName,
   authorTitle,
+  editOpportunityId,
+  initialValues,
 }: {
   authorName: string;
   authorTitle: string;
+  editOpportunityId?: string;
+  initialValues?: FormValues;
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
-  const [values, setValues] = React.useState<FormValues>(EMPTY_VALUES);
+  const [values, setValues] = React.useState<FormValues>(initialValues ?? EMPTY_VALUES);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -148,7 +159,7 @@ export function PublishWizard({
     setError(null);
     setSubmitting(true);
     try {
-      const result = await publishOpportunity({
+      const payload = {
         type: values.type,
         sector: values.sector,
         country: values.country,
@@ -158,7 +169,19 @@ export function PublishWizard({
         deadline: values.deadline,
         visibility: values.visibility,
         attachments: values.attachments.map((a) => a.key),
-      });
+      };
+
+      if (editOpportunityId) {
+        const result = await resubmitOpportunity(editOpportunityId, payload);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+        router.push(`/deal-room/${editOpportunityId}`);
+        return;
+      }
+
+      const result = await publishOpportunity(payload);
       if (!result.success) {
         setError(result.error);
         return;
@@ -424,7 +447,11 @@ export function PublishWizard({
           <Button onClick={handleNext}>Étape suivante →</Button>
         ) : (
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Envoi…" : "🚀 Soumettre pour publication"}
+            {submitting
+              ? "Envoi…"
+              : editOpportunityId
+                ? "🚀 Resoumettre pour modération"
+                : "🚀 Soumettre pour publication"}
           </Button>
         )}
       </div>

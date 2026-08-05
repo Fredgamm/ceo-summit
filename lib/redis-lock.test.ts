@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/redis", () => ({ getRedisClient: vi.fn(() => redisMock) }));
 
@@ -7,7 +7,16 @@ const redisMock = { set: vi.fn(), del: vi.fn() };
 import { withRedisLock, LockBusyError } from "./redis-lock";
 
 describe("withRedisLock", () => {
-  beforeEach(() => vi.clearAllMocks());
+  const originalRedisUrl = process.env.REDIS_URL;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.REDIS_URL = "redis://localhost:6379";
+  });
+
+  afterEach(() => {
+    process.env.REDIS_URL = originalRedisUrl;
+  });
 
   it("runs the callback and releases the lock when acquisition succeeds", async () => {
     redisMock.set.mockResolvedValue("OK");
@@ -41,5 +50,16 @@ describe("withRedisLock", () => {
     redisMock.set.mockResolvedValue("OK");
     await withRedisLock("lock:x", async () => "ok");
     expect(redisMock.set).toHaveBeenCalledWith("lock:x", expect.any(String), "PX", 5000, "NX");
+  });
+
+  it("degrades to a no-op (runs the callback without locking) when REDIS_URL is not set", async () => {
+    delete process.env.REDIS_URL;
+    const fn = vi.fn().mockResolvedValue("result");
+
+    const result = await withRedisLock("lock:x", fn);
+
+    expect(result).toBe("result");
+    expect(redisMock.set).not.toHaveBeenCalled();
+    expect(redisMock.del).not.toHaveBeenCalled();
   });
 });

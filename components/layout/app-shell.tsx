@@ -26,7 +26,10 @@ export function AppShell({ user, badges, rightPanel, children }: AppShellProps) 
     <div className="flex min-h-screen">
       <MemberSidebar user={user} badges={badges} />
 
-      <main className={cn("min-h-screen flex-1 md:ml-sidebar", rightPanel && "md:mr-right-panel")}>
+      <main
+        id="main-content"
+        className={cn("min-h-screen flex-1 md:ml-sidebar", rightPanel && "md:mr-right-panel")}
+      >
         <div className="p-4 pb-24 md:p-7 md:pb-7">{children}</div>
       </main>
 

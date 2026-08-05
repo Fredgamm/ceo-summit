@@ -49,7 +49,7 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
     <aside className="fixed left-0 top-0 hidden h-screen w-sidebar flex-col overflow-y-auto bg-navy md:flex">
       <div className="border-b border-white/10 px-[18px] py-[18px] pb-3.5">
         <Image src="/logo/ceo-summit-logo-dark.png" alt="CEO Summit" width={140} height={67} />
-        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/40">
+        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/60">
           Océan Indien · Décideurs
         </div>
       </div>
@@ -66,10 +66,10 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
           <div className="truncate text-[13.5px] font-semibold text-white">{user.name}</div>
           <div className="text-[11.5px] text-white/50">{user.tier}</div>
         </div>
-        <span className="text-white/30">›</span>
+        <span className="text-white/60">›</span>
       </Link>
 
-      <nav className="flex-1 py-2.5">
+      <nav className="flex-1 py-2.5" aria-label="Navigation principale">
         {NAV_ITEMS.map((item) => {
           const active = pathname.startsWith(item.href);
           const badge = item.badgeKey ? badges[item.badgeKey] : undefined;

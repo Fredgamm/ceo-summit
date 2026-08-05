@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { AdminRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
@@ -9,6 +10,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 const REFERENTIAL_TYPES = ["sector", "country", "opportunity_type"] as const;
+const referentialLabelSchema = z.string().trim().min(1, "Le libellé est requis").max(100);
 
 function parsePositiveInt(value: string): number | null {
   const n = Number(value);
@@ -67,9 +69,13 @@ export async function createReferentialItem(
 ): Promise<ActionResult<{ id: string }>> {
   await requireAdmin("parametres");
   if (!REFERENTIAL_TYPES.includes(type)) return { success: false, error: "Type invalide." };
-  if (!label.trim()) return { success: false, error: "Le libellé est requis." };
+  const parsedLabel = referentialLabelSchema.safeParse(label);
+  if (!parsedLabel.success) {
+    return { success: false, error: parsedLabel.error.issues[0]?.message ?? "Libellé invalide" };
+  }
+  label = parsedLabel.data;
 
-  const existing = await prisma.referential.findFirst({ where: { type, label: label.trim() } });
+  const existing = await prisma.referential.findFirst({ where: { type, label } });
   if (existing) return { success: false, error: "Cet élément existe déjà." };
 
   const maxPosition = await prisma.referential.aggregate({
@@ -77,7 +83,7 @@ export async function createReferentialItem(
     _max: { position: true },
   });
   const item = await prisma.referential.create({
-    data: { type, label: label.trim(), position: (maxPosition._max.position ?? -1) + 1 },
+    data: { type, label, position: (maxPosition._max.position ?? -1) + 1 },
   });
 
   revalidatePath("/admin/parametres");

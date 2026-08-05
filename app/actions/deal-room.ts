@@ -195,11 +195,46 @@ export async function acceptOpportunityContact(
   return { success: true, data: { conversationId: conversation.id } };
 }
 
+/**
+ * Sprint de correction (5 août 2026, EX-T01) — le crédit dépensé par
+ * l'initiateur pour "prendre contact" n'était jamais remboursé si la
+ * demande n'aboutissait pas (déclinée, ou retirée par l'initiateur
+ * lui-même faute de réponse — voir withdrawOpportunityContact). Partagé
+ * entre les deux, seule la vérification d'autorisation diffère à l'appel.
+ */
+async function refundAndDeclineContact(contact: {
+  id: string;
+  initiatorId: string;
+  creditsSpent: number;
+  opportunity: { title: string };
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.opportunityContact.update({ where: { id: contact.id }, data: { status: "DECLINED" } });
+    if (contact.creditsSpent > 0) {
+      await tx.creditBalance.update({
+        where: { userId: contact.initiatorId },
+        data: { used: { decrement: contact.creditsSpent } },
+      });
+      await tx.creditTransaction.create({
+        data: {
+          userId: contact.initiatorId,
+          amount: contact.creditsSpent,
+          type: "REFUND",
+          reason: `Remboursement — contact non abouti (${contact.opportunity.title})`,
+        },
+      });
+    }
+  });
+}
+
 export async function declineOpportunityContact(contactId: string): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
 
-  const contact = await prisma.opportunityContact.findUnique({ where: { id: contactId } });
+  const contact = await prisma.opportunityContact.findUnique({
+    where: { id: contactId },
+    include: { opportunity: { select: { title: true } } },
+  });
   if (!contact || contact.receiverId !== session.user.id) {
     return { success: false, error: "Demande introuvable." };
   }
@@ -207,11 +242,103 @@ export async function declineOpportunityContact(contactId: string): Promise<Acti
     return { success: false, error: "Cette demande a déjà été traitée." };
   }
 
-  await prisma.opportunityContact.update({
-    where: { id: contactId },
-    data: { status: "DECLINED" },
-  });
+  await refundAndDeclineContact(contact);
 
   revalidatePath(`/deal-room/${contact.opportunityId}`);
+  return { success: true, data: undefined };
+}
+
+/**
+ * Sprint de correction (5 août 2026, EX-T01) — l'initiateur d'une demande de
+ * contact restée sans réponse n'avait auparavant aucun moyen d'agir : ni
+ * récupérer son crédit, ni relancer ailleurs. Il peut désormais retirer
+ * lui-même sa demande, ce qui la clôt et rembourse le crédit dépensé —
+ * couvre le cas "jamais répondu" sans nécessiter de tâche planifiée
+ * (aucune infra de cron dans ce projet, voir BACKLOG_DEV.md).
+ */
+export async function withdrawOpportunityContact(contactId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const contact = await prisma.opportunityContact.findUnique({
+    where: { id: contactId },
+    include: { opportunity: { select: { title: true } } },
+  });
+  if (!contact || contact.initiatorId !== session.user.id) {
+    return { success: false, error: "Demande introuvable." };
+  }
+  if (contact.status !== "PENDING") {
+    return { success: false, error: "Cette demande a déjà été traitée." };
+  }
+
+  await refundAndDeclineContact(contact);
+
+  revalidatePath(`/deal-room/${contact.opportunityId}`);
+  return { success: true, data: undefined };
+}
+
+/**
+ * Sprint de correction (5 août 2026, EX-T01) — une opportunité refusée ou
+ * "modifications demandées" par la modération n'avait auparavant aucun
+ * chemin de retour : l'auteur ne pouvait ni la corriger ni la resoumettre.
+ * Repasse par la même validation que la publication initiale et revient en
+ * `PENDING_MODERATION`, note de modération remise à zéro.
+ */
+export async function resubmitOpportunity(
+  opportunityId: string,
+  input: unknown
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const opportunity = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
+  if (!opportunity || opportunity.authorId !== session.user.id) {
+    return { success: false, error: "Opportunité introuvable." };
+  }
+  if (opportunity.status !== "REFUSED" && opportunity.status !== "CHANGES_REQUESTED") {
+    return {
+      success: false,
+      error: "Seule une opportunité refusée ou à modifier peut être resoumise.",
+    };
+  }
+
+  const parsed = opportunityFormSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+  const f = parsed.data;
+
+  const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
+  if (!viewer) return { success: false, error: "Non authentifié." };
+
+  await prisma.opportunity.update({
+    where: { id: opportunityId },
+    data: {
+      title: f.title,
+      type: f.type,
+      sector: f.sector,
+      country: f.country,
+      description: f.description,
+      budget: f.budget.trim() ? parseInt(f.budget, 10) : null,
+      deadline: f.deadline.trim() ? new Date(f.deadline) : null,
+      visibility: f.visibility,
+      attachments: f.attachments,
+      status: "PENDING_MODERATION",
+      moderationNote: null,
+      moderatedById: null,
+      moderatedAt: null,
+    },
+  });
+
+  if (process.env.ADMIN_ALERT_EMAIL) {
+    await sendTransactionalEmail({
+      to: process.env.ADMIN_ALERT_EMAIL,
+      subject: `Opportunité resoumise à modérer — ${f.title}`,
+      react: AdminOpportunityAlertEmail({ authorName: viewer.name, opportunityTitle: f.title }),
+    });
+  }
+
+  revalidatePath(`/deal-room/${opportunityId}`);
+  revalidatePath("/deal-room");
   return { success: true, data: undefined };
 }

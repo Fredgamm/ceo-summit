@@ -122,7 +122,7 @@ export function AdminSidebar({ admin, badges = {} }: AdminSidebarProps) {
     <aside className="fixed left-0 top-0 flex h-screen w-sidebar-bo flex-col overflow-y-auto bg-navy-dark">
       <div className="border-b border-white/[0.08] px-5 py-[14px]">
         <Image src="/logo/ceo-summit-logo-dark.png" alt="CEO Summit" width={150} height={72} />
-        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/40">
+        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/60">
           Océan Indien · Décideurs
         </div>
         <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-navy">
@@ -130,10 +130,10 @@ export function AdminSidebar({ admin, badges = {} }: AdminSidebarProps) {
         </div>
       </div>
 
-      <div className="flex-1 py-2">
+      <nav className="flex-1 py-2" aria-label="Navigation admin">
         {visibleSections.map((section) => (
           <div key={section.title}>
-            <div className="px-[18px] pb-[5px] pt-3.5 text-[10px] uppercase tracking-wide text-white/30">
+            <div className="px-[18px] pb-[5px] pt-3.5 text-[10px] uppercase tracking-wide text-white/60">
               {section.title}
             </div>
             {section.items.map((item) => {
@@ -160,7 +160,7 @@ export function AdminSidebar({ admin, badges = {} }: AdminSidebarProps) {
             })}
           </div>
         ))}
-      </div>
+      </nav>
 
       <div className="border-t border-white/[0.08] p-4">
         <div className="mb-2 text-[12.5px]">

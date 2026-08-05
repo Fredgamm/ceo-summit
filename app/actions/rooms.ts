@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -9,10 +10,13 @@ import AdminRoomReportAlertEmail from "@/emails/admin-room-report-alert-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
+const idSchema = z.string().min(1);
+
 /** E4-T02 — badge "nouveau message" : marque la salle comme lue à l'instant présent. */
 export async function markRoomAsRead(roomId: string): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  if (!idSchema.safeParse(roomId).success) return { success: false, error: "Requête invalide." };
 
   await prisma.roomRead.upsert({
     where: { roomId_userId: { roomId, userId: session.user.id } },
@@ -27,6 +31,9 @@ export async function markRoomAsRead(roomId: string): Promise<ActionResult> {
 export async function reportRoomMessage(roomMessageId: string): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  if (!idSchema.safeParse(roomMessageId).success) {
+    return { success: false, error: "Requête invalide." };
+  }
 
   const message = await prisma.roomMessage.findUnique({
     where: { id: roomMessageId },

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/redis", () => ({
   getRedisClient: vi.fn(() => redisMock),
@@ -12,8 +12,15 @@ const redisMock = {
 import { withEventRegistrationLock, RegistrationLockBusyError } from "./event-registration-lock";
 
 describe("withEventRegistrationLock", () => {
+  const originalRedisUrl = process.env.REDIS_URL;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.REDIS_URL = "redis://localhost:6379";
+  });
+
+  afterEach(() => {
+    process.env.REDIS_URL = originalRedisUrl;
   });
 
   it("runs the callback and releases the lock when acquisition succeeds", async () => {

@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
+import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
 import { formatAriary, formatDateFr, initials, meetsMinTier, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail événement" };
@@ -206,6 +207,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
                   <Button asChild variant="outline" className="mt-2 w-full justify-center">
                     <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
                   </Button>
+                  {!isPast && <CancelRegistrationButton eventId={event.id} />}
                 </>
               ) : isPast ? (
                 <Button disabled className="mt-4 w-full justify-center">

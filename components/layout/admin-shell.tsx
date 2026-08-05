@@ -35,7 +35,9 @@ export function AdminShell({
           {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
         </div>
 
-        <div className="flex-1 p-7">{children}</div>
+        <main id="main-content" className="flex-1 p-7">
+          {children}
+        </main>
       </div>
     </div>
   );

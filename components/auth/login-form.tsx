@@ -30,6 +30,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   ACCOUNT_EXPIRED: "Votre adhésion a expiré. Contactez l'équipe CEO Summit pour la renouveler.",
   ACCOUNT_PENDING_ACTIVATION:
     "Ce compte n'a pas encore été activé. Demandez un nouveau lien d'activation ci-dessous.",
+  RATE_LIMITED: "Trop de tentatives de connexion. Réessayez dans quelques minutes.",
 };
 
 export function LoginForm() {

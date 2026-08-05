@@ -51,7 +51,7 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <div className="mt-auto border-t border-white/10 pt-10 text-xs text-white/30">
+        <div className="mt-auto border-t border-white/10 pt-10 text-xs text-white/60">
           CEO Summit © 2026 — Plateforme réservée aux membres
         </div>
       </div>
