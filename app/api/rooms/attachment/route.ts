@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadPrivateObject } from "@/lib/r2";
 import { meetsRoomAccess } from "@/lib/rooms-query";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import {
   ROOM_ATTACHMENT_MAX_BYTES,
   ROOM_ATTACHMENT_ALLOWED_MIME_TYPES,
@@ -47,13 +48,13 @@ export async function POST(req: Request) {
     prisma.room.findUnique({ where: { id: roomId } }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+      include: VIEWER_TIER_INCLUDE,
     }),
   ]);
   if (!room || room.status !== "ACTIVE") {
     return NextResponse.json({ error: "Salle introuvable." }, { status: 404 });
   }
-  if (!viewer || !meetsRoomAccess(viewer.memberships[0]?.tier ?? null, room.minTier)) {
+  if (!viewer || !meetsRoomAccess(getViewerTierFromCompany(viewer.company), room.minTier)) {
     return NextResponse.json({ error: "Accès non autorisé à cette salle." }, { status: 403 });
   }
 

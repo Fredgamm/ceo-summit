@@ -35,7 +35,7 @@ describe("POST /api/rooms/attachment", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      memberships: [{ tier: "MEMBER" }],
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
   });
 

@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildConversationsWhere, otherParticipantId } from "@/lib/conversations-query";
 import { decryptMessageContent } from "@/lib/message-crypto";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   ConversationList,
@@ -24,7 +25,7 @@ export default async function MessagerieLayout({ children }: { children: React.R
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
@@ -68,7 +69,7 @@ export default async function MessagerieLayout({ children }: { children: React.R
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewer.memberships[0]?.tier),
+        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}

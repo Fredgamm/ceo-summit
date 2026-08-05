@@ -1,4 +1,4 @@
-import type { Plan, PlanScope } from "@prisma/client";
+import type { Plan } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -23,14 +23,13 @@ import { prisma } from "@/lib/prisma";
  * évènement passé. Passer un id explicite pour lister les offres d'un
  * évènement précis (page publique de l'évènement, admin évènement).
  */
-export async function getActivePlans(
-  scope?: PlanScope,
-  opts?: { selfServiceOnly?: boolean; eventId?: string }
-): Promise<Plan[]> {
+export async function getActivePlans(opts?: {
+  selfServiceOnly?: boolean;
+  eventId?: string;
+}): Promise<Plan[]> {
   return prisma.plan.findMany({
     where: {
       isActive: true,
-      ...(scope ? { scope } : {}),
       ...(opts?.selfServiceOnly ? { isSelfService: true } : {}),
       eventId: opts?.eventId ?? null,
     },

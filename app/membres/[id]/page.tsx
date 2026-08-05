@@ -6,6 +6,7 @@ import { Building2, Handshake, Briefcase, Linkedin } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -34,28 +35,25 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
 
   const user = await prisma.user.findUnique({
     where: { id: params.id },
-    include: {
-      company: true,
-      memberships: { where: { status: "ACTIVE" }, orderBy: { endDate: "desc" }, take: 1 },
-    },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!user) notFound();
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
   const isSelf = viewer.id === user.id;
-  const tier = user.memberships[0]?.tier;
+  const tier = getViewerTierFromCompany(user.company);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewer.memberships[0]?.tier),
+        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}

@@ -6,9 +6,14 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    plan: { create: vi.fn(), update: vi.fn(), delete: vi.fn(), findUnique: vi.fn() },
+    plan: {
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      findUnique: vi.fn(),
+      count: vi.fn(),
+    },
     user: { count: vi.fn() },
-    membership: { count: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -24,7 +29,6 @@ const VALID_PLAN_INPUT = {
   name: "Sponsor Or",
   slug: "sponsor-or",
   description: "Offre sponsor niveau or",
-  scope: "COMPANY" as const,
   priceAr: 5_000_000,
   maxTeamMembers: 20,
   minParticipants: null,
@@ -42,7 +46,7 @@ beforeEach(() => {
   vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
   vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
   vi.mocked(prisma.user.count).mockResolvedValue(0);
-  vi.mocked(prisma.membership.count).mockResolvedValue(0);
+  vi.mocked(prisma.plan.count).mockResolvedValue(0);
   vi.mocked(prisma.plan.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
     const list = ops as Promise<unknown>[];
@@ -59,7 +63,7 @@ describe("createPlan", () => {
     expect(result).toEqual({ success: true, data: { id: "plan_1" } });
     expect(prisma.plan.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ name: "Sponsor Or", scope: "COMPANY", rank: 4 }),
+        data: expect.objectContaining({ name: "Sponsor Or", rank: 4 }),
       })
     );
     expect(prisma.auditLog.create).toHaveBeenCalledWith(
@@ -128,14 +132,21 @@ describe("togglePlanActive", () => {
 });
 
 describe("deletePlan", () => {
-  it("deletes a plan with no members/memberships attached", async () => {
+  it("deletes a plan with no members/linked event offers attached", async () => {
     const result = await deletePlan("plan_1");
     expect(result.success).toBe(true);
     expect(prisma.plan.delete).toHaveBeenCalledWith({ where: { id: "plan_1" } });
   });
 
-  it("refuses to delete a plan still in use", async () => {
+  it("refuses to delete a plan still in use by members", async () => {
     vi.mocked(prisma.user.count).mockResolvedValue(3);
+    const result = await deletePlan("plan_1");
+    expect(result.success).toBe(false);
+    expect(prisma.plan.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a platform plan still referenced by an event offer", async () => {
+    vi.mocked(prisma.plan.count).mockResolvedValue(2);
     const result = await deletePlan("plan_1");
     expect(result.success).toBe(false);
     expect(prisma.plan.delete).not.toHaveBeenCalled();

@@ -4,7 +4,7 @@ vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    membership: { findMany: vi.fn() },
+    companyPayment: { findMany: vi.fn() },
     eventRegistration: { findMany: vi.fn() },
     creditPurchase: { findMany: vi.fn() },
   },
@@ -21,13 +21,16 @@ describe("GET /api/admin/finances/export", () => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
-    vi.mocked(prisma.membership.findMany).mockResolvedValue([
+    vi.mocked(prisma.companyPayment.findMany).mockResolvedValue([
       {
         id: "m1",
-        tier: "CHAIRMAN",
-        price: 1_500_000,
+        amount: 1_500_000,
+        method: "VIREMENT",
         createdAt: new Date("2026-01-15"),
-        user: { name: "Sarah R." },
+        companySubscription: {
+          company: { name: "Sarah R." },
+          plan: { name: "Chairman (démo)" },
+        },
       },
     ] as never);
     vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([

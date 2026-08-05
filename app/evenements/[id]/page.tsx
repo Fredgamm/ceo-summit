@@ -9,11 +9,11 @@ import { eventCapacityBadge } from "@/lib/events-query";
 import { getActivePlans } from "@/lib/plans-query";
 import { parseProgram, parseSpeakers } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { IndividualPlanPicker } from "@/components/adhesion/individual-plan-picker";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { formatAriary, formatDateFr, initials, meetsMinTier, tierLabel } from "@/lib/utils";
 
@@ -32,10 +32,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: {
-      memberships: { where: { status: "ACTIVE" }, take: 1 },
-      company: { select: { id: true, companyAdminId: true } },
-    },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
@@ -57,12 +54,10 @@ export default async function EventDetailPage({ params }: { params: { id: string
    * configurées, elles remplacent l'ancien bouton simple d'inscription
    * (virement/mobile money, sans preuve) pour éviter un double mécanisme.
    */
-  const eventOffers = await getActivePlans(undefined, { selfServiceOnly: true, eventId: event.id });
-  const individualOffers = eventOffers.filter((p) => p.scope === "INDIVIDUAL");
-  const companyOffers = eventOffers.filter((p) => p.scope === "COMPANY");
+  const eventOffers = await getActivePlans({ selfServiceOnly: true, eventId: event.id });
   const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
 
-  const viewerTier = viewer.memberships[0]?.tier;
+  const viewerTier = getViewerTierFromCompany(viewer.company);
   const tierOk = meetsMinTier(viewerTier, event.minTier);
   const isRegistered = event.registrations.some((r) => r.user.id === viewer.id);
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
@@ -169,40 +164,30 @@ export default async function EventDetailPage({ params }: { params: { id: string
         <aside className="flex flex-col gap-4">
           {eventOffers.length > 0 && !isRegistered && !isPast ? (
             <div className="flex flex-col gap-4">
-              {individualOffers.length > 0 && (
-                <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
-                    Pass individuel
-                  </p>
-                  <IndividualPlanPicker plans={individualOffers} />
-                </div>
-              )}
-              {companyOffers.length > 0 && (
-                <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
-                  <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
-                    Pass entreprise
-                  </p>
-                  {viewer.company ? (
-                    isCompanyAdmin ? (
-                      <PlanPicker companyId={viewer.company.id} plans={companyOffers} />
-                    ) : (
-                      <p className="text-sm text-text-muted">
-                        Seul l&apos;admin de votre entreprise peut choisir un pass entreprise.
-                      </p>
-                    )
+              <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
+                  Pass entreprise
+                </p>
+                {viewer.company ? (
+                  isCompanyAdmin ? (
+                    <PlanPicker companyId={viewer.company.id} plans={eventOffers} />
                   ) : (
-                    <div className="flex flex-col gap-2">
-                      {companyOffers.map((plan) => (
-                        <Button key={plan.id} asChild variant="outline" className="justify-center">
-                          <Link href={`/entreprise/creer?offre=${plan.slug}`}>
-                            {plan.name} — {formatAriary(plan.priceAr)}/participant
-                          </Link>
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                    <p className="text-sm text-text-muted">
+                      Seul l&apos;admin de votre entreprise peut choisir un pass entreprise.
+                    </p>
+                  )
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {eventOffers.map((plan) => (
+                      <Button key={plan.id} asChild variant="outline" className="justify-center">
+                        <Link href={`/entreprise/creer?offre=${plan.slug}`}>
+                          {plan.name} — {formatAriary(plan.priceAr)}/participant
+                        </Link>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5 text-center">

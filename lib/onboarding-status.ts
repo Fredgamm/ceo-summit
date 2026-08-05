@@ -35,38 +35,6 @@ export interface OnboardingStatusItem {
   done: boolean;
 }
 
-export type MembershipStatusLike =
-  | "PENDING_PAYMENT"
-  | "PENDING_REVIEW"
-  | "ACTIVE"
-  | "EXPIRED"
-  | "SUSPENDED"
-  | "CANCELLED"
-  | null
-  | undefined;
-
-/**
- * Phase 2ter (1er août 2026) — statut de dossier pour une adhésion
- * individuelle. Une fonction séparée, pas un forçage de
- * `getOnboardingStatus` (pensée pour le parcours entreprise, avec des
- * étapes — "collaborateurs", "invitations" — qui n'ont pas de sens ici) :
- * un individuel n'a que 5 étapes réelles, pas 9.
- */
-export function getIndividualOnboardingStatus(
-  membershipStatus: MembershipStatusLike
-): OnboardingStatusItem[] {
-  const paymentSubmitted = membershipStatus === "PENDING_REVIEW" || membershipStatus === "ACTIVE";
-  const accessActive = membershipStatus === "ACTIVE";
-
-  return [
-    { key: "account", label: "Compte créé", done: true },
-    { key: "plan", label: "Offre sélectionnée", done: membershipStatus != null },
-    { key: "payment_submitted", label: "Paiement soumis", done: paymentSubmitted },
-    { key: "admin_review", label: "Vérification par l'administration", done: paymentSubmitted },
-    { key: "access_active", label: "Accès activé", done: accessActive },
-  ];
-}
-
 export function getOnboardingStatus(input: OnboardingStatusInput): OnboardingStatusItem[] {
   const { hasCompany, hasInvites, subscriptionStatus } = input;
 

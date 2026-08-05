@@ -101,7 +101,7 @@ describe("room:join", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      memberships: [{ tier: "MEMBER" }],
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
 
@@ -125,7 +125,7 @@ describe("room:join", () => {
       minTier: "CHAIRMAN_ONLY",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      memberships: [{ tier: "MEMBER" }],
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
 
     const client = await connect("user_1");
@@ -140,7 +140,7 @@ describe("room:join", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      memberships: [{ tier: "MEMBER" }],
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue({ id: "susp_1" } as never);
 
@@ -158,7 +158,7 @@ describe("room:message", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      memberships: [{ tier: "MEMBER" }],
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
     await new Promise((resolve) => client.emit("room:join", roomId, resolve));

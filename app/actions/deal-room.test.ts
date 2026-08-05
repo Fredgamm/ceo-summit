@@ -74,7 +74,7 @@ function makeViewer(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
-    memberships: [{ tier: "EXECUTIVE" }],
+    company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     ...overrides,
   } as never;
 }
@@ -152,7 +152,7 @@ describe("contactOpportunityAuthor", () => {
   it("bypasses the balance check and spends 0 credits for a Chairman", async () => {
     vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
     vi.mocked(prisma.user.findUnique).mockResolvedValue(
-      makeViewer({ memberships: [{ tier: "CHAIRMAN" }] })
+      makeViewer({ company: { subscription: { status: "ACTIVE", plan: { rank: 3 } } } })
     );
 
     const result = await contactOpportunityAuthor("opp_1");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getOnboardingStatus, getIndividualOnboardingStatus } from "./onboarding-status";
+import { getOnboardingStatus } from "./onboarding-status";
 
 describe("getOnboardingStatus", () => {
   it("marks only the account as done right after signup, before any company", () => {
@@ -47,34 +47,6 @@ describe("getOnboardingStatus", () => {
       hasInvites: true,
       subscriptionStatus: "ACTIVE",
     });
-    expect(items.every((i) => i.done)).toBe(true);
-  });
-});
-
-describe("getIndividualOnboardingStatus", () => {
-  it("marks only the account as done before any plan is selected", () => {
-    const done = getIndividualOnboardingStatus(null)
-      .filter((i) => i.done)
-      .map((i) => i.key);
-    expect(done).toEqual(["account"]);
-  });
-
-  it("marks offer selected once a Membership exists in PENDING_PAYMENT", () => {
-    const done = getIndividualOnboardingStatus("PENDING_PAYMENT")
-      .filter((i) => i.done)
-      .map((i) => i.key);
-    expect(done).toEqual(["account", "plan"]);
-  });
-
-  it("marks payment-submitted and admin-review together at PENDING_REVIEW", () => {
-    const done = getIndividualOnboardingStatus("PENDING_REVIEW")
-      .filter((i) => i.done)
-      .map((i) => i.key);
-    expect(done).toEqual(["account", "plan", "payment_submitted", "admin_review"]);
-  });
-
-  it("marks every item done once ACTIVE", () => {
-    const items = getIndividualOnboardingStatus("ACTIVE");
     expect(items.every((i) => i.done)).toBe(true);
   });
 });

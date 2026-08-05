@@ -7,6 +7,7 @@ import { Server, type Socket } from "socket.io";
 
 import { prisma } from "../lib/prisma";
 import { meetsRoomAccess } from "../lib/rooms-query";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "../lib/plan-access";
 import { encryptMessageContent } from "../lib/message-crypto";
 import { getSignedDownloadUrl } from "../lib/r2";
 import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
@@ -56,9 +57,9 @@ async function handleJoin(io: Server, socket: Socket, roomId: string): Promise<J
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
-  const tier = user?.memberships[0]?.tier ?? null;
+  const tier = getViewerTierFromCompany(user?.company);
   if (!meetsRoomAccess(tier, room.minTier)) return { ok: false, error: "forbidden" };
 
   const suspension = await prisma.roomSuspension.findFirst({

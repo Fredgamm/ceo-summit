@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { opportunityFormSchema } from "@/lib/validations/opportunity";
 import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
 import { getOrCreateConversation } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
 import OpportunityContactRequestEmail from "@/emails/opportunity-contact-request-email";
@@ -77,7 +78,7 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+      include: VIEWER_TIER_INCLUDE,
     }),
   ]);
 
@@ -96,7 +97,7 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
     return { success: false, error: "Vous avez déjà pris contact pour cette opportunité." };
   }
 
-  const isChairman = viewer.memberships[0]?.tier === "CHAIRMAN";
+  const isChairman = getViewerTierFromCompany(viewer.company) === "CHAIRMAN";
 
   try {
     await withCreditDeductionLock(viewer.id, () =>

@@ -94,7 +94,10 @@ async function main() {
     create: { userId: admin.id, role: "SUPER_ADMIN" },
   });
 
-  // ── Demo Chairman member (for local dev) ──
+  // ── Demo Chairman-equivalent member (for local dev) ──
+  // 4 août 2026 (CEO Summit devenu intégralement B2B) — plus de Membership
+  // personnel : le tier vient désormais du rang de l'offre plateforme de
+  // l'entreprise (lib/plan-access.ts::getViewerTierFromCompany).
   const demoPassword = await bcrypt.hash("Demo1234!", 12);
   const demoMember = await prisma.user.upsert({
     where: { email: "demo@ceosummit.mg" },
@@ -111,14 +114,44 @@ async function main() {
     },
   });
 
-  await prisma.membership.create({
-    data: {
-      userId: demoMember.id,
-      tier: Tier.CHAIRMAN,
+  const demoPlan = await prisma.plan.upsert({
+    where: { slug: "demo-chairman" },
+    update: {},
+    create: {
+      name: "Chairman (démo)",
+      slug: "demo-chairman",
+      priceAr: 1500000,
+      includedCredits: 0,
+      hasUnlimitedCredits: true,
+      rank: 3,
+      isActive: true,
+      isSelfService: false,
+    },
+  });
+
+  const demoCompany = await prisma.company.upsert({
+    where: { id: "demo-company-seed" },
+    update: {},
+    create: {
+      id: "demo-company-seed",
+      name: "Razanamahery Group",
+      sector: "Finance",
+      country: "Madagascar",
+      companyAdminId: demoMember.id,
+    },
+  });
+
+  await prisma.user.update({ where: { id: demoMember.id }, data: { companyId: demoCompany.id } });
+
+  await prisma.companySubscription.upsert({
+    where: { companyId: demoCompany.id },
+    update: {},
+    create: {
+      companyId: demoCompany.id,
+      planId: demoPlan.id,
+      status: "ACTIVE",
       startDate: new Date("2026-01-15"),
       endDate: new Date("2027-01-15"),
-      status: MembershipStatus.ACTIVE,
-      price: 1500000,
     },
   });
 

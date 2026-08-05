@@ -2,6 +2,7 @@ import type { Prisma, Tier } from "@prisma/client";
 
 import { SERVICE_CATEGORIES } from "@/lib/service-categories";
 import { COUNTRIES } from "@/lib/countries";
+import { legacyTierRank } from "@/lib/plan-access";
 
 /** E5-T01 — pure filter/pagination logic for `/catalogue/services`, same rationale as lib/deal-room-query.ts. */
 
@@ -48,7 +49,18 @@ export function buildServicesQuery(params: ServicesSearchParams): ServicesQuery 
   }
 
   if (params.tier && TIER_VALUES.includes(params.tier as Tier)) {
-    where.author = { memberships: { some: { status: "ACTIVE", tier: params.tier as Tier } } };
+    // 4 août 2026 (CEO Summit devenu intégralement B2B) — le tier n'est plus
+    // stocké par utilisateur, il est dérivé du rang de l'offre plateforme de
+    // son entreprise (voir lib/plan-access.ts). Filtre par seuil minimum
+    // (même sémantique que meetsMinRank ailleurs), pas par bucket exact.
+    where.author = {
+      company: {
+        subscription: {
+          status: { in: ["ACTIVE", "EXPIRED"] },
+          plan: { rank: { gte: legacyTierRank(params.tier) } },
+        },
+      },
+    };
   }
 
   if (params.q?.trim()) {

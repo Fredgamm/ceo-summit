@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
 import { buildActivityFeed, buildMonthlyRevenueSeries, computeMRR } from "@/lib/admin-dashboard";
+import { buildBroadcastRecipientsWhere } from "@/lib/broadcast-segments";
 import { RevenueChart } from "@/components/admin/revenue-chart";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,23 +26,43 @@ const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
  */
 export default async function AdminDashboardPage() {
   const [
-    activeByRole,
-    activeMemberships,
-    allMembershipsForRevenue,
+    activeUsersCount,
+    chairmanCount,
+    executiveCount,
+    activeSubscriptions,
+    allCompanyPaymentsForRevenue,
     paidEventRegistrations,
     pendingApplications,
     pendingEventPayments,
     pendingReports,
     upcomingEvents,
-    recentMemberships,
+    recentCompanyPayments,
     recentRegistrations,
   ] = await Promise.all([
-    prisma.user.groupBy({ by: ["role"], where: { status: "ACTIVE" }, _count: { _all: true } }),
-    prisma.membership.findMany({
-      where: { status: "ACTIVE" },
-      select: { price: true, startDate: true, endDate: true },
+    prisma.user.count({ where: { status: "ACTIVE" } }),
+    prisma.user.count({
+      where: { status: "ACTIVE", ...buildBroadcastRecipientsWhere("CHAIRMAN") },
     }),
-    prisma.membership.findMany({ select: { price: true, createdAt: true } }),
+    prisma.user.count({
+      where: { status: "ACTIVE", ...buildBroadcastRecipientsWhere("EXECUTIVE") },
+    }),
+    prisma.companySubscription.findMany({
+      where: { status: { in: ["ACTIVE", "EXPIRED"] } },
+      select: {
+        startDate: true,
+        endDate: true,
+        payments: {
+          where: { status: "CONFIRMED" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { amount: true },
+        },
+      },
+    }),
+    prisma.companyPayment.findMany({
+      where: { status: "CONFIRMED", reviewedAt: { not: null } },
+      select: { amount: true, reviewedAt: true },
+    }),
     prisma.eventRegistration.findMany({
       where: { paymentStatus: "PAID" },
       select: { createdAt: true, event: { select: { price: true } } },
@@ -65,10 +86,15 @@ export default async function AdminDashboardPage() {
         },
       },
     }),
-    prisma.membership.findMany({
+    prisma.companyPayment.findMany({
+      where: { status: "CONFIRMED" },
       orderBy: { createdAt: "desc" },
       take: 5,
-      include: { user: { select: { name: true } } },
+      include: {
+        companySubscription: {
+          include: { company: { select: { name: true } }, plan: { select: { name: true } } },
+        },
+      },
     }),
     prisma.eventRegistration.findMany({
       orderBy: { createdAt: "desc" },
@@ -77,19 +103,25 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  const activeMembersCount = activeByRole.reduce((sum, r) => sum + r._count._all, 0);
-  const roleCounts = Object.fromEntries(activeByRole.map((r) => [r.role, r._count._all]));
+  const roleCounts = { CHAIRMAN: chairmanCount, EXECUTIVE: executiveCount };
 
-  // Phase 2ter (1er août 2026) — filtre défensif, voir admin/finances/page.tsx.
+  // Un abonnement ACTIVE/EXPIRED a toujours des dates réelles — filtre
+  // défensif, voir admin/finances/page.tsx.
   const mrr = computeMRR(
-    activeMemberships.filter(
-      (m): m is typeof m & { startDate: Date; endDate: Date } =>
-        m.startDate != null && m.endDate != null
-    )
+    activeSubscriptions
+      .filter(
+        (s): s is typeof s & { startDate: Date; endDate: Date } =>
+          s.startDate != null && s.endDate != null
+      )
+      .map((s) => ({
+        price: s.payments[0]?.amount ?? 0,
+        startDate: s.startDate,
+        endDate: s.endDate,
+      }))
   );
 
   const revenueEntries = [
-    ...allMembershipsForRevenue.map((m) => ({ amount: m.price, date: m.createdAt })),
+    ...allCompanyPaymentsForRevenue.map((p) => ({ amount: p.amount, date: p.reviewedAt! })),
     ...paidEventRegistrations.map((r) => ({ amount: r.event.price, date: r.createdAt })),
   ];
   const revenueSeries = buildMonthlyRevenueSeries(revenueEntries, 12);
@@ -98,10 +130,10 @@ export default async function AdminDashboardPage() {
 
   const activity = buildActivityFeed(
     [
-      ...recentMemberships.map((m) => ({
-        type: "membership",
-        message: `Adhésion — ${m.user.name} (${tierLabel(m.tier)}, ${formatAriary(m.price)})`,
-        date: m.createdAt,
+      ...recentCompanyPayments.map((p) => ({
+        type: "company_payment",
+        message: `Paiement confirmé — ${p.companySubscription.company.name} (${p.companySubscription.plan.name}, ${formatAriary(p.amount)})`,
+        date: p.createdAt,
       })),
       ...recentRegistrations.map((r) => ({
         type: "registration",
@@ -148,11 +180,10 @@ export default async function AdminDashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-navy">{activeMembersCount}</p>
+            <p className="text-2xl font-bold text-navy">{activeUsersCount}</p>
             <p className="text-sm text-text-muted">Membres actifs</p>
             <p className="mt-2 text-xs text-text-muted">
-              {roleCounts.CHAIRMAN ?? 0} Chairman · {roleCounts.EXECUTIVE ?? 0} Executive ·{" "}
-              {roleCounts.MEMBER ?? 0} Member
+              {roleCounts.CHAIRMAN} Chairman · {roleCounts.EXECUTIVE} Executive
             </p>
           </CardContent>
         </Card>
@@ -161,7 +192,7 @@ export default async function AdminDashboardPage() {
             <p className="text-2xl font-bold text-navy">{formatAriary(mrr)}</p>
             <p className="text-sm text-text-muted">MRR estimé</p>
             <p className="mt-2 text-xs text-text-muted">
-              Membership actif, réparti sur la durée du terme
+              Abonnement entreprise actif, réparti sur la durée du terme
             </p>
           </CardContent>
         </Card>

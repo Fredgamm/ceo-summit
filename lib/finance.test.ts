@@ -103,7 +103,7 @@ describe("buildExpiringWithinDays", () => {
 describe("mergeFinanceTransactions", () => {
   const make = (id: string, date: string): FinanceTransaction => ({
     id,
-    source: "MEMBERSHIP",
+    source: "COMPANY",
     memberName: "X",
     description: "d",
     amount: 1,

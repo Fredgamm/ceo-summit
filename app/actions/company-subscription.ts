@@ -32,7 +32,7 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
   }
 
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
-  if (!plan || !plan.isActive || plan.scope !== "COMPANY") {
+  if (!plan || !plan.isActive) {
     return { success: false, error: "Offre invalide." };
   }
 

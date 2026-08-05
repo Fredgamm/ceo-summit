@@ -11,6 +11,7 @@ import {
   type DealRoomSearchParams,
 } from "@/lib/deal-room-query";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { DealRoomFilters } from "@/components/deal-room/deal-room-filters";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
@@ -32,11 +33,11 @@ export default async function DealRoomPage({
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 }, creditBalance: true },
+    include: { creditBalance: true, ...VIEWER_TIER_INCLUDE },
   });
   if (!viewer) redirect("/login");
 
-  const viewerTier = viewer.memberships[0]?.tier ?? null;
+  const viewerTier = getViewerTierFromCompany(viewer.company);
   const { where, orderBy, skip, take, page } = buildDealRoomQuery(searchParams, viewerTier);
 
   const [opportunities, total] = await Promise.all([
@@ -52,7 +53,7 @@ export default async function DealRoomPage({
             title: true,
             avatarUrl: true,
             role: true,
-            memberships: { where: { status: "ACTIVE" }, take: 1 },
+            ...VIEWER_TIER_INCLUDE,
           },
         },
       },
@@ -124,7 +125,7 @@ export default async function DealRoomPage({
                 avatarUrl: opp.author.avatarUrl,
                 role: opp.author.role,
               }}
-              authorTier={opp.author.memberships[0]?.tier ?? null}
+              authorTier={getViewerTierFromCompany(opp.author.company)}
             />
           ))}
         </div>

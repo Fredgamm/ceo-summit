@@ -5,6 +5,7 @@ import type { RegistrationStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { RegistrationWizard } from "@/components/events/registration-wizard";
 import { meetsMinTier } from "@/lib/utils";
 
@@ -30,17 +31,14 @@ export default async function EventRegistrationPage({ params }: { params: { id: 
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: {
-        memberships: { where: { status: "ACTIVE" }, take: 1 },
-        company: { select: { name: true } },
-      },
+      include: VIEWER_TIER_INCLUDE,
     }),
   ]);
 
   if (!event || event.status !== "PUBLISHED") notFound();
   if (!viewer) redirect("/login");
 
-  const tierOk = meetsMinTier(viewer.memberships[0]?.tier, event.minTier);
+  const tierOk = meetsMinTier(getViewerTierFromCompany(viewer.company), event.minTier);
   const isPast = event.date < new Date();
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
 

@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getSignedDownloadUrl } from "@/lib/r2";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { OpportunityChecklist } from "@/components/admin/deal-room/opportunity-checklist";
 import { OpportunityDecisionPanel } from "@/components/admin/deal-room/opportunity-decision-panel";
@@ -42,9 +43,7 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
   const opportunity = await prisma.opportunity.findUnique({
     where: { id: params.id },
     include: {
-      author: {
-        include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
-      },
+      author: { include: VIEWER_TIER_INCLUDE },
     },
   });
   if (!opportunity) notFound();
@@ -68,7 +67,7 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
   const prevId = queueIndex > 0 ? queue[queueIndex - 1].id : null;
   const nextId = queueIndex >= 0 && queueIndex < queue.length - 1 ? queue[queueIndex + 1].id : null;
 
-  const authorTier = opportunity.author.memberships[0]?.tier ?? null;
+  const authorTier = getViewerTierFromCompany(opportunity.author.company);
 
   // B4 (audit du 29 juillet 2026) — see app/deal-room/[id]/page.tsx for the
   // member-facing equivalent; same private-key → signed-URL resolution.

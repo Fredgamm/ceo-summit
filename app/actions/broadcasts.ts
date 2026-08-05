@@ -9,6 +9,8 @@ import { buildBroadcastRecipientsWhere } from "@/lib/broadcast-segments";
 import { renderBroadcastBody } from "@/lib/broadcast-template";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { tierLabel } from "@/lib/utils";
 import BroadcastEmail from "@/emails/broadcast-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -60,10 +62,7 @@ export async function sendTestBroadcast(subject: string, body: string): Promise<
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: {
-      company: { select: { name: true } },
-      memberships: { where: { status: "ACTIVE" }, take: 1 },
-    },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) return { success: false, error: "Non authentifié." };
 
@@ -71,7 +70,7 @@ export async function sendTestBroadcast(subject: string, body: string): Promise<
   const renderedBody = renderBroadcastBody(body, {
     prenom,
     nom,
-    tier: viewer.memberships[0]?.tier ?? "Admin",
+    tier: tierLabel(getViewerTierFromCompany(viewer.company)),
     entreprise: viewer.company?.name ?? "—",
   });
 
@@ -100,10 +99,7 @@ export async function sendBroadcast(
 
   const recipients = await prisma.user.findMany({
     where: buildBroadcastRecipientsWhere(segment, { country, sector }),
-    include: {
-      company: { select: { name: true } },
-      memberships: { where: { status: "ACTIVE" }, take: 1 },
-    },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (recipients.length === 0) {
     return { success: false, error: "Aucun destinataire ne correspond à ce segment." };
@@ -127,7 +123,7 @@ export async function sendBroadcast(
       const renderedBody = renderBroadcastBody(body, {
         prenom,
         nom,
-        tier: recipient.memberships[0]?.tier ?? "Membre",
+        tier: tierLabel(getViewerTierFromCompany(recipient.company)),
         entreprise: recipient.company?.name ?? "—",
       });
 

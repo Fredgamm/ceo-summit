@@ -6,6 +6,7 @@ import { Building2 } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export default async function MyCompanyPage() {
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
@@ -39,7 +40,7 @@ export default async function MyCompanyPage() {
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewer.memberships[0]?.tier),
+        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}

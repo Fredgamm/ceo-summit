@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { serviceFormSchema } from "@/lib/validations/service";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminServiceListingAlertEmail from "@/emails/admin-service-listing-alert-email";
@@ -28,11 +29,11 @@ export async function submitServiceListing(input: unknown): Promise<ActionResult
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) return { success: false, error: "Non authentifié." };
 
-  const isChairman = viewer.memberships[0]?.tier === "CHAIRMAN";
+  const isChairman = getViewerTierFromCompany(viewer.company) === "CHAIRMAN";
 
   if (!isChairman) {
     const existingActive = await prisma.serviceListing.findFirst({

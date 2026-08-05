@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildRoomsWhere, meetsRoomAccess, type RoomsSearchParams } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomsFilters } from "@/components/rooms/rooms-filters";
 import { RoomsGrid } from "@/components/rooms/rooms-grid";
@@ -21,11 +22,11 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
-  const viewerTier = viewer.memberships[0]?.tier ?? null;
+  const viewerTier = getViewerTierFromCompany(viewer.company);
   const where = buildRoomsWhere(searchParams);
 
   const rooms = await prisma.room.findMany({ where, orderBy: { name: "asc" } });

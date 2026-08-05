@@ -70,7 +70,7 @@ export async function createCompany(input: unknown): Promise<ActionResult<{ id: 
   const f = parsed.data;
 
   const plan = await prisma.plan.findUnique({ where: { id: f.planId } });
-  if (!plan || !plan.isActive || plan.scope !== "COMPANY") {
+  if (!plan || !plan.isActive) {
     return { success: false, error: "Offre invalide." };
   }
 

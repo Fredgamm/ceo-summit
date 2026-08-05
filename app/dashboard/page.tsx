@@ -9,6 +9,7 @@ import { countUnreadMessages } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { profileCompleteness } from "@/lib/profile-completeness";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
@@ -36,15 +37,14 @@ export default async function DashboardPage() {
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     include: {
-      memberships: { where: { status: "ACTIVE" }, take: 1 },
       creditBalance: true,
-      company: { select: { name: true } },
+      ...VIEWER_TIER_INCLUDE,
     },
   });
   if (!user) redirect("/login");
 
-  const viewerTier = user.memberships[0]?.tier ?? null;
-  const membership = user.memberships[0];
+  const viewerTier = getViewerTierFromCompany(user.company);
+  const companySubscription = user.company?.subscription;
 
   const [
     upcomingEvents,
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
             title: true,
             avatarUrl: true,
             role: true,
-            memberships: { where: { status: "ACTIVE" }, take: 1 },
+            ...VIEWER_TIER_INCLUDE,
           },
         },
       },
@@ -215,16 +215,18 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {membership && (
+          {companySubscription && (
             <div className="border-t border-border py-5">
               <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                Membership
+                Abonnement entreprise
               </p>
               <div className="rounded-lg border border-gold-light bg-gold-pale px-3.5 py-3">
-                <div className="text-sm font-bold text-navy">{tierLabel(membership.tier)}</div>
-                <div className="mt-1 text-xs text-text-muted">
-                  Valide jusqu&apos;au {formatDateFr(membership.endDate!)}
-                </div>
+                <div className="text-sm font-bold text-navy">{companySubscription.plan.name}</div>
+                {companySubscription.endDate && (
+                  <div className="mt-1 text-xs text-text-muted">
+                    Valide jusqu&apos;au {formatDateFr(companySubscription.endDate)}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -322,7 +324,7 @@ export default async function DashboardPage() {
                 deadline={opp.deadline}
                 createdAt={opp.createdAt}
                 author={opp.author}
-                authorTier={opp.author.memberships[0]?.tier ?? null}
+                authorTier={getViewerTierFromCompany(opp.author.company)}
               />
             ))}
           </div>

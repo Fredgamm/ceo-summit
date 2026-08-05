@@ -61,7 +61,7 @@ function makeViewer(overrides: Partial<Record<string, unknown>> = {}) {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
     email: "jp@techocean.mg",
-    memberships: [{ tier: "EXECUTIVE" }],
+    company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     ...overrides,
   } as never;
 }
@@ -149,9 +149,7 @@ describe("registerForEvent", () => {
 
   it("rejects when the viewer's tier is below the event's minTier", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent({ minTier: "CHAIRMAN" }));
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(
-      makeViewer({ memberships: [{ tier: "EXECUTIVE" }] })
-    );
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
 
     const result = await registerForEvent("event_1", "MOBILE_MONEY");
     expect(result.success).toBe(false);

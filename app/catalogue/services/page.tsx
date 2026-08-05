@@ -11,6 +11,7 @@ import {
   type ServicesSearchParams,
 } from "@/lib/services-query";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceFilters } from "@/components/catalogue-services/service-filters";
 import { ServiceCard } from "@/components/catalogue-services/service-card";
@@ -31,7 +32,7 @@ export default async function ServicesCataloguePage({
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
@@ -58,7 +59,7 @@ export default async function ServicesCataloguePage({
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewer.memberships[0]?.tier),
+        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}

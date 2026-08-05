@@ -20,10 +20,11 @@ function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     name: f.name,
     slug: f.slug,
     description: f.description || null,
-    scope: f.scope,
     priceAr: f.priceAr,
     maxTeamMembers: f.maxTeamMembers ?? null,
     minParticipants: f.minParticipants ?? null,
+    pricingMode: f.pricingMode ?? null,
+    includedSeats: f.includedSeats ?? null,
     includedCredits: f.includedCredits,
     hasUnlimitedCredits: f.hasUnlimitedCredits,
     rank: f.rank,
@@ -32,6 +33,7 @@ function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     isSelfService: f.isSelfService,
     displayOrder: f.displayOrder,
     eventId: f.eventId || null,
+    linkedPlatformPlanId: f.linkedPlatformPlanId || null,
   };
 }
 
@@ -98,21 +100,22 @@ export async function togglePlanActive(planId: string, isActive: boolean): Promi
 }
 
 /**
- * Suppression bloquée si le plan est référencé par au moins un membre/une
- * adhésion — même logique "archiver, pas détruire" que archiveRoom : on
+ * Suppression bloquée si le plan est référencé par au moins un membre, ou
+ * par une offre d'évènement qui en hérite les avantages (RG-13, 4 août
+ * 2026) — même logique "archiver, pas détruire" que archiveRoom : on
  * propose de désactiver (togglePlanActive) plutôt que de casser des FK.
  */
 export async function deletePlan(planId: string): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("plans");
 
-  const [userCount, membershipCount] = await Promise.all([
+  const [userCount, linkedOffersCount] = await Promise.all([
     prisma.user.count({ where: { planId } }),
-    prisma.membership.count({ where: { planId } }),
+    prisma.plan.count({ where: { linkedPlatformPlanId: planId } }),
   ]);
-  if (userCount > 0 || membershipCount > 0) {
+  if (userCount > 0 || linkedOffersCount > 0) {
     return {
       success: false,
-      error: `Ce plan est utilisé par ${userCount} membre(s)/${membershipCount} adhésion(s) — désactive-le au lieu de le supprimer.`,
+      error: `Ce plan est utilisé par ${userCount} membre(s)/${linkedOffersCount} offre(s) d'évènement — désactive-le au lieu de le supprimer.`,
     };
   }
 

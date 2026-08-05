@@ -20,10 +20,17 @@ export default async function NewPlanPage({
     throw err;
   }
 
-  const events = await prisma.event.findMany({
-    select: { id: true, title: true },
-    orderBy: { date: "desc" },
-  });
+  const [events, platformPlans] = await Promise.all([
+    prisma.event.findMany({
+      select: { id: true, title: true },
+      orderBy: { date: "desc" },
+    }),
+    prisma.plan.findMany({
+      where: { eventId: null, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div>
@@ -31,6 +38,7 @@ export default async function NewPlanPage({
       <PlanForm
         mode="create"
         events={events}
+        platformPlans={platformPlans}
         initialValues={searchParams.eventId ? { eventId: searchParams.eventId } : undefined}
       />
     </div>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { buildActiveOpportunitiesWhere } from "@/lib/admin-deal-room-query";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import {
   QuickApproveButton,
@@ -73,7 +74,7 @@ export default async function AdminDealRoomPage({
       name: true,
       title: true,
       avatarUrl: true,
-      memberships: { where: { status: "ACTIVE" as const }, take: 1 },
+      ...VIEWER_TIER_INCLUDE,
     },
   };
 
@@ -166,9 +167,9 @@ export default async function AdminDealRoomPage({
                       <AvatarFallback>{initials(opp.author.name)}</AvatarFallback>
                     </Avatar>
                     <span className="font-semibold text-navy">{opp.author.name}</span>
-                    {opp.author.memberships[0]?.tier && (
-                      <Badge variant={TIER_BADGE[opp.author.memberships[0].tier]}>
-                        {tierLabel(opp.author.memberships[0].tier)}
+                    {getViewerTierFromCompany(opp.author.company) && (
+                      <Badge variant={TIER_BADGE[getViewerTierFromCompany(opp.author.company)!]}>
+                        {tierLabel(getViewerTierFromCompany(opp.author.company))}
                       </Badge>
                     )}
                     <span>· Soumis le {formatDateFr(opp.createdAt)}</span>

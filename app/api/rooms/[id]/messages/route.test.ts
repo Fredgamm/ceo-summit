@@ -37,7 +37,7 @@ describe("GET /api/rooms/[id]/messages", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      memberships: [{ tier: "MEMBER" }],
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomMessage.findMany).mockResolvedValue([
       { id: "msg_2", createdAt: new Date("2026-01-02") },

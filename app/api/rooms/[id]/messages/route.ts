@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { meetsRoomAccess } from "@/lib/rooms-query";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getSignedDownloadUrl } from "@/lib/r2";
 
 const PAGE_SIZE = 50;
@@ -23,13 +24,13 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     prisma.room.findUnique({ where: { id: params.id } }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+      include: VIEWER_TIER_INCLUDE,
     }),
   ]);
   if (!room || room.status !== "ACTIVE") {
     return NextResponse.json({ error: "Salle introuvable." }, { status: 404 });
   }
-  if (!viewer || !meetsRoomAccess(viewer.memberships[0]?.tier ?? null, room.minTier)) {
+  if (!viewer || !meetsRoomAccess(getViewerTierFromCompany(viewer.company), room.minTier)) {
     return NextResponse.json({ error: "Accès non autorisé." }, { status: 403 });
   }
 

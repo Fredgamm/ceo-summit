@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 
+import Link from "next/link";
+
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { buildActivityFeed } from "@/lib/admin-dashboard";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -48,40 +51,28 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
   const member = await prisma.user.findUnique({
     where: { id: params.id },
     include: {
-      company: true,
       creditBalance: true,
       creditTransactions: { orderBy: { createdAt: "desc" }, take: 10 },
-      memberships: { orderBy: { createdAt: "desc" } },
       eventRegistrations: {
         orderBy: { createdAt: "desc" },
         include: { event: { select: { title: true, price: true } } },
       },
+      ...VIEWER_TIER_INCLUDE,
     },
   });
   if (!member) notFound();
 
-  const activeMembership = member.memberships.find((m) => m.status === "ACTIVE");
+  const tier = getViewerTierFromCompany(member.company);
   const available = member.creditBalance
     ? member.creditBalance.included + member.creditBalance.purchased - member.creditBalance.used
     : 0;
 
   const activity = buildActivityFeed(
-    [
-      ...member.memberships.map((m) => ({
-        type: "membership",
-        message: `Adhésion ${tierLabel(m.tier)} — ${formatAriary(m.price)} (${
-          m.startDate && m.endDate
-            ? `${formatDateFr(m.startDate)} → ${formatDateFr(m.endDate)}`
-            : "en attente de paiement"
-        })`,
-        date: m.createdAt,
-      })),
-      ...member.eventRegistrations.map((r) => ({
-        type: "registration",
-        message: `Inscription à ${r.event.title}`,
-        date: r.createdAt,
-      })),
-    ],
+    member.eventRegistrations.map((r) => ({
+      type: "registration",
+      message: `Inscription à ${r.event.title}`,
+      date: r.createdAt,
+    })),
     10
   );
 
@@ -99,9 +90,7 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
               {[member.title, member.company?.name, member.country].filter(Boolean).join(" · ")}
             </p>
             <div className="mt-1.5 flex items-center gap-2">
-              {TIER_BADGE[member.role] && (
-                <Badge variant={TIER_BADGE[member.role]}>{tierLabel(member.role)}</Badge>
-              )}
+              {tier && <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>}
               <Badge variant={STATUS_BADGE[member.status]}>{STATUS_LABEL[member.status]}</Badge>
               <span className="text-xs text-text-muted">
                 Membre depuis {formatDateFr(member.createdAt)}
@@ -152,7 +141,7 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
           <TabsContent value="credits">
             <div className="rounded-lg border border-border bg-white p-6">
               <p className="mb-4 text-2xl font-bold text-navy">
-                {member.role === "CHAIRMAN" ? "∞" : available}
+                {tier === "CHAIRMAN" ? "∞" : available}
                 <span className="ml-1 text-sm font-normal text-text-muted">
                   crédits disponibles
                 </span>
@@ -187,26 +176,19 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
           <TabsContent value="paiements">
             <div className="flex flex-col gap-4">
               <div className="rounded-lg border border-border bg-white p-6">
-                <h2 className="mb-3 text-sm font-bold uppercase text-text-muted">Adhésions</h2>
-                {member.memberships.length === 0 ? (
-                  <p className="text-sm text-text-muted">Aucune adhésion.</p>
+                <h2 className="mb-3 text-sm font-bold uppercase text-text-muted">
+                  Abonnement entreprise
+                </h2>
+                {member.company ? (
+                  <p className="text-sm text-text-mid">
+                    Les paiements et le statut d&apos;abonnement se gèrent au niveau de
+                    l&apos;entreprise —{" "}
+                    <Link href={`/entreprises/${member.company.id}`} className="text-navy-mid">
+                      voir la fiche {member.company.name} →
+                    </Link>
+                  </p>
                 ) : (
-                  member.memberships.map((m) => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0"
-                    >
-                      <div>
-                        <p className="font-semibold text-navy">{tierLabel(m.tier)}</p>
-                        <p className="text-xs text-text-muted">
-                          {m.startDate && m.endDate
-                            ? `${formatDateFr(m.startDate)} → ${formatDateFr(m.endDate)}`
-                            : "En attente de paiement"}
-                        </p>
-                      </div>
-                      <span className="font-semibold text-navy">{formatAriary(m.price)}</span>
-                    </div>
-                  ))
+                  <p className="text-sm text-text-muted">Aucune entreprise associée.</p>
                 )}
               </div>
 
@@ -238,11 +220,7 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
           </TabsContent>
         </Tabs>
 
-        <MemberActionsPanel
-          userId={member.id}
-          currentTier={activeMembership?.tier ?? null}
-          status={member.status}
-        />
+        <MemberActionsPanel userId={member.id} status={member.status} />
       </div>
     </div>
   );

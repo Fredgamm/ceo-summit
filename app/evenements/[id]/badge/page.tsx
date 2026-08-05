@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { Badge } from "@/components/ui/badge";
 import { formatDateFr, initials, tierLabel } from "@/lib/utils";
 
@@ -30,7 +31,7 @@ export default async function EventBadgePage({ params }: { params: { id: string 
     prisma.event.findUnique({ where: { id: params.id } }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+      include: VIEWER_TIER_INCLUDE,
     }),
   ]);
   if (!event || !viewer) notFound();
@@ -44,7 +45,7 @@ export default async function EventBadgePage({ params }: { params: { id: string 
   }
 
   const qrCodeDataUrl = await QRCode.toDataURL(registration.badgeQrCode, { width: 220, margin: 1 });
-  const tier = viewer.memberships[0]?.tier;
+  const tier = getViewerTierFromCompany(viewer.company);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface p-6">

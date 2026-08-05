@@ -189,11 +189,6 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
     };
   }
 
-  const latestMembership = await prisma.membership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "desc" },
-  });
-
   const token = generateSecureToken();
   await prisma.activationToken.create({
     data: { userId: user.id, token, expiresAt: new Date(Date.now() + ACTIVATION_TOKEN_TTL_MS) },
@@ -205,7 +200,7 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
     subject: "Votre nouveau lien d'activation CEO Summit",
     react: ActivationEmail({
       memberName: user.name,
-      tier: tierLabel(latestMembership?.tier ?? undefined),
+      tier: tierLabel(undefined),
       activationUrl,
     }),
   });

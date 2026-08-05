@@ -30,17 +30,16 @@ export default async function CreateCompanyPage({
   if (!viewer) redirect("/login");
   if (viewer.companyId) redirect(`/entreprises/${viewer.companyId}`);
 
-  const plans = await getActivePlans("COMPANY", { selfServiceOnly: true });
+  const plans = await getActivePlans({ selfServiceOnly: true });
 
   const deepLinkedPlan = searchParams.offre ? await getPlanBySlug(searchParams.offre) : null;
-  const resolvedPlanId =
-    deepLinkedPlan?.scope === "COMPANY" ? deepLinkedPlan.id : viewer.intendedPlanId;
+  const resolvedPlanId = deepLinkedPlan ? deepLinkedPlan.id : viewer.intendedPlanId;
 
   // Une offre d'évènement (Phase 2quater) n'apparaît pas dans la liste
   // standard (getActivePlans filtre eventId: null par défaut) — on
   // l'ajoute explicitement si c'est elle qui est visée par le lien profond.
   const allPlans =
-    deepLinkedPlan?.scope === "COMPANY" && !plans.some((p) => p.id === deepLinkedPlan.id)
+    deepLinkedPlan && !plans.some((p) => p.id === deepLinkedPlan.id)
       ? [deepLinkedPlan, ...plans]
       : plans;
 

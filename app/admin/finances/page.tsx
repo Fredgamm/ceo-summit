@@ -13,12 +13,11 @@ import {
   type FinanceTransaction,
 } from "@/lib/finance";
 import { EventPaymentActions } from "@/components/admin/finance/event-payment-actions";
-import { RenewalReminderButton } from "@/components/admin/finance/renewal-reminder-button";
 import { CreditPurchaseActions } from "@/components/admin/credit-purchase-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatAriary, formatDateFr, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Finances" };
 
@@ -27,19 +26,6 @@ const TABS = [
   { key: "remboursements", label: "Remboursements" },
   { key: "en-attente", label: "En attente" },
 ];
-
-// Phase 1 offres dynamiques (30 juillet 2026) — les 3 plans legacy sont
-// nommés exactement "MEMBER"/"EXECUTIVE"/"CHAIRMAN" par prisma/backfill-plans.ts,
-// donc cette table reste valable pour eux ; tout autre plan retombe sur
-// "secondary" (badge.tsx reste volontairement fixe à 3 variantes de tier).
-const LEGACY_PLAN_BADGE: Record<string, "chairman" | "executive" | "member"> = {
-  CHAIRMAN: "chairman",
-  EXECUTIVE: "executive",
-  MEMBER: "member",
-};
-function planBadgeVariant(planName: string) {
-  return LEGACY_PLAN_BADGE[planName] ?? "secondary";
-}
 
 export default async function AdminFinancesPage({
   searchParams,
@@ -58,23 +44,33 @@ export default async function AdminFinancesPage({
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const [
-    activeMemberships,
+    activeSubscriptions,
     plans,
-    monthMemberships,
+    monthPayments,
     monthRegistrations,
     monthPurchases,
     expiring30,
     expiring60,
     expiring90,
   ] = await Promise.all([
-    prisma.membership.findMany({
-      where: { status: "ACTIVE" },
-      select: { planId: true, price: true, startDate: true, endDate: true },
+    prisma.companySubscription.findMany({
+      where: { status: { in: ["ACTIVE", "EXPIRED"] } },
+      select: {
+        planId: true,
+        startDate: true,
+        endDate: true,
+        payments: {
+          where: { status: "CONFIRMED" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { amount: true },
+        },
+      },
     }),
     getAllPlans(),
-    prisma.membership.aggregate({
-      where: { createdAt: { gte: startOfMonth } },
-      _sum: { price: true },
+    prisma.companyPayment.aggregate({
+      where: { status: "CONFIRMED", reviewedAt: { gte: startOfMonth } },
+      _sum: { amount: true },
     }),
     prisma.eventRegistration.findMany({
       where: { paymentStatus: "PAID", createdAt: { gte: startOfMonth } },
@@ -84,48 +80,58 @@ export default async function AdminFinancesPage({
       where: { status: "CONFIRMED", createdAt: { gte: startOfMonth } },
       _sum: { priceAr: true },
     }),
-    prisma.membership.count({
+    prisma.companySubscription.count({
       where: { status: "ACTIVE", endDate: buildExpiringWithinDays(30, now) },
     }),
-    prisma.membership.count({
+    prisma.companySubscription.count({
       where: { status: "ACTIVE", endDate: buildExpiringWithinDays(60, now) },
     }),
-    prisma.membership.count({
+    prisma.companySubscription.count({
       where: { status: "ACTIVE", endDate: buildExpiringWithinDays(90, now) },
     }),
   ]);
 
-  // Phase 2ter (1er août 2026) — startDate/endDate sont devenus nullable
-  // (adhésions PENDING_PAYMENT/PENDING_REVIEW n'ont pas encore de dates
-  // réelles), mais une adhésion ACTIVE en a toujours — filtre défensif,
-  // ne devrait jamais rien retirer en pratique.
-  const activeMembershipsWithDates = activeMemberships.filter(
-    (m): m is typeof m & { startDate: Date; endDate: Date } =>
-      m.startDate != null && m.endDate != null
-  );
+  // Un abonnement ACTIVE/EXPIRED a toujours des dates réelles (nullable
+  // seulement en DRAFT/PENDING_*) — filtre défensif, ne devrait jamais rien
+  // retirer en pratique.
+  const activeSubscriptionsWithDates = activeSubscriptions
+    .filter(
+      (s): s is typeof s & { startDate: Date; endDate: Date } =>
+        s.startDate != null && s.endDate != null
+    )
+    .map((s) => ({
+      planId: s.planId,
+      price: s.payments[0]?.amount ?? 0,
+      startDate: s.startDate,
+      endDate: s.endDate,
+    }));
 
-  const mrr = computeMRR(activeMembershipsWithDates);
+  const mrr = computeMRR(activeSubscriptionsWithDates);
   const arr = mrr * 12;
-  const mrrByPlan = computeMRRByPlan(activeMembershipsWithDates);
+  const mrrByPlan = computeMRRByPlan(activeSubscriptionsWithDates);
   const countByPlan = new Map<string, number>();
-  for (const m of activeMemberships) {
-    const key = m.planId ?? "unknown";
+  for (const s of activeSubscriptions) {
+    const key = s.planId ?? "unknown";
     countByPlan.set(key, (countByPlan.get(key) ?? 0) + 1);
   }
   const plansByRankDesc = [...plans].sort((a, b) => b.rank - a.rank);
-  const totalActiveMembers = activeMemberships.length;
+  const totalActiveCompanies = activeSubscriptions.length;
 
   const eventRevenueThisMonth = monthRegistrations.reduce((sum, r) => sum + r.event.price, 0);
-  const membershipRevenueThisMonth = monthMemberships._sum.price ?? 0;
+  const companyRevenueThisMonth = monthPayments._sum.amount ?? 0;
   const creditRevenueThisMonth = monthPurchases._sum.priceAr ?? 0;
 
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "paiements") {
-    const [memberships, registrations, purchases] = await Promise.all([
-      prisma.membership.findMany({
-        where: { status: { in: ["ACTIVE", "EXPIRED", "CANCELLED"] } },
-        include: { user: { select: { name: true } } },
+    const [companyPayments, registrations, purchases] = await Promise.all([
+      prisma.companyPayment.findMany({
+        where: { status: { in: ["CONFIRMED", "REJECTED"] } },
+        include: {
+          companySubscription: {
+            include: { company: { select: { name: true } }, plan: { select: { name: true } } },
+          },
+        },
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
@@ -147,14 +153,14 @@ export default async function AdminFinancesPage({
     ]);
 
     const transactions: FinanceTransaction[] = mergeFinanceTransactions([
-      ...memberships.map((m) => ({
-        id: m.id,
-        source: "MEMBERSHIP" as const,
-        memberName: m.user.name,
-        description: `Adhésion ${tierLabel(m.tier)}`,
-        amount: m.price,
-        method: "Evolia",
-        date: m.createdAt,
+      ...companyPayments.map((p) => ({
+        id: p.id,
+        source: "COMPANY" as const,
+        memberName: p.companySubscription.company.name,
+        description: `Offre ${p.companySubscription.plan.name}`,
+        amount: p.amount,
+        method: p.method,
+        date: p.createdAt,
       })),
       ...registrations.map((r) => ({
         id: r.id,
@@ -316,10 +322,12 @@ export default async function AdminFinancesPage({
         </div>
         <div className="rounded-lg border border-border bg-white p-4">
           <p className="text-2xl font-bold text-emerald-600">
-            {formatAriary(membershipRevenueThisMonth)}
+            {formatAriary(companyRevenueThisMonth)}
           </p>
-          <p className="text-xs text-text-muted">Revenus membership ce mois</p>
-          <p className="mt-1.5 text-xs text-text-muted">{totalActiveMembers} membres actifs</p>
+          <p className="text-xs text-text-muted">Revenus entreprise ce mois</p>
+          <p className="mt-1.5 text-xs text-text-muted">
+            {totalActiveCompanies} entreprise(s) active(s)
+          </p>
         </div>
         <div className="rounded-lg border border-border bg-white p-4">
           <p className="text-2xl font-bold text-blue-600">{formatAriary(eventRevenueThisMonth)}</p>
@@ -333,7 +341,7 @@ export default async function AdminFinancesPage({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-white p-5">
-          <h2 className="mb-3 text-sm font-bold text-navy">Revenus membership par offre (MRR)</h2>
+          <h2 className="mb-3 text-sm font-bold text-navy">Revenus entreprise par offre (MRR)</h2>
           <div className="flex flex-col gap-3">
             {plansByRankDesc.map((plan) => {
               const planMrr = mrrByPlan.get(plan.id) ?? 0;
@@ -341,9 +349,9 @@ export default async function AdminFinancesPage({
                 <div key={plan.id}>
                   <div className="mb-1 flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
-                      <Badge variant={planBadgeVariant(plan.name)}>{plan.name}</Badge>
+                      <Badge variant="secondary">{plan.name}</Badge>
                       <span className="text-text-muted">
-                        {countByPlan.get(plan.id) ?? 0} membres
+                        {countByPlan.get(plan.id) ?? 0} entreprise(s)
                       </span>
                     </div>
                     <strong>{formatAriary(planMrr)}</strong>
@@ -365,18 +373,17 @@ export default async function AdminFinancesPage({
           <div className="mb-3 flex flex-col gap-2">
             <div className="flex items-center justify-between rounded-md bg-red-50 p-2.5 text-sm">
               <span>Expirant dans 30 jours</span>
-              <strong className="text-red-600">{expiring30} membres</strong>
+              <strong className="text-red-600">{expiring30} entreprise(s)</strong>
             </div>
             <div className="flex items-center justify-between rounded-md bg-amber-50 p-2.5 text-sm">
               <span>Expirant dans 60 jours</span>
-              <strong className="text-amber-700">{expiring60} membres</strong>
+              <strong className="text-amber-700">{expiring60} entreprise(s)</strong>
             </div>
             <div className="flex items-center justify-between rounded-md bg-emerald-50 p-2.5 text-sm">
               <span>Expirant dans 90 jours</span>
-              <strong className="text-emerald-700">{expiring90} membres</strong>
+              <strong className="text-emerald-700">{expiring90} entreprise(s)</strong>
             </div>
           </div>
-          <RenewalReminderButton withinDays={30} count={expiring30} />
         </div>
       </div>
 

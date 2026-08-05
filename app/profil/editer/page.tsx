@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfileEditForm } from "@/components/profile/profile-edit-form";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ export default async function EditProfilePage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!user) redirect("/login");
 
@@ -31,7 +32,7 @@ export default async function EditProfilePage() {
     <AppShell
       user={{
         name: user.name,
-        tier: tierLabel(user.memberships[0]?.tier),
+        tier: tierLabel(getViewerTierFromCompany(user.company)),
         avatarUrl: user.avatarUrl,
         isAdmin: user.role === "ADMIN",
       }}

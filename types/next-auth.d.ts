@@ -8,9 +8,10 @@ import type { DefaultSession } from "next-auth";
  * offers/payment rework, 30 juillet 2026) is the single source of truth for
  * "is this account an admin" — `role` is kept for compatibility during the
  * Tier->Plan transition but no new code should read it as an admin check.
- * `hasCompanyAccess` (Phase 2) is true when the account's company has an
- * ACTIVE CompanySubscription — grants the same platform access as a
- * personal `tier` for every member of that company, not just its admin.
+ * `tier`/`hasCompanyAccess` (4 août 2026 — CEO Summit devenu intégralement
+ * B2B) are both derived from the account's company plan rank (see
+ * lib/plan-access.ts::getViewerTierFromCompany) — every account belongs to a
+ * company, there is no more personal membership tier.
  */
 declare module "next-auth" {
   interface Session {
@@ -19,15 +20,6 @@ declare module "next-auth" {
       role: Role;
       isPlatformAdmin: boolean;
       tier: string | null;
-      /**
-       * Phase 2ter (1er août 2026) — un Membership ACTIVE peut avoir
-       * `tier: null` (offre librement créée par l'admin, sans
-       * correspondance avec MEMBER/EXECUTIVE/CHAIRMAN) : `tier == null`
-       * seul ne peut donc plus servir de signal d'accès, seulement
-       * d'affichage. Vrai dès qu'un Membership ACTIVE existe, quel que
-       * soit son `tier`.
-       */
-      hasIndividualAccess: boolean;
       hasCompanyAccess: boolean;
       status: string;
     } & DefaultSession["user"];
@@ -37,7 +29,6 @@ declare module "next-auth" {
     role: Role;
     isPlatformAdmin: boolean;
     tier: string | null;
-    hasIndividualAccess: boolean;
     hasCompanyAccess: boolean;
     status: string;
   }
@@ -49,7 +40,6 @@ declare module "next-auth/jwt" {
     role: Role;
     isPlatformAdmin: boolean;
     tier: string | null;
-    hasIndividualAccess: boolean;
     hasCompanyAccess: boolean;
     status: string;
   }

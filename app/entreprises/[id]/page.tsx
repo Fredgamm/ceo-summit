@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +51,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
@@ -75,7 +76,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewer.memberships[0]?.tier),
+        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.role === "ADMIN",
       }}

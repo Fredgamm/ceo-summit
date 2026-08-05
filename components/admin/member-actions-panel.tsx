@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { MembershipStatus, Tier } from "@prisma/client";
+import type { MembershipStatus } from "@prisma/client";
 
 import {
-  changeMemberTier,
   suspendMember,
   excludeMember,
   reactivateMember,
@@ -15,26 +14,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-const TIERS: Tier[] = ["MEMBER", "EXECUTIVE", "CHAIRMAN"];
 
 interface MemberActionsPanelProps {
   userId: string;
-  currentTier: Tier | null;
   status: MembershipStatus;
 }
 
-/** E8-T04 — changer tier / suspendre / exclure / réactiver / attribuer crédits. */
-export function MemberActionsPanel({ userId, currentTier, status }: MemberActionsPanelProps) {
+/**
+ * E8-T04 — suspendre / exclure / réactiver / attribuer crédits.
+ * 4 août 2026 (CEO Summit devenu intégralement B2B) — "Changer le tier"
+ * retiré : le tier vient du rang de l'offre plateforme de l'entreprise,
+ * plus un attribut personnel modifiable ici (voir app/actions/members.ts).
+ */
+export function MemberActionsPanel({ userId, status }: MemberActionsPanelProps) {
   const router = useRouter();
-  const [tier, setTier] = React.useState<Tier>(currentTier ?? "MEMBER");
   const [creditsAmount, setCreditsAmount] = React.useState("5");
   const [creditsReason, setCreditsReason] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -57,31 +50,6 @@ export function MemberActionsPanel({ userId, currentTier, status }: MemberAction
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-border bg-white p-5">
-        <p className="mb-3 text-sm font-bold text-navy">Changer le tier</p>
-        <div className="flex gap-2">
-          <Select value={tier} onValueChange={(v) => setTier(v as Tier)}>
-            <SelectTrigger className="flex-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TIERS.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            disabled={loading === "tier"}
-            onClick={() => run("tier", () => changeMemberTier(userId, tier))}
-          >
-            {loading === "tier" ? "…" : "Appliquer"}
-          </Button>
-        </div>
-      </div>
-
       <div className="rounded-lg border border-border bg-white p-5">
         <p className="mb-3 text-sm font-bold text-navy">Statut du compte</p>
         <div className="flex flex-col gap-2">

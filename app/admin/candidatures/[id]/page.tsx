@@ -5,7 +5,6 @@ import type { Tier } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { getActivePlans } from "@/lib/plans-query";
 import { Badge } from "@/components/ui/badge";
 import { CandidatureDecisionPanel } from "@/components/admin/candidature-decision-panel";
 import { CandidatureNoteForm } from "@/components/admin/candidature-note-form";
@@ -43,22 +42,13 @@ export default async function AdminCandidatureDetailPage({ params }: { params: {
   const application = await prisma.membershipApplication.findUnique({ where: { id: params.id } });
   if (!application) notFound();
 
-  // Phase 1 offres dynamiques (30 juillet 2026) — les 3 offres legacy sont
-  // nommées exactement "MEMBER"/"EXECUTIVE"/"CHAIRMAN" (prisma/backfill-plans.ts),
-  // donc lire directement leur prix/crédits par nom reste valable tant que
-  // le formulaire de candidature n'a pas encore été migré vers un vrai
-  // sélecteur de Plan (MembershipApplication.requestedTier reste un Tier).
-  const individualPlans = await getActivePlans("INDIVIDUAL");
-  const planByName = new Map(individualPlans.map((p) => [p.name, p]));
-  const prices: Record<Tier, number> = {
-    MEMBER: planByName.get("MEMBER")?.priceAr ?? 0,
-    EXECUTIVE: planByName.get("EXECUTIVE")?.priceAr ?? 0,
-    CHAIRMAN: planByName.get("CHAIRMAN")?.priceAr ?? 0,
-  };
-  const includedCredits: Record<"MEMBER" | "EXECUTIVE", number> = {
-    MEMBER: planByName.get("MEMBER")?.includedCredits ?? 0,
-    EXECUTIVE: planByName.get("EXECUTIVE")?.includedCredits ?? 0,
-  };
+  // 4 août 2026 (CEO Summit devenu intégralement B2B) — les offres
+  // individuelles legacy MEMBER/EXECUTIVE/CHAIRMAN n'existent plus (scope
+  // INDIVIDUAL retiré du modèle Plan) : plus de prix/crédits à afficher ici
+  // tant que ce formulaire de candidature n'a pas été migré vers l'offre
+  // entreprise réellement souscrite.
+  const prices: Record<Tier, number> = { MEMBER: 0, EXECUTIVE: 0, CHAIRMAN: 0 };
+  const includedCredits: Record<"MEMBER" | "EXECUTIVE", number> = { MEMBER: 0, EXECUTIVE: 0 };
 
   return (
     <div className="flex flex-col gap-4">

@@ -12,6 +12,7 @@ import {
 import { sendTransactionalEmail } from "@/lib/resend";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 import AdminEventPaymentAlertEmail from "@/emails/admin-event-payment-alert-email";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { formatDateFr, meetsMinTier } from "@/lib/utils";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -46,7 +47,7 @@ export async function registerForEvent(
     prisma.event.findUnique({ where: { id: eventId } }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+      include: VIEWER_TIER_INCLUDE,
     }),
     prisma.eventRegistration.findUnique({
       where: { eventId_userId: { eventId, userId: session.user.id } },
@@ -60,7 +61,7 @@ export async function registerForEvent(
     return { success: false, error: "Cet événement est déjà passé." };
   }
   if (!viewer) return { success: false, error: "Non authentifié." };
-  if (!meetsMinTier(viewer.memberships[0]?.tier, event.minTier)) {
+  if (!meetsMinTier(getViewerTierFromCompany(viewer.company), event.minTier)) {
     return {
       success: false,
       error: "Votre niveau de membership ne donne pas accès à cet événement.",

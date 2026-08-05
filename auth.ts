@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 
 /**
  * NextAuth v5 config — Credentials provider only (email + password).
@@ -49,14 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },
-          include: {
-            memberships: {
-              where: { status: "ACTIVE" },
-              orderBy: { endDate: "desc" },
-              take: 1,
-            },
-            company: { include: { subscription: { select: { status: true } } } },
-          },
+          include: VIEWER_TIER_INCLUDE,
         });
 
         if (!user) return null;
@@ -77,35 +71,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("ACCOUNT_SUSPENDED");
         }
 
-        // B2 (audit du 29 juillet 2026) — aucun cron n'existe dans ce projet
-        // pour faire passer un Membership expiré à EXPIRED : sans ce
-        // rattrapage, un membre dont l'adhésion a expiré gardait un accès
-        // complet indéfiniment. On synchronise ici, au point de connexion —
-        // ce n'est pas un vrai remplacement d'un job planifié (une session
-        // déjà ouverte reste valide jusqu'à 24h, durée du JWT), mais ça
-        // couvre le cas le plus critique : se reconnecter après expiration.
-        const activeMembership = user.memberships[0];
-        let status = user.status;
-        if (
-          status === "ACTIVE" &&
-          activeMembership?.endDate &&
-          activeMembership.endDate < new Date()
-        ) {
-          await prisma.$transaction([
-            prisma.membership.update({
-              where: { id: activeMembership.id },
-              data: { status: "EXPIRED" },
-            }),
-            prisma.user.update({ where: { id: user.id }, data: { status: "EXPIRED" } }),
-          ]);
-          status = "EXPIRED";
-        }
-
-        // B3 — avant ce correctif, un compte EXPIRED s'authentifiait avec
-        // succès puis tombait dans une boucle de redirection infinie
-        // /dashboard ⇄ /login (middleware.ts bloque le non-ACTIVE sur les
-        // routes membres, mais renvoie tout /login authentifié vers
-        // /dashboard). Le bloquer ici, comme SUSPENDED, casse la boucle.
+        // B3 — un compte EXPIRED s'authentifiait avec succès puis tombait
+        // dans une boucle de redirection infinie /dashboard ⇄ /login
+        // (middleware.ts bloque le non-ACTIVE sur les routes membres, mais
+        // renvoie tout /login authentifié vers /dashboard). Le bloquer ici,
+        // comme SUSPENDED, casse la boucle. Noter que `User.status` n'est
+        // plus synchronisé automatiquement à l'expiration (c'était piloté
+        // par `Membership.endDate`, supprimé le 4 août 2026 — CEO Summit
+        // devenu intégralement B2B) : l'expiration d'accès se joue
+        // désormais au niveau de `CompanySubscription.status` (RG-12), pas
+        // de `User.status`.
+        const status = user.status;
         if (status === "EXPIRED") {
           throw new Error("ACCOUNT_EXPIRED");
         }
@@ -113,13 +89,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) return null;
 
-        // Phase 2 offres/paiement (30 juillet 2026) — un membre invité par
-        // une entreprise n'a pas de Membership personnel (tier == null),
-        // mais doit avoir le même accès que les autres une fois
-        // l'abonnement de l'entreprise ACTIVE. Calculé au login, même
-        // fraîcheur/limite que `tier` ci-dessus (rafraîchi à la prochaine
-        // connexion, pas en temps réel dans une session déjà ouverte).
-        const hasCompanyAccess = user.company?.subscription?.status === "ACTIVE";
+        // 4 août 2026 (CEO Summit devenu intégralement B2B) — le tier et
+        // l'accès plateforme viennent désormais exclusivement du rang de
+        // l'offre de l'entreprise (voir lib/plan-access.ts). `EXPIRED`
+        // compte encore pour l'accès plateforme : seul l'accès à l'édition
+        // d'évènement expire, pas les avantages plateforme (RG-12).
+        const tier = getViewerTierFromCompany(user.company);
+        const hasCompanyAccess = tier !== null;
 
         return {
           id: user.id,
@@ -128,11 +104,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           image: user.avatarUrl,
           role: user.role,
           isPlatformAdmin: user.isPlatformAdmin,
-          tier: activeMembership?.tier ?? null,
-          // Phase 2ter (1er août 2026) — voir types/next-auth.d.ts : signal
-          // d'accès distinct de `tier`, qui peut être null même avec un
-          // Membership ACTIVE (offre librement créée par l'admin).
-          hasIndividualAccess: Boolean(activeMembership),
+          tier,
           hasCompanyAccess,
           status,
         };
@@ -147,7 +119,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.isPlatformAdmin = user.isPlatformAdmin;
         token.tier = user.tier;
-        token.hasIndividualAccess = user.hasIndividualAccess;
         token.hasCompanyAccess = user.hasCompanyAccess;
         token.status = user.status;
       }
@@ -161,7 +132,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       session.user.role = token.role as (typeof session.user)["role"];
       session.user.isPlatformAdmin = token.isPlatformAdmin as boolean;
       session.user.tier = token.tier as string | null;
-      session.user.hasIndividualAccess = token.hasIndividualAccess as boolean;
       session.user.hasCompanyAccess = token.hasCompanyAccess as boolean;
       session.user.status = token.status as string;
       return session;

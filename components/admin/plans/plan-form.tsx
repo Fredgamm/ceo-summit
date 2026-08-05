@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { PlanScope } from "@prisma/client";
+import type { PlanPricingMode } from "@prisma/client";
 
 import { createPlan, updatePlan } from "@/app/actions/admin-plans";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -23,10 +23,11 @@ export interface PlanFormValues {
   name: string;
   slug: string;
   description: string;
-  scope: PlanScope;
   priceAr: number;
   maxTeamMembers: number | null;
   minParticipants: number | null;
+  pricingMode: PlanPricingMode | null;
+  includedSeats: number | null;
   includedCredits: number;
   hasUnlimitedCredits: boolean;
   rank: number;
@@ -35,16 +36,18 @@ export interface PlanFormValues {
   isSelfService: boolean;
   displayOrder: number;
   eventId: string;
+  linkedPlatformPlanId: string;
 }
 
 const EMPTY_VALUES: PlanFormValues = {
   name: "",
   slug: "",
   description: "",
-  scope: "INDIVIDUAL",
   priceAr: 0,
   maxTeamMembers: null,
   minParticipants: null,
+  pricingMode: null,
+  includedSeats: null,
   includedCredits: 0,
   hasUnlimitedCredits: false,
   rank: 1,
@@ -53,6 +56,7 @@ const EMPTY_VALUES: PlanFormValues = {
   isSelfService: true,
   displayOrder: 0,
   eventId: "",
+  linkedPlatformPlanId: "",
 };
 
 function slugify(name: string): string {
@@ -70,10 +74,23 @@ interface PlanFormProps {
   initialValues?: Partial<PlanFormValues>;
   /** Phase 2quater (1er août 2026) — évènements disponibles pour le sélecteur. */
   events?: { id: string; title: string }[];
+  /**
+   * 4 août 2026 (split plateforme/évènement) — offres plateforme actives
+   * (eventId nul) proposées comme "offre plateforme associée" pour une
+   * offre d'évènement. La propre offre en cours d'édition est exclue par
+   * l'appelant (une offre ne peut pas se référencer elle-même).
+   */
+  platformPlans?: { id: string; name: string }[];
 }
 
-/** Phase 1 offres dynamiques — "offres créables librement par l'admin". */
-export function PlanForm({ mode, planId, initialValues, events = [] }: PlanFormProps) {
+/** Phase 1 offres dynamiques — "offres créables librement par l'admin", toutes entreprise. */
+export function PlanForm({
+  mode,
+  planId,
+  initialValues,
+  events = [],
+  platformPlans = [],
+}: PlanFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<PlanFormValues>({ ...EMPTY_VALUES, ...initialValues });
   const [error, setError] = React.useState<string | null>(null);
@@ -82,6 +99,8 @@ export function PlanForm({ mode, planId, initialValues, events = [] }: PlanFormP
   function set<K extends keyof PlanFormValues>(key: K, value: PlanFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
   }
+
+  const isEventOffer = values.eventId !== "";
 
   async function handleSubmit() {
     setError(null);
@@ -152,19 +171,6 @@ export function PlanForm({ mode, planId, initialValues, events = [] }: PlanFormP
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label>Portée *</Label>
-          <Select value={values.scope} onValueChange={(v) => set("scope", v as PlanScope)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="INDIVIDUAL">Individuelle</SelectItem>
-              <SelectItem value="COMPANY">Entreprise</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
           <Label>Évènement</Label>
           <Select
             value={values.eventId || "none"}
@@ -189,6 +195,33 @@ export function PlanForm({ mode, planId, initialValues, events = [] }: PlanFormP
           </p>
         </div>
 
+        {isEventOffer && (
+          <div className="flex flex-col gap-1.5">
+            <Label>Offre plateforme associée</Label>
+            <Select
+              value={values.linkedPlatformPlanId || "none"}
+              onValueChange={(v) => set("linkedPlatformPlanId", v === "none" ? "" : v)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Aucune</SelectItem>
+                {platformPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-text-muted">
+              Les avantages (crédits, quotas de collaborateurs) accordés au paiement de cette offre
+              d&apos;évènement viennent de l&apos;offre plateforme liée, pas de cette offre
+              elle-même.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="plan-price">Prix (Ar) *</Label>
@@ -212,37 +245,75 @@ export function PlanForm({ mode, planId, initialValues, events = [] }: PlanFormP
           </div>
         </div>
 
-        {values.scope === "COMPANY" && (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-max-members">Nombre max de collaborateurs</Label>
-              <Input
-                id="plan-max-members"
-                type="number"
-                min={1}
-                value={values.maxTeamMembers ?? ""}
-                onChange={(e) =>
-                  set("maxTeamMembers", e.target.value ? Number(e.target.value) : null)
-                }
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="plan-min-participants">
-                Seuil minimum de participants (prix dégressif)
-              </Label>
-              <Input
-                id="plan-min-participants"
-                type="number"
-                min={1}
-                value={values.minParticipants ?? ""}
-                onChange={(e) =>
-                  set("minParticipants", e.target.value ? Number(e.target.value) : null)
-                }
-              />
-              <p className="text-xs text-text-muted">
-                Le prix (Ar) ci-dessus s&apos;applique par participant, pas au total.
-              </p>
-            </div>
+        {isEventOffer && (
+          <div className="flex flex-col gap-1.5">
+            <Label>Mode de tarification</Label>
+            <Select
+              value={values.pricingMode ?? "PER_PARTICIPANT"}
+              onValueChange={(v) => set("pricingMode", v as PlanPricingMode)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PER_PARTICIPANT">Par participant</SelectItem>
+                <SelectItem value="FIXED_BUNDLE">Forfait fixe</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {isEventOffer && values.pricingMode === "FIXED_BUNDLE" ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="plan-included-seats">Nombre de sièges inclus</Label>
+            <Input
+              id="plan-included-seats"
+              type="number"
+              min={1}
+              value={values.includedSeats ?? ""}
+              onChange={(e) => set("includedSeats", e.target.value ? Number(e.target.value) : null)}
+            />
+            <p className="text-xs text-text-muted">
+              Le prix (Ar) ci-dessus est un forfait total pour ce nombre de sièges, quel que soit le
+              nombre exact de collaborateurs inscrits.
+            </p>
+          </div>
+        ) : isEventOffer ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="plan-min-participants">
+              Seuil minimum de participants (prix dégressif)
+            </Label>
+            <Input
+              id="plan-min-participants"
+              type="number"
+              min={1}
+              value={values.minParticipants ?? ""}
+              onChange={(e) =>
+                set("minParticipants", e.target.value ? Number(e.target.value) : null)
+              }
+            />
+            <p className="text-xs text-text-muted">
+              Le prix (Ar) ci-dessus s&apos;applique par participant, pas au total.
+            </p>
+          </div>
+        ) : null}
+
+        {!isEventOffer && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="plan-max-members">Nombre max de collaborateurs</Label>
+            <Input
+              id="plan-max-members"
+              type="number"
+              min={1}
+              value={values.maxTeamMembers ?? ""}
+              onChange={(e) =>
+                set("maxTeamMembers", e.target.value ? Number(e.target.value) : null)
+              }
+            />
+            <p className="text-xs text-text-muted">
+              Quota de collaborateurs de cet avantage plateforme — indépendant de toute édition
+              d&apos;évènement.
+            </p>
           </div>
         )}
 

@@ -1,71 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Tier } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
-import { syncUserPlanCache } from "@/lib/membership-sync";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 /**
- * E8-T04 — gestion membres : changer tier, suspendre/exclure/réactiver,
- * attribuer des crédits, note interne. All actions revalidate the member's
- * own detail page since that's the only place they're called from today.
+ * E8-T04 — gestion membres : suspendre/exclure/réactiver, attribuer des
+ * crédits, note interne. All actions revalidate the member's own detail page
+ * since that's the only place they're called from today.
+ *
+ * 4 août 2026 (CEO Summit devenu intégralement B2B) — `changeMemberTier` a
+ * été retiré : le tier n'est plus un attribut personnel modifiable par
+ * l'admin, il est dérivé du rang de l'offre plateforme de l'entreprise du
+ * membre (lib/plan-access.ts::getViewerTierFromCompany). Changer le niveau
+ * d'accès d'un membre passe désormais par le changement d'offre de son
+ * entreprise, pas par une action individuelle.
  */
-
-export async function changeMemberTier(userId: string, tier: Tier): Promise<ActionResult> {
-  const { userId: adminId } = await requireAdmin("membres");
-
-  // Phase 0 of the offers/payment rework (30 juillet 2026) — resolve the
-  // Plan row mirroring this legacy tier (seeded by prisma/backfill-plans.ts).
-  const plan = await prisma.plan.findFirst({ where: { name: tier, scope: "INDIVIDUAL" } });
-
-  const activeMembership = await prisma.membership.findFirst({
-    where: { userId, status: "ACTIVE" },
-    orderBy: { endDate: "desc" },
-  });
-
-  if (activeMembership) {
-    await prisma.membership.update({
-      where: { id: activeMembership.id },
-      data: { tier, planId: plan?.id },
-    });
-  } else {
-    // No active membership to adjust (e.g. a candidature-approved account that
-    // hasn't paid via Evolia yet) — an admin-granted one, price 0, 1 year.
-    await prisma.membership.create({
-      data: {
-        userId,
-        tier,
-        planId: plan?.id,
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        status: "ACTIVE",
-        price: 0,
-      },
-    });
-  }
-
-  await prisma.user.update({ where: { id: userId }, data: { role: tier } });
-  if (plan) {
-    await syncUserPlanCache(userId, plan.id);
-  }
-
-  await prisma.auditLog.create({
-    data: {
-      actorId: adminId,
-      action: "member.change_tier",
-      targetType: "User",
-      targetId: userId,
-      metadata: { tier },
-    },
-  });
-
-  revalidatePath(`/admin/membres/${userId}`);
-  return { success: true, data: undefined };
-}
 
 async function setMemberStatus(
   userId: string,

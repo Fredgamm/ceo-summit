@@ -56,8 +56,7 @@ export function SignupForm({ intendedPlan }: { intendedPlan?: Plan | null }) {
         <Alert variant="gold">
           <AlertDescription>
             Vous vous inscrivez pour : <strong>{intendedPlan.name}</strong> —{" "}
-            {formatAriary(intendedPlan.priceAr)}
-            {intendedPlan.scope === "COMPANY" ? " / participant / an" : " / an"}
+            {formatAriary(intendedPlan.priceAr)} / participant / an
           </AlertDescription>
         </Alert>
       )}

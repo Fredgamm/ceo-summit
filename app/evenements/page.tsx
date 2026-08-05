@@ -12,6 +12,7 @@ import {
   type EventsSearchParams,
 } from "@/lib/events-query";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { EventFilters } from "@/components/events/event-filters";
 import { EventCard } from "@/components/events/event-card";
@@ -28,11 +29,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
-  const viewerTier = viewer.memberships[0]?.tier;
+  const viewerTier = getViewerTierFromCompany(viewer.company);
 
   const [upcoming, past] = await Promise.all([
     prisma.event.findMany({

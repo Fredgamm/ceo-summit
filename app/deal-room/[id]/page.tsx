@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getSignedDownloadUrl } from "@/lib/r2";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { OPPORTUNITY_TYPE_LABEL } from "@/components/deal-room/opportunity-card";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,7 +31,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
@@ -44,8 +45,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
           title: true,
           avatarUrl: true,
           bio: true,
-          company: { select: { name: true } },
-          memberships: { where: { status: "ACTIVE" }, take: 1 },
+          ...VIEWER_TIER_INCLUDE,
         },
       },
       _count: { select: { contacts: true } },
@@ -53,7 +53,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
   });
   if (!opportunity) notFound();
 
-  const viewerTier = viewer.memberships[0]?.tier ?? null;
+  const viewerTier = getViewerTierFromCompany(viewer.company);
   const isAuthor = opportunity.authorId === viewer.id;
 
   // Defense in depth — the list already filters by visibility, but a
@@ -77,7 +77,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
       })
     : [];
 
-  const authorTier = opportunity.author.memberships[0]?.tier ?? null;
+  const authorTier = getViewerTierFromCompany(opportunity.author.company);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   // B4 (audit du 29 juillet 2026) — attachments are R2 keys in a private

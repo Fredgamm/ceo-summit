@@ -37,13 +37,7 @@ function isPublicRoute(pathname: string) {
  * bounce them to /paiement-en-attente before they could ever reach the flow
  * meant to get them out of it.
  */
-const ACCOUNT_SETUP_PREFIXES = [
-  "/entreprise",
-  "/entreprises",
-  "/bienvenue",
-  "/profil",
-  "/adhesion",
-];
+const ACCOUNT_SETUP_PREFIXES = ["/entreprise", "/entreprises", "/bienvenue", "/profil"];
 
 function isAccountSetupRoute(pathname: string) {
   return ACCOUNT_SETUP_PREFIXES.some(
@@ -82,32 +76,18 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/login", req.nextUrl.origin));
   }
 
-  // B1f (audit du 29 juillet 2026) — un candidat approuvé (compte ACTIVE)
-  // qui ne va jamais au bout du paiement Evolia n'a pas de Membership, donc
-  // pas de tier : avant ce correctif, il gardait un accès plateforme complet
-  // et gratuit indéfiniment. Les admins n'ont jamais de Membership non plus
-  // (rôle distinct des tiers) — explicitement exclus ici.
-  //
-  // Phase 2 offres/paiement (30 juillet 2026) — un membre invité par une
-  // entreprise n'a pas non plus de tier personnel : `hasCompanyAccess`
-  // (vrai si l'entreprise a un CompanySubscription ACTIVE) couvre ce cas
-  // pour tous ses collaborateurs, pas seulement l'admin entreprise. Les
-  // routes de mise en place du compte (entreprise, bienvenue, profil)
-  // restent atteignables même sans accès — sinon impossible de jamais en
-  // sortir.
-  //
-  // Phase 2ter (1er août 2026) — `session.user.tier == null` ne suffit
-  // plus comme signal d'accès : une offre librement créée par l'admin
-  // (ex. "Executive pass") n'a pas de tier legacy correspondant, un
-  // Membership ACTIVE peut donc avoir `tier: null` légitimement.
-  // `hasIndividualAccess` (voir auth.ts/types/next-auth.d.ts) est le vrai
-  // signal, calculé indépendamment de `tier`.
+  // 4 août 2026 (CEO Summit devenu intégralement B2B) — chaque compte est
+  // rattaché à une entreprise ; `hasCompanyAccess` (vrai si l'entreprise a
+  // un CompanySubscription ACTIVE ou EXPIRED — RG-12, seul l'accès à
+  // l'édition d'évènement expire, pas les avantages plateforme) couvre tous
+  // les collaborateurs, pas seulement l'admin entreprise. Les routes de mise
+  // en place du compte (entreprise, bienvenue, profil) restent atteignables
+  // même sans accès — sinon impossible de jamais en sortir.
   if (
     !isAdminRoute &&
     !isPublic &&
     !isAccountSetupRoute(pathname) &&
     !session.user.isPlatformAdmin &&
-    !session.user.hasIndividualAccess &&
     !session.user.hasCompanyAccess &&
     pathname !== "/paiement-en-attente"
   ) {

@@ -29,10 +29,15 @@ describe("buildServicesQuery", () => {
     ]);
   });
 
-  it("filters by the provider's active membership tier", () => {
+  it("filters by the provider's company plan rank meeting the tier threshold", () => {
     const query = buildServicesQuery({ tier: "CHAIRMAN" });
     expect(query.where.author).toEqual({
-      memberships: { some: { status: "ACTIVE", tier: "CHAIRMAN" } },
+      company: {
+        subscription: {
+          status: { in: ["ACTIVE", "EXPIRED"] },
+          plan: { rank: { gte: 3 } },
+        },
+      },
     });
   });
 

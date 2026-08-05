@@ -8,6 +8,7 @@ import { markRoomAsRead } from "@/app/actions/rooms";
 import { meetsRoomAccess, ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getSignedDownloadUrl } from "@/lib/r2";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomChat } from "@/components/rooms/room-chat";
 import { Badge } from "@/components/ui/badge";
@@ -29,14 +30,14 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { memberships: { where: { status: "ACTIVE" }, take: 1 } },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
   const room = await prisma.room.findUnique({ where: { id: params.id } });
   if (!room || room.status !== "ACTIVE") notFound();
 
-  const viewerTier = viewer.memberships[0]?.tier ?? null;
+  const viewerTier = getViewerTierFromCompany(viewer.company);
   if (!meetsRoomAccess(viewerTier, room.minTier)) notFound();
 
   const [messages] = await Promise.all([

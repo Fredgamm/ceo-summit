@@ -24,30 +24,21 @@ enum Role {
   ADMIN
 }
 
-/// Membership tier — drives pricing, Deal Room credits, room access.
-/// Superseded by the dynamic `Plan` model (Phase 1 of the offers/payment
-/// rework, 30 juillet 2026) but kept as-is during the transition: existing
-/// `Membership.tier`/`User.role` rows stay valid and readable, nothing reads
-/// this as the source of truth for new logic anymore.
+/// Legacy tier bucket — still the type of `Event.minTier`/`Opportunity.visibility`/
+/// `MembershipApplication.requestedTier` (non-nullable legacy columns) and the
+/// unit `Room.minTier`/RBAC checks compare against. Superseded by the dynamic
+/// `Plan` model (Phase 1 of the offers/payment rework, 30 juillet 2026); the
+/// effective tier of a user is now derived from their company's plan rank
+/// (CEO Summit devenu intégralement B2B, 4 août 2026 — voir
+/// lib/plan-access.ts::getViewerTierFromCompany) rather than stored per-user.
 enum Tier {
   MEMBER
   EXECUTIVE
   CHAIRMAN
 }
 
-enum PlanScope {
-  INDIVIDUAL
-  COMPANY
-}
-
 enum MembershipStatus {
   PENDING_ACTIVATION
-  /// Phase 2ter (1er août 2026) — offre individuelle choisie, paiement pas
-  /// encore soumis. Ne s'applique qu'à `Membership.status` (jamais à
-  /// `User.status`, qui partage cet enum mais n'utilise pas ces 2 valeurs).
-  PENDING_PAYMENT
-  /// Preuve de paiement soumise, en attente de revue admin.
-  PENDING_REVIEW
   ACTIVE
   EXPIRED
   SUSPENDED
@@ -171,78 +162,77 @@ enum WebhookStatus {
 // ═══════════════════════════════════════════════
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  passwordHash  String?
-  name          String
-  title         String? // ex: "CEO", "Directeur Général"
-  bio           String?   @db.Text
-  avatarUrl     String?
-  linkedinUrl   String?
-  phone         String?
-  country       String?
-  sectors       String[] // secteurs d'intérêt (référentiel dans AdminSettings)
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  name         String
+  title        String? // ex: "CEO", "Directeur Général"
+  bio          String?  @db.Text
+  avatarUrl    String?
+  linkedinUrl  String?
+  phone        String?
+  country      String?
+  sectors      String[] // secteurs d'intérêt (référentiel dans AdminSettings)
 
-  role          Role      @default(MEMBER)
+  role            Role             @default(MEMBER)
   /// Split off `role` (Phase 0, 30 juillet 2026) — `role` used to double as
   /// both "is this account an admin" and a denormalized tier cache, synced
   /// by two independent write paths that had to stay in lockstep by
   /// convention only. This is now the single source of truth for the admin
   /// axis; `role` stays populated for compatibility during the Tier->Plan
   /// transition but nothing new should read it as an admin check.
-  isPlatformAdmin Boolean @default(false)
-  status        MembershipStatus @default(PENDING_ACTIVATION)
+  isPlatformAdmin Boolean          @default(false)
+  status          MembershipStatus @default(PENDING_ACTIVATION)
 
   /// Denormalized cache of the current plan, kept in sync exclusively via
   /// lib/membership-sync.ts::syncUserPlanCache. Nullable: a brand-new
   /// signup or a company-invited teammate has no personal plan of their own.
-  planId        String?
-  plan          Plan?     @relation(fields: [planId], references: [id])
+  planId String?
+  plan   Plan?   @relation(fields: [planId], references: [id])
 
   /// Phase 2ter (1er août 2026) — offre choisie sur le site public avant
   /// inscription (lien profond `/inscription?offre=<slug>`), portée jusqu'à
   /// /paiement-en-attente pour ne pas la redemander. Transitoire : jamais
-  /// nettoyé explicitement une fois le vrai Membership/CompanySubscription
-  /// créé, mais plus lu à partir de ce moment-là.
+  /// nettoyé explicitement une fois le vrai CompanySubscription créé, mais
+  /// plus lu à partir de ce moment-là.
   intendedPlanId String?
-  intendedPlan   Plan?    @relation("IntendedPlan", fields: [intendedPlanId], references: [id])
+  intendedPlan   Plan?   @relation("IntendedPlan", fields: [intendedPlanId], references: [id])
 
-  companyId     String?
-  company       Company?  @relation(fields: [companyId], references: [id])
+  companyId      String?
+  company        Company? @relation(fields: [companyId], references: [id])
   /// Phase 2 offres/paiement — non-null uniquement si ce User est l'admin
   /// fonctionnel d'une entreprise (voir Company.companyAdminId).
   companyAdminOf Company? @relation("CompanyAdmin")
 
-  sponsorId     String? // parrain (RG parrainage cercle privé)
-  sponsor       User?     @relation("Sponsorship", fields: [sponsorId], references: [id])
-  sponsees      User[]    @relation("Sponsorship")
+  sponsorId String? // parrain (RG parrainage cercle privé)
+  sponsor   User?   @relation("Sponsorship", fields: [sponsorId], references: [id])
+  sponsees  User[]  @relation("Sponsorship")
 
-  emailVerifiedAt DateTime?
+  emailVerifiedAt       DateTime?
   /// Set once the /bienvenue tutorial (E1-T05) is completed or explicitly
   /// skipped — gates whether it re-triggers on subsequent logins.
   onboardingCompletedAt DateTime?
   /// E8-T04 — internal admin note on this member, visible only in /admin/membres/[id].
-  adminNote     String?   @db.Text
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  adminNote             String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  memberships       Membership[]
-  eventRegistrations EventRegistration[]
-  opportunitiesAuthored Opportunity[]      @relation("OpportunityAuthor")
+  eventRegistrations           EventRegistration[]
+  opportunitiesAuthored        Opportunity[]        @relation("OpportunityAuthor")
   opportunityContactsInitiated OpportunityContact[] @relation("ContactInitiator")
   opportunityContactsReceived  OpportunityContact[] @relation("ContactReceiver")
-  creditBalance     CreditBalance?
-  creditTransactions CreditTransaction[]
-  creditPurchases   CreditPurchase[]
-  roomMessages      RoomMessage[]
-  sentMessages      Message[]           @relation("MessageSender")
-  conversationsAsMember1 Conversation[]  @relation("ConversationMember1")
-  conversationsAsMember2 Conversation[]  @relation("ConversationMember2")
-  serviceListings   ServiceListing[]
-  activationTokens  ActivationToken[]
-  passwordResetTokens PasswordResetToken[]
-  reportsFiled      RoomReport[]        @relation("ReportedBy")
-  auditLogsAsAdmin  AuditLog[]          @relation("AuditActor")
+  creditBalance                CreditBalance?
+  creditTransactions           CreditTransaction[]
+  creditPurchases              CreditPurchase[]
+  roomMessages                 RoomMessage[]
+  sentMessages                 Message[]            @relation("MessageSender")
+  conversationsAsMember1       Conversation[]       @relation("ConversationMember1")
+  conversationsAsMember2       Conversation[]       @relation("ConversationMember2")
+  serviceListings              ServiceListing[]
+  activationTokens             ActivationToken[]
+  passwordResetTokens          PasswordResetToken[]
+  reportsFiled                 RoomReport[]         @relation("ReportedBy")
+  auditLogsAsAdmin             AuditLog[]           @relation("AuditActor")
 
   @@index([email])
   @@index([role, status])
@@ -290,70 +280,43 @@ model PasswordResetToken {
 // ═══════════════════════════════════════════════
 
 model MembershipApplication {
-  id           String             @id @default(cuid())
-  fullName     String
-  email        String
-  companyName  String
-  title        String
-  sector       String
-  country      String
+  id            String            @id @default(cuid())
+  fullName      String
+  email         String
+  companyName   String
+  title         String
+  sector        String
+  country       String
   /// Rendu optionnel (30 juillet 2026) — le formulaire /demande-acces ne
   /// collecte plus de message de motivation, formulaire simplifié. Reste
   /// nullable plutôt que supprimé : les candidatures historiques gardent
   /// leur texte.
-  motivation   String?            @db.Text
+  motivation    String?           @db.Text
   /// Parrainage jamais activé (30 juillet 2026) — champ retiré du
   /// formulaire, gardé nullable pour l'historique.
-  sponsorName  String?
-  attachments  String[] // R2 URLs (CV, lettre de motivation...)
+  sponsorName   String?
+  attachments   String[] // R2 URLs (CV, lettre de motivation...)
   requestedTier Tier              @default(MEMBER)
-  status       ApplicationStatus  @default(PENDING)
-  adminNote    String?            @db.Text
-  decidedById  String?
-  decidedAt    DateTime?
+  status        ApplicationStatus @default(PENDING)
+  adminNote     String?           @db.Text
+  decidedById   String?
+  decidedAt     DateTime?
   /// Horodatage du consentement RGPD à la collecte (case CGU/politique de
   /// confidentialité cochée sur /demande-acces) — preuve du consentement,
   /// pas juste un booléen : audit conformité du 29 juillet 2026.
-  consentedAt  DateTime
-  createdAt    DateTime           @default(now())
+  consentedAt   DateTime
+  createdAt     DateTime          @default(now())
 
   @@index([status])
   @@index([email])
 }
 
-model Membership {
-  id           String            @id @default(cuid())
-  userId       String
-  user         User              @relation(fields: [userId], references: [id])
-  /// Devenu nullable (Phase 2ter, 1er août 2026) — une offre librement
-  /// créée par l'admin (ex. "Executive pass" à 2,5M Ar) n'a pas toujours de
-  /// correspondance légitime avec l'un des 3 tiers historiques. Renseigné
-  /// uniquement quand `planId` référence l'une des 3 offres backfillées en
-  /// Phase 0 ; `null` pour toute nouvelle offre créée depuis /admin/plans.
-  tier         Tier?
-  /// Nullable during the Tier->Plan transition (Phase 0, 30 juillet 2026) —
-  /// backfilled for every existing row from `tier`, and set going forward by
-  /// lib/membership-sync.ts::syncUserPlanCache. `tier` itself is left
-  /// populated in parallel, read by any not-yet-migrated code path.
-  planId       String?
-  plan         Plan?             @relation(fields: [planId], references: [id])
-  /// Nullable (Phase 2ter, 1er août 2026) — un Membership PENDING_PAYMENT/
-  /// PENDING_REVIEW n'a pas encore de dates réelles, calculées seulement à
-  /// la confirmation admin (mêmes raisons que CompanySubscription.startDate/
-  /// endDate, déjà nullable pour la même phase de vie).
-  startDate    DateTime?
-  endDate      DateTime?
-  status       MembershipStatus  @default(ACTIVE)
-  price        Int // in Ariary
-  paymentRef   String?           @unique // Evolia payment reference — unique so a webhook retry (RG-P1-01) can't create a duplicate Membership
-  autoRenew    Boolean           @default(false)
-  createdAt    DateTime          @default(now())
-
-  payments     MembershipPayment[]
-
-  @@index([userId])
-  @@index([status, endDate]) // used for "expiring soon" admin queries
-  @@index([planId])
+/// 4 août 2026 (split plateforme/évènement) — mode de facturation d'une
+/// offre d'évènement. Sans objet pour une offre plateforme (`Plan.eventId`
+/// nul), qui ne se vend jamais directement.
+enum PlanPricingMode {
+  PER_PARTICIPANT
+  FIXED_BUNDLE
 }
 
 /// Admin-creatable offer/plan — replaces the fixed `Tier` enum as the source
@@ -363,36 +326,56 @@ model Membership {
 /// what used to be two separately-hardcoded arrays
 /// (lib/deal-room-query.ts::TIER_ORDER, lib/utils.ts::TIER_RANK).
 model Plan {
-  id                  String    @id @default(cuid())
-  name                String
+  id                   String           @id @default(cuid())
+  name                 String
   /// Phase 2ter (1er août 2026) — identifiant lisible pour le lien profond
   /// depuis le site public vitrine (`/inscription?offre=<slug>`), plutôt que
   /// l'id cuid technique. Éditable dans /admin/plans.
-  slug                String    @unique
-  description         String?   @db.Text
-  scope               PlanScope @default(INDIVIDUAL)
-  /// Prix unitaire — total pour scope INDIVIDUAL (1 participant), prix PAR
-  /// PARTICIPANT pour scope COMPANY (Phase 2ter : montant dû = priceAr ×
-  /// nombre réel de collaborateurs, voir lib/company-payment-amount.ts).
-  priceAr             Int
-  /// Only meaningful for scope: COMPANY plans — enforced at invite time, not just payment.
-  maxTeamMembers      Int?
-  /// Phase 2ter (1er août 2026) — seuil minimum de participants pour
-  /// bénéficier de ce tarif dégressif (scope COMPANY uniquement, ex. "Light
-  /// corporate pass" exige ≥10 collaborateurs). `null` = aucun seuil.
-  minParticipants     Int?
-  includedCredits     Int       @default(0)
+  slug                 String           @unique
+  description          String?          @db.Text
+  /// Prix unitaire. Pour une offre d'évènement (`eventId` non nul) en mode
+  /// `pricingMode: PER_PARTICIPANT`, prix par participant (montant dû =
+  /// priceAr × nombre déclaré, voir lib/company-payment-amount.ts) ; en mode
+  /// `FIXED_BUNDLE`, montant total fixe pour `includedSeats` sièges.
+  priceAr              Int
+  /// Quota de collaborateurs de l'avantage **plateforme** (offre avec
+  /// `eventId` nul) — indépendant de toute édition d'évènement. Pour une
+  /// offre d'évènement, lire ce champ sur `linkedPlatformPlan`, jamais sur
+  /// l'offre d'évènement elle-même (4 août 2026, split plateforme/évènement).
+  maxTeamMembers       Int?
+  /// Seuil minimum de participants pour bénéficier du tarif dégressif d'une
+  /// offre d'évènement en mode `PER_PARTICIPANT` (ex. "Light corporate pass"
+  /// exige ≥10 collaborateurs). Sans objet en mode `FIXED_BUNDLE`. `null` =
+  /// aucun seuil.
+  minParticipants      Int?
+  /// 4 août 2026 (split plateforme/évènement) — mode de facturation d'une
+  /// offre d'évènement : `PER_PARTICIPANT` (priceAr × nombre déclaré,
+  /// comportement historique) ou `FIXED_BUNDLE` (priceAr fixe pour
+  /// `includedSeats` sièges). `null` pour une offre plateforme (`eventId`
+  /// nul) — elle ne se vend jamais directement par ce mécanisme.
+  pricingMode          PlanPricingMode?
+  /// Nombre de sièges inclus dans le forfait — pertinent uniquement en mode
+  /// `FIXED_BUNDLE`.
+  includedSeats        Int?
+  /// 4 août 2026 (split plateforme/évènement) — référence, pour une offre
+  /// d'évènement (`eventId` non nul), vers l'offre plateforme (`eventId`
+  /// nul) dont hériter les avantages permanents (crédits, quotas) à la
+  /// confirmation du paiement. `null` sur une offre plateforme elle-même.
+  linkedPlatformPlanId String?
+  linkedPlatformPlan   Plan?            @relation("PlatformPlanLink", fields: [linkedPlatformPlanId], references: [id])
+  eventOffers          Plan[]           @relation("PlatformPlanLink")
+  includedCredits      Int              @default(0)
   /// Replaces the scattered `=== "CHAIRMAN"` unlimited-credits checks.
-  hasUnlimitedCredits Boolean   @default(false)
-  rank                Int
-  eligibilityNote     String?   @db.Text
-  isActive            Boolean   @default(true)
+  hasUnlimitedCredits  Boolean          @default(false)
+  rank                 Int
+  eligibilityNote      String?          @db.Text
+  isActive             Boolean          @default(true)
   /// Phase 2ter (1er août 2026) — offres de sponsoring créées pour le suivi
   /// admin mais sans parcours self-service (aucun prix public, deal négocié
   /// manuellement) : exclues de getActivePlans({selfServiceOnly:true}) et de
   /// la résolution de lien profond, mais toujours listées à l'admin.
-  isSelfService       Boolean   @default(true)
-  displayOrder        Int       @default(0)
+  isSelfService        Boolean          @default(true)
+  displayOrder         Int              @default(0)
   /// Phase 2quater (1er août 2026) — rattache cette offre à un évènement
   /// précis (ex. les pass "Engagement 2025 — CEO Summit") plutôt qu'à la
   /// plateforme en général. `null` = offre standard plateforme (mécanisme
@@ -401,52 +384,52 @@ model Plan {
   /// `EventRegistration` correspondantes à la confirmation admin — voir
   /// app/actions/admin-memberships.ts::confirmMembershipPayment et
   /// app/actions/admin-companies.ts::confirmCompanyPayment.
-  eventId             String?
-  event               Event?    @relation("EventOffers", fields: [eventId], references: [id])
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  eventId              String?
+  event                Event?           @relation("EventOffers", fields: [eventId], references: [id])
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  memberships         Membership[]
-  users               User[]
-  usersIntending      User[]        @relation("IntendedPlan")
-  eventsAsMinPlan     Event[]       @relation("EventMinPlan")
-  opportunitiesAsVisibilityPlan Opportunity[] @relation("OpportunityVisibilityPlan")
-  companySubscriptions CompanySubscription[]
-  eventRegistrations  EventRegistration[]
+  users                         User[]
+  usersIntending                User[]                @relation("IntendedPlan")
+  eventsAsMinPlan               Event[]               @relation("EventMinPlan")
+  opportunitiesAsVisibilityPlan Opportunity[]         @relation("OpportunityVisibilityPlan")
+  companySubscriptions          CompanySubscription[]
+  eventRegistrations            EventRegistration[]
 
-  @@index([scope, isActive, displayOrder])
+  @@index([isActive, displayOrder])
   @@index([eventId])
+  @@index([linkedPlatformPlanId])
 }
 
 model Company {
-  id          String   @id @default(cuid())
-  name        String
-  sector      String
-  country     String
-  description String?  @db.Text
-  logoUrl     String?
-  website     String?
+  id             String   @id @default(cuid())
+  name           String
+  sector         String
+  country        String
+  description    String?  @db.Text
+  logoUrl        String?
+  website        String?
   /// Coordonnées (parcours revu, 1er août 2026).
-  phone       String?
-  address     String?
+  phone          String?
+  address        String?
   /// Réseaux sociaux — clé libre (ex: "linkedin", "facebook") -> URL, plutôt
   /// que des colonnes par plateforme : le formulaire ne fixe pas une liste
   /// fermée de réseaux.
-  socialLinks Json?
-  additionalInfo String? @db.Text
-  createdAt   DateTime @default(now())
+  socialLinks    Json?
+  additionalInfo String?  @db.Text
+  createdAt      DateTime @default(now())
 
   /// Phase 2 offres/paiement (30 juillet 2026) — le créateur de la fiche
   /// entreprise devient admin entreprise par défaut (rôle fonctionnel,
   /// indépendant de son titre réel) ; réassignable depuis le back-office
   /// (app/actions/admin-companies.ts::reassignCompanyAdmin).
-  companyAdminId String?  @unique
-  companyAdmin   User?    @relation("CompanyAdmin", fields: [companyAdminId], references: [id])
+  companyAdminId String? @unique
+  companyAdmin   User?   @relation("CompanyAdmin", fields: [companyAdminId], references: [id])
 
-  users            User[]
-  serviceListings  ServiceListing[]
-  subscription     CompanySubscription?
-  invites          CompanyInvite[]
+  users           User[]
+  serviceListings ServiceListing[]
+  subscription    CompanySubscription?
+  invites         CompanyInvite[]
 
   @@index([sector])
   @@index([country])
@@ -467,18 +450,18 @@ enum CompanySubscriptionStatus {
 /// tentative de paiement (CompanyPayment) en miroir volontaire du pattern
 /// déjà en place EventRegistration.status/.paymentStatus.
 model CompanySubscription {
-  id        String   @id @default(cuid())
-  companyId String   @unique
-  company   Company  @relation(fields: [companyId], references: [id])
+  id        String                    @id @default(cuid())
+  companyId String                    @unique
+  company   Company                   @relation(fields: [companyId], references: [id])
   planId    String
-  plan      Plan     @relation(fields: [planId], references: [id])
+  plan      Plan                      @relation(fields: [planId], references: [id])
   status    CompanySubscriptionStatus @default(DRAFT)
   startDate DateTime?
   endDate   DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
 
-  payments  CompanyPayment[]
+  payments CompanyPayment[]
 
   @@index([status])
 }
@@ -501,40 +484,19 @@ enum PaymentReviewStatus {
 /// en V1 (y compris carte bancaire — décision produit du 30 juillet 2026,
 /// pas de gateway intégré pour l'instant).
 model CompanyPayment {
-  id                    String   @id @default(cuid())
+  id                    String              @id @default(cuid())
   companySubscriptionId String
   companySubscription   CompanySubscription @relation(fields: [companySubscriptionId], references: [id])
   amount                Int
   method                PaymentMethod
   proofFileKey          String // clé R2 privée — preuve de paiement uploadée
-  comment               String?  @db.Text
+  comment               String?             @db.Text
   status                PaymentReviewStatus @default(PENDING)
   submittedById         String
   reviewedById          String?
   reviewedAt            DateTime?
-  rejectionReason       String?  @db.Text
-  createdAt             DateTime @default(now())
-
-  @@index([status])
-}
-
-/// Phase 2ter (1er août 2026) — miroir exact de CompanyPayment pour les
-/// adhésions individuelles (Evolia définitivement écarté aussi pour ce
-/// chemin). Réutilise les mêmes enums PaymentMethod/PaymentReviewStatus.
-model MembershipPayment {
-  id             String   @id @default(cuid())
-  membershipId   String
-  membership     Membership @relation(fields: [membershipId], references: [id])
-  amount         Int
-  method         PaymentMethod
-  proofFileKey   String
-  comment        String?  @db.Text
-  status         PaymentReviewStatus @default(PENDING)
-  submittedById  String
-  reviewedById   String?
-  reviewedAt     DateTime?
-  rejectionReason String? @db.Text
-  createdAt      DateTime @default(now())
+  rejectionReason       String?             @db.Text
+  createdAt             DateTime            @default(now())
 
   @@index([status])
 }
@@ -549,15 +511,15 @@ enum CompanyInviteStatus {
 /// entreprise. Devient un vrai User (companyId prérempli) via le même
 /// mécanisme ActivationToken que l'inscription self-service, à l'acceptation.
 model CompanyInvite {
-  id          String   @id @default(cuid())
+  id          String              @id @default(cuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id])
+  company     Company             @relation(fields: [companyId], references: [id])
   email       String
   name        String
   invitedById String
-  token       String   @unique
+  token       String              @unique
   status      CompanyInviteStatus @default(PENDING)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime            @default(now())
   acceptedAt  DateTime?
 
   @@index([companyId, status])
@@ -568,34 +530,34 @@ model CompanyInvite {
 // ═══════════════════════════════════════════════
 
 model Event {
-  id             String       @id @default(cuid())
-  title          String
-  type           EventType    @default(RENCONTRE)
-  description    String       @db.Text
-  program        Json? // structured agenda blocks
-  speakers       Json? // [{ name, title, company, photoUrl }]
-  location       String
-  isOnline       Boolean      @default(false)
-  zoomMeetingId  String?
-  date           DateTime
-  capacity       Int
-  minTier        Tier         @default(MEMBER)
+  id            String      @id @default(cuid())
+  title         String
+  type          EventType   @default(RENCONTRE)
+  description   String      @db.Text
+  program       Json? // structured agenda blocks
+  speakers      Json? // [{ name, title, company, photoUrl }]
+  location      String
+  isOnline      Boolean     @default(false)
+  zoomMeetingId String?
+  date          DateTime
+  capacity      Int
+  minTier       Tier        @default(MEMBER)
   /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `minTier` à
   /// terme. Nullable : un événement créé avant cette migration retombe sur
   /// `minTier` (comparaison par rang legacy) tant qu'il n'est pas réédité.
-  minPlanId      String?
-  minPlan        Plan?        @relation("EventMinPlan", fields: [minPlanId], references: [id])
-  price          Int          @default(0) // 0 = inclus dans membership
-  imageUrl       String?
-  status         EventStatus  @default(DRAFT)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  minPlanId     String?
+  minPlan       Plan?       @relation("EventMinPlan", fields: [minPlanId], references: [id])
+  price         Int         @default(0) // 0 = inclus dans membership
+  imageUrl      String?
+  status        EventStatus @default(DRAFT)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  registrations  EventRegistration[]
+  registrations EventRegistration[]
   /// Phase 2quater (1er août 2026) — catalogue d'offres propre à cet
   /// évènement (ex. Executive pass, Light/Medium/Premium/Ultimate
   /// corporate), créées librement par l'admin depuis /admin/plans.
-  offers         Plan[]              @relation("EventOffers")
+  offers        Plan[]              @relation("EventOffers")
 
   @@index([status, date])
   @@index([type])
@@ -603,24 +565,24 @@ model Event {
 }
 
 model EventRegistration {
-  id             String              @id @default(cuid())
-  eventId        String
-  event          Event               @relation(fields: [eventId], references: [id])
-  userId         String
-  user           User                @relation(fields: [userId], references: [id])
-  status         RegistrationStatus  @default(PENDING_PAYMENT)
-  paymentStatus  PaymentStatus       @default(PENDING)
-  paymentMethod  EventPaymentMethod?
-  paymentRef     String?
+  id            String              @id @default(cuid())
+  eventId       String
+  event         Event               @relation(fields: [eventId], references: [id])
+  userId        String
+  user          User                @relation(fields: [userId], references: [id])
+  status        RegistrationStatus  @default(PENDING_PAYMENT)
+  paymentStatus PaymentStatus       @default(PENDING)
+  paymentMethod EventPaymentMethod?
+  paymentRef    String?
   /// Phase 2quater (1er août 2026) — offre d'évènement utilisée (Plan avec
   /// eventId défini). `null` = créée via l'ancien flux simple
   /// (registerForEvent, virement/mobile money, sans preuve).
-  planId         String?
-  plan           Plan?               @relation(fields: [planId], references: [id])
-  badgeQrCode    String              @unique @default(cuid())
-  checkedIn      Boolean             @default(false)
-  checkedInAt    DateTime?
-  createdAt      DateTime            @default(now())
+  planId        String?
+  plan          Plan?               @relation(fields: [planId], references: [id])
+  badgeQrCode   String              @unique @default(cuid())
+  checkedIn     Boolean             @default(false)
+  checkedInAt   DateTime?
+  createdAt     DateTime            @default(now())
 
   @@unique([eventId, userId])
   @@index([eventId, status])
@@ -633,31 +595,31 @@ model EventRegistration {
 // ═══════════════════════════════════════════════
 
 model Opportunity {
-  id           String              @id @default(cuid())
-  authorId     String
-  author       User                @relation("OpportunityAuthor", fields: [authorId], references: [id])
-  title        String
-  type         OpportunityType
-  sector       String
-  country      String
-  description  String              @db.Text
-  budget       Int? // Ariary
-  deadline     DateTime?
-  visibility   Tier                @default(EXECUTIVE) // minimum tier to view
+  id               String            @id @default(cuid())
+  authorId         String
+  author           User              @relation("OpportunityAuthor", fields: [authorId], references: [id])
+  title            String
+  type             OpportunityType
+  sector           String
+  country          String
+  description      String            @db.Text
+  budget           Int? // Ariary
+  deadline         DateTime?
+  visibility       Tier              @default(EXECUTIVE) // minimum tier to view
   /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `visibility` à
   /// terme, même logique de repli que `Event.minPlanId`.
   visibilityPlanId String?
-  visibilityPlan   Plan?           @relation("OpportunityVisibilityPlan", fields: [visibilityPlanId], references: [id])
-  tags         String[]
-  attachments  String[] // R2 signed URLs, TTL 24h at generation
-  status       OpportunityStatus   @default(PENDING_MODERATION)
-  moderationNote String?           @db.Text
-  moderatedById String?
-  moderatedAt  DateTime?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  visibilityPlan   Plan?             @relation("OpportunityVisibilityPlan", fields: [visibilityPlanId], references: [id])
+  tags             String[]
+  attachments      String[] // R2 signed URLs, TTL 24h at generation
+  status           OpportunityStatus @default(PENDING_MODERATION)
+  moderationNote   String?           @db.Text
+  moderatedById    String?
+  moderatedAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
-  contacts     OpportunityContact[]
+  contacts OpportunityContact[]
 
   @@index([status, createdAt])
   @@index([sector, country])
@@ -665,53 +627,53 @@ model Opportunity {
 }
 
 model OpportunityContact {
-  id             String         @id @default(cuid())
+  id             String        @id @default(cuid())
   opportunityId  String
-  opportunity    Opportunity    @relation(fields: [opportunityId], references: [id])
+  opportunity    Opportunity   @relation(fields: [opportunityId], references: [id])
   initiatorId    String
-  initiator      User           @relation("ContactInitiator", fields: [initiatorId], references: [id])
+  initiator      User          @relation("ContactInitiator", fields: [initiatorId], references: [id])
   receiverId     String // = opportunity.authorId, denormalized for query convenience
-  receiver       User           @relation("ContactReceiver", fields: [receiverId], references: [id])
-  status         ContactStatus  @default(PENDING)
-  message        String?        @db.Text
-  creditsSpent   Int            @default(1)
+  receiver       User          @relation("ContactReceiver", fields: [receiverId], references: [id])
+  status         ContactStatus @default(PENDING)
+  message        String?       @db.Text
+  creditsSpent   Int           @default(1)
   conversationId String? // set once accepted and conversation auto-created
-  createdAt      DateTime       @default(now())
+  createdAt      DateTime      @default(now())
 
   @@unique([opportunityId, initiatorId])
   @@index([receiverId, status])
 }
 
 model CreditBalance {
-  id         String   @id @default(cuid())
-  userId     String   @unique
-  user       User     @relation(fields: [userId], references: [id])
-  included   Int      @default(0) // reset at each renewal based on tier
-  purchased  Int      @default(0)
-  used       Int      @default(0)
-  resetAt    DateTime? // next renewal date
-  updatedAt  DateTime @updatedAt
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
+  included  Int       @default(0) // reset at each renewal based on tier
+  purchased Int       @default(0)
+  used      Int       @default(0)
+  resetAt   DateTime? // next renewal date
+  updatedAt DateTime  @updatedAt
 
   /// Computed in application layer as (included + purchased - used).
   /// Chairman tier bypasses this check entirely (unlimited).
 }
 
 model CreditTransaction {
-  id        String                 @id @default(cuid())
+  id        String                @id @default(cuid())
   userId    String
-  user      User                   @relation(fields: [userId], references: [id])
+  user      User                  @relation(fields: [userId], references: [id])
   amount    Int // positive = credit, negative = debit
   type      CreditTransactionType
   reason    String?
-  createdAt DateTime               @default(now())
+  createdAt DateTime              @default(now())
 
   @@index([userId, createdAt])
 }
 
 model CreditPackPrice {
-  id       String @id @default(cuid())
-  credits  Int    @unique // 1, 5, 10
-  priceAr  Int
+  id      String @id @default(cuid())
+  credits Int    @unique // 1, 5, 10
+  priceAr Int
 }
 
 enum CreditPurchaseStatus {
@@ -754,7 +716,7 @@ model Conversation {
   lastEmailNotifiedAt DateTime?
   createdAt           DateTime  @default(now())
 
-  messages            Message[]
+  messages Message[]
 
   @@unique([member1Id, member2Id])
   @@index([lastMessageAt])
@@ -824,21 +786,21 @@ model RoomSuspension {
 }
 
 model RoomMessage {
-  id         String       @id @default(cuid())
-  roomId     String
-  room       Room         @relation(fields: [roomId], references: [id])
-  authorId   String
-  author     User         @relation(fields: [authorId], references: [id])
-  content    String       @db.Text
+  id            String    @id @default(cuid())
+  roomId        String
+  room          Room      @relation(fields: [roomId], references: [id])
+  authorId      String
+  author        User      @relation(fields: [authorId], references: [id])
+  content       String    @db.Text
   /// R2 key (private bucket), not a URL — resolved to a short-lived signed
   /// URL at broadcast/render time (server/socket-server.ts,
   /// app/salles/[id]/page.tsx). Renamed from `attachmentUrl` — B4, audit
   /// sécurité du 29 juillet 2026.
   attachmentKey String?
-  deletedAt  DateTime? // soft-delete, replaced by "[Message supprimé]" client-side
-  createdAt  DateTime     @default(now())
+  deletedAt     DateTime? // soft-delete, replaced by "[Message supprimé]" client-side
+  createdAt     DateTime  @default(now())
 
-  reports    RoomReport[]
+  reports RoomReport[]
 
   @@index([roomId, createdAt])
 }
@@ -902,28 +864,28 @@ model PlatformSetting {
 }
 
 model WebhookLog {
-  id         String        @id @default(cuid())
-  source     String // "evolia" | "resend" | "zoom"
-  event      String
-  payload    Json
-  status     WebhookStatus @default(RECEIVED)
-  error      String?
+  id          String        @id @default(cuid())
+  source      String // "evolia" | "resend" | "zoom"
+  event       String
+  payload     Json
+  status      WebhookStatus @default(RECEIVED)
+  error       String?
   processedAt DateTime?
-  createdAt  DateTime      @default(now())
+  createdAt   DateTime      @default(now())
 
   @@index([source, status])
 }
 
 /// Every admin action is logged here for audit (RGPD + accountability).
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String
-  actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String // "candidature.approve", "member.suspend", "opportunity.publish"...
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id])
+  action     String // "candidature.approve", "member.suspend", "opportunity.publish"...
   targetType String
-  targetId  String
-  metadata  Json?
-  createdAt DateTime @default(now())
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
 
   @@index([actorId, createdAt])
   @@index([targetType, targetId])
@@ -952,7 +914,7 @@ model Broadcast {
   openCount      Int              @default(0)
   createdAt      DateTime         @default(now())
 
-  recipients     BroadcastRecipient[]
+  recipients BroadcastRecipient[]
 
   @@index([createdAt])
 }

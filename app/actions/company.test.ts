@@ -78,11 +78,10 @@ describe("createCompany", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects an inactive or non-COMPANY-scope plan", async () => {
+  it("rejects an inactive plan", async () => {
     vi.mocked(prisma.plan.findUnique).mockResolvedValue({
       id: "plan_1",
-      isActive: true,
-      scope: "INDIVIDUAL",
+      isActive: false,
     } as never);
 
     const result = await createCompany({ ...VALID_INPUT, planId: "plan_1" });

@@ -2,8 +2,9 @@ import { computeMRR } from "@/lib/admin-dashboard";
 
 /** E8-T10 — pure computations for the admin finances page. */
 
-export interface MembershipForFinance {
+export interface CompanySubscriptionForFinance {
   planId: string | null;
+  /** Montant réellement payé (dernière CompanyPayment CONFIRMED), pas Plan.priceAr brut. */
   price: number;
   startDate: Date;
   endDate: Date;
@@ -11,22 +12,22 @@ export interface MembershipForFinance {
 
 /**
  * Real MRR per plan — reuses the same spread-over-term logic as the global
- * MRR (E8-T02). Phase 1 offres dynamiques (30 juillet 2026) — replaces the
- * old `computeMRRByTier`'s fixed 3-key `Record<Tier, ...>` bucket, which
- * couldn't represent a 5th/6th admin-created plan. Groups by `planId`
- * instead; a `null` planId (a membership that predates the Phase 0 backfill
- * somehow) buckets under the `"unknown"` key rather than being dropped.
+ * MRR (E8-T02). Groups by `planId`; a `null` planId (ne devrait pas arriver
+ * pour un CompanySubscription réel, `planId` est requis en base — garde
+ * défensive) bucket sous `"unknown"` plutôt que d'être ignoré.
  */
-export function computeMRRByPlan(memberships: MembershipForFinance[]): Map<string, number> {
-  const byPlan = new Map<string, MembershipForFinance[]>();
-  for (const m of memberships) {
-    const key = m.planId ?? "unknown";
+export function computeMRRByPlan(
+  subscriptions: CompanySubscriptionForFinance[]
+): Map<string, number> {
+  const byPlan = new Map<string, CompanySubscriptionForFinance[]>();
+  for (const s of subscriptions) {
+    const key = s.planId ?? "unknown";
     const bucket = byPlan.get(key) ?? [];
-    bucket.push(m);
+    bucket.push(s);
     byPlan.set(key, bucket);
   }
 
-  return new Map([...byPlan.entries()].map(([planId, ms]) => [planId, computeMRR(ms)]));
+  return new Map([...byPlan.entries()].map(([planId, ss]) => [planId, computeMRR(ss)]));
 }
 
 /**
@@ -39,7 +40,7 @@ export function buildExpiringWithinDays(days: number, now: Date): { gt: Date; lt
 
 export interface FinanceTransaction {
   id: string;
-  source: "MEMBERSHIP" | "EVENT" | "CREDITS";
+  source: "COMPANY" | "EVENT" | "CREDITS";
   memberName: string;
   description: string;
   amount: number;

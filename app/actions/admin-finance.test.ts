@@ -10,7 +10,6 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
     eventRegistration: { findUnique: vi.fn(), update: vi.fn() },
-    membership: { findMany: vi.fn() },
     auditLog: { create: vi.fn() },
   },
 }));
@@ -18,16 +17,11 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/event-registration-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/emails/event-payment-reminder-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/membership-renewal-reminder-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
-import {
-  confirmEventPayment,
-  sendEventPaymentReminder,
-  sendRenewalReminders,
-} from "./admin-finance";
+import { confirmEventPayment, sendEventPaymentReminder } from "./admin-finance";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
@@ -98,40 +92,5 @@ describe("sendEventPaymentReminder", () => {
     expect(sendTransactionalEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: "fatima@example.com" })
     );
-  });
-});
-
-describe("sendRenewalReminders", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
-    vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "FINANCIER" } as never);
-  });
-
-  it("emails every member expiring within the window and returns the count", async () => {
-    vi.mocked(prisma.membership.findMany).mockResolvedValue([
-      {
-        tier: "EXECUTIVE",
-        endDate: new Date("2026-08-15"),
-        user: { name: "A", email: "a@example.com" },
-      },
-      {
-        tier: "CHAIRMAN",
-        endDate: new Date("2026-08-20"),
-        user: { name: "B", email: "b@example.com" },
-      },
-    ] as never);
-
-    const result = await sendRenewalReminders(30);
-
-    expect(result).toEqual({ success: true, data: { sent: 2 } });
-    expect(sendTransactionalEmail).toHaveBeenCalledTimes(2);
-  });
-
-  it("returns a zero count when nobody is expiring soon", async () => {
-    vi.mocked(prisma.membership.findMany).mockResolvedValue([]);
-    const result = await sendRenewalReminders(30);
-    expect(result).toEqual({ success: true, data: { sent: 0 } });
-    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 });

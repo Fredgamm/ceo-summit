@@ -34,7 +34,7 @@ function makeViewer(overrides: Partial<Record<string, unknown>> = {}) {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
     companyId: null,
-    memberships: [{ tier: "EXECUTIVE" }],
+    company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     ...overrides,
   } as never;
 }
@@ -100,7 +100,7 @@ describe("submitServiceListing", () => {
 
   it("bypasses the active-listing limit for a Chairman", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(
-      makeViewer({ memberships: [{ tier: "CHAIRMAN" }] })
+      makeViewer({ company: { subscription: { status: "ACTIVE", plan: { rank: 3 } } } })
     );
     vi.mocked(prisma.serviceListing.create).mockResolvedValue({ id: "svc_1" } as never);
 

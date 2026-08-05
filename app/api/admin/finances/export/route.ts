@@ -17,10 +17,14 @@ export async function GET() {
     throw err;
   }
 
-  const [memberships, registrations, purchases] = await Promise.all([
-    prisma.membership.findMany({
-      where: { status: { in: ["ACTIVE", "EXPIRED", "CANCELLED"] } },
-      include: { user: { select: { name: true } } },
+  const [companyPayments, registrations, purchases] = await Promise.all([
+    prisma.companyPayment.findMany({
+      where: { status: { in: ["CONFIRMED", "REJECTED"] } },
+      include: {
+        companySubscription: {
+          include: { company: { select: { name: true } }, plan: { select: { name: true } } },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
     prisma.eventRegistration.findMany({
@@ -39,14 +43,14 @@ export async function GET() {
   ]);
 
   const transactions: FinanceTransaction[] = [
-    ...memberships.map((m) => ({
-      id: m.id,
-      source: "MEMBERSHIP" as const,
-      memberName: m.user.name,
-      description: `Adhésion ${m.tier}`,
-      amount: m.price,
-      method: "Evolia",
-      date: m.createdAt,
+    ...companyPayments.map((p) => ({
+      id: p.id,
+      source: "COMPANY" as const,
+      memberName: p.companySubscription.company.name,
+      description: `Offre ${p.companySubscription.plan.name}`,
+      amount: p.amount,
+      method: p.method,
+      date: p.createdAt,
     })),
     ...registrations.map((r) => ({
       id: r.id,

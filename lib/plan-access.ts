@@ -40,3 +40,60 @@ export function nearestLegacyTier(rank: number): Tier {
   if (rank >= LEGACY_TIER_RANK.EXECUTIVE) return "EXECUTIVE";
   return "MEMBER";
 }
+
+/** Subset of CompanySubscription that still counts as "has an active platform benefit". */
+const TIER_ELIGIBLE_STATUSES = ["ACTIVE", "EXPIRED"] as const;
+
+export interface CompanyForTier {
+  subscription?: {
+    status: string;
+    plan: {
+      rank: number;
+      linkedPlatformPlan?: { rank: number } | null;
+    };
+  } | null;
+}
+
+/**
+ * 4 août 2026 (CEO Summit devenu intégralement B2B) — remplace
+ * `user.memberships[0]?.tier` comme source du tier effectif. Dérivé du rang
+ * de l'offre plateforme liée à l'abonnement entreprise (ou de l'offre
+ * elle-même si aucun lien plateforme n'est renseigné). `EXPIRED` compte
+ * encore : seul l'accès à l'édition d'évènement expire (RG-12), les
+ * avantages plateforme (crédits, Deal Room, salles) persistent tant que le
+ * statut n'est pas `SUSPENDED`/`CANCELLED`/`DRAFT`/`PENDING_*`.
+ */
+export function getViewerTierFromCompany(company: CompanyForTier | null | undefined): Tier | null {
+  const sub = company?.subscription;
+  if (
+    !sub ||
+    !TIER_ELIGIBLE_STATUSES.includes(sub.status as (typeof TIER_ELIGIBLE_STATUSES)[number])
+  ) {
+    return null;
+  }
+  const rank = sub.plan.linkedPlatformPlan?.rank ?? sub.plan.rank;
+  return nearestLegacyTier(rank);
+}
+
+/** Same as {@link getViewerTierFromCompany} but returns the numeric rank directly. */
+export function getViewerRankFromCompany(company: CompanyForTier | null | undefined): number {
+  const sub = company?.subscription;
+  if (
+    !sub ||
+    !TIER_ELIGIBLE_STATUSES.includes(sub.status as (typeof TIER_ELIGIBLE_STATUSES)[number])
+  ) {
+    return 0;
+  }
+  return sub.plan.linkedPlatformPlan?.rank ?? sub.plan.rank;
+}
+
+/** Prisma `include` shape needed to compute the viewer's tier from their company. */
+export const VIEWER_TIER_INCLUDE = {
+  company: {
+    include: {
+      subscription: {
+        include: { plan: { include: { linkedPlatformPlan: true } } },
+      },
+    },
+  },
+} as const;

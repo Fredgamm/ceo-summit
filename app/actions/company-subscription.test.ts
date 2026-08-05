@@ -50,11 +50,10 @@ describe("selectPlan", () => {
     );
   });
 
-  it("rejects a non-COMPANY-scope plan", async () => {
+  it("rejects an inactive plan", async () => {
     vi.mocked(prisma.plan.findUnique).mockResolvedValue({
       id: "plan_1",
-      isActive: true,
-      scope: "INDIVIDUAL",
+      isActive: false,
     } as never);
 
     const result = await selectPlan("company_1", "plan_1");
