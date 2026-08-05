@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EventType, Tier } from "@prisma/client";
 
@@ -38,7 +39,6 @@ export interface EventFormValues {
   title: string;
   type: EventType;
   description: string;
-  programText: string;
   speakersText: string;
   location: string;
   isOnline: boolean;
@@ -54,7 +54,6 @@ const EMPTY_VALUES: EventFormValues = {
   title: "",
   type: "RENCONTRE",
   description: "",
-  programText: "",
   speakersText: "",
   location: "",
   isOnline: false,
@@ -249,20 +248,22 @@ export function EventForm({ mode, eventId, initialValues }: EventFormProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Programme</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              rows={6}
-              placeholder={"19h30 — Accueil cocktail\n20h00 — Dîner\n21h00 — Table ronde"}
-              value={values.programText}
-              onChange={(e) => set("programText", e.target.value)}
-            />
-            <p className="mt-1.5 text-xs text-text-muted">Une ligne par étape du programme.</p>
-          </CardContent>
-        </Card>
+        {mode === "edit" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Programme</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-text-mid">
+                Le programme se gère désormais depuis l&apos;agenda multi-salles (créneaux horaires,
+                salle/piste, intervenants par session).
+              </p>
+              <Button asChild variant="outline" size="sm" className="mt-2">
+                <Link href={`/admin/evenements/${eventId}/agenda`}>Gérer l&apos;agenda →</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

@@ -7,7 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { getActivePlans } from "@/lib/plans-query";
-import { parseProgram, parseSpeakers } from "@/lib/event-content";
+import { parseSpeakers, speakersToText } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
@@ -45,6 +45,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
         include: { user: { select: { id: true, name: true, avatarUrl: true } } },
         take: 12,
       },
+      sessions: { orderBy: { startTime: "asc" } },
       _count: { select: { registrations: { where: { status: { in: TAKEN_STATUSES } } } } },
     },
   });
@@ -65,9 +66,26 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
   const isPast = event.date < new Date();
 
-  const program = parseProgram(event.program);
   const speakers = parseSpeakers(event.speakers);
   const unreadMessages = await countUnreadMessages(viewer.id);
+
+  // E10 — agenda dynamique multi-salles (5 août 2026) : sessions groupées
+  // par jour calendaire, dans l'ordre de leur horaire — des sessions au
+  // même créneau dans des salles différentes s'affichent l'une sous
+  // l'autre (voir la note de app/admin/evenements/[id]/agenda/page.tsx sur
+  // la grille multi-colonnes, pas construite ici pour rester simple).
+  const sessionsByDay = new Map<string, typeof event.sessions>();
+  for (const eventSession of event.sessions) {
+    const dayKey = eventSession.startTime.toISOString().slice(0, 10);
+    const existing = sessionsByDay.get(dayKey) ?? [];
+    existing.push(eventSession);
+    sessionsByDay.set(dayKey, existing);
+  }
+  const formatTimeRange = (start: Date, end: Date) => {
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const t = (d: Date) => `${pad(d.getHours())}h${pad(d.getMinutes())}`;
+    return `${t(start)} – ${t(end)}`;
+  };
 
   return (
     <AppShell
@@ -106,16 +124,37 @@ export default async function EventDetailPage({ params }: { params: { id: string
             </p>
           </div>
 
-          {program.length > 0 && (
+          {event.sessions.length > 0 && (
             <div className="rounded-lg border border-border bg-white p-6">
               <h2 className="mb-3 text-base font-bold text-navy">Programme</h2>
-              <div className="flex flex-col gap-4 border-l-2 border-gold pl-4">
-                {program.map((block) => (
-                  <div key={block.day}>
-                    <p className="mb-1 text-xs font-bold uppercase text-gold">{block.day}</p>
-                    <div className="text-sm leading-relaxed text-text-mid">
-                      {block.items.map((item, i) => (
-                        <p key={i}>{item}</p>
+              <div className="flex flex-col gap-5">
+                {[...sessionsByDay.entries()].map(([dayKey, daySessions]) => (
+                  <div key={dayKey} className="border-l-2 border-gold pl-4">
+                    <p className="mb-2 text-xs font-bold uppercase text-gold">
+                      {formatDateFr(new Date(dayKey))}
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {daySessions.map((eventSession) => (
+                        <div
+                          key={eventSession.id}
+                          className="text-sm leading-relaxed text-text-mid"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-navy">
+                              {formatTimeRange(eventSession.startTime, eventSession.endTime)}
+                            </span>
+                            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-navy">
+                              {eventSession.room}
+                            </span>
+                          </div>
+                          <p className="font-semibold text-navy">{eventSession.title}</p>
+                          {eventSession.description && <p>{eventSession.description}</p>}
+                          {speakersToText(eventSession.speakers) && (
+                            <p className="text-xs text-text-muted">
+                              {speakersToText(eventSession.speakers).split("\n").join(" · ")}
+                            </p>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

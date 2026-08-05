@@ -5,7 +5,6 @@ export const eventFormSchema = z.object({
   title: z.string().trim().min(3, "Le titre doit contenir au moins 3 caractères"),
   type: z.enum(["SUMMIT", "DINER", "WEBINAIRE", "RENCONTRE"]),
   description: z.string().trim().min(10, "La description doit contenir au moins 10 caractères"),
-  programText: z.string().optional().default(""),
   speakersText: z.string().optional().default(""),
   location: z.string().trim().min(1, "Le lieu est requis"),
   isOnline: z.boolean().default(false),

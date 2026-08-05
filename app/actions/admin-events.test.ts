@@ -23,7 +23,6 @@ const VALID_INPUT = {
   title: "Dîner Privé — Finance",
   type: "DINER" as const,
   description: "Un dîner privé pour dirigeants du secteur financier.",
-  programText: "19h30 — Accueil\n20h00 — Dîner",
   speakersText: "Sarah Razanamahery | DG | BNI Madagascar",
   location: "Hotel Carlton",
   isOnline: false,
@@ -43,7 +42,7 @@ describe("admin event actions", () => {
   });
 
   describe("createEvent", () => {
-    it("creates a draft event with parsed program/speakers", async () => {
+    it("creates a draft event with parsed speakers", async () => {
       vi.mocked(prisma.event.create).mockResolvedValue({ id: "evt_1" } as never);
 
       const result = await createEvent(VALID_INPUT);
@@ -53,7 +52,6 @@ describe("admin event actions", () => {
         expect.objectContaining({
           data: expect.objectContaining({
             status: "DRAFT",
-            program: [{ day: "Programme", items: ["19h30 — Accueil", "20h00 — Dîner"] }],
             speakers: [{ name: "Sarah Razanamahery", title: "DG", company: "BNI Madagascar" }],
           }),
         })

@@ -1,19 +1,18 @@
 /**
- * Shared program/speakers parsing for Event.program / Event.speakers (Json
- * columns) — used by the member-facing detail page (E3-T02, read-only) and
- * the admin form (E3-T05, read/write). Kept in one place so both sides
- * agree on the shape.
+ * Shared speaker parsing for Event.speakers (Json column) — used by the
+ * member-facing detail page (E3-T02, read-only) and the admin form
+ * (E3-T05, read/write). Kept in one place so both sides agree on the
+ * shape.
  *
- * The admin form edits these as plain text (one line per item/speaker)
- * rather than a full drag-and-drop block editor — deliberately simple,
- * matching the backlog's "Programme" bullet without inventing UI the
- * backlog never asked for.
+ * The admin form edits this as plain text (one line per speaker) rather
+ * than a full block editor — deliberately simple, matching the backlog's
+ * "Intervenants" bullet without inventing UI the backlog never asked for.
+ *
+ * Programme parsing (`parseProgram`/`parseProgramText`) lived here until
+ * the 5 août 2026 agenda rework (E10) — `Event.program` (free JSON text)
+ * is gone, replaced by structured `EventSession` rows (see
+ * app/actions/admin-event-sessions.ts).
  */
-
-export interface ProgramBlock {
-  day: string;
-  items: string[];
-}
 
 export interface Speaker {
   name: string;
@@ -21,34 +20,11 @@ export interface Speaker {
   company?: string;
 }
 
-export function parseProgram(json: unknown): ProgramBlock[] {
-  if (!Array.isArray(json)) return [];
-  return json.filter(
-    (b): b is ProgramBlock =>
-      !!b && typeof b === "object" && typeof (b as ProgramBlock).day === "string"
-  );
-}
-
 export function parseSpeakers(json: unknown): Speaker[] {
   if (!Array.isArray(json)) return [];
   return json.filter(
     (s): s is Speaker => !!s && typeof s === "object" && typeof (s as Speaker).name === "string"
   );
-}
-
-/** One line per item, stored as a single unnamed block. */
-export function parseProgramText(text: string): ProgramBlock[] {
-  const items = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return items.length > 0 ? [{ day: "Programme", items }] : [];
-}
-
-export function programToText(program: unknown): string {
-  return parseProgram(program)
-    .flatMap((block) => block.items)
-    .join("\n");
 }
 
 /** One speaker per line: "Name | Title | Company" (title/company optional). */

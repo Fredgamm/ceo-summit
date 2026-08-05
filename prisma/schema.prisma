@@ -535,7 +535,6 @@ model Event {
   title         String
   type          EventType   @default(RENCONTRE)
   description   String      @db.Text
-  program       Json? // structured agenda blocks
   speakers      Json? // [{ name, title, company, photoUrl }]
   location      String
   isOnline      Boolean     @default(false)
@@ -559,10 +558,40 @@ model Event {
   /// évènement (ex. Executive pass, Light/Medium/Premium/Ultimate
   /// corporate), créées librement par l'admin depuis /admin/plans.
   offers        Plan[]              @relation("EventOffers")
+  /// E10 — agenda dynamique multi-salles (5 août 2026), remplace l'ancien
+  /// champ `program` (JSON libre, {jour, lignes de texte}) par des sessions
+  /// structurées avec horaire et salle/piste — plusieurs sessions peuvent
+  /// couvrir le même créneau dans des salles différentes (voir
+  /// EventSession). Affichage seul pour l'instant : pas d'inscription ni de
+  /// check-in par session (nécessiterait un modèle d'inscription dédié).
+  sessions      EventSession[]
 
   @@index([status, date])
   @@index([type])
   @@index([minPlanId])
+}
+
+/// E10 — agenda dynamique multi-salles (5 août 2026). Une session est un
+/// créneau dans une salle/piste donnée ; plusieurs sessions du même
+/// évènement peuvent partager le même horaire dans des salles différentes
+/// (ateliers parallèles). `room` reste une chaîne libre — ce n'est pas une
+/// relation vers le modèle `Room` des salles thématiques permanentes
+/// (concept différent : discussion continue vs créneau ponctuel).
+model EventSession {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title       String
+  description String?  @db.Text
+  room        String
+  startTime   DateTime
+  endTime     DateTime
+  /// Même forme que Event.speakers : [{ name, title, company }].
+  speakers    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId, startTime])
 }
 
 model EventRegistration {

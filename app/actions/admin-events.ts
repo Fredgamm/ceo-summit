@@ -6,7 +6,7 @@ import type { EventStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { eventFormSchema } from "@/lib/validations/event";
-import { parseProgramText, parseSpeakersText } from "@/lib/event-content";
+import { parseSpeakersText } from "@/lib/event-content";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -29,7 +29,6 @@ function toEventData(
       title: f.title,
       type: f.type,
       description: f.description,
-      program: parseProgramText(f.programText) as unknown as Prisma.InputJsonValue,
       speakers: parseSpeakersText(f.speakersText) as unknown as Prisma.InputJsonValue,
       location: f.location,
       isOnline: f.isOnline,

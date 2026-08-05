@@ -180,25 +180,6 @@ async function main() {
       type: "SUMMIT",
       description:
         "Le rendez-vous annuel incontournable des dirigeants d'entreprise de l'Océan Indien. Pendant 2 jours, 300 décideurs des secteurs clés se réunissent pour partager des analyses, nouer des partenariats stratégiques et définir les grandes orientations économiques de la région.",
-      program: [
-        {
-          day: "Jour 1 — 15 novembre",
-          items: [
-            "08h30 — Accueil & networking café",
-            "09h30 — Discours d'ouverture",
-            "10h30 — Table ronde : Économie Océan Indien 2027–2030",
-            "19h30 — Cocktail de bienvenue",
-          ],
-        },
-        {
-          day: "Jour 2 — 16 novembre",
-          items: [
-            "09h00 — Keynote : Innovation & Transformation digitale",
-            "14h30 — Table ronde : Investissement & Capital",
-            "19h30 — Gala de clôture",
-          ],
-        },
-      ],
       speakers: [
         { name: "Sarah Razanamahery", title: "DG", company: "BNI Madagascar" },
         { name: "Karan Mehta", title: "CEO", company: "Mauritius Telecom" },
@@ -211,6 +192,93 @@ async function main() {
       price: 1500000,
       status: "PUBLISHED",
     },
+  });
+
+  // E10 — agenda dynamique multi-salles (5 août 2026) : remplace l'ancien
+  // `program` (JSON libre) par des sessions structurées. Le créneau
+  // "14h30" du jour 2 illustre volontairement deux salles en parallèle
+  // (table ronde en salle plénière + atelier PME en salle B), le cas
+  // d'usage central de cette fonctionnalité.
+  const day1 = inDays(110);
+  const day2 = inDays(111);
+  const atTime = (day: Date, hours: number, minutes: number) => {
+    const d = new Date(day);
+    d.setHours(hours, minutes, 0, 0);
+    return d;
+  };
+
+  await prisma.eventSession.createMany({
+    data: [
+      {
+        id: "sess_summit_d1_accueil",
+        eventId: summit.id,
+        title: "Accueil & networking café",
+        room: "Hall principal",
+        startTime: atTime(day1, 8, 30),
+        endTime: atTime(day1, 9, 30),
+      },
+      {
+        id: "sess_summit_d1_ouverture",
+        eventId: summit.id,
+        title: "Discours d'ouverture",
+        room: "Salle plénière",
+        startTime: atTime(day1, 9, 30),
+        endTime: atTime(day1, 10, 30),
+      },
+      {
+        id: "sess_summit_d1_table_ronde",
+        eventId: summit.id,
+        title: "Table ronde : Économie Océan Indien 2027–2030",
+        room: "Salle plénière",
+        startTime: atTime(day1, 10, 30),
+        endTime: atTime(day1, 12, 0),
+        speakers: [{ name: "Sarah Razanamahery", title: "DG", company: "BNI Madagascar" }],
+      },
+      {
+        id: "sess_summit_d1_cocktail",
+        eventId: summit.id,
+        title: "Cocktail de bienvenue",
+        room: "Terrasse",
+        startTime: atTime(day1, 19, 30),
+        endTime: atTime(day1, 21, 0),
+      },
+      {
+        id: "sess_summit_d2_keynote",
+        eventId: summit.id,
+        title: "Keynote : Innovation & Transformation digitale",
+        room: "Salle plénière",
+        startTime: atTime(day2, 9, 0),
+        endTime: atTime(day2, 10, 0),
+        speakers: [{ name: "Karan Mehta", title: "CEO", company: "Mauritius Telecom" }],
+      },
+      {
+        id: "sess_summit_d2_table_ronde_investissement",
+        eventId: summit.id,
+        title: "Table ronde : Investissement & Capital",
+        room: "Salle plénière",
+        startTime: atTime(day2, 14, 30),
+        endTime: atTime(day2, 15, 30),
+      },
+      {
+        id: "sess_summit_d2_atelier_pme",
+        eventId: summit.id,
+        title: "Atelier : Financement des PME",
+        description: "Session parallèle, en petit comité — places limitées.",
+        room: "Salle B",
+        startTime: atTime(day2, 14, 30),
+        endTime: atTime(day2, 15, 30),
+        speakers: [{ name: "Farida Djabou", title: "DG Coopération OI", company: "Comores" }],
+      },
+      {
+        id: "sess_summit_d2_gala",
+        eventId: summit.id,
+        title: "Gala de clôture",
+        room: "Terrasse",
+        startTime: atTime(day2, 19, 30),
+        endTime: atTime(day2, 22, 0),
+      },
+    ],
+    skipDuplicates: true,
   });
 
   await prisma.event.upsert({

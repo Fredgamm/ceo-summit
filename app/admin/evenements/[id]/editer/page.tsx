@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { programToText, speakersToText } from "@/lib/event-content";
+import { speakersToText } from "@/lib/event-content";
 import { EventForm } from "@/components/admin/event-form";
 import { EventStatusActions } from "@/components/admin/event-status-actions";
 
@@ -40,6 +40,12 @@ export default async function EditEventPage({ params }: { params: { id: string }
         </div>
         <div className="flex gap-4">
           <Link
+            href={`/admin/evenements/${event.id}/agenda`}
+            className="text-sm font-semibold text-navy-mid"
+          >
+            Agenda multi-salles →
+          </Link>
+          <Link
             href={`/admin/plans?eventId=${event.id}`}
             className="text-sm font-semibold text-navy-mid"
           >
@@ -68,7 +74,6 @@ export default async function EditEventPage({ params }: { params: { id: string }
           title: event.title,
           type: event.type,
           description: event.description,
-          programText: programToText(event.program),
           speakersText: speakersToText(event.speakers),
           location: event.location,
           isOnline: event.isOnline,
