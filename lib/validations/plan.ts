@@ -13,7 +13,7 @@ import { z } from "zod";
  */
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-export const planFormSchema = z.object({
+const basePlanFormSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(60),
   slug: z
     .string()
@@ -42,8 +42,34 @@ export const planFormSchema = z.object({
   eventId: z.string().trim().optional().default(""),
   /// 4 août 2026 (split plateforme/évènement) — offre plateforme dont
   /// hériter les avantages ; chaîne vide = aucun lien (offre plateforme
-  /// elle-même, ou offre d'évènement pas encore migrée).
+  /// elle-même).
   linkedPlatformPlanId: z.string().trim().optional().default(""),
 });
 
-export type PlanFormInput = z.input<typeof planFormSchema>;
+/**
+ * 4 août 2026 (split plateforme/évènement) — pour toute offre d'évènement
+ * (eventId renseigné), le lien vers une offre plateforme est obligatoire
+ * (RG-13/UC-10 : aucune offre d'évènement existante en base au moment de
+ * cette décision, pas de rétrocompatibilité à gérer). En mode FIXED_BUNDLE,
+ * includedSeats est obligatoire.
+ */
+export const planFormSchema = basePlanFormSchema.superRefine((data, ctx) => {
+  if (data.eventId) {
+    if (!data.linkedPlatformPlanId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["linkedPlatformPlanId"],
+        message: "Une offre plateforme associée est requise pour une offre d'évènement.",
+      });
+    }
+    if (data.pricingMode === "FIXED_BUNDLE" && !data.includedSeats) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["includedSeats"],
+        message: "Le nombre de sièges est requis pour un forfait fixe.",
+      });
+    }
+  }
+});
+
+export type PlanFormInput = z.input<typeof basePlanFormSchema>;

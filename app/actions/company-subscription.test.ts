@@ -8,8 +8,7 @@ vi.mock("@/lib/prisma", () => ({
     company: { findUnique: vi.fn() },
     plan: { findUnique: vi.fn() },
     companySubscription: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    companyPayment: { create: vi.fn() },
-    user: { count: vi.fn() },
+    companyPayment: { create: vi.fn(), updateMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -35,7 +34,6 @@ describe("selectPlan", () => {
     vi.mocked(prisma.plan.findUnique).mockResolvedValue({
       id: "plan_1",
       isActive: true,
-      scope: "COMPANY",
     } as never);
   });
 
@@ -65,7 +63,7 @@ describe("selectPlan", () => {
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       id: "company_1",
       companyAdminId: "admin_user_1",
-      subscription: { status: "ACTIVE" },
+      subscription: { id: "sub_1", status: "ACTIVE", plan: { event: null } },
     } as never);
 
     const result = await selectPlan("company_1", "plan_1");
@@ -82,6 +80,64 @@ describe("selectPlan", () => {
     const result = await selectPlan("company_1", "plan_1");
     expect(result.success).toBe(false);
   });
+
+  it("allows re-selecting once an event-tied ACTIVE subscription's edition has passed (RG-12), persisting EXPIRED", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      id: "company_1",
+      companyAdminId: "admin_user_1",
+      subscription: {
+        id: "sub_1",
+        status: "ACTIVE",
+        plan: { event: { date: new Date("2020-01-01") } },
+      },
+    } as never);
+
+    const result = await selectPlan("company_1", "plan_2");
+
+    expect(result.success).toBe(true);
+    expect(prisma.companySubscription.update).toHaveBeenCalledWith({
+      where: { id: "sub_1" },
+      data: { status: "EXPIRED" },
+    });
+  });
+
+  it("allows switching while PENDING_REVIEW (RG-11) and invalidates the pending proof", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      id: "company_1",
+      companyAdminId: "admin_user_1",
+      subscription: { id: "sub_1", status: "PENDING_REVIEW", plan: { event: null } },
+    } as never);
+
+    const result = await selectPlan("company_1", "plan_2");
+
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { companySubscriptionId: "sub_1", status: "PENDING" },
+        data: expect.objectContaining({ status: "REJECTED" }),
+      })
+    );
+    expect(prisma.companySubscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          planId: "plan_2",
+          status: "PENDING_PAYMENT",
+          declaredParticipants: null,
+        }),
+      })
+    );
+  });
+
+  it("does not touch payments when switching from PENDING_PAYMENT (no proof submitted yet)", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      id: "company_1",
+      companyAdminId: "admin_user_1",
+      subscription: { id: "sub_1", status: "PENDING_PAYMENT", plan: { event: null } },
+    } as never);
+
+    await selectPlan("company_1", "plan_2");
+    expect(prisma.companyPayment.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("submitPaymentProof", () => {
@@ -89,6 +145,7 @@ describe("submitPaymentProof", () => {
     method: "VIREMENT" as const,
     proofFileKey: "company-payments/admin_user_1/proof.pdf",
     comment: "",
+    declaredParticipants: 10,
   };
 
   beforeEach(() => {
@@ -99,27 +156,72 @@ describe("submitPaymentProof", () => {
       companyId: "company_1",
       status: "PENDING_PAYMENT",
       company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
-      plan: { priceAr: 2_250_000, minParticipants: 10 },
+      plan: { priceAr: 2_250_000, minParticipants: 10, pricingMode: null, includedSeats: null },
     } as never);
-    vi.mocked(prisma.user.count).mockResolvedValue(10);
     vi.mocked(prisma.$transaction).mockResolvedValue(undefined as never);
   });
 
-  it("creates the payment (amount computed from headcount × unit price) and flips the subscription to PENDING_REVIEW", async () => {
+  it("creates the payment (amount computed from the declared count × unit price) and flips the subscription to PENDING_REVIEW", async () => {
     const result = await submitPaymentProof("sub_1", VALID_INPUT);
     expect(result.success).toBe(true);
     expect(prisma.$transaction).toHaveBeenCalled();
     expect(prisma.companyPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ amount: 22_500_000 }) })
     );
+    expect(prisma.companySubscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "PENDING_REVIEW", declaredParticipants: 10 }),
+      })
+    );
   });
 
-  it("rejects when headcount is below the plan's minParticipants threshold", async () => {
-    vi.mocked(prisma.user.count).mockResolvedValue(3);
-
-    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+  it("rejects when the declared count is below the plan's minParticipants threshold", async () => {
+    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, declaredParticipants: 3 });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing declared count for a PER_PARTICIPANT plan", async () => {
+    const withoutCount = {
+      method: VALID_INPUT.method,
+      proofFileKey: VALID_INPUT.proofFileKey,
+      comment: VALID_INPUT.comment,
+    };
+    const result = await submitPaymentProof("sub_1", withoutCount);
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("computes a flat amount for a FIXED_BUNDLE plan, no declared count required", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: {
+        priceAr: 20_000_000,
+        minParticipants: null,
+        pricingMode: "FIXED_BUNDLE",
+        includedSeats: 10,
+      },
+    } as never);
+
+    const withoutCount = {
+      method: VALID_INPUT.method,
+      proofFileKey: VALID_INPUT.proofFileKey,
+      comment: VALID_INPUT.comment,
+    };
+    const result = await submitPaymentProof("sub_1", withoutCount);
+
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 20_000_000 }) })
+    );
+    expect(prisma.companySubscription.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ declaredParticipants: null }),
+      })
+    );
   });
 
   it("rejects when the subscription isn't PENDING_PAYMENT", async () => {

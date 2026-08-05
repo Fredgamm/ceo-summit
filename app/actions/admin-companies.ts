@@ -26,7 +26,7 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
     include: {
       companySubscription: {
         include: {
-          plan: true,
+          plan: { include: { linkedPlatformPlan: true } },
           company: { include: { companyAdmin: true, users: { select: { id: true } } } },
         },
       },
@@ -57,7 +57,8 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
    * confirmMembershipPayment, mais pour chaque membre déjà rattaché à
    * l'entreprise au moment de la confirmation (pas les invitations encore
    * en attente) — un collaborateur invité après coup n'est pas
-   * rétroactivement inscrit à l'évènement.
+   * rétroactivement inscrit à l'évènement (RG-14 couvre ce cas séparément,
+   * à l'acceptation de l'invitation).
    */
   const plan = payment.companySubscription.plan;
   if (plan.eventId) {
@@ -78,6 +79,35 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
       )
     );
   }
+
+  /**
+   * RG-09 (4 août 2026) — les avantages plateforme (crédits Deal Room)
+   * viennent de l'offre plateforme liée (`linkedPlatformPlan`), jamais de
+   * l'offre d'évènement elle-même ; repli sur l'offre payée directement si
+   * aucun lien n'est renseigné (offre plateforme achetée sans passer par un
+   * évènement). Attribué à chaque collaborateur déjà rattaché à
+   * l'entreprise — même mécanique que confirmMembershipPayment, simplement
+   * appliquée à tous les membres plutôt qu'à un seul individu. La
+   * répartition d'un pool distinct entre collaborateurs reste hors
+   * périmètre (Phase 3).
+   */
+  const benefitPlan = plan.linkedPlatformPlan ?? plan;
+  const includedCredits = benefitPlan.hasUnlimitedCredits ? 999999 : benefitPlan.includedCredits;
+  await Promise.all(
+    payment.companySubscription.company.users.map((u) =>
+      prisma.creditBalance.upsert({
+        where: { userId: u.id },
+        update: { included: includedCredits, used: 0, resetAt: oneYearLater },
+        create: {
+          userId: u.id,
+          included: includedCredits,
+          purchased: 0,
+          used: 0,
+          resetAt: oneYearLater,
+        },
+      })
+    )
+  );
 
   await prisma.auditLog.create({
     data: {

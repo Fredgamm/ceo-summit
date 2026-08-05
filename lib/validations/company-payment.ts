@@ -11,13 +11,18 @@ export const COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES = [
 
 /**
  * Phase 2ter (1er août 2026) — `amount` retiré : le montant est désormais
- * toujours calculé côté serveur (prix unitaire de l'offre × nombre réel de
- * participants, 1 pour une adhésion individuelle), jamais saisi par
- * l'utilisateur. Réutilisé tel quel pour les adhésions individuelles
- * (aucun champ propre à l'entreprise ici).
+ * toujours calculé côté serveur, jamais saisi par l'utilisateur.
+ *
+ * 4 août 2026 (RG-04) — `declaredParticipants` : pour une offre
+ * `PER_PARTICIPANT`, l'entreprise déclare son nombre de participants prévu
+ * (source de vérité du montant, pas le headcount réel) ; sans objet pour
+ * une offre `FIXED_BUNDLE` (le nombre de sièges vient de l'offre
+ * elle-même). Validé conditionnellement dans submitPaymentProof, pas ici
+ * (dépend du pricingMode du plan, pas connu du schéma).
  */
 export const submitPaymentProofSchema = z.object({
   method: z.enum(["VIREMENT", "CHEQUE", "CARTE_BANCAIRE", "MOBILE_MONEY"]),
   proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
   comment: z.string().trim().max(1000).optional().default(""),
+  declaredParticipants: z.coerce.number().int().min(1).optional(),
 });

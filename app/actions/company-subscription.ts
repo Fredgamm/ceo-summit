@@ -7,24 +7,48 @@ import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { submitPaymentProofSchema } from "@/lib/validations/company-payment";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import AdminCompanyPaymentAlertEmail from "@/emails/admin-company-payment-alert-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
-/** Phase 2 offres/paiement (30 juillet 2026) — choix d'une offre par l'admin entreprise. */
+/**
+ * Phase 2 offres/paiement (30 juillet 2026) — choix d'une offre par l'admin
+ * entreprise.
+ *
+ * RG-11 (4 août 2026) — changer d'offre reste possible à tout moment tant
+ * que l'abonnement n'est pas `ACTIVE`, y compris après soumission d'une
+ * preuve (`PENDING_REVIEW`) : dans ce cas, la preuve précédente est
+ * invalidée (marquée `REJECTED`, motif automatique) et le dossier repasse
+ * en `PENDING_PAYMENT` — l'entreprise doit soumettre une nouvelle preuve
+ * pour la nouvelle offre, `declaredParticipants` est réinitialisé.
+ */
 export async function selectPlan(companyId: string, planId: string): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    include: { subscription: true },
+    include: { subscription: { include: { plan: { include: { event: true } } } } },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
   if (company.companyAdminId !== session.user.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut choisir une offre." };
   }
-  if (company.subscription?.status === "ACTIVE") {
+
+  const effectiveStatus = company.subscription
+    ? computeEffectiveStatus(company.subscription.status, company.subscription.plan.event?.date)
+    : null;
+  // RG-12 — une souscription ACTIVE dont l'évènement est passé n'est plus
+  // qu'un statut affiché : on la persiste en EXPIRED avant de continuer,
+  // pour que ce constat ne dépende pas d'un autre point de lecture.
+  if (effectiveStatus === "EXPIRED" && company.subscription!.status === "ACTIVE") {
+    await prisma.companySubscription.update({
+      where: { id: company.subscription!.id },
+      data: { status: "EXPIRED" },
+    });
+  }
+  if (effectiveStatus === "ACTIVE") {
     return {
       success: false,
       error: "Un abonnement actif existe déjà — contactez l'équipe CEO Summit pour en changer.",
@@ -36,14 +60,25 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
     return { success: false, error: "Offre invalide." };
   }
 
+  if (company.subscription?.status === "PENDING_REVIEW") {
+    await prisma.companyPayment.updateMany({
+      where: { companySubscriptionId: company.subscription.id, status: "PENDING" },
+      data: {
+        status: "REJECTED",
+        rejectionReason: "Offre changée avant validation — nouvelle preuve requise.",
+        reviewedAt: new Date(),
+      },
+    });
+  }
+
   await prisma.companySubscription.upsert({
     where: { companyId },
-    update: { planId, status: "PENDING_PAYMENT" },
+    update: { planId, status: "PENDING_PAYMENT", declaredParticipants: null },
     create: { companyId, planId, status: "PENDING_PAYMENT" },
   });
 
   revalidatePath(`/entreprises/${companyId}`);
-  revalidatePath("/entreprise/abonnement");
+  revalidatePath("/entreprise/paiement");
   return { success: true, data: undefined };
 }
 
@@ -77,21 +112,28 @@ export async function submitPaymentProof(
   const f = parsed.data;
 
   /**
-   * Phase 2ter (1er août 2026) — tarification par participant : le montant
-   * n'est plus saisi par l'utilisateur, calculé à partir du nombre réel de
-   * collaborateurs rattachés (propriétaire inclus), pas des invitations
-   * encore en attente. Bloque la soumission tant que le seuil minimum de
-   * l'offre n'est pas atteint.
+   * RG-04/RG-06 (4 août 2026) — pour une offre `PER_PARTICIPANT`, le
+   * montant est calculé à partir du nombre de participants **déclaré** par
+   * l'entreprise (source de vérité), pas du headcount réel — remplace le
+   * blocage historique par seuil réel (Phase 2ter). Pour `FIXED_BUNDLE`,
+   * pas de déclaration nécessaire, le montant est le forfait fixe. Le
+   * nombre déclaré est persisté sur l'abonnement (verrouillé dès cette
+   * soumission — RG-06 : le modifier exige de changer d'offre, RG-11).
    */
-  const headcount = await prisma.user.count({ where: { companyId: subscription.companyId } });
-  if (!meetsMinParticipants(subscription.plan, headcount)) {
-    const missing = (subscription.plan.minParticipants ?? 1) - headcount;
+  const isFixedBundle = subscription.plan.pricingMode === "FIXED_BUNDLE";
+  if (!isFixedBundle && !f.declaredParticipants) {
+    return { success: false, error: "Le nombre de participants prévu est requis." };
+  }
+  const declaredParticipants = isFixedBundle ? 1 : f.declaredParticipants!;
+
+  if (!meetsMinParticipants(subscription.plan, declaredParticipants)) {
+    const missing = (subscription.plan.minParticipants ?? 1) - declaredParticipants;
     return {
       success: false,
-      error: `Il manque encore ${missing} collaborateur(s) pour atteindre le seuil minimum de cette offre (${subscription.plan.minParticipants}).`,
+      error: `Il manque encore ${missing} participant(s) déclaré(s) pour atteindre le seuil minimum de cette offre (${subscription.plan.minParticipants}).`,
     };
   }
-  const amount = computeDueAmount(subscription.plan, headcount);
+  const amount = computeDueAmount(subscription.plan, declaredParticipants);
 
   await prisma.$transaction([
     prisma.companyPayment.create({
@@ -106,7 +148,10 @@ export async function submitPaymentProof(
     }),
     prisma.companySubscription.update({
       where: { id: companySubscriptionId },
-      data: { status: "PENDING_REVIEW" },
+      data: {
+        status: "PENDING_REVIEW",
+        declaredParticipants: isFixedBundle ? null : declaredParticipants,
+      },
     }),
   ]);
 

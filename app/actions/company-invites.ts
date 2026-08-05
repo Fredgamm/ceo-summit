@@ -9,6 +9,7 @@ import { generateSecureToken } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
+import { seatCap } from "@/lib/company-payment-amount";
 import CompanyInviteEmail from "@/emails/company-invite-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -26,7 +27,7 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    include: { subscription: { include: { plan: true } } },
+    include: { subscription: { include: { plan: { include: { linkedPlatformPlan: true } } } } },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
   if (company.companyAdminId !== session.user.id) {
@@ -42,16 +43,34 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   }
   const email = parsed.data.email.toLowerCase();
 
-  const maxTeamMembers = company.subscription?.plan.maxTeamMembers;
-  if (maxTeamMembers != null) {
+  /**
+   * Deux plafonds indépendants, le plus restrictif s'applique :
+   * - RG-13 (split plateforme/évènement) : quota de collaborateurs de
+   *   l'avantage plateforme (`maxTeamMembers`), vit sur l'offre plateforme
+   *   liée, jamais sur l'offre d'évènement elle-même.
+   * - Nombre de sièges de *cette édition* — `includedSeats` en
+   *   `FIXED_BUNDLE`, ou `declaredParticipants` en `PER_PARTICIPANT` une
+   *   fois une preuve soumise (proposition "payer avant de rassembler").
+   */
+  const subscribedPlan = company.subscription?.plan;
+  const platformCap =
+    subscribedPlan?.linkedPlatformPlan?.maxTeamMembers ?? subscribedPlan?.maxTeamMembers ?? null;
+  const editionCap = subscribedPlan
+    ? (seatCap(subscribedPlan) ?? company.subscription?.declaredParticipants ?? null)
+    : null;
+  const applicableCap = [platformCap, editionCap]
+    .filter((c): c is number => c != null)
+    .reduce((min, c) => (min == null ? c : Math.min(min, c)), null as number | null);
+
+  if (applicableCap != null) {
     const [memberCount, pendingInviteCount] = await Promise.all([
       prisma.user.count({ where: { companyId } }),
       prisma.companyInvite.count({ where: { companyId, status: "PENDING" } }),
     ]);
-    if (memberCount + pendingInviteCount >= maxTeamMembers) {
+    if (memberCount + pendingInviteCount >= applicableCap) {
       return {
         success: false,
-        error: `Plafond de ${maxTeamMembers} collaborateur(s) atteint pour l'offre actuelle.`,
+        error: `Plafond de ${applicableCap} collaborateur(s) atteint pour l'offre actuelle.`,
       };
     }
   }
@@ -158,7 +177,7 @@ export async function acceptCompanyInvite(
 
   const passwordHash = await bcrypt.hash(parsedPassword.data.password, 12);
 
-  await prisma.$transaction([
+  const [newUser] = await prisma.$transaction([
     prisma.user.create({
       data: {
         name: invite.name,
@@ -173,6 +192,35 @@ export async function acceptCompanyInvite(
       data: { status: "ACCEPTED", acceptedAt: new Date() },
     }),
   ]);
+
+  /**
+   * RG-14 (4 août 2026) — un collaborateur invité APRÈS la confirmation du
+   * paiement de l'entreprise (le cas nominal de la décision "payer avant de
+   * rassembler les collaborateurs") n'était jamais inscrit à l'évènement :
+   * confirmCompanyPayment ne couvre que les membres déjà présents au
+   * moment de la confirmation. On rattrape ici, à l'acceptation — mais
+   * seulement si l'abonnement est encore ACTIVE (pas EXPIRED : inscrire
+   * quelqu'un à une édition déjà passée n'a pas de sens).
+   */
+  const subscription = await prisma.companySubscription.findUnique({
+    where: { companyId: invite.companyId },
+    include: { plan: true },
+  });
+  if (subscription?.status === "ACTIVE" && subscription.plan.eventId) {
+    await prisma.eventRegistration.upsert({
+      where: {
+        eventId_userId: { eventId: subscription.plan.eventId, userId: newUser.id },
+      },
+      update: { status: "CONFIRMED", paymentStatus: "PAID", planId: subscription.plan.id },
+      create: {
+        eventId: subscription.plan.eventId,
+        userId: newUser.id,
+        status: "CONFIRMED",
+        paymentStatus: "PAID",
+        planId: subscription.plan.id,
+      },
+    });
+  }
 
   return { success: true, data: { email: invite.email } };
 }

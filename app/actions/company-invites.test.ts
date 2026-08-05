@@ -14,6 +14,8 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    companySubscription: { findUnique: vi.fn() },
+    eventRegistration: { upsert: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -147,13 +149,56 @@ describe("acceptCompanyInvite", () => {
       status: "PENDING",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
-    vi.mocked(prisma.$transaction).mockResolvedValue(undefined as never);
+    vi.mocked(prisma.$transaction).mockResolvedValue([{ id: "user_new" }, {}] as never);
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue(null);
   });
 
   it("creates the account (ACTIVE, password set immediately) with companyId pre-filled", async () => {
     const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
     expect(result).toEqual({ success: true, data: { email: "marie@example.mg" } });
     expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it("registers the new collaborator to the linked event when the subscription is ACTIVE (RG-14)", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      plan: { id: "plan_1", eventId: "event_1" },
+    } as never);
+
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+
+    expect(prisma.eventRegistration.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventId_userId: { eventId: "event_1", userId: "user_new" } },
+        create: expect.objectContaining({
+          eventId: "event_1",
+          userId: "user_new",
+          planId: "plan_1",
+        }),
+      })
+    );
+  });
+
+  it("does not register to the event when the subscription has EXPIRED (past edition)", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      status: "EXPIRED",
+      plan: { id: "plan_1", eventId: "event_1" },
+    } as never);
+
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+
+    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
+  });
+
+  it("does not register to any event for a platform-only plan (no eventId)", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      plan: { id: "plan_1", eventId: null },
+    } as never);
+
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+
+    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
   });
 
   it("rejects an already-accepted invite", async () => {

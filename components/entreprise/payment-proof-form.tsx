@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, PlanPricingMode } from "@prisma/client";
 
 import { submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
@@ -28,35 +28,46 @@ const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
 ];
 
 /**
- * Phase 2ter (1er août 2026) — le montant n'est plus saisi : calculé à
- * partir du prix par participant de l'offre et du nombre réel de
- * collaborateurs (voir lib/company-payment-amount.ts, appliqué de la même
- * façon côté serveur dans submitPaymentProof — ce composant n'affiche
- * qu'un aperçu, la source de vérité reste le calcul serveur).
+ * 4 août 2026 (RG-04/RG-06, split plateforme/évènement) — pour une offre
+ * `PER_PARTICIPANT`, le montant vient du nombre de participants **déclaré**
+ * par l'entreprise (saisi ici, pas déduit du headcount réel — voir
+ * lib/company-payment-amount.ts, même calcul rejoué côté serveur dans
+ * submitPaymentProof, source de vérité). Pour `FIXED_BUNDLE`, le montant
+ * est le forfait fixe de l'offre, aucune saisie requise.
  */
 export function PaymentProofForm({
   companySubscriptionId,
-  pricePerParticipant,
+  priceAr,
   minParticipants,
+  pricingMode,
+  includedSeats,
   headcount,
 }: {
   companySubscriptionId: string;
-  pricePerParticipant: number;
+  priceAr: number;
   minParticipants: number | null;
+  pricingMode: PlanPricingMode | null;
+  includedSeats: number | null;
+  /** Nombre de collaborateurs déjà rattachés — utilisé seulement comme valeur de départ suggérée. */
   headcount: number;
 }) {
   const router = useRouter();
+  const isFixedBundle = pricingMode === "FIXED_BUNDLE";
   const [method, setMethod] = React.useState<PaymentMethod>("VIREMENT");
   const [comment, setComment] = React.useState("");
+  const [declaredParticipants, setDeclaredParticipants] = React.useState(
+    String(Math.max(headcount, minParticipants ?? 1))
+  );
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
 
-  const plan = { priceAr: pricePerParticipant, minParticipants };
-  const meetsThreshold = meetsMinParticipants(plan, headcount);
-  const amount = computeDueAmount(plan, headcount);
+  const plan = { priceAr, minParticipants, pricingMode, includedSeats };
+  const declaredCount = isFixedBundle ? 1 : Number(declaredParticipants) || 0;
+  const meetsThreshold = meetsMinParticipants(plan, declaredCount);
+  const amount = computeDueAmount(plan, declaredCount);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -92,6 +103,7 @@ export function PaymentProofForm({
         method,
         proofFileKey: proof.key,
         comment,
+        ...(isFixedBundle ? {} : { declaredParticipants: declaredCount }),
       });
       if (!result.success) {
         setError(result.error);
@@ -117,15 +129,36 @@ export function PaymentProofForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      {!isFixedBundle && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="declared-participants">Nombre de participants prévu *</Label>
+          <Input
+            id="declared-participants"
+            type="number"
+            min={1}
+            value={declaredParticipants}
+            onChange={(e) => setDeclaredParticipants(e.target.value)}
+          />
+          <p className="text-xs text-text-muted">
+            Vous pourrez inviter vos collaborateurs après paiement, à votre rythme, dans la limite
+            de ce nombre.
+          </p>
+        </div>
+      )}
+
       <div className="rounded-md border border-border bg-surface p-4">
-        <p className="text-sm text-text-mid">
-          {headcount} participant(s) × {formatAriary(pricePerParticipant)}
-        </p>
+        {isFixedBundle ? (
+          <p className="text-sm text-text-mid">Forfait — {includedSeats ?? "?"} sièges inclus</p>
+        ) : (
+          <p className="text-sm text-text-mid">
+            {declaredCount} participant(s) × {formatAriary(priceAr)}
+          </p>
+        )}
         <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
-        {minParticipants && !meetsThreshold && (
+        {!isFixedBundle && minParticipants && !meetsThreshold && (
           <p className="mt-1 text-xs text-red-600">
-            Il manque {minParticipants - headcount} collaborateur(s) pour atteindre le seuil minimum
-            de {minParticipants} de cette offre — invitez-les avant de soumettre.
+            Il manque {minParticipants - declaredCount} participant(s) déclaré(s) pour atteindre le
+            seuil minimum de {minParticipants} de cette offre.
           </p>
         )}
       </div>

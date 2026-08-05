@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import QRCode from "qrcode";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getAllPlans } from "@/lib/plans-query";
+import { getPlanShareUrl } from "@/lib/plan-share";
 import { formatAriary } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PlanAdminActions } from "@/components/admin/plans/plan-admin-actions";
+import { PlanShareButton } from "@/components/admin/plans/plan-share-button";
 
 export const metadata: Metadata = { title: "Admin — Offres" };
 
@@ -36,6 +39,18 @@ export default async function AdminPlansPage({
       ? prisma.event.findUnique({ where: { id: searchParams.eventId }, select: { title: true } })
       : Promise.resolve(null),
   ]);
+
+  // UC-11 — QR code généré pour chaque offre réellement partageable (celles
+  // que /inscription?offre= résout, voir lib/plans-query.ts::getPlanBySlug).
+  const shareablePlans = plans.filter((p) => p.isActive && p.isSelfService);
+  const qrCodes = Object.fromEntries(
+    await Promise.all(
+      shareablePlans.map(async (p) => [
+        p.id,
+        await QRCode.toDataURL(getPlanShareUrl(p.slug), { width: 180, margin: 1 }),
+      ])
+    )
+  ) as Record<string, string>;
 
   return (
     <div className="flex flex-col gap-6">
@@ -114,6 +129,12 @@ export default async function AdminPlansPage({
                       <Button asChild variant="ghost" size="sm">
                         <Link href={`/admin/plans/${plan.id}/editer`}>Éditer</Link>
                       </Button>
+                      {qrCodes[plan.id] && (
+                        <PlanShareButton
+                          url={getPlanShareUrl(plan.slug)}
+                          qrCodeDataUrl={qrCodes[plan.id]}
+                        />
+                      )}
                       <PlanAdminActions planId={plan.id} isActive={plan.isActive} />
                     </div>
                   </td>

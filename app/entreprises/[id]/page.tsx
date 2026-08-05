@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +63,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
         where: { status: "ACTIVE" },
         select: { id: true, name: true, title: true, avatarUrl: true, country: true, role: true },
       },
-      subscription: { include: { plan: true } },
+      subscription: { include: { plan: { include: { event: true } } } },
       invites: { where: { status: "PENDING" }, select: { id: true, name: true, email: true } },
       _count: { select: { invites: true } },
     },
@@ -71,6 +72,9 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
 
   const isCompanyAdmin = company.companyAdminId === viewer.id;
   const unreadMessages = await countUnreadMessages(viewer.id);
+  const subscriptionStatus = company.subscription
+    ? computeEffectiveStatus(company.subscription.status, company.subscription.plan.event?.date)
+    : undefined;
 
   return (
     <AppShell
@@ -170,7 +174,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
                   items={getOnboardingStatus({
                     hasCompany: true,
                     hasInvites: company._count.invites > 0,
-                    subscriptionStatus: company.subscription?.status,
+                    subscriptionStatus,
                   })}
                 />
               </div>
@@ -178,10 +182,8 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
               <div className="rounded-lg border border-border bg-white p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-sm font-bold text-navy">Abonnement</h2>
-                  <Badge
-                    variant={SUBSCRIPTION_STATUS_BADGE[company.subscription?.status ?? "DRAFT"]}
-                  >
-                    {SUBSCRIPTION_STATUS_LABEL[company.subscription?.status ?? "DRAFT"]}
+                  <Badge variant={SUBSCRIPTION_STATUS_BADGE[subscriptionStatus ?? "DRAFT"]}>
+                    {SUBSCRIPTION_STATUS_LABEL[subscriptionStatus ?? "DRAFT"]}
                   </Badge>
                 </div>
                 {company.subscription ? (
@@ -198,12 +200,18 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
                 <div className="mt-3">
                   {!company.subscription && (
                     <Button asChild size="sm">
-                      <Link href="/entreprise/abonnement">Choisir une offre</Link>
+                      <Link href="/entreprise/paiement">Choisir une offre</Link>
                     </Button>
                   )}
-                  {company.subscription?.status === "PENDING_PAYMENT" && (
+                  {company.subscription && subscriptionStatus !== "ACTIVE" && (
                     <Button asChild size="sm">
-                      <Link href="/entreprise/paiement">Soumettre le paiement</Link>
+                      <Link href="/entreprise/paiement">
+                        {company.subscription.status === "PENDING_PAYMENT"
+                          ? "Soumettre le paiement"
+                          : subscriptionStatus === "EXPIRED"
+                            ? "Renouveler pour la prochaine édition"
+                            : "Voir / changer d'offre"}
+                      </Link>
                     </Button>
                   )}
                 </div>

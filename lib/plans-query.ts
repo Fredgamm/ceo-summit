@@ -1,6 +1,8 @@
-import type { Plan } from "@prisma/client";
+import type { Event, Plan } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+
+export type PlanWithEvent = Plan & { event: Event | null };
 
 /**
  * Phase 1 offres dynamiques (30 juillet 2026) — single place every page/
@@ -47,9 +49,15 @@ export async function getPlanById(id: string): Promise<Plan | null> {
  * libre-service : un slug de sponsoring ou d'offre désactivée retombe sur
  * `null` (le site continue de s'afficher normalement, sans pré-sélection),
  * pas une erreur bloquante.
+ *
+ * `event` inclus (UC-11, 5 août 2026) pour la preview enrichie et les
+ * métadonnées Open Graph du lien partagé (app/inscription/page.tsx).
  */
-export async function getPlanBySlug(slug: string): Promise<Plan | null> {
-  return prisma.plan.findFirst({ where: { slug, isActive: true, isSelfService: true } });
+export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null> {
+  return prisma.plan.findFirst({
+    where: { slug, isActive: true, isSelfService: true },
+    include: { event: true },
+  });
 }
 
 /**

@@ -184,9 +184,10 @@ model User {
   isPlatformAdmin Boolean          @default(false)
   status          MembershipStatus @default(PENDING_ACTIVATION)
 
-  /// Denormalized cache of the current plan, kept in sync exclusively via
-  /// lib/membership-sync.ts::syncUserPlanCache. Nullable: a brand-new
-  /// signup or a company-invited teammate has no personal plan of their own.
+  /// Denormalized cache of the current plan. Nullable: a brand-new signup
+  /// or a company-invited teammate has no personal plan of their own.
+  /// Currently unwritten since the Tier->Plan transition completed (4 août
+  /// 2026) — kept for display/backward compat, not a write path anymore.
   planId String?
   plan   Plan?   @relation(fields: [planId], references: [id])
 
@@ -450,16 +451,24 @@ enum CompanySubscriptionStatus {
 /// tentative de paiement (CompanyPayment) en miroir volontaire du pattern
 /// déjà en place EventRegistration.status/.paymentStatus.
 model CompanySubscription {
-  id        String                    @id @default(cuid())
-  companyId String                    @unique
-  company   Company                   @relation(fields: [companyId], references: [id])
-  planId    String
-  plan      Plan                      @relation(fields: [planId], references: [id])
-  status    CompanySubscriptionStatus @default(DRAFT)
-  startDate DateTime?
-  endDate   DateTime?
-  createdAt DateTime                  @default(now())
-  updatedAt DateTime                  @updatedAt
+  id                   String                    @id @default(cuid())
+  companyId            String                    @unique
+  company              Company                   @relation(fields: [companyId], references: [id])
+  planId               String
+  plan                 Plan                      @relation(fields: [planId], references: [id])
+  status               CompanySubscriptionStatus @default(DRAFT)
+  startDate            DateTime?
+  endDate              DateTime?
+  /// 4 août 2026 (RG-04/RG-11) — nombre de participants déclaré par
+  /// l'entreprise pour une offre `PER_PARTICIPANT`, source de vérité du
+  /// montant dû (pas le headcount réel — voir lib/company-payment-amount.ts).
+  /// Renseigné à la soumission de la preuve, verrouillé jusqu'à un
+  /// changement d'offre ou une nouvelle soumission. `null` avant
+  /// soumission, ou toujours pour une offre `FIXED_BUNDLE` (le nombre de
+  /// sièges vient de `Plan.includedSeats`, pas d'ici).
+  declaredParticipants Int?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
   payments CompanyPayment[]
 
