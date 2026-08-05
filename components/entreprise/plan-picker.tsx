@@ -13,10 +13,17 @@ export function PlanPicker({
   companyId,
   plans,
   currentPlanId,
+  initialPlanId,
 }: {
   companyId: string;
   plans: Plan[];
   currentPlanId?: string | null;
+  /**
+   * Sprint du 5 août 2026 — met en avant l'offre visée par un lien profond
+   * (`?offre=<slug>` ou `User.intendedPlanId`) sans la sélectionner
+   * automatiquement : l'utilisateur confirme toujours son choix lui-même.
+   */
+  initialPlanId?: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
@@ -49,7 +56,9 @@ export function PlanPicker({
         {plans.map((plan) => (
           <div
             key={plan.id}
-            className="flex flex-col gap-2 rounded-lg border border-border bg-white p-5"
+            className={`flex flex-col gap-2 rounded-lg border bg-white p-5 ${
+              initialPlanId === plan.id ? "border-2 border-gold" : "border-border"
+            }`}
           >
             <p className="text-base font-bold text-navy">{plan.name}</p>
             {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}

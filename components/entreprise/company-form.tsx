@@ -53,14 +53,18 @@ const EMPTY_VALUES: CompanyFormValues = {
 interface CompanyFormProps {
   mode: "create" | "edit";
   companyId?: string;
-  /** Requis en mode "create" — voir CompanyOnboardingWizard (offre choisie avant l'entreprise). */
-  planId?: string;
   initialValues?: Partial<CompanyFormValues>;
-  onBack?: () => void;
+  /**
+   * Sprint du 5 août 2026 — lien profond `?offre=<slug>` porté depuis
+   * `/entreprise/creer` jusqu'à la redirection post-création vers
+   * `/entreprise/paiement`, où l'offre choisie se résout réellement (voir
+   * app/entreprise/paiement/page.tsx).
+   */
+  offerSlug?: string;
 }
 
 /** Parcours revu (1er août 2026) — coordonnées, réseaux sociaux et logo ajoutés. */
-export function CompanyForm({ mode, companyId, planId, initialValues, onBack }: CompanyFormProps) {
+export function CompanyForm({ mode, companyId, initialValues, offerSlug }: CompanyFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<CompanyFormValues>({
     ...EMPTY_VALUES,
@@ -97,23 +101,17 @@ export function CompanyForm({ mode, companyId, planId, initialValues, onBack }: 
 
   async function handleSubmit() {
     setError(null);
-    if (mode === "create" && !planId) {
-      setError("Aucune offre sélectionnée — retournez à l'étape précédente.");
-      return;
-    }
     setSubmitting(true);
     try {
       const result =
-        mode === "create"
-          ? await createCompany({ ...values, planId })
-          : await updateCompany(companyId!, values);
+        mode === "create" ? await createCompany(values) : await updateCompany(companyId!, values);
       if (!result.success) {
         setError(result.error);
         return;
       }
       const destination =
-        mode === "create" && "data" in result && result.data
-          ? `/entreprises/${result.data.id}`
+        mode === "create"
+          ? `/entreprise/paiement${offerSlug ? `?offre=${encodeURIComponent(offerSlug)}` : ""}`
           : `/entreprises/${companyId}`;
       router.push(destination);
       router.refresh();
@@ -284,24 +282,17 @@ export function CompanyForm({ mode, companyId, planId, initialValues, onBack }: 
           </Alert>
         )}
 
-        <div className="flex items-center gap-2">
-          {onBack && (
-            <Button type="button" variant="outline" onClick={onBack} disabled={submitting}>
-              ← Retour
-            </Button>
-          )}
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || uploadingLogo}
-            className="flex-1 justify-center"
-          >
-            {submitting
-              ? "Enregistrement…"
-              : mode === "create"
-                ? "✓ Créer l'entreprise"
-                : "Enregistrer"}
-          </Button>
-        </div>
+        <Button
+          onClick={handleSubmit}
+          disabled={submitting || uploadingLogo}
+          className="justify-center"
+        >
+          {submitting
+            ? "Enregistrement…"
+            : mode === "create"
+              ? "✓ Créer l'entreprise"
+              : "Enregistrer"}
+        </Button>
       </div>
     </div>
   );

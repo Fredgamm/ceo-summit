@@ -3,20 +3,24 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getActivePlans, getPlanBySlug } from "@/lib/plans-query";
-import { CompanyOnboardingWizard } from "@/components/entreprise/company-onboarding-wizard";
+import { CompanyForm } from "@/components/entreprise/company-form";
 
 export const metadata: Metadata = { title: "Créer mon entreprise" };
 
 /**
- * Parcours revu (1er août 2026) — assistant à 2 étapes : offre puis
- * entreprise (voir components/entreprise/company-onboarding-wizard.tsx).
+ * Parcours re-revu (5 août 2026) — l'entreprise se crée seule ici, sans
+ * offre : le choix d'une offre vient après, sur `/entreprise/paiement`
+ * (voir app/actions/company.ts::createCompany pour le détail de
+ * l'inversion). Un formulaire entreprise plus long est ainsi sauvegardé dès
+ * sa soumission — l'utilisateur peut revenir compléter sa fiche à tout
+ * moment depuis `/entreprises/[id]`, sans dépendre d'un état d'assistant
+ * perdu à la navigation.
  *
  * `?offre=<slug>` (Phase 2quater, 1er août 2026) — lien profond depuis la
  * page d'un évènement (`/evenements/[id]`) pour un utilisateur déjà connecté
- * sans entreprise : même mécanisme que `/inscription?offre=`, mais résolu
- * ici puisqu'il n'y a pas d'étape d'inscription à traverser. Prioritaire
- * sur `User.intendedPlanId` (choisi avant l'inscription, site public).
+ * sans entreprise : transmis tel quel à `CompanyForm`, qui l'ajoute à
+ * l'URL de redirection post-création vers `/entreprise/paiement?offre=...`
+ * — la résolution/validation du slug se fait là-bas, pas ici.
  */
 export default async function CreateCompanyPage({
   searchParams,
@@ -30,24 +34,9 @@ export default async function CreateCompanyPage({
   if (!viewer) redirect("/login");
   if (viewer.companyId) redirect(`/entreprises/${viewer.companyId}`);
 
-  const plans = await getActivePlans({ selfServiceOnly: true });
-
-  const deepLinkedPlan = searchParams.offre ? await getPlanBySlug(searchParams.offre) : null;
-  const resolvedPlanId = deepLinkedPlan ? deepLinkedPlan.id : viewer.intendedPlanId;
-
-  // Une offre d'évènement (Phase 2quater) n'apparaît pas dans la liste
-  // standard (getActivePlans filtre eventId: null par défaut) — on
-  // l'ajoute explicitement si c'est elle qui est visée par le lien profond.
-  const allPlans =
-    deepLinkedPlan && !plans.some((p) => p.id === deepLinkedPlan.id)
-      ? [deepLinkedPlan, ...plans]
-      : plans;
-
-  const initialPlanId = allPlans.some((p) => p.id === resolvedPlanId) ? resolvedPlanId : null;
-
   return (
     <div className="flex min-h-screen justify-center bg-surface p-6 pt-16">
-      <CompanyOnboardingWizard plans={allPlans} initialPlanId={initialPlanId} />
+      <CompanyForm mode="create" offerSlug={searchParams.offre} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { companyFormSchema, createCompanyWithPlanSchema } from "@/lib/validations/company";
+import { companyFormSchema } from "@/lib/validations/company";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -42,16 +42,19 @@ function companyData(f: {
 }
 
 /**
- * Parcours revu (1er août 2026) — l'offre est choisie AVANT l'entreprise
- * (cas d'usage retenu), mais `CompanySubscription.companyId` exige que la
- * Company existe déjà : les deux sont donc créées ensemble, dans la même
- * transaction, à la toute fin de l'assistant — le choix d'offre ne reste
- * qu'un état d'assistant côté client jusque-là (voir
- * components/entreprise/company-onboarding-wizard.tsx), pas une écriture
- * séparée comme dans la première version de cette phase. Le créateur devient
- * admin entreprise (rôle fonctionnel, indépendant de son titre réel) et
- * rejoint lui-même la fiche (companyId). Réassignable ensuite via
- * app/actions/admin-companies.ts.
+ * Parcours re-revu (5 août 2026) — l'entreprise est créée AVANT le choix
+ * d'une offre (ordre inversé par rapport à la version du 1er août) :
+ * demander une offre avant même que l'entreprise existe arrivait trop tôt
+ * dans le parcours réel, et un formulaire entreprise plus long mérite
+ * d'être sauvegardé dès sa soumission plutôt que de dépendre d'un état
+ * d'assistant côté client perdu à la moindre navigation. La Company est
+ * donc créée seule ici (aucune offre requise) ; l'utilisateur choisit et
+ * paie son offre ensuite sur `/entreprise/paiement`, qui gère déjà le cas
+ * "aucun abonnement" (voir ce fichier) — `selectPlan`
+ * (app/actions/company-subscription.ts) crée la `CompanySubscription` à ce
+ * moment-là, pas ici. Le créateur devient admin entreprise (rôle
+ * fonctionnel, indépendant de son titre réel) et rejoint lui-même la fiche
+ * (companyId). Réassignable ensuite via app/actions/admin-companies.ts.
  */
 export async function createCompany(input: unknown): Promise<ActionResult<{ id: string }>> {
   const session = await auth();
@@ -63,25 +66,17 @@ export async function createCompany(input: unknown): Promise<ActionResult<{ id: 
     return { success: false, error: "Votre compte est déjà rattaché à une entreprise." };
   }
 
-  const parsed = createCompanyWithPlanSchema.safeParse(input);
+  const parsed = companyFormSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
-
-  const plan = await prisma.plan.findUnique({ where: { id: f.planId } });
-  if (!plan || !plan.isActive) {
-    return { success: false, error: "Offre invalide." };
-  }
 
   const company = await prisma.$transaction(async (tx) => {
     const created = await tx.company.create({
       data: { ...companyData(f), companyAdminId: viewer.id },
     });
     await tx.user.update({ where: { id: viewer.id }, data: { companyId: created.id } });
-    await tx.companySubscription.create({
-      data: { companyId: created.id, planId: plan.id, status: "PENDING_PAYMENT" },
-    });
     return created;
   });
 

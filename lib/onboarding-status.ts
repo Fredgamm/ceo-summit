@@ -4,12 +4,15 @@
  * solliciter l'équipe. Fonction pure (pas de Prisma ici) pour rester
  * testable sans base de données, même convention que lib/events-query.ts.
  *
- * Deux paires d'étapes se confirment au même moment dans ce modèle, pas de
- * simplification abusive : "Offre sélectionnée"/"Entreprise renseignée"
- * sont créées ensemble (voir app/actions/company.ts::createCompany), et
- * "Collaborateurs ajoutés"/"Invitations envoyées" aussi (inviteTeammate
- * envoie l'email immédiatement, il n'y a pas d'état "ajouté mais pas
- * encore invité" dans ce parcours).
+ * "Collaborateurs ajoutés"/"Invitations envoyées" se confirment au même
+ * moment dans ce modèle, pas une simplification abusive (inviteTeammate
+ * envoie l'email immédiatement, il n'y a pas d'état "ajouté mais pas encore
+ * invité" dans ce parcours).
+ *
+ * "Offre sélectionnée" et "Entreprise renseignée" ne sont PLUS le même
+ * instant depuis le 5 août 2026 (ordre inversé : l'entreprise se crée sans
+ * offre, l'offre se choisit après sur `/entreprise/paiement`) — "Offre
+ * sélectionnée" dépend donc de `subscriptionStatus`, pas de `hasCompany`.
  */
 
 export type CompanySubscriptionStatusLike =
@@ -41,11 +44,12 @@ export function getOnboardingStatus(input: OnboardingStatusInput): OnboardingSta
   const paymentSubmitted =
     subscriptionStatus === "PENDING_REVIEW" || subscriptionStatus === "ACTIVE";
   const accessActive = subscriptionStatus === "ACTIVE";
+  const planSelected = subscriptionStatus != null && subscriptionStatus !== "DRAFT";
 
   return [
     { key: "account", label: "Compte créé", done: true },
-    { key: "plan", label: "Offre sélectionnée", done: hasCompany },
     { key: "company", label: "Entreprise renseignée", done: hasCompany },
+    { key: "plan", label: "Offre sélectionnée", done: planSelected },
     { key: "collaborators", label: "Collaborateurs ajoutés", done: hasInvites },
     { key: "payment_submitted", label: "Paiement soumis", done: paymentSubmitted },
     {

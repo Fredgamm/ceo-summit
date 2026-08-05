@@ -13,14 +13,24 @@ describe("getOnboardingStatus", () => {
     expect(done).toEqual(["account"]);
   });
 
-  it("marks offer+company done together once the company exists (PENDING_PAYMENT)", () => {
+  it("marks the company done before any offer is chosen (ordre inversé, 5 août 2026)", () => {
+    const items = getOnboardingStatus({
+      hasCompany: true,
+      hasInvites: false,
+      subscriptionStatus: null,
+    });
+    const done = items.filter((i) => i.done).map((i) => i.key);
+    expect(done).toEqual(["account", "company"]);
+  });
+
+  it("marks the plan done once an offer is chosen (PENDING_PAYMENT)", () => {
     const items = getOnboardingStatus({
       hasCompany: true,
       hasInvites: false,
       subscriptionStatus: "PENDING_PAYMENT",
     });
     const done = items.filter((i) => i.done).map((i) => i.key);
-    expect(done).toEqual(["account", "plan", "company"]);
+    expect(done).toEqual(["account", "company", "plan"]);
   });
 
   it("marks payment-submitted and admin-review together at PENDING_REVIEW", () => {
@@ -32,8 +42,8 @@ describe("getOnboardingStatus", () => {
     const done = items.filter((i) => i.done).map((i) => i.key);
     expect(done).toEqual([
       "account",
-      "plan",
       "company",
+      "plan",
       "collaborators",
       "payment_submitted",
       "admin_review",

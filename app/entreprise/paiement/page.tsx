@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getActivePlans } from "@/lib/plans-query";
+import { getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,8 +17,18 @@ export const metadata: Metadata = { title: "Paiement" };
  * une offre, la payer, et en changer librement tant que l'abonnement n'est
  * pas ACTIVE (y compris après soumission d'une preuve : selectPlan invalide
  * alors la preuve précédente et repasse le dossier en PENDING_PAYMENT).
+ *
+ * `?offre=<slug>` (5 août 2026, ordre inversé entreprise/offre) — porté
+ * depuis `/entreprise/creer` (lien profond évènement) ou résolu depuis
+ * `User.intendedPlanId` (choisi avant l'inscription, site public) : ne
+ * fait que présélectionner visuellement l'offre dans `PlanPicker`, aucune
+ * écriture avant que l'utilisateur ne confirme son choix.
  */
-export default async function CompanyPaymentPage() {
+export default async function CompanyPaymentPage({
+  searchParams,
+}: {
+  searchParams: { offre?: string };
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -26,7 +36,7 @@ export default async function CompanyPaymentPage() {
   if (!viewer) redirect("/login");
   if (!viewer.companyId) redirect("/entreprise/creer");
 
-  const [company, plans] = await Promise.all([
+  const [company, plans, deepLinkedPlan] = await Promise.all([
     prisma.company.findUnique({
       where: { id: viewer.companyId },
       include: {
@@ -35,6 +45,7 @@ export default async function CompanyPaymentPage() {
       },
     }),
     getActivePlans({ selfServiceOnly: true }),
+    searchParams.offre ? getPlanBySlug(searchParams.offre) : null,
   ]);
   if (!company) redirect("/entreprise/creer");
   if (company.companyAdminId !== viewer.id) redirect(`/entreprises/${company.id}`);
@@ -42,6 +53,18 @@ export default async function CompanyPaymentPage() {
 
   const subscription = company.subscription;
   const headcount = company.users.length;
+
+  // Une offre d'évènement (Phase 2quater) n'apparaît pas dans la liste
+  // standard (getActivePlans filtre eventId: null par défaut) — on
+  // l'ajoute explicitement si c'est elle qui est visée par le lien profond.
+  const allPlans =
+    deepLinkedPlan && !plans.some((p) => p.id === deepLinkedPlan.id)
+      ? [deepLinkedPlan, ...plans]
+      : plans;
+  const resolvedInitialPlanId = deepLinkedPlan ? deepLinkedPlan.id : viewer.intendedPlanId;
+  const initialPlanId = allPlans.some((p) => p.id === resolvedInitialPlanId)
+    ? resolvedInitialPlanId
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -96,7 +119,12 @@ export default async function CompanyPaymentPage() {
             Changer d&apos;offre
           </h2>
         )}
-        <PlanPicker companyId={company.id} plans={plans} currentPlanId={subscription?.planId} />
+        <PlanPicker
+          companyId={company.id}
+          plans={allPlans}
+          currentPlanId={subscription?.planId}
+          initialPlanId={initialPlanId}
+        />
       </div>
     </div>
   );

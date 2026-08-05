@@ -27,17 +27,6 @@ export const companyFormSchema = z.object({
 
 export type CompanyFormInput = z.input<typeof companyFormSchema>;
 
-/**
- * L'assistant de création choisit une offre avant de renseigner
- * l'entreprise (cas d'usage retenu, 1er août 2026) — les deux sont
- * soumis ensemble en une seule action transactionnelle
- * (voir app/actions/company.ts::createCompany), pas deux écritures
- * séparées dans l'ordre inverse comme avant.
- */
-export const createCompanyWithPlanSchema = companyFormSchema.extend({
-  planId: z.string().min(1, "Choisissez une offre"),
-});
-
 export const inviteTeammateSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
   email: z.string().trim().min(1, "L'email est requis").email("Adresse email invalide"),
