@@ -96,10 +96,13 @@ export async function setEventStatus(eventId: string, status: EventStatus): Prom
 }
 
 /**
- * E3-T04 — check-in. `code` is typed or pasted in, not scanned by camera —
- * see /admin/evenements/[id]/checkin for that scope note. Only a CONFIRMED
- * registration (paid or included) can be checked in, matching the
- * wireframe's disabled "—" for pending-payment rows.
+ * E3-T04 — check-in. `code` is validated the same way whether it was typed,
+ * pasted, or decoded from a camera scan (see components/admin/
+ * checkin-scanner.tsx, camera scan added 5 août 2026) — this action only
+ * ever sees the resulting string, matched against `EventRegistration.
+ * badgeQrCode`. Only a CONFIRMED registration (paid or included) can be
+ * checked in, matching the wireframe's disabled "—" for pending-payment
+ * rows.
  */
 export async function checkInRegistration(
   eventId: string,
