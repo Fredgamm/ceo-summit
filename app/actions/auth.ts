@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 
 import { prisma } from "@/lib/prisma";
-import { setPasswordSchema, emailSchema, signupSchema } from "@/lib/validations/auth";
+import { setPasswordSchema, emailSchema } from "@/lib/validations/auth";
 import {
   generateSecureToken,
   ACTIVATION_TOKEN_TTL_MS,
@@ -22,76 +22,6 @@ import ResetPasswordEmail from "@/emails/reset-password-email";
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 const RATE_LIMITED_ERROR = "Trop de tentatives depuis cette adresse. Réessayez plus tard.";
-
-// ═══════════════════════════════════════════════
-// Parcours revu (1er août 2026) — inscription self-service
-// ═══════════════════════════════════════════════
-
-/**
- * Porte d'entrée self-service : nom, email, mot de passe choisi
- * immédiatement — pas de champ entreprise ici (voir app/actions/company.ts,
- * volontairement séparé pour ne pas alourdir le premier écran). Le compte
- * est actif dès sa création ; l'appelant (signup-form.tsx) enchaîne avec un
- * signIn() côté client pour la connexion automatique. Contrairement à
- * `approveApplication`/le webhook Evolia (comptes créés par un tiers, où
- * prouver la possession de l'email via un lien reçu a du sens),
- * l'inscription self-service n'a pas besoin de ce détour : l'utilisateur
- * vient de taper son mot de passe lui-même dans le même formulaire.
- */
-/**
- * `planId` (Phase 2ter, 1er août 2026) — offre choisie sur le site public
- * via le lien profond `/inscription?offre=<slug>`, résolue et validée côté
- * serveur (signup-form.tsx ne transmet que l'id, pas le slug). Stockée sur
- * `User.intendedPlanId`, lue ensuite par /paiement-en-attente pour ne pas
- * la redemander. Un id invalide/périmé est ignoré silencieusement (pas
- * d'erreur bloquante sur l'inscription elle-même).
- */
-export async function signup(
-  name: string,
-  email: string,
-  password: string,
-  confirmPassword: string,
-  planId?: string | null
-): Promise<ActionResult> {
-  // Sprint de correction (5 août 2026, EX-T01) — anti-spam par IP : rien
-  // n'empêchait sinon de créer des comptes en boucle (aucune vérification
-  // d'email requise dans ce parcours self-service, voir plus haut).
-  const rateLimit = await checkRateLimit(`signup:${getClientIp()}`, 5, 60 * 60);
-  if (!rateLimit.allowed) {
-    return { success: false, error: RATE_LIMITED_ERROR };
-  }
-
-  const parsed = signupSchema.safeParse({ name, email, password, confirmPassword });
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
-  }
-  const normalizedEmail = parsed.data.email.toLowerCase();
-
-  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existing) {
-    return {
-      success: false,
-      error: "Un compte existe déjà avec cet email. Connectez-vous plutôt.",
-    };
-  }
-
-  const intendedPlan = planId
-    ? await prisma.plan.findFirst({ where: { id: planId, isActive: true, isSelfService: true } })
-    : null;
-
-  const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
-  await prisma.user.create({
-    data: {
-      name: parsed.data.name,
-      email: normalizedEmail,
-      passwordHash,
-      status: "ACTIVE",
-      intendedPlanId: intendedPlan?.id,
-    },
-  });
-
-  return { success: true, data: undefined };
-}
 
 // ═══════════════════════════════════════════════
 // E1-T03 — Activation de compte

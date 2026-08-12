@@ -27,7 +27,6 @@ const PUBLIC_ROUTES = [
   "/login",
   "/mot-de-passe-oublie",
   "/demande-acces",
-  "/inscription",
   "/cgu",
   "/confidentialite",
   "/",

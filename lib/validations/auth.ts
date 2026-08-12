@@ -22,25 +22,3 @@ export const setPasswordSchema = z
   });
 
 export const emailSchema = z.string().min(1, "L'email est requis").email("Adresse email invalide");
-
-/**
- * Parcours revu (1er août 2026) — le mot de passe est choisi immédiatement à
- * l'inscription (connexion automatique juste après), pas via un lien
- * d'activation envoyé par email : ça évitait un vrai blocage constaté en
- * conditions réelles (compte créé en base puis plantage silencieux si
- * l'envoi d'email échoue, écran figé côté client sans jamais pouvoir se
- * connecter). `MembershipApplication`/le webhook Evolia gardent leur propre
- * mécanisme `ActivationToken` (compte créé par un tiers, pas par l'intéressé
- * lui-même) — ce n'est que l'inscription self-service qui change ici.
- */
-export const signupSchema = z
-  .object({
-    name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
-    email: emailSchema,
-    password: passwordSchema,
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Les mots de passe ne correspondent pas",
-    path: ["confirmPassword"],
-  });
