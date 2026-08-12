@@ -33,6 +33,7 @@ function makeViewer(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
+    status: "ACTIVE",
     companyId: null,
     company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     ...overrides,

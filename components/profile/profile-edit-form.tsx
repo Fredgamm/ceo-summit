@@ -31,6 +31,7 @@ interface ProfileEditFormProps {
   initialCountry: string;
   initialSectors: string[];
   initialAvatarUrl: string | null;
+  initialPhone: string;
   /** Référentiels admin-éditables (E8-T11, 5 août 2026) — fournis par la page serveur parente. */
   availableCountries: string[];
   availableSectors: string[];
@@ -51,6 +52,7 @@ export function ProfileEditForm({
   initialCountry,
   initialSectors,
   initialAvatarUrl,
+  initialPhone,
   availableCountries,
   availableSectors,
 }: ProfileEditFormProps) {
@@ -62,6 +64,7 @@ export function ProfileEditForm({
   const [bio, setBio] = React.useState(initialBio);
   const [linkedinUrl, setLinkedinUrl] = React.useState(initialLinkedinUrl);
   const [country, setCountry] = React.useState(initialCountry);
+  const [phone, setPhone] = React.useState(initialPhone);
   const [sectors, setSectors] = React.useState<string[]>(initialSectors);
   const [avatarUrl, setAvatarUrl] = React.useState(initialAvatarUrl);
 
@@ -114,7 +117,15 @@ export function ProfileEditForm({
     setSuccess(false);
     setSaving(true);
     try {
-      const result = await updateProfile({ name, title, bio, linkedinUrl, country, sectors });
+      const result = await updateProfile({
+        name,
+        title,
+        bio,
+        linkedinUrl,
+        country,
+        sectors,
+        phone,
+      });
       if (!result.success) {
         setError(result.error);
         return;
@@ -171,6 +182,20 @@ export function ProfileEditForm({
               <Label htmlFor="edit-title">Titre / Poste</Label>
               <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-phone">Téléphone (optionnel)</Label>
+            <Input
+              id="edit-phone"
+              type="tel"
+              placeholder="034 12 345 67"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <p className="text-xs text-text-muted">
+              Utilisé pour vous notifier par SMS lors d&apos;un achat groupé entreprise.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">

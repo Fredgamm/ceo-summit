@@ -70,7 +70,7 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
         name: viewer.name,
         tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ rooms: unreadCount || undefined, messages: unreadMessages || undefined }}
     >

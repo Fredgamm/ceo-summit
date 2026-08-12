@@ -69,6 +69,13 @@ interface EventFormProps {
   mode: "create" | "edit";
   eventId?: string;
   initialValues?: Partial<EventFormValues>;
+  /**
+   * Nombre d'offres (`Plan.eventId`) déjà rattachées à cet évènement — dès
+   * qu'il y en a au moins une, elles remplacent ce prix unique sur la fiche
+   * publique (`/evenements/[id]`, même garde-fou dans `registerForEvent`) :
+   * le champ ci-dessous devient inerte tant qu'elles restent actives.
+   */
+  offersCount?: number;
 }
 
 /**
@@ -76,7 +83,7 @@ interface EventFormProps {
  * en texte libre (une ligne = un élément) plutôt qu'avec un éditeur de blocs
  * — voir lib/event-content.ts pour le format exact et la justification.
  */
-export function EventForm({ mode, eventId, initialValues }: EventFormProps) {
+export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: EventFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<EventFormValues>({
     ...EMPTY_VALUES,
@@ -348,9 +355,32 @@ export function EventForm({ mode, eventId, initialValues }: EventFormProps) {
           <CardHeader>
             <CardTitle>Tarification</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
+            {offersCount > 0 && (
+              <Alert>
+                <AlertDescription>
+                  {offersCount} offre(s) sont déjà configurées pour cet évènement — elles remplacent
+                  ce prix unique sur la fiche publique (les participants choisissent parmi elles, ce
+                  champ est ignoré tant qu&apos;au moins une reste active).
+                  {eventId && (
+                    <>
+                      {" "}
+                      <Link
+                        href={`/admin/plans?eventId=${eventId}`}
+                        className="font-semibold underline"
+                      >
+                        Gérer les offres →
+                      </Link>
+                    </>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ev-price">Prix (Ar) — 0 = gratuit / inclus</Label>
+              <Label htmlFor="ev-price">
+                Prix (Ar) — 0 = gratuit / inclus
+                {offersCount > 0 && " (inscription à prix unique, sans offre configurée)"}
+              </Label>
               <Input
                 id="ev-price"
                 type="number"

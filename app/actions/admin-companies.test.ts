@@ -6,23 +6,42 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    companyPayment: { findUnique: vi.fn(), update: vi.fn() },
+    companyPayment: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     companySubscription: { update: vi.fn() },
     company: { update: vi.fn() },
     user: { findUnique: vi.fn() },
-    eventRegistration: { upsert: vi.fn() },
+    event: { findUnique: vi.fn() },
+    eventRegistration: {
+      upsert: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+    },
     creditBalance: { upsert: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
 
+vi.mock("@/lib/event-registration-lock", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/event-registration-lock")>();
+  return {
+    ...actual,
+    withEventRegistrationLock: vi.fn((_eventId: string, fn: () => Promise<unknown>) => fn()),
+  };
+});
+
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
+vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/emails/company-payment-confirmed-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/emails/company-payment-rejected-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendSms } from "@/lib/sms";
 import {
   confirmCompanyPayment,
   rejectCompanyPayment,
@@ -81,10 +100,62 @@ describe("confirmCompanyPayment", () => {
       ...PAYMENT_BASE,
       status: "CONFIRMED",
     } as never);
+    vi.mocked(prisma.companyPayment.updateMany).mockResolvedValueOnce({ count: 0 } as never);
 
     const result = await confirmCompanyPayment("payment_1");
     expect(result.success).toBe(false);
     expect(prisma.companySubscription.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Gestion corporate (7 août 2026) — notification SMS (Befiana) au payeur
+   * en plus de l'email, uniquement s'il a renseigné un téléphone (champ
+   * facultatif, non collecté avant ce chantier).
+   */
+  it("notifies the company admin by SMS when a phone number is on file", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...PAYMENT_BASE,
+      companySubscription: {
+        ...PAYMENT_BASE.companySubscription,
+        company: {
+          ...PAYMENT_BASE.companySubscription.company,
+          companyAdmin: { name: "Marie Dupont", email: "marie@example.mg", phone: "034 12 345 67" },
+        },
+      },
+    } as never);
+
+    await confirmCompanyPayment("payment_1");
+
+    expect(sendSms).toHaveBeenCalledWith(
+      "034 12 345 67",
+      expect.stringContaining("Rakoto Holding")
+    );
+  });
+
+  it("does not attempt an SMS when the company admin has no phone number", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(PAYMENT_BASE as never);
+
+    await confirmCompanyPayment("payment_1");
+
+    expect(sendSms).not.toHaveBeenCalled();
+  });
+
+  it("still confirms the payment even if the SMS send fails", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...PAYMENT_BASE,
+      companySubscription: {
+        ...PAYMENT_BASE.companySubscription,
+        company: {
+          ...PAYMENT_BASE.companySubscription.company,
+          companyAdmin: { name: "Marie Dupont", email: "marie@example.mg", phone: "034 12 345 67" },
+        },
+      },
+    } as never);
+    vi.mocked(sendSms).mockRejectedValueOnce(new Error("boom"));
+
+    const result = await confirmCompanyPayment("payment_1");
+
+    expect(result.success).toBe(true);
   });
 
   it("registers every current company member to the linked event when the plan is event-scoped", async () => {

@@ -10,6 +10,7 @@ import {
   DEAL_ROOM_PAGE_SIZE,
   type DealRoomSearchParams,
 } from "@/lib/deal-room-query";
+import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
@@ -39,10 +40,11 @@ export default async function DealRoomPage({
   if (!viewer) redirect("/login");
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
-  const [validTypes, validSectors, validCountries] = await Promise.all([
+  const [validTypes, validSectors, validCountries, contactCost] = await Promise.all([
     getReferentialLabels("opportunity_type"),
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
+    getDealRoomContactCost(),
   ]);
   const { where, orderBy, skip, take, page } = buildDealRoomQuery(searchParams, viewerTier, {
     validTypes,
@@ -86,7 +88,7 @@ export default async function DealRoomPage({
         name: viewer.name,
         tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
@@ -100,8 +102,11 @@ export default async function DealRoomPage({
       <Alert variant="gold" className="mb-4">
         <Diamond />
         <AlertDescription>
-          <strong>Crédits disponibles : {available === null ? "Illimité" : available}</strong> —
-          Chaque prise de contact coûte 1 crédit. Les membres Chairman ont un accès illimité.{" "}
+          <strong>Crédits disponibles : {available === null ? "Illimité" : available}</strong> —{" "}
+          {contactCost === 0
+            ? "La prise de contact est gratuite pour l'instant."
+            : `Chaque prise de contact coûte ${contactCost} crédit.`}{" "}
+          Les membres Chairman ont un accès illimité.{" "}
           <Link href="/credits/acheter" className="font-semibold text-navy underline">
             Acheter des crédits →
           </Link>
@@ -136,6 +141,7 @@ export default async function DealRoomPage({
                 role: opp.author.role,
               }}
               authorTier={getViewerTierFromCompany(opp.author.company)}
+              contactCost={contactCost}
             />
           ))}
         </div>

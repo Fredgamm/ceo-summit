@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getActivePlans } from "@/lib/plans-query";
 import { RegistrationWizard } from "@/components/events/registration-wizard";
 import { meetsMinTier } from "@/lib/utils";
 
@@ -42,11 +43,14 @@ export default async function EventRegistrationPage({ params }: { params: { id: 
   const isPast = event.date < new Date();
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
 
-  const alreadyRegistered = await prisma.eventRegistration.findUnique({
-    where: { eventId_userId: { eventId: event.id, userId: viewer.id } },
-  });
+  const [alreadyRegistered, eventOffers] = await Promise.all([
+    prisma.eventRegistration.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: viewer.id } },
+    }),
+    getActivePlans({ selfServiceOnly: true, eventId: event.id }),
+  ]);
 
-  if (!tierOk || isPast || capacity === "complet" || alreadyRegistered) {
+  if (!tierOk || isPast || capacity === "complet" || alreadyRegistered || eventOffers.length > 0) {
     redirect(`/evenements/${event.id}`);
   }
 

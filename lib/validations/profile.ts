@@ -30,6 +30,22 @@ export const profileSchema = z.object({
     .default(""),
   country: z.string().trim().optional().or(z.literal("")).default(""),
   sectors: z.array(z.string().trim().min(1)).default([]),
+  /**
+   * Gestion corporate (7 août 2026) — jusqu'ici jamais collecté nulle part
+   * dans l'app malgré le champ `User.phone` existant depuis le début du
+   * schéma ; nécessaire pour notifier par SMS (Befiana) l'admin entreprise
+   * qui soumet un achat groupé. Format libre, pas de validation stricte de
+   * préfixe pays — les numéros locaux et internationaux doivent tous deux
+   * passer.
+   */
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .regex(/^[\d\s+()-]*$/, "Numéro de téléphone invalide")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

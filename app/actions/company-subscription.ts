@@ -16,12 +16,12 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * Phase 2 offres/paiement (30 juillet 2026) — choix d'une offre par l'admin
  * entreprise.
  *
- * RG-11 (4 août 2026) — changer d'offre reste possible à tout moment tant
- * que l'abonnement n'est pas `ACTIVE`, y compris après soumission d'une
- * preuve (`PENDING_REVIEW`) : dans ce cas, la preuve précédente est
- * invalidée (marquée `REJECTED`, motif automatique) et le dossier repasse
- * en `PENDING_PAYMENT` — l'entreprise doit soumettre une nouvelle preuve
- * pour la nouvelle offre, `declaredParticipants` est réinitialisé.
+ * RG-11 révisée (6 août 2026) — changer d'offre reste possible tant que
+ * l'abonnement n'est pas `ACTIVE`, mais plus une fois une preuve soumise
+ * (`PENDING_REVIEW`) : l'équipe CEO Summit est déjà en train de la valider,
+ * un changement d'offre à ce stade créait une confusion sur ce qui est
+ * réellement dû. L'entreprise doit attendre la décision (validée → `ACTIVE`,
+ * rejetée → retour à `PENDING_PAYMENT`) avant de pouvoir changer d'offre.
  */
 export async function selectPlan(companyId: string, planId: string): Promise<ActionResult> {
   const session = await auth();
@@ -55,20 +55,17 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
     };
   }
 
+  if (company.subscription?.status === "PENDING_REVIEW") {
+    return {
+      success: false,
+      error:
+        "Votre paiement est en cours de validation — attendez la décision de l'équipe CEO Summit avant de changer d'offre.",
+    };
+  }
+
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
   if (!plan || !plan.isActive) {
     return { success: false, error: "Offre invalide." };
-  }
-
-  if (company.subscription?.status === "PENDING_REVIEW") {
-    await prisma.companyPayment.updateMany({
-      where: { companySubscriptionId: company.subscription.id, status: "PENDING" },
-      data: {
-        status: "REJECTED",
-        rejectionReason: "Offre changée avant validation — nouvelle preuve requise.",
-        reviewedAt: new Date(),
-      },
-    });
   }
 
   await prisma.companySubscription.upsert({
@@ -110,6 +107,21 @@ export async function submitPaymentProof(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+
+  /**
+   * Correctif (7 août 2026, audit) — `proofFileKey` n'était jamais vérifié
+   * comme appartenant à l'appelant avant d'être résolu en URL signée côté
+   * admin (`getSignedDownloadUrl`, qui ne porte lui-même aucune
+   * autorisation — voir lib/r2.ts). `/api/company/payment-proof` préfixe
+   * toujours ses clés par `company-payments/<uploaderId>/` ; seul ce
+   * préfixe pour l'appelant courant est désormais accepté, ce qui empêche
+   * de faire enregistrer par cette action une clé appartenant à quelqu'un
+   * d'autre (preuve d'une autre entreprise, pièce jointe d'un tout autre
+   * usage du bucket).
+   */
+  if (!f.proofFileKey.startsWith(`company-payments/${session.user.id}/`)) {
+    return { success: false, error: "Preuve de paiement invalide." };
+  }
 
   /**
    * RG-04/RG-06 (4 août 2026) — pour une offre `PER_PARTICIPANT`, le

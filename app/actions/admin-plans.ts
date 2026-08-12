@@ -100,22 +100,25 @@ export async function togglePlanActive(planId: string, isActive: boolean): Promi
 }
 
 /**
- * Suppression bloquée si le plan est référencé par au moins un membre, ou
- * par une offre d'évènement qui en hérite les avantages (RG-13, 4 août
- * 2026) — même logique "archiver, pas détruire" que archiveRoom : on
- * propose de désactiver (togglePlanActive) plutôt que de casser des FK.
+ * Suppression bloquée si le plan est référencé par une offre d'évènement
+ * qui en hérite les avantages (RG-13, 4 août 2026) — même logique
+ * "archiver, pas détruire" que archiveRoom : on propose de désactiver
+ * (togglePlanActive) plutôt que de casser des FK.
+ *
+ * Correctif (7 août 2026, audit) — cette fonction vérifiait aussi
+ * `User.planId`, une colonne jamais écrite depuis la bascule Tier->Plan
+ * (4 août 2026, voir prisma/schema.prisma) et supprimée dans ce même
+ * correctif : ce volet de la garde ne bloquait donc jamais rien en
+ * pratique (toujours 0), seul `linkedPlatformPlanId` reste un vrai risque.
  */
 export async function deletePlan(planId: string): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("plans");
 
-  const [userCount, linkedOffersCount] = await Promise.all([
-    prisma.user.count({ where: { planId } }),
-    prisma.plan.count({ where: { linkedPlatformPlanId: planId } }),
-  ]);
-  if (userCount > 0 || linkedOffersCount > 0) {
+  const linkedOffersCount = await prisma.plan.count({ where: { linkedPlatformPlanId: planId } });
+  if (linkedOffersCount > 0) {
     return {
       success: false,
-      error: `Ce plan est utilisé par ${userCount} membre(s)/${linkedOffersCount} offre(s) d'évènement — désactive-le au lieu de le supprimer.`,
+      error: `Ce plan est utilisé par ${linkedOffersCount} offre(s) d'évènement — désactive-le au lieu de le supprimer.`,
     };
   }
 

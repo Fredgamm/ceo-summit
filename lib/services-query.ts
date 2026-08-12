@@ -54,7 +54,8 @@ export function buildServicesQuery(
     // 4 août 2026 (CEO Summit devenu intégralement B2B) — le tier n'est plus
     // stocké par utilisateur, il est dérivé du rang de l'offre plateforme de
     // son entreprise (voir lib/plan-access.ts). Filtre par seuil minimum
-    // (même sémantique que meetsMinRank ailleurs), pas par bucket exact.
+    // ("le rang du viewer satisfait-il ce minimum" — même comparaison
+    // >= que partout ailleurs), pas par bucket exact.
     where.author = {
       company: {
         subscription: {

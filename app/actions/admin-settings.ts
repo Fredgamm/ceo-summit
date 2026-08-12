@@ -6,6 +6,7 @@ import type { AdminRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { setDealRoomContactCost } from "@/lib/deal-room-settings";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -54,6 +55,35 @@ export async function saveCreditPackPrices(
 
   revalidatePath("/admin/parametres");
   revalidatePath("/credits/acheter");
+  return { success: true, data: undefined };
+}
+
+/**
+ * Coût en crédits du "Prendre contact" Deal Room, configurable (7 août
+ * 2026, demande admin) — jusqu'ici une constante fixe. 0 = gratuit pour
+ * tout le monde (Chairman reste de toute façon toujours gratuit).
+ */
+export async function updateDealRoomContactCost(cost: number): Promise<ActionResult> {
+  const { userId: adminId } = await requireAdmin("parametres");
+
+  if (!Number.isFinite(cost) || cost < 0 || cost > 1000 || !Number.isInteger(cost)) {
+    return { success: false, error: "Coût invalide (nombre entier entre 0 et 1000)." };
+  }
+
+  await setDealRoomContactCost(cost);
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "settings.update_deal_room_contact_cost",
+      targetType: "PlatformSetting",
+      targetId: "deal_room_contact_cost",
+      metadata: { cost },
+    },
+  });
+
+  revalidatePath("/admin/parametres");
+  revalidatePath("/deal-room");
   return { success: true, data: undefined };
 }
 

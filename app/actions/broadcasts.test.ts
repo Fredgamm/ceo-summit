@@ -32,6 +32,7 @@ function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
     email: "jp@example.com",
+    status: "ACTIVE",
     company: { name: "TechOcean" },
     memberships: [{ tier: "EXECUTIVE" }],
     ...overrides,

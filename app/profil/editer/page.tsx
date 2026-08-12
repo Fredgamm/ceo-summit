@@ -39,7 +39,7 @@ export default async function EditProfilePage() {
         name: user.name,
         tier: tierLabel(getViewerTierFromCompany(user.company)),
         avatarUrl: user.avatarUrl,
-        isAdmin: user.role === "ADMIN",
+        isAdmin: user.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
@@ -60,6 +60,7 @@ export default async function EditProfilePage() {
           initialCountry={user.country ?? ""}
           initialSectors={user.sectors}
           initialAvatarUrl={user.avatarUrl}
+          initialPhone={user.phone ?? ""}
           availableCountries={availableCountries}
           availableSectors={availableSectors}
         />

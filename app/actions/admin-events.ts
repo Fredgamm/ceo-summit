@@ -105,7 +105,8 @@ export async function setEventStatus(eventId: string, status: EventStatus): Prom
  */
 export async function checkInRegistration(
   eventId: string,
-  code: string
+  code: string,
+  checkpointId?: string | null
 ): Promise<ActionResult<{ name: string; alreadyCheckedIn: boolean }>> {
   await requireAdmin("evenements");
 
@@ -127,10 +128,57 @@ export async function checkInRegistration(
     return { success: true, data: { name: registration.user.name, alreadyCheckedIn: true } };
   }
 
+  /**
+   * Contrôle d'accès multi-points (7 août 2026) — `checkpointId` est
+   * optionnel (compatibilité avec un évènement sans poste configuré) mais,
+   * fourni, doit appartenir à cet évènement précis — sinon un poste d'un
+   * autre évènement pourrait être enregistré par erreur/malveillance.
+   */
+  if (checkpointId) {
+    const checkpoint = await prisma.eventCheckpoint.findUnique({ where: { id: checkpointId } });
+    if (!checkpoint || checkpoint.eventId !== eventId) {
+      return { success: false, error: "Poste de contrôle invalide pour cet évènement." };
+    }
+  }
+
   await prisma.eventRegistration.update({
     where: { id: registration.id },
-    data: { checkedIn: true, checkedInAt: new Date() },
+    data: { checkedIn: true, checkedInAt: new Date(), checkpointId: checkpointId || null },
   });
 
   return { success: true, data: { name: registration.user.name, alreadyCheckedIn: false } };
+}
+
+/**
+ * Contrôle d'accès multi-points (7 août 2026, demande client 3ème édition)
+ * — CRUD minimal des postes de scan d'un évènement (ex. "Entrée VIP",
+ * "Entrée Staff"). Suppression sans garde d'usage : un poste est une
+ * métadonnée opérationnelle, pas une donnée facturable — un check-in déjà
+ * effectué perd juste sa référence au poste (ON DELETE SET NULL), le
+ * comptage global reste correct.
+ */
+export async function createEventCheckpoint(
+  eventId: string,
+  name: string
+): Promise<ActionResult<{ id: string }>> {
+  await requireAdmin("evenements");
+
+  const trimmed = name.trim();
+  if (!trimmed) return { success: false, error: "Nom du poste requis." };
+  if (trimmed.length > 60) return { success: false, error: "Nom du poste trop long (60 max)." };
+
+  const checkpoint = await prisma.eventCheckpoint.create({ data: { eventId, name: trimmed } });
+  revalidatePath(`/admin/evenements/${eventId}/checkin`);
+  return { success: true, data: { id: checkpoint.id } };
+}
+
+export async function deleteEventCheckpoint(checkpointId: string): Promise<ActionResult> {
+  await requireAdmin("evenements");
+
+  const checkpoint = await prisma.eventCheckpoint.findUnique({ where: { id: checkpointId } });
+  if (!checkpoint) return { success: false, error: "Poste introuvable." };
+
+  await prisma.eventCheckpoint.delete({ where: { id: checkpointId } });
+  revalidatePath(`/admin/evenements/${checkpoint.eventId}/checkin`);
+  return { success: true, data: undefined };
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
+import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
@@ -22,11 +23,12 @@ export default async function PublishOpportunityPage() {
   });
   if (!viewer) redirect("/login");
 
-  const [unreadMessages, types, sectors, countries] = await Promise.all([
+  const [unreadMessages, types, sectors, countries, contactCost] = await Promise.all([
     countUnreadMessages(viewer.id),
     getReferentialLabels("opportunity_type"),
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
+    getDealRoomContactCost(),
   ]);
 
   return (
@@ -35,7 +37,7 @@ export default async function PublishOpportunityPage() {
         name: viewer.name,
         tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
@@ -45,6 +47,7 @@ export default async function PublishOpportunityPage() {
         types={types}
         sectors={sectors}
         countries={countries}
+        contactCost={contactCost}
       />
     </AppShell>
   );

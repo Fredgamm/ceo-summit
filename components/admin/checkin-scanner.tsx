@@ -3,14 +3,28 @@
 import * as React from "react";
 
 import { checkInRegistration } from "@/app/actions/admin-events";
+import { getSocketClient } from "@/lib/socket-client";
 import { QrCameraScanner } from "@/components/admin/qr-camera-scanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type CheckinResult =
   { kind: "success"; name: string; alreadyCheckedIn: boolean } | { kind: "error"; message: string };
+
+interface CheckinUpdateEvent {
+  checkpointId: string | null;
+  checkpointName: string | null;
+  at: number;
+}
 
 /**
  * E3-T04 (check-in), scan caméra ajouté le 5 août 2026 (E10) —
@@ -21,13 +35,52 @@ type CheckinResult =
  * manuelle reste accessible en repli (permission caméra refusée, matériel
  * indisponible, badge imprimé illisible).
  */
-export function CheckinScanner({ eventId }: { eventId: string }) {
+export function CheckinScanner({
+  eventId,
+  checkpoints = [],
+}: {
+  eventId: string;
+  /** Contrôle d'accès multi-points (7 août 2026) — vide = pas de sélecteur affiché. */
+  checkpoints?: { id: string; name: string }[];
+}) {
   const [mode, setMode] = React.useState<"camera" | "manual">("camera");
   const [code, setCode] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<CheckinResult | null>(null);
+  const [checkpointId, setCheckpointId] = React.useState<string>(checkpoints[0]?.id ?? "");
+  const [liveCounts, setLiveCounts] = React.useState<Record<string, number>>({});
   const inFlightRef = React.useRef(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  /**
+   * Contrôle d'accès multi-points (7 août 2026) — "suivi en temps réel :
+   * entrée et nombre de présence". Rejoint un salon dédié à cet évènement
+   * (admin uniquement, vérifié côté serveur) et écoute les scans effectués
+   * par N'IMPORTE QUEL poste ouvert sur ce même évènement, pas seulement
+   * celui-ci — plusieurs postes physiques comptent ensemble en direct.
+   */
+  React.useEffect(() => {
+    let active = true;
+    let socketRef: Awaited<ReturnType<typeof getSocketClient>> | null = null;
+
+    getSocketClient().then((socket) => {
+      if (!active) return;
+      socketRef = socket;
+      socket.emit("checkin:join", eventId);
+      socket.on("checkin:update", (evt: CheckinUpdateEvent) => {
+        if (!evt.checkpointId) return;
+        setLiveCounts((prev) => ({
+          ...prev,
+          [evt.checkpointId!]: (prev[evt.checkpointId!] ?? 0) + 1,
+        }));
+      });
+    });
+
+    return () => {
+      active = false;
+      socketRef?.off("checkin:update");
+    };
+  }, [eventId]);
 
   async function submitCode(rawCode: string) {
     const trimmed = rawCode.trim();
@@ -37,12 +90,21 @@ export function CheckinScanner({ eventId }: { eventId: string }) {
     setLoading(true);
     setResult(null);
     try {
-      const res = await checkInRegistration(eventId, trimmed);
+      const res = await checkInRegistration(eventId, trimmed, checkpointId || null);
       setResult(
         res.success
           ? { kind: "success", name: res.data.name, alreadyCheckedIn: res.data.alreadyCheckedIn }
           : { kind: "error", message: res.error }
       );
+      if (res.success && !res.data.alreadyCheckedIn && checkpointId) {
+        getSocketClient().then((socket) =>
+          socket.emit("checkin:scan", {
+            eventId,
+            checkpointId,
+            checkpointName: checkpoints.find((c) => c.id === checkpointId)?.name ?? null,
+          })
+        );
+      }
     } finally {
       setLoading(false);
       inFlightRef.current = false;
@@ -58,6 +120,25 @@ export function CheckinScanner({ eventId }: { eventId: string }) {
 
   return (
     <div className="mx-auto max-w-[420px]">
+      {checkpoints.length > 0 && (
+        <div className="mb-4 flex flex-col gap-1.5">
+          <Label htmlFor="checkin-checkpoint">Poste de contrôle</Label>
+          <Select value={checkpointId} onValueChange={setCheckpointId}>
+            <SelectTrigger id="checkin-checkpoint">
+              <SelectValue placeholder="Sélectionner un poste…" />
+            </SelectTrigger>
+            <SelectContent>
+              {checkpoints.map((cp) => (
+                <SelectItem key={cp.id} value={cp.id}>
+                  {cp.name}
+                  {liveCounts[cp.id] ? ` — ${liveCounts[cp.id]} en direct` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       <div className="mb-4 flex justify-center">
         <Button
           type="button"

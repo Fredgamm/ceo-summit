@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
+
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -8,6 +11,12 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
  * import time in environments without R2 credentials set.
  */
 let client: S3Client | null = null;
+
+function isR2Configured(): boolean {
+  return Boolean(
+    process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
+  );
+}
 
 function getR2Client(): S3Client {
   if (!client) {
@@ -24,6 +33,28 @@ function getR2Client(): S3Client {
     });
   }
   return client;
+}
+
+/**
+ * Repli développement local uniquement (jamais en production — voir chaque
+ * appelant ci-dessous) : sans identifiants R2 dans `.env`, tout upload
+ * échouait silencieusement pour quiconque testait l'appli en local (aucun
+ * compte R2 de dev n'existe). Écrit sur disque hors de `public/` (fichiers
+ * "privés" comme publics) et sert via /api/dev/local-storage, qui refuse de
+ * répondre si NODE_ENV !== "development".
+ */
+const LOCAL_STORAGE_DIR = path.join(process.cwd(), ".local-storage");
+
+async function writeLocalObject(bucket: string, key: string, body: Buffer, contentType: string) {
+  const dir = path.join(LOCAL_STORAGE_DIR, bucket, path.dirname(key));
+  await mkdir(dir, { recursive: true });
+  const filePath = path.join(LOCAL_STORAGE_DIR, bucket, key);
+  await writeFile(filePath, body);
+  await writeFile(`${filePath}.contenttype`, contentType, "utf-8");
+}
+
+function localObjectUrl(bucket: string, key: string): string {
+  return `/api/dev/local-storage/${bucket}/${key}`;
 }
 
 interface UploadObjectArgs {
@@ -44,6 +75,11 @@ export async function uploadObject({
   body,
   contentType,
 }: UploadObjectArgs): Promise<string> {
+  if (!isR2Configured() && process.env.NODE_ENV === "development") {
+    await writeLocalObject(bucket, key, body, contentType);
+    return localObjectUrl(bucket, key);
+  }
+
   const publicBaseUrl = process.env.R2_PUBLIC_URL;
   if (!publicBaseUrl) {
     throw new Error("R2_PUBLIC_URL is not set — see .env.example");
@@ -79,6 +115,11 @@ export async function uploadPrivateObject({
   body,
   contentType,
 }: UploadPrivateObjectArgs): Promise<{ key: string }> {
+  if (!isR2Configured() && process.env.NODE_ENV === "development") {
+    await writeLocalObject(bucket, key, body, contentType);
+    return { key };
+  }
+
   const r2 = getR2Client();
   await r2.send(
     new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType })
@@ -97,6 +138,10 @@ export async function getSignedDownloadUrl(
   key: string,
   expiresInSeconds = 3600
 ): Promise<string> {
+  if (!isR2Configured() && process.env.NODE_ENV === "development") {
+    return localObjectUrl(bucket, key);
+  }
+
   const r2 = getR2Client();
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(r2, command, { expiresIn: expiresInSeconds });

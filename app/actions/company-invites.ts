@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
+import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -10,7 +11,12 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
 import { seatCap } from "@/lib/company-payment-amount";
+import { computeEffectiveStatus } from "@/lib/company-subscription-status";
+import { withEventRegistrationLock } from "@/lib/event-registration-lock";
+import { BCRYPT_ROUNDS } from "@/lib/password";
+import { formatDateFr } from "@/lib/utils";
 import CompanyInviteEmail from "@/emails/company-invite-email";
+import EventRegistrationEmail from "@/emails/event-registration-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -175,7 +181,7 @@ export async function acceptCompanyInvite(
     };
   }
 
-  const passwordHash = await bcrypt.hash(parsedPassword.data.password, 12);
+  const passwordHash = await bcrypt.hash(parsedPassword.data.password, BCRYPT_ROUNDS);
 
   const [newUser] = await prisma.$transaction([
     prisma.user.create({
@@ -201,25 +207,80 @@ export async function acceptCompanyInvite(
    * moment de la confirmation. On rattrape ici, à l'acceptation — mais
    * seulement si l'abonnement est encore ACTIVE (pas EXPIRED : inscrire
    * quelqu'un à une édition déjà passée n'a pas de sens).
+   *
+   * Correctif (7 août 2026, audit) — deux trous corrigés ensemble :
+   * (1) le statut lu ici était le statut brut en base, jamais rafraîchi
+   * sans qu'un admin entreprise revisite `selectPlan` — une souscription
+   * restée `ACTIVE` par oubli après la date de l'évènement (RG-12)
+   * inscrivait silencieusement le nouveau collaborateur à une édition déjà
+   * passée. Utilise désormais `computeEffectiveStatus`, comme
+   * `selectPlan`. (2) aucune vérification de capacité ni verrou n'existait
+   * ici, contrairement à `registerForEvent` — un collaborateur pouvait
+   * pousser un évènement au-delà de sa capacité. Sérialisé par
+   * `withEventRegistrationLock`, capacité vérifiée avant inscription ; si
+   * l'évènement est complet, l'invitation est tout de même acceptée
+   * (l'entreprise a payé pour ce collaborateur) mais celui-ci n'est pas
+   * inscrit à l'évènement — cas limite qui nécessitera un suivi manuel
+   * admin, préférable à un dépassement silencieux de capacité.
+   *
+   * Correctif (7 août 2026) — l'inscription était créée silencieusement :
+   * aucun email n'informait jamais le collaborateur qu'il était inscrit,
+   * ni ne lui transmettait son badge/QR (contrairement à `registerForEvent`,
+   * qui envoie systématiquement `EventRegistrationEmail`). Même envoi ici,
+   * en dehors du verrou (l'email n'a pas besoin de tenir le verrou de
+   * capacité) et sans bloquer l'acceptation de l'invitation en cas
+   * d'échec d'envoi (même principe que partout ailleurs dans ce fichier).
    */
   const subscription = await prisma.companySubscription.findUnique({
     where: { companyId: invite.companyId },
-    include: { plan: true },
+    include: { plan: { include: { event: { select: { date: true } } } } },
   });
-  if (subscription?.status === "ACTIVE" && subscription.plan.eventId) {
-    await prisma.eventRegistration.upsert({
-      where: {
-        eventId_userId: { eventId: subscription.plan.eventId, userId: newUser.id },
-      },
-      update: { status: "CONFIRMED", paymentStatus: "PAID", planId: subscription.plan.id },
-      create: {
-        eventId: subscription.plan.eventId,
-        userId: newUser.id,
-        status: "CONFIRMED",
-        paymentStatus: "PAID",
-        planId: subscription.plan.id,
-      },
+  const effectiveStatus = subscription
+    ? computeEffectiveStatus(subscription.status, subscription.plan.event?.date)
+    : null;
+  if (effectiveStatus === "ACTIVE" && subscription!.plan.eventId) {
+    const eventId = subscription!.plan.eventId;
+    const planId = subscription!.plan.id;
+    const outcome = await withEventRegistrationLock(eventId, async () => {
+      const existingRegistration = await prisma.eventRegistration.findUnique({
+        where: { eventId_userId: { eventId, userId: newUser.id } },
+      });
+      const [event, takenSpots] = await Promise.all([
+        prisma.event.findUnique({ where: { id: eventId } }),
+        prisma.eventRegistration.count({
+          where: { eventId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } },
+        }),
+      ]);
+      const hasRoom = existingRegistration || !event || takenSpots < event.capacity;
+      if (!hasRoom || !event) return null;
+
+      const registration = await prisma.eventRegistration.upsert({
+        where: { eventId_userId: { eventId, userId: newUser.id } },
+        update: { status: "CONFIRMED", paymentStatus: "PAID", planId },
+        create: { eventId, userId: newUser.id, status: "CONFIRMED", paymentStatus: "PAID", planId },
+      });
+      return { registration, event };
     });
+
+    if (outcome) {
+      try {
+        const qrCodeDataUrl = await QRCode.toDataURL(outcome.registration.badgeQrCode);
+        await sendTransactionalEmail({
+          to: newUser.email,
+          subject: `Inscription confirmée — ${outcome.event.title}`,
+          react: EventRegistrationEmail({
+            memberName: newUser.name,
+            eventTitle: outcome.event.title,
+            eventDateLabel: formatDateFr(outcome.event.date),
+            eventLocation: outcome.event.isOnline ? "En ligne" : outcome.event.location,
+            qrCodeDataUrl,
+            requiresManualValidation: false,
+          }),
+        });
+      } catch (err) {
+        console.error("[acceptCompanyInvite] failed to send event registration email", err);
+      }
+    }
   }
 
   return { success: true, data: { email: invite.email } };

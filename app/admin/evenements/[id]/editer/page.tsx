@@ -70,6 +70,7 @@ export default async function EditEventPage({ params }: { params: { id: string }
       <EventForm
         mode="edit"
         eventId={event.id}
+        offersCount={offersCount}
         initialValues={{
           title: event.title,
           type: event.type,

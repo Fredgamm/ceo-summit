@@ -58,11 +58,21 @@ export async function reportRoomMessage(roomMessageId: string): Promise<ActionRe
   });
 
   if (process.env.ADMIN_ALERT_EMAIL) {
-    await sendTransactionalEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
-      subject: `Message signalé — ${message.room.name}`,
-      react: AdminRoomReportAlertEmail({ reporterName: viewer.name, roomName: message.room.name }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Message signalé — ${message.room.name}`,
+        react: AdminRoomReportAlertEmail({
+          reporterName: viewer.name,
+          roomName: message.room.name,
+        }),
+      });
+    } catch (err) {
+      // Le signalement est déjà enregistré à ce stade — un échec d'envoi de
+      // l'alerte admin ne doit pas faire échouer l'action (même bug de
+      // classe que celui corrigé sur signup() le 1er août 2026).
+      console.error("[reportRoomMessage] failed to send admin alert email", err);
+    }
   }
 
   revalidatePath("/admin/salles");

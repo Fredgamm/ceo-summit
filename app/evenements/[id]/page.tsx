@@ -93,7 +93,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
         name: viewer.name,
         tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
     >

@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
+import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { profileCompleteness } from "@/lib/profile-completeness";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -56,6 +57,7 @@ export default async function DashboardPage() {
     acceptedContactsInitiated,
     unreadMessagesList,
     unreadMessages,
+    contactCost,
   ] = await Promise.all([
     prisma.event.findMany({
       where: { status: "PUBLISHED", date: { gte: new Date() } },
@@ -120,6 +122,7 @@ export default async function DashboardPage() {
       include: { sender: { select: { name: true } } },
     }),
     countUnreadMessages(user.id),
+    getDealRoomContactCost(),
   ]);
 
   const nextEvent = upcomingEvents[0] ?? null;
@@ -159,7 +162,7 @@ export default async function DashboardPage() {
         name: user.name,
         tier: tierLabel(viewerTier),
         avatarUrl: user.avatarUrl,
-        isAdmin: user.role === "ADMIN",
+        isAdmin: user.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
       rightPanel={
@@ -325,6 +328,7 @@ export default async function DashboardPage() {
                 createdAt={opp.createdAt}
                 author={opp.author}
                 authorTier={getViewerTierFromCompany(opp.author.company)}
+                contactCost={contactCost}
               />
             ))}
           </div>

@@ -8,6 +8,11 @@ vi.mock("@/lib/prisma", () => ({
     adminUser: { findUnique: vi.fn() },
     event: { create: vi.fn(), update: vi.fn() },
     eventRegistration: { findUnique: vi.fn(), update: vi.fn() },
+    eventCheckpoint: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
     auditLog: { create: vi.fn() },
   },
 }));
@@ -15,7 +20,14 @@ vi.mock("@/lib/prisma", () => ({
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { AdminAccessError } from "@/lib/admin-auth";
-import { createEvent, updateEvent, setEventStatus, checkInRegistration } from "./admin-events";
+import {
+  createEvent,
+  updateEvent,
+  setEventStatus,
+  checkInRegistration,
+  createEventCheckpoint,
+  deleteEventCheckpoint,
+} from "./admin-events";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
 
@@ -149,6 +161,90 @@ describe("admin event actions", () => {
       const result = await checkInRegistration("evt_1", "qr_token_2");
       expect(result.success).toBe(false);
       expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Contrôle d'accès multi-points (7 août 2026) — checkpointId optionnel,
+     * mais doit appartenir au même évènement s'il est fourni.
+     */
+    it("records the checkpoint on a successful check-in", async () => {
+      vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+        id: "reg_1",
+        eventId: "evt_1",
+        status: "CONFIRMED",
+        checkedIn: false,
+        user: { name: "Jean-Pierre Rakoto" },
+      } as never);
+      vi.mocked(prisma.eventCheckpoint.findUnique).mockResolvedValue({
+        id: "cp_1",
+        eventId: "evt_1",
+      } as never);
+
+      const result = await checkInRegistration("evt_1", "qr_token_1", "cp_1");
+
+      expect(result.success).toBe(true);
+      expect(prisma.eventRegistration.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ checkpointId: "cp_1" }) })
+      );
+    });
+
+    it("rejects a checkpoint that belongs to a different event", async () => {
+      vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+        id: "reg_1",
+        eventId: "evt_1",
+        status: "CONFIRMED",
+        checkedIn: false,
+        user: { name: "Jean-Pierre Rakoto" },
+      } as never);
+      vi.mocked(prisma.eventCheckpoint.findUnique).mockResolvedValue({
+        id: "cp_1",
+        eventId: "evt_2",
+      } as never);
+
+      const result = await checkInRegistration("evt_1", "qr_token_1", "cp_1");
+
+      expect(result.success).toBe(false);
+      expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("createEventCheckpoint", () => {
+    it("creates a checkpoint with a trimmed name", async () => {
+      vi.mocked(prisma.eventCheckpoint.create).mockResolvedValue({ id: "cp_1" } as never);
+
+      const result = await createEventCheckpoint("evt_1", "  Entrée VIP  ");
+
+      expect(result.success).toBe(true);
+      expect(prisma.eventCheckpoint.create).toHaveBeenCalledWith({
+        data: { eventId: "evt_1", name: "Entrée VIP" },
+      });
+    });
+
+    it("rejects an empty name without touching the database", async () => {
+      const result = await createEventCheckpoint("evt_1", "   ");
+      expect(result.success).toBe(false);
+      expect(prisma.eventCheckpoint.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("deleteEventCheckpoint", () => {
+    it("deletes an existing checkpoint", async () => {
+      vi.mocked(prisma.eventCheckpoint.findUnique).mockResolvedValue({
+        id: "cp_1",
+        eventId: "evt_1",
+      } as never);
+
+      const result = await deleteEventCheckpoint("cp_1");
+
+      expect(result.success).toBe(true);
+      expect(prisma.eventCheckpoint.delete).toHaveBeenCalledWith({ where: { id: "cp_1" } });
+    });
+
+    it("rejects deleting a checkpoint that doesn't exist", async () => {
+      vi.mocked(prisma.eventCheckpoint.findUnique).mockResolvedValue(null);
+      const result = await deleteEventCheckpoint("cp_missing");
+      expect(result.success).toBe(false);
+      expect(prisma.eventCheckpoint.delete).not.toHaveBeenCalled();
     });
   });
 });

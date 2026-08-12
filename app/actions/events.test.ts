@@ -29,6 +29,7 @@ vi.mock("@/emails/admin-event-payment-alert-email", () => ({ default: vi.fn(() =
 vi.mock("qrcode", () => ({
   default: { toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,xxx") },
 }));
+vi.mock("@/lib/plans-query", () => ({ getActivePlans: vi.fn().mockResolvedValue([]) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -37,6 +38,7 @@ import {
   RegistrationLockBusyError,
 } from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { getActivePlans } from "@/lib/plans-query";
 import { registerForEvent, cancelEventRegistration } from "./events";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
@@ -62,6 +64,7 @@ function makeViewer(overrides: Partial<Record<string, unknown>> = {}) {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
     email: "jp@techocean.mg",
+    status: "ACTIVE",
     company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     ...overrides,
   } as never;
@@ -77,6 +80,7 @@ describe("registerForEvent", () => {
       id: "reg_1",
       badgeQrCode: "qr_token_1",
     } as never);
+    vi.mocked(getActivePlans).mockResolvedValue([]);
   });
 
   it("confirms a free event immediately with method INCLUS and sends no admin alert", async () => {
@@ -94,6 +98,17 @@ describe("registerForEvent", () => {
       }),
     });
     expect(sendTransactionalEmail).toHaveBeenCalledTimes(1); // member email only, no admin alert
+  });
+
+  it("rejects the flat-price path once the event has dedicated offers configured", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent());
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
+    vi.mocked(getActivePlans).mockResolvedValue([{ id: "plan_1" }] as never);
+
+    const result = await registerForEvent("event_1", "VIREMENT");
+
+    expect(result.success).toBe(false);
+    expect(prisma.eventRegistration.create).not.toHaveBeenCalled();
   });
 
   it("creates a pending registration for mobile money without alerting admin", async () => {
@@ -154,6 +169,23 @@ describe("registerForEvent", () => {
 
     const result = await registerForEvent("event_1", "MOBILE_MONEY");
     expect(result.success).toBe(false);
+  });
+
+  /**
+   * Correctif (7 août 2026, audit) — `suspendMember`/`excludeMember` ne
+   * mettaient à jour que `User.status` en base ; une session déjà ouverte
+   * (JWT, 24h) gardait un accès complet à cette action tant que le compte
+   * ne se reconnectait pas. `requireViewer()` relit désormais le statut à
+   * chaque appel.
+   */
+  it("rejects a viewer whose account was suspended after their session was issued", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent());
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer({ status: "SUSPENDED" }));
+
+    const result = await registerForEvent("event_1", "MOBILE_MONEY");
+
+    expect(result.success).toBe(false);
+    expect(prisma.eventRegistration.create).not.toHaveBeenCalled();
   });
 
   it("rejects when already registered", async () => {

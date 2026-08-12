@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 
 import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/components/providers";
+import { DevServiceWorkerCleanup } from "@/components/dev-service-worker-cleanup";
 import { SPLASH_DEVICES, splashMediaQuery } from "@/lib/apple-splash-screens";
 import "./globals.css";
 
@@ -58,6 +59,7 @@ export default function RootLayout({
         >
           Aller au contenu principal
         </a>
+        <DevServiceWorkerCleanup />
         <Providers>
           {children}
           <Toaster />

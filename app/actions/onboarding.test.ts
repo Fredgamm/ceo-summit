@@ -4,7 +4,10 @@ vi.mock("@/auth", () => ({ auth: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { update: vi.fn().mockResolvedValue({}) },
+    user: {
+      update: vi.fn().mockResolvedValue({}),
+      findUnique: vi.fn().mockResolvedValue({ id: "user_1", status: "ACTIVE" }),
+    },
   },
 }));
 
@@ -46,9 +49,26 @@ describe("onboarding server actions", () => {
       expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
-    it("throws when there is no authenticated session", async () => {
+    /**
+     * Correctif (7 août 2026, audit) — cette action levait auparavant une
+     * `Error` brute plutôt que de retourner `ActionResult` comme partout
+     * ailleurs (`requireActiveUserId()`, remplacé depuis par
+     * `requireViewer()`).
+     */
+    it("returns a graceful error when there is no authenticated session, instead of throwing", async () => {
       vi.mocked(auth).mockResolvedValue(null as never);
-      await expect(saveOnboardingProfileStep("CEO", "bio")).rejects.toThrow();
+      const result = await saveOnboardingProfileStep("CEO", "bio");
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects a viewer suspended after their session was issued", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: "user_1",
+        status: "SUSPENDED",
+      } as never);
+      const result = await saveOnboardingProfileStep("CEO", "bio");
+      expect(result.success).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 

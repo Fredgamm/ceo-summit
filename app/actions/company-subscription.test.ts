@@ -101,7 +101,7 @@ describe("selectPlan", () => {
     });
   });
 
-  it("allows switching while PENDING_REVIEW (RG-11) and invalidates the pending proof", async () => {
+  it("rejects switching while PENDING_REVIEW (RG-11 révisée) — must wait for the admin's decision", async () => {
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       id: "company_1",
       companyAdminId: "admin_user_1",
@@ -110,22 +110,9 @@ describe("selectPlan", () => {
 
     const result = await selectPlan("company_1", "plan_2");
 
-    expect(result.success).toBe(true);
-    expect(prisma.companyPayment.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { companySubscriptionId: "sub_1", status: "PENDING" },
-        data: expect.objectContaining({ status: "REJECTED" }),
-      })
-    );
-    expect(prisma.companySubscription.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        update: expect.objectContaining({
-          planId: "plan_2",
-          status: "PENDING_PAYMENT",
-          declaredParticipants: null,
-        }),
-      })
-    );
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.updateMany).not.toHaveBeenCalled();
+    expect(prisma.companySubscription.upsert).not.toHaveBeenCalled();
   });
 
   it("does not touch payments when switching from PENDING_PAYMENT (no proof submitted yet)", async () => {
@@ -251,6 +238,19 @@ describe("submitPaymentProof", () => {
 
   it("rejects invalid input", async () => {
     const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "INVALID" });
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Correctif (7 août 2026, audit) — `proofFileKey` n'était jamais vérifié
+   * comme appartenant à l'appelant avant résolution en URL signée côté admin.
+   */
+  it("rejects a proofFileKey that doesn't belong to the calling admin", async () => {
+    const result = await submitPaymentProof("sub_1", {
+      ...VALID_INPUT,
+      proofFileKey: "company-payments/someone_else/proof.pdf",
+    });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

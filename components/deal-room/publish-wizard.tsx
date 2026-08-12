@@ -73,6 +73,7 @@ export function PublishWizard({
   types,
   sectors,
   countries,
+  contactCost,
 }: {
   authorName: string;
   authorTitle: string;
@@ -82,6 +83,8 @@ export function PublishWizard({
   types: string[];
   sectors: string[];
   countries: string[];
+  /** Configurable par l'admin (7 août 2026) — voir lib/deal-room-settings.ts. */
+  contactCost: number;
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
@@ -201,8 +204,10 @@ export function PublishWizard({
     <div className="mx-auto max-w-[760px]">
       <Alert variant="gold" className="mb-6">
         <AlertDescription>
-          La publication est <strong>gratuite</strong>. C&apos;est l&apos;accès aux coordonnées qui
-          coûte 1 crédit aux membres intéressés.
+          La publication est <strong>gratuite</strong>.{" "}
+          {contactCost === 0
+            ? "L'accès aux coordonnées est aussi gratuit pour l'instant."
+            : `C'est l'accès aux coordonnées qui coûte ${contactCost} crédit${contactCost > 1 ? "s" : ""} aux membres intéressés.`}
         </AlertDescription>
       </Alert>
 

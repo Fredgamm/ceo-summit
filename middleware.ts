@@ -48,7 +48,19 @@ function isPublicRoute(pathname: string) {
  * bounce them to /paiement-en-attente before they could ever reach the flow
  * meant to get them out of it.
  */
-const ACCOUNT_SETUP_PREFIXES = ["/entreprise", "/entreprises", "/bienvenue", "/profil"];
+const ACCOUNT_SETUP_PREFIXES = [
+  "/entreprise",
+  "/entreprises",
+  "/bienvenue",
+  "/profil",
+  // API routes called from the account-setup pages above (company logo,
+  // payment proof upload) — without this, this same gate below redirected
+  // the fetch() itself to /paiement-en-attente (307, body/method preserved),
+  // which then choked on the multipart body it never expected: uploads from
+  // /entreprise/creer and /entreprise/paiement silently failed for anyone
+  // without company access yet, i.e. everyone still in this exact flow.
+  "/api/company",
+];
 
 function isAccountSetupRoute(pathname: string) {
   return ACCOUNT_SETUP_PREFIXES.some(
@@ -118,7 +130,7 @@ export const config = {
      *   above: a logged-out browser could never register the service worker
      *   if this middleware redirected the SW file itself to /login.
      * - API routes that manage their own auth:
-     *   - api/webhooks must stay public for Evolia/Zoom/Resend
+     *   - api/webhooks must stay public for payments/Zoom/Resend
      *   - api/auth is NextAuth's own surface (csrf, signin, callback/credentials,
      *     session, signout...) — it must be reachable *without* a session, since
      *     that's exactly how a session gets created. Blocking it here made login

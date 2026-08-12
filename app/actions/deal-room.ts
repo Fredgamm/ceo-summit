@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { opportunityFormSchema } from "@/lib/validations/opportunity";
 import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
 import { getOrCreateConversation } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { allowedVisibilities } from "@/lib/deal-room-query";
+import { getDealRoomContactCost } from "@/lib/deal-room-settings";
+import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
 import OpportunityContactRequestEmail from "@/emails/opportunity-contact-request-email";
@@ -16,20 +18,19 @@ type ActionResult<T = undefined> =
   { success: true; data: T } | { success: false; error: string; code?: "INSUFFICIENT_CREDITS" };
 
 class InsufficientCreditsError extends Error {}
+class ContactAlreadyHandledError extends Error {}
 
 /** E6-T03 — publication (gratuite, statut pending_moderation → email admin). */
 export async function publishOpportunity(input: unknown): Promise<ActionResult<{ id: string }>> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const parsed = opportunityFormSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
-
-  const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!viewer) return { success: false, error: "Non authentifié." };
 
   const opportunity = await prisma.opportunity.create({
     data: {
@@ -48,14 +49,21 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
   });
 
   if (process.env.ADMIN_ALERT_EMAIL) {
-    await sendTransactionalEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
-      subject: `Nouvelle opportunité à modérer — ${opportunity.title}`,
-      react: AdminOpportunityAlertEmail({
-        authorName: viewer.name,
-        opportunityTitle: opportunity.title,
-      }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Nouvelle opportunité à modérer — ${opportunity.title}`,
+        react: AdminOpportunityAlertEmail({
+          authorName: viewer.name,
+          opportunityTitle: opportunity.title,
+        }),
+      });
+    } catch (err) {
+      // L'opportunité est déjà créée à ce stade — un échec d'envoi de
+      // l'alerte admin ne doit pas faire échouer la publication (même bug
+      // de classe que celui corrigé sur signup() le 1er août 2026).
+      console.error("[publishOpportunity] failed to send admin alert email", err);
+    }
   }
 
   revalidatePath("/deal-room");
@@ -68,26 +76,33 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
  * concurrentes), bypass total pour Chairman.
  */
 export async function contactOpportunityAuthor(opportunityId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
-  const [opportunity, viewer] = await Promise.all([
-    prisma.opportunity.findUnique({
-      where: { id: opportunityId },
-      include: { author: { select: { email: true } } },
-    }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: VIEWER_TIER_INCLUDE,
-    }),
-  ]);
+  const opportunity = await prisma.opportunity.findUnique({
+    where: { id: opportunityId },
+    include: { author: { select: { email: true } } },
+  });
 
   if (!opportunity || opportunity.status !== "PUBLISHED") {
     return { success: false, error: "Cette opportunité n'est pas disponible." };
   }
-  if (!viewer) return { success: false, error: "Non authentifié." };
   if (opportunity.authorId === viewer.id) {
     return { success: false, error: "Vous ne pouvez pas contacter votre propre opportunité." };
+  }
+  /**
+   * Correctif (7 août 2026, audit) — cette action ne vérifiait jamais le
+   * tier du viewer face à `opportunity.visibility`, contrairement à la
+   * page détail (`app/deal-room/[id]/page.tsx:62`, qui commente
+   * explicitement "défense en profondeur — une URL directe ne doit pas
+   * contourner le gate de tier") et à la requête de liste. Un membre
+   * MEMBER en connaissant l'id pouvait donc contacter l'auteur d'une
+   * opportunité réservée EXECUTIVE/CHAIRMAN et dépenser un crédit pour ça.
+   */
+  const viewerTier = getViewerTierFromCompany(viewer.company);
+  if (!allowedVisibilities(viewerTier).includes(opportunity.visibility)) {
+    return { success: false, error: "Cette opportunité n'est pas disponible." };
   }
 
   const existing = await prisma.opportunityContact.findUnique({
@@ -97,25 +112,33 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
     return { success: false, error: "Vous avez déjà pris contact pour cette opportunité." };
   }
 
-  const isChairman = getViewerTierFromCompany(viewer.company) === "CHAIRMAN";
+  const isChairman = viewerTier === "CHAIRMAN";
+  /**
+   * Coût configurable (7 août 2026, demande admin) — un admin peut le
+   * mettre à 0 depuis /admin/parametres pour rendre le contact gratuit pour
+   * tout le monde, sans toucher au code. Chairman reste de toute façon
+   * toujours gratuit, indépendamment de ce réglage.
+   */
+  const contactCost = await getDealRoomContactCost();
+  const shouldCharge = !isChairman && contactCost > 0;
 
   try {
     await withCreditDeductionLock(viewer.id, () =>
       prisma.$transaction(async (tx) => {
-        if (!isChairman) {
+        if (shouldCharge) {
           const balance = await tx.creditBalance.findUnique({ where: { userId: viewer.id } });
           const available = balance ? balance.included + balance.purchased - balance.used : 0;
-          if (available <= 0) {
+          if (available < contactCost) {
             throw new InsufficientCreditsError();
           }
           await tx.creditBalance.update({
             where: { userId: viewer.id },
-            data: { used: { increment: 1 } },
+            data: { used: { increment: contactCost } },
           });
           await tx.creditTransaction.create({
             data: {
               userId: viewer.id,
-              amount: -1,
+              amount: -contactCost,
               type: "DEDUCTION",
               reason: `Contact — ${opportunity.title}`,
             },
@@ -127,7 +150,7 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
             opportunityId,
             initiatorId: viewer.id,
             receiverId: opportunity.authorId,
-            creditsSpent: isChairman ? 0 : 1,
+            creditsSpent: shouldCharge ? contactCost : 0,
           },
         });
       })
@@ -146,15 +169,23 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
     throw err;
   }
 
-  await sendTransactionalEmail({
-    to: opportunity.author.email,
-    subject: `Nouvelle demande de contact — ${opportunity.title}`,
-    react: OpportunityContactRequestEmail({
-      initiatorName: viewer.name,
-      opportunityTitle: opportunity.title,
-      opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: opportunity.author.email,
+      subject: `Nouvelle demande de contact — ${opportunity.title}`,
+      react: OpportunityContactRequestEmail({
+        initiatorName: viewer.name,
+        opportunityTitle: opportunity.title,
+        opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
+      }),
+    });
+  } catch (err) {
+    // Le crédit est déjà débité et le contact déjà créé à ce stade — un
+    // échec d'envoi de la notification à l'auteur ne doit pas faire
+    // échouer l'action (même bug de classe que celui corrigé sur
+    // signup() le 1er août 2026, et sur publishOpportunity le 7 août).
+    console.error("[contactOpportunityAuthor] failed to send notification email", err);
+  }
 
   revalidatePath(`/deal-room/${opportunityId}`);
   return { success: true, data: undefined };
@@ -167,14 +198,15 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
 export async function acceptOpportunityContact(
   contactId: string
 ): Promise<ActionResult<{ conversationId: string }>> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const contact = await prisma.opportunityContact.findUnique({
     where: { id: contactId },
     include: { opportunity: { select: { id: true, title: true } } },
   });
-  if (!contact || contact.receiverId !== session.user.id) {
+  if (!contact || contact.receiverId !== viewer.id) {
     return { success: false, error: "Demande introuvable." };
   }
   if (contact.status !== "PENDING") {
@@ -201,6 +233,17 @@ export async function acceptOpportunityContact(
  * demande n'aboutissait pas (déclinée, ou retirée par l'initiateur
  * lui-même faute de réponse — voir withdrawOpportunityContact). Partagé
  * entre les deux, seule la vérification d'autorisation diffère à l'appel.
+ *
+ * Correctif (7 août 2026, audit) — la vérification `status !== "PENDING"`
+ * se faisait chez l'appelant, sur une lecture antérieure à la transaction,
+ * et l'`update` ici n'était pas conditionné sur le statut : deux appels
+ * concurrents (double-clic, ou refus et retrait au même instant) passaient
+ * tous deux la vérification obsolète et remboursaient tous les deux le
+ * même crédit déjà dépensé. Verrouillé comme la dépense elle-même
+ * (`withCreditDeductionLock`, même clé par utilisateur) et le passage à
+ * `DECLINED` est désormais conditionné sur `status: "PENDING"` dans la
+ * transaction — un second appel concurrent trouve 0 ligne mise à jour et
+ * lève `ContactAlreadyHandledError` au lieu de rembourser une seconde fois.
  */
 async function refundAndDeclineContact(contact: {
   id: string;
@@ -208,41 +251,60 @@ async function refundAndDeclineContact(contact: {
   creditsSpent: number;
   opportunity: { title: string };
 }): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    await tx.opportunityContact.update({ where: { id: contact.id }, data: { status: "DECLINED" } });
-    if (contact.creditsSpent > 0) {
-      await tx.creditBalance.update({
-        where: { userId: contact.initiatorId },
-        data: { used: { decrement: contact.creditsSpent } },
+  await withCreditDeductionLock(contact.initiatorId, () =>
+    prisma.$transaction(async (tx) => {
+      const { count } = await tx.opportunityContact.updateMany({
+        where: { id: contact.id, status: "PENDING" },
+        data: { status: "DECLINED" },
       });
-      await tx.creditTransaction.create({
-        data: {
-          userId: contact.initiatorId,
-          amount: contact.creditsSpent,
-          type: "REFUND",
-          reason: `Remboursement — contact non abouti (${contact.opportunity.title})`,
-        },
-      });
-    }
-  });
+      if (count === 0) {
+        throw new ContactAlreadyHandledError();
+      }
+      if (contact.creditsSpent > 0) {
+        await tx.creditBalance.update({
+          where: { userId: contact.initiatorId },
+          data: { used: { decrement: contact.creditsSpent } },
+        });
+        await tx.creditTransaction.create({
+          data: {
+            userId: contact.initiatorId,
+            amount: contact.creditsSpent,
+            type: "REFUND",
+            reason: `Remboursement — contact non abouti (${contact.opportunity.title})`,
+          },
+        });
+      }
+    })
+  );
 }
 
 export async function declineOpportunityContact(contactId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const contact = await prisma.opportunityContact.findUnique({
     where: { id: contactId },
     include: { opportunity: { select: { title: true } } },
   });
-  if (!contact || contact.receiverId !== session.user.id) {
+  if (!contact || contact.receiverId !== viewer.id) {
     return { success: false, error: "Demande introuvable." };
   }
   if (contact.status !== "PENDING") {
     return { success: false, error: "Cette demande a déjà été traitée." };
   }
 
-  await refundAndDeclineContact(contact);
+  try {
+    await refundAndDeclineContact(contact);
+  } catch (err) {
+    if (err instanceof ContactAlreadyHandledError) {
+      return { success: false, error: "Cette demande a déjà été traitée." };
+    }
+    if (err instanceof CreditDeductionLockBusyError) {
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
 
   revalidatePath(`/deal-room/${contact.opportunityId}`);
   return { success: true, data: undefined };
@@ -257,21 +319,32 @@ export async function declineOpportunityContact(contactId: string): Promise<Acti
  * (aucune infra de cron dans ce projet, voir BACKLOG_DEV.md).
  */
 export async function withdrawOpportunityContact(contactId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const contact = await prisma.opportunityContact.findUnique({
     where: { id: contactId },
     include: { opportunity: { select: { title: true } } },
   });
-  if (!contact || contact.initiatorId !== session.user.id) {
+  if (!contact || contact.initiatorId !== viewer.id) {
     return { success: false, error: "Demande introuvable." };
   }
   if (contact.status !== "PENDING") {
     return { success: false, error: "Cette demande a déjà été traitée." };
   }
 
-  await refundAndDeclineContact(contact);
+  try {
+    await refundAndDeclineContact(contact);
+  } catch (err) {
+    if (err instanceof ContactAlreadyHandledError) {
+      return { success: false, error: "Cette demande a déjà été traitée." };
+    }
+    if (err instanceof CreditDeductionLockBusyError) {
+      return { success: false, error: err.message };
+    }
+    throw err;
+  }
 
   revalidatePath(`/deal-room/${contact.opportunityId}`);
   return { success: true, data: undefined };
@@ -288,11 +361,12 @@ export async function resubmitOpportunity(
   opportunityId: string,
   input: unknown
 ): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const opportunity = await prisma.opportunity.findUnique({ where: { id: opportunityId } });
-  if (!opportunity || opportunity.authorId !== session.user.id) {
+  if (!opportunity || opportunity.authorId !== viewer.id) {
     return { success: false, error: "Opportunité introuvable." };
   }
   if (opportunity.status !== "REFUSED" && opportunity.status !== "CHANGES_REQUESTED") {
@@ -307,9 +381,6 @@ export async function resubmitOpportunity(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
-
-  const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!viewer) return { success: false, error: "Non authentifié." };
 
   await prisma.opportunity.update({
     where: { id: opportunityId },
@@ -331,11 +402,15 @@ export async function resubmitOpportunity(
   });
 
   if (process.env.ADMIN_ALERT_EMAIL) {
-    await sendTransactionalEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
-      subject: `Opportunité resoumise à modérer — ${f.title}`,
-      react: AdminOpportunityAlertEmail({ authorName: viewer.name, opportunityTitle: f.title }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Opportunité resoumise à modérer — ${f.title}`,
+        react: AdminOpportunityAlertEmail({ authorName: viewer.name, opportunityTitle: f.title }),
+      });
+    } catch (err) {
+      console.error("[resubmitOpportunity] failed to send admin alert email", err);
+    }
   }
 
   revalidatePath(`/deal-room/${opportunityId}`);

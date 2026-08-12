@@ -2,9 +2,9 @@
 
 import { z } from "zod";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getReferentialLabels } from "@/lib/referentials-query";
+import { requireViewer } from "@/lib/require-viewer";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -22,12 +22,6 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * on User (title, bio, sectors).
  */
 
-async function requireActiveUserId(): Promise<string> {
-  const session = await auth();
-  if (!session?.user?.id) throw new Error("Non authentifié.");
-  return session.user.id;
-}
-
 const profileStepSchema = z.object({
   title: z.string().trim().max(120).optional().default(""),
   bio: z
@@ -44,9 +38,11 @@ export async function saveOnboardingProfileStep(title: string, bio: string): Pro
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
 
-  const userId = await requireActiveUserId();
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+
   await prisma.user.update({
-    where: { id: userId },
+    where: { id: viewerResult.viewer.id },
     data: { title: parsed.data.title || null, bio: parsed.data.bio || null },
   });
 
@@ -60,8 +56,10 @@ export async function saveOnboardingSectorsStep(sectors: string[]): Promise<Acti
     return { success: false, error: "Secteur inconnu." };
   }
 
-  const userId = await requireActiveUserId();
-  await prisma.user.update({ where: { id: userId }, data: { sectors: valid } });
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+
+  await prisma.user.update({ where: { id: viewerResult.viewer.id }, data: { sectors: valid } });
 
   return { success: true, data: undefined };
 }
@@ -70,11 +68,24 @@ export async function saveOnboardingSectorsStep(sectors: string[]): Promise<Acti
  * Called either from the final step's "Terminer" button or from the
  * "Passer" button available at every step (US-010) — both end the tutorial
  * for good; it never re-triggers on later logins (checked in the page).
+ *
+ * Correctif (7 août 2026, audit) — ces 3 actions appelaient auparavant un
+ * `requireActiveUserId()` local qui levait une `Error` brute au lieu de
+ * retourner `ActionResult`, seule fonction du fichier à casser cette
+ * convention (partagée par toutes les autres actions membre du projet) —
+ * une session expirée pendant l'onboarding aurait fait planter l'action
+ * avec une erreur non gérée plutôt que le message gracieux habituel.
+ * Remplacé par `requireViewer()` (lib/require-viewer.ts), qui suit la
+ * convention et ferme au passage le même trou que partout ailleurs : sans
+ * lui, un compte suspendu entre-temps pouvait encore sauvegarder ses
+ * étapes d'onboarding.
  */
 export async function finishOnboarding(): Promise<ActionResult> {
-  const userId = await requireActiveUserId();
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+
   await prisma.user.update({
-    where: { id: userId },
+    where: { id: viewerResult.viewer.id },
     data: { onboardingCompletedAt: new Date() },
   });
 

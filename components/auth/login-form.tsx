@@ -33,10 +33,27 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   RATE_LIMITED: "Trop de tentatives de connexion. Réessayez dans quelques minutes.",
 };
 
+/**
+ * Correctif (7 août 2026, audit) — `callbackUrl` était passé tel quel à
+ * `router.push()` après un `signIn({ redirect: false })`, qui contourne
+ * exprès le callback `redirect` interne de NextAuth (jamais invoqué ici) :
+ * une URL du type `?callbackUrl=https://faux-site.example` renvoyait la
+ * victime, fraîchement authentifiée pour de vrai, droit vers une page de
+ * phishing. `middleware.ts` ne pose lui-même ce paramètre que vers un
+ * `pathname` interne, mais rien n'empêchait un lien forgé de porter
+ * n'importe quelle valeur — seul un chemin relatif à cette origine
+ * (commençant par un unique `/`, jamais `//` qui est protocol-relative) est
+ * désormais accepté.
+ */
+function sanitizeCallbackUrl(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  return raw;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = sanitizeCallbackUrl(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");

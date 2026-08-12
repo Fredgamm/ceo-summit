@@ -50,7 +50,7 @@ temps réel (compteur en ligne, messages live) et affichent une erreur de connex
 app/                    App Router — pages, layouts, route handlers
   (member routes)       /dashboard, /deal-room, /evenements, /catalogue, /salles, /messagerie, /profil, /entreprise
   admin/                Backoffice — protégé par middleware (role === ADMIN)
-  api/                  Route handlers (auth, webhooks Evolia/Zoom/Resend)
+  api/                  Route handlers (auth, webhooks payments/Zoom/Resend)
 components/
   ui/                   Composants shadcn/ui (Button, Card, Dialog, Tabs...) — palette navy/gold CEO Summit
   layout/                AppShell (membre), AdminShell (backoffice), MobileBottomNav (PWA)
@@ -87,7 +87,7 @@ npm run test:watch    # mode watch
 npm run test:coverage # rapport de couverture
 ```
 
-Couverture actuelle (366 tests) : webhook Evolia, webhook Resend (E8-T09), actions
+Couverture actuelle (523 tests) : webhook paiement générique, webhook Resend (E8-T09), actions
 d'auth (activation, mot de passe oublié, onboarding, profil), actions
 membres/candidatures/événements admin, logique de requête catalogue/événements/
 membres/Deal Room/salles/conversations/services/broadcasts/finances
@@ -122,7 +122,12 @@ Ce n'est pas un problème de code ; ça fonctionne normalement en local et sur C
 
 - ✅ E1-T01 : NextAuth + middleware RBAC (mur grossier — les vérifications fines de tier
   se font page par page à mesure qu'elles existent)
-- ✅ E1-T02 : Webhook Evolia (`/api/webhooks/evolia`) — idempotent sur `paymentRef`, testé (Vitest)
+- ⚠️ E1-T02 : Webhook Evolia (`/api/webhooks/evolia`) — retiré pendant la purge Phase 3
+  (adhésions individuelles). Remplacé (7 août 2026) par un webhook de confirmation
+  générique et agnostique du prestataire : `/api/webhooks/payments`, voir
+  `lib/payment-confirmations.ts`. Aucun prestataire n'est branché à ce stade ; la
+  validation manuelle admin reste le chemin principal, le webhook n'est qu'un
+  chemin de confirmation automatique en plus.
 - ✅ E1-T03 : Page d'activation (`/activer/[token]`) — token expiré → renvoi de lien,
   token déjà utilisé → redirect `/login`
 - ✅ E1-T04 : Page de connexion (`/login`)

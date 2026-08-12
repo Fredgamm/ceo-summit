@@ -14,6 +14,8 @@ import {
 import { sendTransactionalEmail } from "@/lib/resend";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
+import { BCRYPT_ROUNDS } from "@/lib/password";
+import { tierLabel } from "@/lib/utils";
 import ActivationEmail from "@/emails/activation-email";
 import ResetPasswordEmail from "@/emails/reset-password-email";
 
@@ -77,7 +79,7 @@ export async function signup(
     ? await prisma.plan.findFirst({ where: { id: planId, isActive: true, isSelfService: true } })
     : null;
 
-  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+  const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
   await prisma.user.create({
     data: {
       name: parsed.data.name,
@@ -136,7 +138,7 @@ export async function activateAccount(
     };
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+  const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
 
   const user = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
@@ -212,16 +214,16 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
     subject: "Votre nouveau lien d'activation CEO Summit",
     react: ActivationEmail({
       memberName: user.name,
+      // Correctif (7 août 2026, audit) — utilisait une copie locale de
+      // tierLabel() dupliquant lib/utils.ts, avec un texte de repli anglais
+      // ("Member") détonnant dans un email entièrement en français —
+      // désormais "Membre", cohérent avec le reste de la plateforme.
       tier: tierLabel(undefined),
       activationUrl,
     }),
   });
 
   return { success: true, data: undefined };
-}
-
-function tierLabel(tier?: "MEMBER" | "EXECUTIVE" | "CHAIRMAN") {
-  return tier === "CHAIRMAN" ? "Chairman" : tier === "EXECUTIVE" ? "Executive" : "Member";
 }
 
 // ═══════════════════════════════════════════════
@@ -297,7 +299,7 @@ export async function resetPassword(
     return { success: false, error: "Ce lien a expiré. Demandez-en un nouveau." };
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+  const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
 
   await prisma.$transaction([
     prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),

@@ -176,13 +176,6 @@ model User {
   isPlatformAdmin Boolean          @default(false)
   status          MembershipStatus @default(PENDING_ACTIVATION)
 
-  /// Denormalized cache of the current plan. Nullable: a brand-new signup
-  /// or a company-invited teammate has no personal plan of their own.
-  /// Currently unwritten since the Tier->Plan transition completed (4 août
-  /// 2026) — kept for display/backward compat, not a write path anymore.
-  planId String?
-  plan   Plan?   @relation(fields: [planId], references: [id])
-
   /// Phase 2ter (1er août 2026) — offre choisie sur le site public avant
   /// inscription (lien profond `/inscription?offre=<slug>`), portée jusqu'à
   /// /paiement-en-attente pour ne pas la redemander. Transitoire : jamais
@@ -230,7 +223,6 @@ model User {
   @@index([email])
   @@index([role, status])
   @@index([companyId])
-  @@index([planId])
 }
 
 model AdminUser {
@@ -382,7 +374,6 @@ model Plan {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  users                         User[]
   usersIntending                User[]                @relation("IntendedPlan")
   eventsAsMinPlan               Event[]               @relation("EventMinPlan")
   opportunitiesAsVisibilityPlan Opportunity[]         @relation("OpportunityVisibilityPlan")
@@ -565,6 +556,10 @@ model Event {
   /// EventSession). Affichage seul pour l'instant : pas d'inscription ni de
   /// check-in par session (nécessiterait un modèle d'inscription dédié).
   sessions      EventSession[]
+  /// Contrôle d'accès multi-points (7 août 2026, demande client 3ème
+  /// édition) — postes de scan distincts (ex. "Entrée VIP", "Entrée Staff")
+  /// pour un même évènement, voir EventCheckpoint.
+  checkpoints   EventCheckpoint[]
 
   @@index([status, date])
   @@index([type])
@@ -594,6 +589,26 @@ model EventSession {
   @@index([eventId, startTime])
 }
 
+/// Contrôle d'accès multi-points (7 août 2026, demande client 3ème édition)
+/// — un évènement peut avoir plusieurs postes de scan physiquement
+/// distincts (ex. "Entrée VIP", "Entrée Staff", "Entrée principale"), gérés
+/// librement par l'admin depuis la fiche évènement. Chaque check-in
+/// (EventRegistration.checkpointId) enregistre par lequel un participant est
+/// effectivement entré — un badge ne peut être validé qu'une fois au total
+/// pour l'évènement (pas un check-in par poste), le poste sert au comptage
+/// et au reporting, pas à restreindre quel badge peut entrer où.
+model EventCheckpoint {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  registrations EventRegistration[]
+
+  @@index([eventId])
+}
+
 model EventRegistration {
   id            String              @id @default(cuid())
   eventId       String
@@ -612,12 +627,17 @@ model EventRegistration {
   badgeQrCode   String              @unique @default(cuid())
   checkedIn     Boolean             @default(false)
   checkedInAt   DateTime?
+  /// Contrôle d'accès multi-points (7 août 2026) — quel poste a effectué le
+  /// check-in, renseigné uniquement quand checkedIn passe à true.
+  checkpointId  String?
+  checkpoint    EventCheckpoint?    @relation(fields: [checkpointId], references: [id])
   createdAt     DateTime            @default(now())
 
   @@unique([eventId, userId])
   @@index([eventId, status])
   @@index([badgeQrCode])
   @@index([planId])
+  @@index([checkpointId])
 }
 
 // ═══════════════════════════════════════════════

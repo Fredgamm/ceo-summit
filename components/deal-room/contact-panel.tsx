@@ -11,6 +11,8 @@ interface ContactPanelProps {
   opportunityId: string;
   authorName: string;
   isChairman: boolean;
+  /** Configurable par l'admin (7 août 2026) — voir lib/deal-room-settings.ts. */
+  contactCost: number;
 }
 
 /**
@@ -18,7 +20,13 @@ interface ContactPanelProps {
  * Si le solde est à 0, l'action renvoie code=INSUFFICIENT_CREDITS et cette
  * page redirige vers /credits/acheter (backlog : "Si solde 0 → redirect").
  */
-export function ContactPanel({ opportunityId, authorName, isChairman }: ContactPanelProps) {
+export function ContactPanel({
+  opportunityId,
+  authorName,
+  isChairman,
+  contactCost,
+}: ContactPanelProps) {
+  const isFree = isChairman || contactCost === 0;
   const router = useRouter();
   const [confirming, setConfirming] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -58,7 +66,7 @@ export function ContactPanel({ opportunityId, authorName, isChairman }: ContactP
   if (!confirming) {
     return (
       <Button size="lg" className="w-full justify-center" onClick={() => setConfirming(true)}>
-        ✉ Contacter{isChairman ? "" : " (1 crédit)"}
+        ✉ Contacter{isFree ? "" : ` (${contactCost} crédit${contactCost > 1 ? "s" : ""})`}
       </Button>
     );
   }
@@ -68,7 +76,9 @@ export function ContactPanel({ opportunityId, authorName, isChairman }: ContactP
       <p className="mb-3 text-sm text-text-mid">
         {isChairman
           ? `Contacter ${authorName} ? En tant que Chairman, aucun crédit ne sera déduit.`
-          : `En utilisant 1 crédit, vous débloquez les coordonnées de ${authorName} et l'envoi d'un message d'introduction.`}
+          : contactCost === 0
+            ? `Contacter ${authorName} ? La prise de contact est gratuite pour l'instant.`
+            : `En utilisant ${contactCost} crédit${contactCost > 1 ? "s" : ""}, vous débloquez les coordonnées de ${authorName} et l'envoi d'un message d'introduction.`}
       </p>
       {error && (
         <Alert variant="destructive" className="mb-3">
@@ -82,9 +92,9 @@ export function ContactPanel({ opportunityId, authorName, isChairman }: ContactP
         <Button onClick={handleConfirm} disabled={loading} className="flex-1 justify-center">
           {loading
             ? "Traitement…"
-            : isChairman
+            : isFree
               ? "Confirmer le contact"
-              : "Utiliser 1 crédit et contacter"}
+              : `Utiliser ${contactCost} crédit${contactCost > 1 ? "s" : ""} et contacter`}
         </Button>
       </div>
     </div>

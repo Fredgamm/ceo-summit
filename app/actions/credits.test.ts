@@ -8,9 +8,15 @@ vi.mock("@/lib/prisma", () => ({
     adminUser: { findUnique: vi.fn() },
     creditPackPrice: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
-    creditPurchase: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    creditPurchase: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     creditBalance: { upsert: vi.fn() },
     creditTransaction: { create: vi.fn() },
+    auditLog: { create: vi.fn() },
     $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
   },
 }));
@@ -34,6 +40,7 @@ describe("requestCreditPurchase", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user_1",
       name: "Jean-Pierre Rakoto",
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
     } as never);
   });
@@ -42,6 +49,7 @@ describe("requestCreditPurchase", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user_1",
       name: "Jean-Pierre Rakoto",
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
 
@@ -103,6 +111,34 @@ describe("confirmCreditPurchase", () => {
       expect.objectContaining({ data: expect.objectContaining({ amount: 5, type: "PURCHASE" }) })
     );
     expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "credit_purchase.confirm", targetId: "cp_1" }),
+      })
+    );
+  });
+
+  /**
+   * Correctif (7 août 2026, audit) — la vérification `status !== "PENDING"`
+   * se faisait sur une lecture antérieure à l'écriture, sans verrou ni
+   * condition sur l'update lui-même : deux confirmations concurrentes
+   * (double-clic, deux admins) pouvaient toutes deux créditer le même achat.
+   */
+  it("does not double-credit when the status flip races (updateMany affects 0 rows)", async () => {
+    vi.mocked(prisma.creditPurchase.findUnique).mockResolvedValue({
+      id: "cp_1",
+      userId: "user_1",
+      credits: 5,
+      status: "PENDING",
+      user: { name: "Jean-Pierre Rakoto", email: "jp@example.com" },
+    } as never);
+    vi.mocked(prisma.creditPurchase.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    const result = await confirmCreditPurchase("cp_1");
+
+    expect(result.success).toBe(false);
+    expect(prisma.creditBalance.upsert).not.toHaveBeenCalled();
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
   it("rejects confirming an already-processed purchase", async () => {
@@ -110,6 +146,7 @@ describe("confirmCreditPurchase", () => {
       id: "cp_1",
       status: "CONFIRMED",
     } as never);
+    vi.mocked(prisma.creditPurchase.updateMany).mockResolvedValueOnce({ count: 0 });
     const result = await confirmCreditPurchase("cp_1");
     expect(result.success).toBe(false);
     expect(prisma.creditBalance.upsert).not.toHaveBeenCalled();
@@ -132,8 +169,25 @@ describe("rejectCreditPurchase", () => {
     const result = await rejectCreditPurchase("cp_1");
 
     expect(result.success).toBe(true);
-    expect(prisma.creditPurchase.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "REJECTED" }) })
+    expect(prisma.creditPurchase.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "cp_1", status: "PENDING" },
+        data: expect.objectContaining({ status: "REJECTED" }),
+      })
     );
+  });
+
+  /** Correctif (7 août 2026, audit) — même race que confirmCreditPurchase. */
+  it("does not double-process when the status flip races (updateMany affects 0 rows)", async () => {
+    vi.mocked(prisma.creditPurchase.findUnique).mockResolvedValue({
+      id: "cp_1",
+      status: "PENDING",
+    } as never);
+    vi.mocked(prisma.creditPurchase.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    const result = await rejectCreditPurchase("cp_1");
+
+    expect(result.success).toBe(false);
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 });

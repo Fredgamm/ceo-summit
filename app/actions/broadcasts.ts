@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { BroadcastSegment } from "@prisma/client";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildBroadcastRecipientsWhere } from "@/lib/broadcast-segments";
 import { renderBroadcastBody } from "@/lib/broadcast-template";
 import { requireAdmin } from "@/lib/admin-auth";
+import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { tierLabel } from "@/lib/utils";
@@ -59,8 +59,9 @@ export async function getCustomSegmentCount(
 
 /** E8-T09 — "✉ Tester" : envoie uniquement à l'admin connecté, avec ses propres variables. */
 export async function sendTestBroadcast(subject: string, body: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
   await requireAdmin("communications");
 
   const parsedContent = broadcastContentSchema.safeParse({ subject, body });
@@ -68,12 +69,6 @@ export async function sendTestBroadcast(subject: string, body: string): Promise<
     return { success: false, error: parsedContent.error.issues[0]?.message ?? "Champs invalides" };
   }
   ({ subject, body } = parsedContent.data);
-
-  const viewer = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: VIEWER_TIER_INCLUDE,
-  });
-  if (!viewer) return { success: false, error: "Non authentifié." };
 
   const { prenom, nom } = splitName(viewer.name);
   const renderedBody = renderBroadcastBody(body, {

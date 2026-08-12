@@ -9,7 +9,10 @@ vi.mock("qrcode", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    eventRegistration: { findUnique: vi.fn(), update: vi.fn() },
+    eventRegistration: {
+      findUnique: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     auditLog: { create: vi.fn() },
   },
 }));
@@ -53,8 +56,8 @@ describe("confirmEventPayment", () => {
   it("confirms a pending payment and emails the member", async () => {
     const result = await confirmEventPayment("reg_1");
     expect(result.success).toBe(true);
-    expect(prisma.eventRegistration.update).toHaveBeenCalledWith({
-      where: { id: "reg_1" },
+    expect(prisma.eventRegistration.updateMany).toHaveBeenCalledWith({
+      where: { id: "reg_1", paymentStatus: "PENDING" },
       data: { status: "CONFIRMED", paymentStatus: "PAID" },
     });
     expect(sendTransactionalEmail).toHaveBeenCalledWith(
@@ -66,9 +69,10 @@ describe("confirmEventPayment", () => {
     vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue(
       makeRegistration({ paymentStatus: "PAID" })
     );
+    vi.mocked(prisma.eventRegistration.updateMany).mockResolvedValueOnce({ count: 0 } as never);
     const result = await confirmEventPayment("reg_1");
     expect(result.success).toBe(false);
-    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown registration", async () => {

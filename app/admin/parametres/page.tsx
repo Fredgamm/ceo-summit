@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
+import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { CreditPackPricesForm } from "@/components/admin/settings/tariffs-form";
+import { DealRoomContactCostForm } from "@/components/admin/settings/deal-room-contact-cost-form";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +45,7 @@ export default async function AdminParametresPage({
 
   if (activeTab === "tarifs") {
     const creditPacks = await prisma.creditPackPrice.findMany({ orderBy: { credits: "asc" } });
+    const dealRoomContactCost = await getDealRoomContactCost();
 
     tabContent = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -57,6 +60,7 @@ export default async function AdminParametresPage({
           </Button>
         </div>
         <CreditPackPricesForm packs={creditPacks} />
+        <DealRoomContactCostForm cost={dealRoomContactCost} />
       </div>
     );
   } else if (activeTab === "referentiels") {
@@ -95,7 +99,7 @@ export default async function AdminParametresPage({
 
     tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
   } else if (activeTab === "integrations") {
-    const evoliaConfigured = Boolean(process.env.EVOLIA_WEBHOOK_SECRET);
+    const paymentWebhookConfigured = Boolean(process.env.PAYMENT_WEBHOOK_SECRET);
     const resendConfigured = Boolean(process.env.RESEND_API_KEY);
     const r2Configured = Boolean(
       process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
@@ -107,9 +111,12 @@ export default async function AdminParametresPage({
     tabContent = (
       <div className="flex flex-col gap-4">
         <IntegrationCard
-          title="Evolia (paiement adhésions & événements)"
-          configured={evoliaConfigured}
-          rows={[{ label: "Webhook entrant", value: "app/api/webhooks/evolia/route.ts" }]}
+          title="Confirmation de paiement — webhook générique"
+          configured={paymentWebhookConfigured}
+          rows={[
+            { label: "Webhook entrant", value: "app/api/webhooks/payments/route.ts" },
+            { label: "Prestataire branché", value: "aucun pour l'instant" },
+          ]}
         />
         <IntegrationCard
           title="Email transactionnel — Resend"

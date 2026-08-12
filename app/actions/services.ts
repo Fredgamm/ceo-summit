@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { requireViewer } from "@/lib/require-viewer";
 import { serviceFormSchema } from "@/lib/validations/service";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminServiceListingAlertEmail from "@/emails/admin-service-listing-alert-email";
@@ -18,20 +18,15 @@ const ACTIVE_STATUSES = ["PENDING_MODERATION", "PUBLISHED"] as const;
  * "Limit : 1 fiche active par entreprise (Member/Executive), illimité Chairman."
  */
 export async function submitServiceListing(input: unknown): Promise<ActionResult<{ id: string }>> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const parsed = serviceFormSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
-
-  const viewer = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: VIEWER_TIER_INCLUDE,
-  });
-  if (!viewer) return { success: false, error: "Non authentifié." };
 
   const isChairman = getViewerTierFromCompany(viewer.company) === "CHAIRMAN";
 
@@ -65,14 +60,21 @@ export async function submitServiceListing(input: unknown): Promise<ActionResult
   });
 
   if (process.env.ADMIN_ALERT_EMAIL) {
-    await sendTransactionalEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
-      subject: `Nouvelle fiche service à modérer — ${listing.title}`,
-      react: AdminServiceListingAlertEmail({
-        authorName: viewer.name,
-        serviceTitle: listing.title,
-      }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Nouvelle fiche service à modérer — ${listing.title}`,
+        react: AdminServiceListingAlertEmail({
+          authorName: viewer.name,
+          serviceTitle: listing.title,
+        }),
+      });
+    } catch (err) {
+      // La fiche est déjà créée à ce stade — un échec d'envoi de l'alerte
+      // admin ne doit pas faire échouer le dépôt (même bug de classe que
+      // celui corrigé sur signup() le 1er août 2026).
+      console.error("[createServiceListing] failed to send admin alert email", err);
+    }
   }
 
   revalidatePath("/catalogue/services");

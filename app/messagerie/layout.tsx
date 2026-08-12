@@ -71,7 +71,7 @@ export default async function MessagerieLayout({ children }: { children: React.R
         name: viewer.name,
         tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ messages: totalUnread || undefined }}
     >

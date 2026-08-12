@@ -15,16 +15,34 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
     },
     companySubscription: { findUnique: vi.fn() },
-    eventRegistration: { upsert: vi.fn() },
+    event: { findUnique: vi.fn() },
+    eventRegistration: {
+      upsert: vi.fn(),
+      findUnique: vi.fn().mockResolvedValue(null),
+      count: vi.fn().mockResolvedValue(0),
+    },
     $transaction: vi.fn(),
   },
 }));
 
+vi.mock("@/lib/event-registration-lock", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/event-registration-lock")>();
+  return {
+    ...actual,
+    withEventRegistrationLock: vi.fn((_eventId: string, fn: () => Promise<unknown>) => fn()),
+  };
+});
+
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/company-invite-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("@/emails/event-registration-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("qrcode", () => ({
+  default: { toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,xxx") },
+}));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammate, revokeInvite, acceptCompanyInvite } from "./company-invites";
 
 const SESSION = { user: { id: "admin_user_1" } } as never;
@@ -164,6 +182,17 @@ describe("acceptCompanyInvite", () => {
       status: "ACTIVE",
       plan: { id: "plan_1", eventId: "event_1" },
     } as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({
+      id: "event_1",
+      title: "CEO Summit 2026",
+      date: new Date("2026-11-15T09:00:00Z"),
+      isOnline: false,
+      location: "Saint-Denis",
+      capacity: 300,
+    } as never);
+    vi.mocked(prisma.eventRegistration.upsert).mockResolvedValue({
+      badgeQrCode: "qr_token_1",
+    } as never);
 
     await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
 
@@ -177,6 +206,59 @@ describe("acceptCompanyInvite", () => {
         }),
       })
     );
+  });
+
+  /**
+   * Correctif (7 août 2026) — jusqu'ici aucun email n'informait le
+   * collaborateur de son inscription automatique (RG-14) ni ne lui
+   * transmettait son badge/QR, contrairement au parcours d'inscription
+   * individuelle (registerForEvent).
+   */
+  it("emails the collaborator their badge/QR when auto-registered to the event (RG-14)", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      plan: { id: "plan_1", eventId: "event_1" },
+    } as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({
+      id: "event_1",
+      title: "CEO Summit 2026",
+      date: new Date("2026-11-15T09:00:00Z"),
+      isOnline: false,
+      location: "Saint-Denis",
+      capacity: 300,
+    } as never);
+    vi.mocked(prisma.eventRegistration.upsert).mockResolvedValue({
+      badgeQrCode: "qr_token_1",
+    } as never);
+
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: expect.stringContaining("CEO Summit 2026"),
+      })
+    );
+  });
+
+  it("does not attempt to email a badge when the event is full (no registration created)", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      plan: { id: "plan_1", eventId: "event_1" },
+    } as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({
+      id: "event_1",
+      title: "CEO Summit 2026",
+      date: new Date("2026-11-15T09:00:00Z"),
+      isOnline: false,
+      location: "Saint-Denis",
+      capacity: 10,
+    } as never);
+    vi.mocked(prisma.eventRegistration.count).mockResolvedValue(10);
+
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+
+    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
   it("does not register to the event when the subscription has EXPIRED (past edition)", async () => {

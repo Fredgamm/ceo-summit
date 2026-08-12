@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { CompanyForm } from "@/components/entreprise/company-form";
+import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 
 export const metadata: Metadata = { title: "Créer mon entreprise" };
 
@@ -41,13 +42,16 @@ export default async function CreateCompanyPage({
   ]);
 
   return (
-    <div className="flex min-h-screen justify-center bg-surface p-6 pt-16">
-      <CompanyForm
-        mode="create"
-        offerSlug={searchParams.offre}
-        sectors={sectors}
-        countries={countries}
-      />
+    <div className="flex min-h-screen flex-col items-center bg-surface">
+      <OnboardingHeader backHref="/paiement-en-attente" />
+      <div className="flex w-full justify-center p-6 pt-10">
+        <CompanyForm
+          mode="create"
+          offerSlug={searchParams.offre}
+          sectors={sectors}
+          countries={countries}
+        />
+      </div>
     </div>
   );
 }

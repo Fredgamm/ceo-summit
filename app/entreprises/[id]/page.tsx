@@ -82,7 +82,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
         name: viewer.name,
         tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
     >

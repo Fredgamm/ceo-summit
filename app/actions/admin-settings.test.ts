@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
     },
     creditPackPrice: { upsert: vi.fn() },
+    platformSetting: { findUnique: vi.fn(), upsert: vi.fn() },
     referential: {
       findFirst: vi.fn(),
       aggregate: vi.fn(),
@@ -27,6 +28,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   saveCreditPackPrices,
+  updateDealRoomContactCost,
   createReferentialItem,
   deleteReferentialItem,
   promoteToAdmin,
@@ -66,6 +68,39 @@ describe("saveCreditPackPrices", () => {
     const result = await saveCreditPackPrices([{ credits: 1, priceAr: "-5" }]);
     expect(result.success).toBe(false);
     expect(prisma.creditPackPrice.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateDealRoomContactCost", () => {
+  it("stores the new cost and logs an audit entry", async () => {
+    const result = await updateDealRoomContactCost(0);
+
+    expect(result.success).toBe(true);
+    expect(prisma.platformSetting.upsert).toHaveBeenCalledWith({
+      where: { key: "deal_room_contact_cost" },
+      update: { value: "0" },
+      create: { key: "deal_room_contact_cost", value: "0" },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "settings.update_deal_room_contact_cost",
+          metadata: { cost: 0 },
+        }),
+      })
+    );
+  });
+
+  it("rejects a negative cost", async () => {
+    const result = await updateDealRoomContactCost(-1);
+    expect(result.success).toBe(false);
+    expect(prisma.platformSetting.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-integer cost", async () => {
+    const result = await updateDealRoomContactCost(1.5);
+    expect(result.success).toBe(false);
+    expect(prisma.platformSetting.upsert).not.toHaveBeenCalled();
   });
 });
 

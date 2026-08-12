@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Mon badge" };
@@ -79,6 +80,12 @@ export default async function EventBadgePage({ params }: { params: { id: string 
         <p className="mt-4 text-center text-xs text-white/60">
           Présentez ce QR code à l&apos;accueil de l&apos;événement.
         </p>
+
+        <Button asChild variant="secondary" className="mt-4 w-full justify-center">
+          <a href={`/evenements/${event.id}/badge/pdf`} download>
+            Télécharger le badge (PDF)
+          </a>
+        </Button>
       </div>
     </div>
   );

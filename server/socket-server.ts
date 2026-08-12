@@ -41,7 +41,7 @@ interface MessagePayload {
 
 interface MessageResult {
   ok: boolean;
-  error?: "not_joined" | "rate_limited" | "suspended" | "empty";
+  error?: "not_joined" | "rate_limited" | "suspended" | "empty" | "invalid_attachment";
 }
 
 function broadcastPresence(io: Server, roomId: string) {
@@ -84,6 +84,24 @@ async function handleMessage(
   const { roomId, content, attachmentKey } = payload;
   if (!socket.rooms.has(roomId)) return { ok: false, error: "not_joined" };
   if (!content?.trim() && !attachmentKey) return { ok: false, error: "empty" };
+  /**
+   * Correctif (7 août 2026, audit) — `attachmentKey` venait tel quel du
+   * payload Socket.io brut, sans aucune vérification qu'il provient bien
+   * d'un upload réel pour CETTE salle (cette vérification n'existait que
+   * dans la route HTTP d'upload, `app/api/rooms/attachment/route.ts`, que
+   * le protocole Socket.io contourne entièrement). Le serveur résolvait
+   * ensuite n'importe quelle clé fournie en URL signée et la diffusait à
+   * toute la salle — `getSignedDownloadUrl` (lib/r2.ts) documente
+   * explicitement ne porter aucune autorisation, l'appelant doit vérifier
+   * avant. La route d'upload préfixe toujours ses clés par
+   * `salles/<roomId>/` : seul ce préfixe pour la salle courante est
+   * désormais accepté, ce qui empêche de faire résoudre par le serveur une
+   * clé d'une autre salle ou d'un tout autre usage du bucket (preuve de
+   * paiement, pièce jointe Deal Room...).
+   */
+  if (attachmentKey && !attachmentKey.startsWith(`salles/${roomId}/`)) {
+    return { ok: false, error: "invalid_attachment" };
+  }
 
   const now = Date.now();
   const last = (socket.data.lastMessageAt as number | undefined) ?? 0;
@@ -117,6 +135,52 @@ async function handleMessage(
     : null;
   io.to(roomId).emit("room:message", { ...message, attachmentUrl });
   return { ok: true };
+}
+
+/**
+ * Contrôle d'accès multi-points (7 août 2026, demande client 3ème édition)
+ * — "suivi en temps réel : entrée et nombre de présence". Le check-in
+ * lui-même reste une Server Action classique (`checkInRegistration`, déjà
+ * la seule source de vérité écrite en base) ; ce canal ne fait que
+ * rediffuser l'évènement aux autres postes/tableaux de bord ouverts sur le
+ * même évènement, purement pour l'affichage live — jamais consulté pour
+ * une décision d'autorisation.
+ */
+interface CheckinJoinResult {
+  ok: boolean;
+  error?: "forbidden";
+}
+
+function checkinRoom(eventId: string) {
+  return `checkin:${eventId}`;
+}
+
+async function handleCheckinJoin(socket: Socket, eventId: string): Promise<CheckinJoinResult> {
+  const userId = socket.data.userId as string;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isPlatformAdmin: true },
+  });
+  if (!user?.isPlatformAdmin) return { ok: false, error: "forbidden" };
+
+  socket.join(checkinRoom(eventId));
+  return { ok: true };
+}
+
+interface CheckinScanPayload {
+  eventId: string;
+  checkpointId: string | null;
+  checkpointName: string | null;
+}
+
+function handleCheckinScan(io: Server, socket: Socket, payload: CheckinScanPayload) {
+  const room = checkinRoom(payload.eventId);
+  if (!socket.rooms.has(room)) return; // pas rejoint (pas admin, ou jamais appelé checkin:join)
+  io.to(room).emit("checkin:update", {
+    checkpointId: payload.checkpointId,
+    checkpointName: payload.checkpointName,
+    at: Date.now(),
+  });
 }
 
 interface ConversationJoinResult {
@@ -273,6 +337,17 @@ export function createSocketServer() {
 
     socket.on("room:join", async (roomId: string, callback?: (res: JoinResult) => void) => {
       callback?.(await handleJoin(io, socket, roomId));
+    });
+
+    socket.on(
+      "checkin:join",
+      async (eventId: string, callback?: (res: CheckinJoinResult) => void) => {
+        callback?.(await handleCheckinJoin(socket, eventId));
+      }
+    );
+
+    socket.on("checkin:scan", (payload: CheckinScanPayload) => {
+      handleCheckinScan(io, socket, payload);
     });
 
     socket.on("room:leave", (roomId: string) => {

@@ -22,11 +22,6 @@ export function legacyTierRank(tier: string | null | undefined): number {
   return LEGACY_TIER_RANK[tier as Tier] ?? 0;
 }
 
-/** Canonical "does this rank satisfy this minimum" comparison. */
-export function meetsMinRank(viewerRank: number, minRank: number): boolean {
-  return viewerRank >= minRank;
-}
-
 /**
  * Best-effort mapping from an arbitrary Plan.rank down to the closest legacy
  * Tier bucket — used only to keep the still-required, non-nullable legacy

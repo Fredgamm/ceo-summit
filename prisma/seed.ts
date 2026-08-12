@@ -2,6 +2,7 @@ import { PrismaClient, Role, Tier, MembershipStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 import { encryptMessageContent } from "../lib/message-crypto";
+import { BCRYPT_ROUNDS } from "../lib/password";
 
 const prisma = new PrismaClient();
 
@@ -80,7 +81,7 @@ async function main() {
   }
 
   // ── Admin account ──
-  const adminPassword = await bcrypt.hash("ChangeMe123!", 12);
+  const adminPassword = await bcrypt.hash("ChangeMe123!", BCRYPT_ROUNDS);
   const admin = await prisma.user.upsert({
     where: { email: "admin@ceosummit.mg" },
     update: {},
@@ -105,7 +106,7 @@ async function main() {
   // 4 août 2026 (CEO Summit devenu intégralement B2B) — plus de Membership
   // personnel : le tier vient désormais du rang de l'offre plateforme de
   // l'entreprise (lib/plan-access.ts::getViewerTierFromCompany).
-  const demoPassword = await bcrypt.hash("Demo1234!", 12);
+  const demoPassword = await bcrypt.hash("Demo1234!", BCRYPT_ROUNDS);
   const demoMember = await prisma.user.upsert({
     where: { email: "demo@ceosummit.mg" },
     update: {},

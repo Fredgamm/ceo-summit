@@ -115,7 +115,7 @@ Colle ces 3 valeurs dans `.env` (`NEXTAUTH_SECRET`,
 pré-remplis avec `http://167.114.96.153` dans le modèle — laisse tel quel
 pour l'instant (IP seule, pas de domaine).
 
-Les identifiants Resend/R2/Zoom/Evolia sont optionnels pour un premier
+Les identifiants Resend/R2/Zoom/webhook paiement sont optionnels pour un premier
 déploiement de test — sans eux, les emails et uploads de fichiers
 échoueront proprement (comportement déjà documenté dans le projet pour
 l'environnement de dev), mais le reste de la plateforme fonctionne.
@@ -279,16 +279,21 @@ docker compose -f docker-compose.prod.yml ps
 
 Depuis la Phase 2, l'adhésion peut être payée directement dans la
 plateforme (création d'entreprise → invitation → choix d'offre →
-upload preuve → validation admin), sans passer par Evolia. La route
-webhook (`app/api/webhooks/evolia/route.ts`) **reste en place et
-fonctionnelle** — aucune donnée historique n'est touchée — mais n'est
-plus le chemin recommandé pour un nouveau paiement.
+upload preuve → validation admin), sans passer par un prestataire
+externe. La route webhook `app/api/webhooks/evolia/route.ts`
+mentionnée dans une version antérieure de ce document **a été retirée
+pendant la purge Phase 3** (adhésions individuelles) — elle n'existe
+plus dans le code, contrairement à ce qui était affirmé ici.
 
-Pour couper Evolia proprement une fois le nouveau parcours validé en
-production : **arrêter de pointer Evolia vers cette URL de webhook**
-côté configuration Evolia elle-même — aucun changement de code n'est
-nécessaire ici. La route continue de répondre (idempotence testée)
-si un appel tardif arrive malgré tout.
+**Remplacement (7 août 2026)** : un webhook de confirmation générique
+et agnostique du prestataire, `app/api/webhooks/payments/route.ts`
+(voir `lib/payment-confirmations.ts` et `lib/validations/webhooks.ts`).
+Aucun prestataire n'est branché à ce stade. Il coexiste avec la
+validation manuelle admin (`confirmCompanyPayment`/
+`confirmEventPayment`/`confirmCreditPurchase`), qui reste le chemin
+principal et n'est jamais remplacée — le webhook n'est qu'un chemin de
+confirmation automatique en plus, pour un prestataire qui l'offrirait.
+Secret HMAC : `PAYMENT_WEBHOOK_SECRET` (voir `.env.example`).
 
 ## Limites connues de ce déploiement
 

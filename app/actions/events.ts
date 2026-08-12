@@ -12,7 +12,9 @@ import {
 import { sendTransactionalEmail } from "@/lib/resend";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 import AdminEventPaymentAlertEmail from "@/emails/admin-event-payment-alert-email";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { requireViewer } from "@/lib/require-viewer";
+import { getActivePlans } from "@/lib/plans-query";
 import { formatDateFr, meetsMinTier } from "@/lib/utils";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -40,17 +42,14 @@ export async function registerForEvent(
     return { success: false, error: "Requête invalide." };
   }
 
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
-  const [event, viewer, existing] = await Promise.all([
+  const [event, existing] = await Promise.all([
     prisma.event.findUnique({ where: { id: eventId } }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: VIEWER_TIER_INCLUDE,
-    }),
     prisma.eventRegistration.findUnique({
-      where: { eventId_userId: { eventId, userId: session.user.id } },
+      where: { eventId_userId: { eventId, userId: viewer.id } },
     }),
   ]);
 
@@ -60,7 +59,22 @@ export async function registerForEvent(
   if (event.date < new Date()) {
     return { success: false, error: "Cet événement est déjà passé." };
   }
-  if (!viewer) return { success: false, error: "Non authentifié." };
+  /**
+   * Phase 2quater — un évènement avec des offres configurées (`Plan.eventId`)
+   * remplace ce mécanisme d'inscription à prix unique (voir la même note sur
+   * `/evenements/[id]`) : sans ce garde-fou, ce chemin restait joignable
+   * directement (URL, favori posé avant la création des offres) et
+   * contournait entièrement le système multi-paliers, au prix figé de
+   * `Event.price` — exactement le double mécanisme que ce commentaire
+   * ailleurs dit vouloir éviter.
+   */
+  const eventOffers = await getActivePlans({ selfServiceOnly: true, eventId: event.id });
+  if (eventOffers.length > 0) {
+    return {
+      success: false,
+      error: "Cet évènement se réserve via une offre — voir les options sur sa fiche.",
+    };
+  }
   if (!meetsMinTier(getViewerTierFromCompany(viewer.company), event.minTier)) {
     return {
       success: false,
@@ -106,30 +120,41 @@ export async function registerForEvent(
 
   const qrCodeDataUrl = await QRCode.toDataURL(registration.badgeQrCode);
 
-  await sendTransactionalEmail({
-    to: viewer.email,
-    subject: `Inscription confirmée — ${event.title}`,
-    react: EventRegistrationEmail({
-      memberName: viewer.name,
-      eventTitle: event.title,
-      eventDateLabel: formatDateFr(event.date),
-      eventLocation: event.isOnline ? "En ligne" : event.location,
-      qrCodeDataUrl,
-      requiresManualValidation: method === "VIREMENT",
-    }),
-  });
-
-  if (method === "VIREMENT" && process.env.ADMIN_ALERT_EMAIL) {
+  try {
     await sendTransactionalEmail({
-      to: process.env.ADMIN_ALERT_EMAIL,
-      subject: `Virement à valider — ${event.title}`,
-      react: AdminEventPaymentAlertEmail({
+      to: viewer.email,
+      subject: `Inscription confirmée — ${event.title}`,
+      react: EventRegistrationEmail({
         memberName: viewer.name,
-        memberEmail: viewer.email,
         eventTitle: event.title,
-        amount: event.price,
+        eventDateLabel: formatDateFr(event.date),
+        eventLocation: event.isOnline ? "En ligne" : event.location,
+        qrCodeDataUrl,
+        requiresManualValidation: method === "VIREMENT",
       }),
     });
+  } catch (err) {
+    // L'inscription est déjà enregistrée à ce stade — un échec d'envoi ne
+    // doit pas faire échouer l'action (même bug de classe que celui
+    // corrigé sur signup() le 1er août 2026).
+    console.error("[registerForEvent] failed to send confirmation email", err);
+  }
+
+  if (method === "VIREMENT" && process.env.ADMIN_ALERT_EMAIL) {
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Virement à valider — ${event.title}`,
+        react: AdminEventPaymentAlertEmail({
+          memberName: viewer.name,
+          memberEmail: viewer.email,
+          eventTitle: event.title,
+          amount: event.price,
+        }),
+      });
+    } catch (err) {
+      console.error("[registerForEvent] failed to send admin alert email", err);
+    }
   }
 
   return { success: true, data: { registrationId: registration.id } };

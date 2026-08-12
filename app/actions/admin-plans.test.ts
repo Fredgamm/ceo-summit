@@ -13,7 +13,6 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
     },
-    user: { count: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -45,7 +44,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
   vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
-  vi.mocked(prisma.user.count).mockResolvedValue(0);
   vi.mocked(prisma.plan.count).mockResolvedValue(0);
   vi.mocked(prisma.plan.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
@@ -132,17 +130,10 @@ describe("togglePlanActive", () => {
 });
 
 describe("deletePlan", () => {
-  it("deletes a plan with no members/linked event offers attached", async () => {
+  it("deletes a plan with no linked event offers attached", async () => {
     const result = await deletePlan("plan_1");
     expect(result.success).toBe(true);
     expect(prisma.plan.delete).toHaveBeenCalledWith({ where: { id: "plan_1" } });
-  });
-
-  it("refuses to delete a plan still in use by members", async () => {
-    vi.mocked(prisma.user.count).mockResolvedValue(3);
-    const result = await deletePlan("plan_1");
-    expect(result.success).toBe(false);
-    expect(prisma.plan.delete).not.toHaveBeenCalled();
   });
 
   it("refuses to delete a platform plan still referenced by an event offer", async () => {

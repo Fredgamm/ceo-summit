@@ -28,6 +28,7 @@ const VALID_INPUT = {
   linkedinUrl: "https://linkedin.com/in/marie-dupont",
   country: "Madagascar",
   sectors: ["Finance & Banque"],
+  phone: "",
 };
 
 describe("updateProfile", () => {
@@ -49,8 +50,30 @@ describe("updateProfile", () => {
         linkedinUrl: "https://linkedin.com/in/marie-dupont",
         country: "Madagascar",
         sectors: ["Finance & Banque"],
+        phone: null,
       },
     });
+  });
+
+  /**
+   * Gestion corporate (7 août 2026) — le téléphone n'était collecté nulle
+   * part avant ce champ, requis pour notifier par SMS (Befiana) l'admin
+   * entreprise d'un achat groupé.
+   */
+  it("persists a phone number when provided", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, phone: "034 12 345 67" });
+
+    expect(result.success).toBe(true);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ phone: "034 12 345 67" }) })
+    );
+  });
+
+  it("rejects a phone number with invalid characters without touching the database", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, phone: "call me maybe" });
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("rejects a non-LinkedIn URL without touching the database", async () => {

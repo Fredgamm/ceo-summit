@@ -47,7 +47,7 @@ export default async function ServiceDetailPage({ params }: { params: { id: stri
         name: viewer.name,
         tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
-        isAdmin: viewer.role === "ADMIN",
+        isAdmin: viewer.isPlatformAdmin,
       }}
       badges={{ messages: unreadMessages || undefined }}
     >

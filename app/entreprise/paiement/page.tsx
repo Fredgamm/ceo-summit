@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
+import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatAriary } from "@/lib/utils";
 
@@ -67,64 +68,70 @@ export default async function CompanyPaymentPage({
     : null;
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      {subscription ? (
-        <>
-          <h1 className="mb-1 text-xl font-bold text-navy">Paiement — {subscription.plan.name}</h1>
-          <p className="mb-4 text-sm text-text-muted">
-            {formatAriary(subscription.plan.priceAr)}
-            {subscription.plan.pricingMode === "FIXED_BUNDLE"
-              ? ` — forfait ${subscription.plan.includedSeats ?? "?"} sièges`
-              : " / participant / an"}
-            . Choisissez votre mode de paiement, uploadez une preuve (bordereau, reçu, capture) —
-            l&apos;équipe CEO Summit valide manuellement chaque paiement.
-          </p>
+    <div className="flex flex-col items-center">
+      <OnboardingHeader backHref="/paiement-en-attente" />
+      <div className="mx-auto max-w-4xl p-6">
+        {subscription ? (
+          <>
+            <h1 className="mb-1 text-xl font-bold text-navy">
+              Paiement — {subscription.plan.name}
+            </h1>
+            <p className="mb-4 text-sm text-text-muted">
+              {formatAriary(subscription.plan.priceAr)}
+              {subscription.plan.pricingMode === "FIXED_BUNDLE"
+                ? ` — forfait ${subscription.plan.includedSeats ?? "?"} sièges`
+                : " / participant / an"}
+              . Choisissez votre mode de paiement, uploadez une preuve (bordereau, reçu, capture) —
+              l&apos;équipe CEO Summit valide manuellement chaque paiement.
+            </p>
 
-          {subscription.status === "PENDING_REVIEW" && (
-            <Alert className="mb-4">
-              <AlertDescription>
-                Votre paiement est en cours de validation par l&apos;équipe CEO Summit. Vous pouvez
-                encore changer d&apos;offre ci-dessous si besoin — une nouvelle preuve sera alors
-                requise.
-              </AlertDescription>
-            </Alert>
-          )}
+            {subscription.status === "PENDING_REVIEW" && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  Votre paiement est en cours de validation par l&apos;équipe CEO Summit —
+                  l&apos;accès de votre équipe s&apos;activera dès confirmation.
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {subscription.status === "PENDING_PAYMENT" && (
-            <div className="mb-8 max-w-lg">
-              <PaymentProofForm
-                companySubscriptionId={subscription.id}
-                priceAr={subscription.plan.priceAr}
-                minParticipants={subscription.plan.minParticipants}
-                pricingMode={subscription.plan.pricingMode}
-                includedSeats={subscription.plan.includedSeats}
-                headcount={headcount}
-              />
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <h1 className="mb-1 text-xl font-bold text-navy">Choisir une offre</h1>
-          <p className="mb-4 text-sm text-text-muted">
-            Pour {company.name} — l&apos;accès de toute l&apos;équipe s&apos;active une fois le
-            paiement confirmé.
-          </p>
-        </>
-      )}
-
-      <div className={subscription ? "border-t border-border pt-6" : ""}>
-        {subscription && (
-          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-text-muted">
-            Changer d&apos;offre
-          </h2>
+            {subscription.status === "PENDING_PAYMENT" && (
+              <div className="mb-8 max-w-lg">
+                <PaymentProofForm
+                  companySubscriptionId={subscription.id}
+                  priceAr={subscription.plan.priceAr}
+                  minParticipants={subscription.plan.minParticipants}
+                  pricingMode={subscription.plan.pricingMode}
+                  includedSeats={subscription.plan.includedSeats}
+                  headcount={headcount}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <h1 className="mb-1 text-xl font-bold text-navy">Choisir une offre</h1>
+            <p className="mb-4 text-sm text-text-muted">
+              Pour {company.name} — l&apos;accès de toute l&apos;équipe s&apos;active une fois le
+              paiement confirmé.
+            </p>
+          </>
         )}
-        <PlanPicker
-          companyId={company.id}
-          plans={allPlans}
-          currentPlanId={subscription?.planId}
-          initialPlanId={initialPlanId}
-        />
+
+        {subscription?.status !== "PENDING_REVIEW" && (
+          <div className={subscription ? "border-t border-border pt-6" : ""}>
+            {subscription && (
+              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-text-muted">
+                Changer d&apos;offre
+              </h2>
+            )}
+            <PlanPicker
+              companyId={company.id}
+              plans={allPlans}
+              currentPlanId={subscription?.planId}
+              initialPlanId={initialPlanId}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
