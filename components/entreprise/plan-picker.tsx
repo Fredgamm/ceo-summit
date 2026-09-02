@@ -7,7 +7,7 @@ import type { Plan } from "@prisma/client";
 import { selectPlan } from "@/app/actions/company-subscription";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { formatAriary } from "@/lib/utils";
+import { formatPlanPrice } from "@/lib/utils";
 
 export function PlanPicker({
   companyId,
@@ -63,7 +63,7 @@ export function PlanPicker({
             <p className="text-base font-bold text-navy">{plan.name}</p>
             {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
             <p className="mt-1 text-lg font-bold text-navy">
-              {formatAriary(plan.priceAr)}
+              {formatPlanPrice(plan)}
               {plan.pricingMode === "FIXED_BUNDLE"
                 ? ` — forfait ${plan.includedSeats ?? "?"} sièges`
                 : " / participant / an"}

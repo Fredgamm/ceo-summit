@@ -24,6 +24,7 @@ export interface PlanFormValues {
   slug: string;
   description: string;
   priceAr: number;
+  priceEur: number | null;
   maxTeamMembers: number | null;
   minParticipants: number | null;
   pricingMode: PlanPricingMode | null;
@@ -44,6 +45,7 @@ const EMPTY_VALUES: PlanFormValues = {
   slug: "",
   description: "",
   priceAr: 0,
+  priceEur: null,
   maxTeamMembers: null,
   minParticipants: null,
   pricingMode: null,
@@ -224,25 +226,46 @@ export function PlanForm({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-price">Prix (Ar) *</Label>
+            <Label htmlFor="plan-price-eur">Prix (€)</Label>
+            <Input
+              id="plan-price-eur"
+              type="number"
+              min={0}
+              placeholder="Laisser vide pour coter en Ar"
+              value={values.priceEur ?? ""}
+              onChange={(e) => set("priceEur", e.target.value ? Number(e.target.value) : null)}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="plan-price">
+              {values.priceEur != null ? "≈ Prix (Ar) — calculé au taux du jour" : "Prix (Ar) *"}
+            </Label>
             <Input
               id="plan-price"
               type="number"
               min={0}
+              disabled={values.priceEur != null}
               value={values.priceAr}
               onChange={(e) => set("priceAr", Number(e.target.value))}
             />
+            {values.priceEur != null && (
+              <p className="text-xs text-text-muted">
+                Recalculé au taux du jour à chaque enregistrement — informatif, jamais utilisé pour
+                valider un paiement.
+              </p>
+            )}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-rank">Rang (comparaison d&apos;accès) *</Label>
-            <Input
-              id="plan-rank"
-              type="number"
-              min={1}
-              value={values.rank}
-              onChange={(e) => set("rank", Number(e.target.value))}
-            />
-          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="plan-rank">Rang (comparaison d&apos;accès) *</Label>
+          <Input
+            id="plan-rank"
+            type="number"
+            min={1}
+            value={values.rank}
+            onChange={(e) => set("rank", Number(e.target.value))}
+          />
         </div>
 
         {isEventOffer && (

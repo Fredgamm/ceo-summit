@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getAllPlans } from "@/lib/plans-query";
 import { getPlanShareUrl } from "@/lib/plan-share";
-import { formatAriary } from "@/lib/utils";
+import { formatPlanPrice } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,7 +114,7 @@ export default async function AdminPlansPage({
                   <td className="px-4 py-3 text-text-mid">
                     {plan.eventId ? "Offre d'évènement" : "Offre plateforme"}
                   </td>
-                  <td className="px-4 py-3 text-text-mid">{formatAriary(plan.priceAr)}</td>
+                  <td className="px-4 py-3 text-text-mid">{formatPlanPrice(plan)}</td>
                   <td className="px-4 py-3 text-text-mid">
                     {plan.hasUnlimitedCredits ? "Illimité" : plan.includedCredits}
                   </td>

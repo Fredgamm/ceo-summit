@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatAriary } from "@/lib/utils";
+import { formatPlanPrice } from "@/lib/utils";
 
 interface CompanySignupWizardProps {
   plans: Plan[];
@@ -70,7 +70,7 @@ export function CompanySignupWizard({
               <p className="text-base font-bold text-navy">{plan.name}</p>
               {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
               <p className="mt-1 text-lg font-bold text-navy">
-                {formatAriary(plan.priceAr)}
+                {formatPlanPrice(plan)}
                 {plan.pricingMode === "FIXED_BUNDLE"
                   ? ` — forfait ${plan.includedSeats ?? "?"} sièges`
                   : " / participant / an"}
@@ -125,8 +125,7 @@ export function CompanySignupWizard({
         <Alert variant="gold">
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              Offre choisie : <strong>{selectedPlan.name}</strong> —{" "}
-              {formatAriary(selectedPlan.priceAr)}
+              Offre choisie : <strong>{selectedPlan.name}</strong> — {formatPlanPrice(selectedPlan)}
             </span>
             {!intendedPlan && (
               <button

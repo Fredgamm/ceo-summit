@@ -52,6 +52,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           slug: plan.slug,
           description: plan.description ?? "",
           priceAr: plan.priceAr,
+          priceEur: plan.priceEur,
           maxTeamMembers: plan.maxTeamMembers,
           minParticipants: plan.minParticipants,
           pricingMode: plan.pricingMode,

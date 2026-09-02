@@ -318,11 +318,21 @@ model Plan {
   /// l'id cuid technique. Éditable dans /admin/plans.
   slug                 String           @unique
   description          String?          @db.Text
-  /// Prix unitaire. Pour une offre d'évènement (`eventId` non nul) en mode
-  /// `pricingMode: PER_PARTICIPANT`, prix par participant (montant dû =
-  /// priceAr × nombre déclaré, voir lib/company-payment-amount.ts) ; en mode
-  /// `FIXED_BUNDLE`, montant total fixe pour `includedSeats` sièges.
+  /// Prix unitaire, en Ariary — reste la valeur lue par tout calcul de
+  /// montant dû (lib/company-payment-amount.ts) et toute comparaison de
+  /// preuve de paiement. Pour une offre d'évènement (`eventId` non nul) en
+  /// mode `pricingMode: PER_PARTICIPANT`, prix par participant (montant dû =
+  /// priceAr × nombre déclaré) ; en mode `FIXED_BUNDLE`, montant total fixe
+  /// pour `includedSeats` sièges.
   priceAr              Int
+  /// 3 septembre 2026 (catalogue de sponsoring en euros) — prix officiel
+  /// pour une offre cotée en euros ; `priceAr` est alors une estimation
+  /// dérivée d'un taux de change au moment de la création/modification de
+  /// l'offre (lib/currency-conversion.ts), recalculée à la demande par
+  /// l'admin — jamais lue pour un calcul de montant dû, seulement pour
+  /// l'affichage informatif "≈ X Ar". `null` pour une offre restée cotée
+  /// directement en Ariary (comportement historique, inchangé).
+  priceEur             Int?
   /// Quota de collaborateurs de l'avantage **plateforme** (offre avec
   /// `eventId` nul) — indépendant de toute édition d'évènement. Pour une
   /// offre d'évènement, lire ce champ sur `linkedPlatformPlan`, jamais sur

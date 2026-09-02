@@ -24,6 +24,17 @@ const basePlanFormSchema = z.object({
     .regex(SLUG_PATTERN, "Le slug ne peut contenir que des minuscules, chiffres et tirets"),
   description: z.string().trim().max(500).optional().default(""),
   priceAr: z.coerce.number().int().min(0, "Le prix ne peut pas être négatif"),
+  /// 3 septembre 2026 — prix officiel en euros pour une offre du catalogue
+  /// de sponsoring ; `priceAr` est alors recalculé côté serveur à partir du
+  /// taux du jour (jamais fait confiance à une valeur envoyée par le
+  /// client). Absent/vide = offre cotée directement en Ariary (comportement
+  /// historique).
+  priceEur: z.coerce
+    .number()
+    .int()
+    .min(0, "Le prix ne peut pas être négatif")
+    .optional()
+    .nullable(),
   maxTeamMembers: z.coerce.number().int().min(1).optional().nullable(),
   minParticipants: z.coerce.number().int().min(1).optional().nullable(),
   /// Offre d'évènement uniquement — sans objet pour une offre plateforme.

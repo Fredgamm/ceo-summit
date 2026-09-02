@@ -14,6 +14,23 @@ export function formatAriary(amount: number): string {
   return `${new Intl.NumberFormat("fr-FR").format(amount)} Ar`;
 }
 
+/** Format euro amounts consistently across the app: 50000 -> "50 000 €" */
+export function formatEuro(amount: number): string {
+  return `${new Intl.NumberFormat("fr-FR").format(amount)} €`;
+}
+
+/**
+ * 3 septembre 2026 — prix d'une offre pour l'affichage public : en euros
+ * avec l'estimation Ariary en complément si `priceEur` est renseigné,
+ * sinon en Ariary seul (comportement historique).
+ */
+export function formatPlanPrice(plan: { priceAr: number; priceEur?: number | null }): string {
+  if (plan.priceEur != null) {
+    return `${formatEuro(plan.priceEur)} (≈ ${formatAriary(plan.priceAr)})`;
+  }
+  return formatAriary(plan.priceAr);
+}
+
 /** Format a date the CEO Summit way: 15 août 2026 */
 export function formatDateFr(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;

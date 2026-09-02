@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { planFormSchema } from "@/lib/validations/plan";
+import { convertEurToAr } from "@/lib/currency-conversion";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -15,12 +16,20 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * revalidatePath.
  */
 
-function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
+/**
+ * 3 septembre 2026 — une offre cotée en euros voit son `priceAr` recalculé
+ * côté serveur au taux du jour à chaque création/modification (jamais une
+ * valeur envoyée par le client) ; `priceAr` reste la seule valeur lue pour
+ * tout calcul de montant dû, `priceEur` n'est qu'informatif à l'affichage.
+ */
+async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
+  const priceAr = f.priceEur ? await convertEurToAr(f.priceEur) : f.priceAr;
   return {
     name: f.name,
     slug: f.slug,
     description: f.description || null,
-    priceAr: f.priceAr,
+    priceAr,
+    priceEur: f.priceEur ?? null,
     maxTeamMembers: f.maxTeamMembers ?? null,
     minParticipants: f.minParticipants ?? null,
     pricingMode: f.pricingMode ?? null,
@@ -50,7 +59,7 @@ export async function createPlan(input: unknown): Promise<ActionResult<{ id: str
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
-  const plan = await prisma.plan.create({ data: toPlanData(parsed.data) });
+  const plan = await prisma.plan.create({ data: await toPlanData(parsed.data) });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.create", targetType: "Plan", targetId: plan.id },
   });
@@ -72,7 +81,7 @@ export async function updatePlan(planId: string, input: unknown): Promise<Action
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
-  await prisma.plan.update({ where: { id: planId }, data: toPlanData(parsed.data) });
+  await prisma.plan.update({ where: { id: planId }, data: await toPlanData(parsed.data) });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.update", targetType: "Plan", targetId: planId },
   });

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 
 import { encryptMessageContent } from "../lib/message-crypto";
 import { BCRYPT_ROUNDS } from "../lib/password";
+import { convertEurToAr } from "../lib/currency-conversion";
 
 const prisma = new PrismaClient();
 
@@ -194,6 +195,121 @@ async function main() {
       status: "PUBLISHED",
     },
   });
+
+  // ── Catalogue de sponsoring 2026 (validé 3 septembre 2026, coté en €) ──
+  // Offre technique jamais vendue directement (isSelfService: false) — sert
+  // uniquement de linkedPlatformPlanId aux offres de groupement ci-dessous
+  // (avantages permanents hérités à la confirmation de paiement, RG-13).
+  const groupementPlatformBase = await prisma.plan.upsert({
+    where: { slug: "acces-plateforme-groupement" },
+    update: {},
+    create: {
+      name: "Accès plateforme (groupement)",
+      slug: "acces-plateforme-groupement",
+      priceAr: 0,
+      rank: 1,
+      isActive: true,
+      isSelfService: false,
+    },
+  });
+
+  const eurToArRate = await convertEurToAr(1);
+
+  const sponsoringOffers = [
+    { name: "Platinum", slug: "platinum", priceEur: 50000, maxTeamMembers: 10, displayOrder: 1 },
+    { name: "Gold", slug: "gold", priceEur: 25000, maxTeamMembers: 6, displayOrder: 2 },
+    { name: "Silver", slug: "silver", priceEur: 15000, maxTeamMembers: 4, displayOrder: 3 },
+    { name: "Bronze", slug: "bronze", priceEur: 8500, maxTeamMembers: 2, displayOrder: 4 },
+    { name: "Early Bird", slug: "early-bird", priceEur: 750, maxTeamMembers: 1, displayOrder: 5 },
+    {
+      name: "Executive Pass",
+      slug: "executive-pass",
+      priceEur: 950,
+      maxTeamMembers: 1,
+      displayOrder: 6,
+    },
+  ];
+
+  for (const [index, offer] of sponsoringOffers.entries()) {
+    await prisma.plan.upsert({
+      where: { slug: offer.slug },
+      update: {},
+      create: {
+        name: offer.name,
+        slug: offer.slug,
+        priceEur: offer.priceEur,
+        priceAr: Math.round(offer.priceEur * eurToArRate),
+        maxTeamMembers: offer.maxTeamMembers,
+        rank: index + 2,
+        isActive: true,
+        isSelfService: true,
+        displayOrder: offer.displayOrder,
+      },
+    });
+  }
+
+  // Partenaire institutionnel — paiement en échange de service, jamais un
+  // montant : géré manuellement par l'admin (validé 3 septembre 2026), pas
+  // de parcours self-service.
+  await prisma.plan.upsert({
+    where: { slug: "partenaire-institutionnel" },
+    update: {},
+    create: {
+      name: "Partenaire Institutionnel",
+      slug: "partenaire-institutionnel",
+      priceAr: 0,
+      maxTeamMembers: 2,
+      rank: 8,
+      isActive: true,
+      isSelfService: false,
+      eligibilityNote:
+        "Accès accordé en échange de service — négocié et activé manuellement par l'admin, hors catalogue self-service.",
+      displayOrder: 7,
+    },
+  });
+
+  // Groupement +10/+30 — tarif dégressif par participant, réservé aux
+  // offres d'évènement (voir conception/11, 3 septembre 2026 : le mode
+  // PER_PARTICIPANT est "sans objet" pour une offre plateforme).
+  const groupementOffers = [
+    {
+      name: "Groupement +10 pers",
+      slug: "groupement-10",
+      priceEur: 650,
+      minParticipants: 11,
+      rank: 9,
+      displayOrder: 8,
+    },
+    {
+      name: "Groupement +30 pers",
+      slug: "groupement-30",
+      priceEur: 500,
+      minParticipants: 31,
+      rank: 10,
+      displayOrder: 9,
+    },
+  ];
+
+  for (const offer of groupementOffers) {
+    await prisma.plan.upsert({
+      where: { slug: offer.slug },
+      update: {},
+      create: {
+        name: offer.name,
+        slug: offer.slug,
+        eventId: summit.id,
+        priceEur: offer.priceEur,
+        priceAr: Math.round(offer.priceEur * eurToArRate),
+        pricingMode: "PER_PARTICIPANT",
+        minParticipants: offer.minParticipants,
+        linkedPlatformPlanId: groupementPlatformBase.id,
+        rank: offer.rank,
+        isActive: true,
+        isSelfService: true,
+        displayOrder: offer.displayOrder,
+      },
+    });
+  }
 
   // E10 — agenda dynamique multi-salles (5 août 2026) : remplace l'ancien
   // `program` (JSON libre) par des sessions structurées. Le créneau
