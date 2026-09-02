@@ -9,6 +9,7 @@ import { getOrCreateConversation } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { isValidReferentialLabel } from "@/lib/referentials-query";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
@@ -19,6 +20,32 @@ type ActionResult<T = undefined> =
 
 class InsufficientCreditsError extends Error {}
 class ContactAlreadyHandledError extends Error {}
+
+/**
+ * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+ * `opportunityFormSchema` n'accepte `type`/`sector`/`country` que comme
+ * chaînes non vides, contrairement à tous les autres points d'écriture de
+ * ces mêmes champs (profile.ts, company.ts, apply.ts, onboarding.ts) qui
+ * les valident contre la vraie liste `Referential` — n'importe quel membre
+ * pouvait publier une opportunité avec des valeurs arbitraires, contournant
+ * les filtres qui supposent ces champs tirés du référentiel. Même pattern
+ * que `validateSectorAndCountry` (app/actions/company.ts).
+ */
+async function validateOpportunityReferentials(f: {
+  type: string;
+  sector: string;
+  country: string;
+}): Promise<string | null> {
+  const [validType, validSector, validCountry] = await Promise.all([
+    isValidReferentialLabel("opportunity_type", f.type),
+    isValidReferentialLabel("sector", f.sector),
+    isValidReferentialLabel("country", f.country),
+  ]);
+  if (!validType) return "Type d'opportunité invalide.";
+  if (!validSector) return "Secteur invalide.";
+  if (!validCountry) return "Zone géographique invalide.";
+  return null;
+}
 
 /** E6-T03 — publication (gratuite, statut pending_moderation → email admin). */
 export async function publishOpportunity(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -31,6 +58,9 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+
+  const referentialError = await validateOpportunityReferentials(f);
+  if (referentialError) return { success: false, error: referentialError };
 
   const opportunity = await prisma.opportunity.create({
     data: {
@@ -381,6 +411,9 @@ export async function resubmitOpportunity(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+
+  const referentialError = await validateOpportunityReferentials(f);
+  if (referentialError) return { success: false, error: referentialError };
 
   await prisma.opportunity.update({
     where: { id: opportunityId },

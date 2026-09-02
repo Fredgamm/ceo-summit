@@ -37,12 +37,14 @@ vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedVal
 vi.mock("@/emails/admin-opportunity-alert-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/emails/opportunity-contact-request-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/lib/conversations", () => ({ getOrCreateConversation: vi.fn() }));
+vi.mock("@/lib/referentials-query", () => ({ isValidReferentialLabel: vi.fn() }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { isValidReferentialLabel } from "@/lib/referentials-query";
 import {
   publishOpportunity,
   contactOpportunityAuthor,
@@ -93,6 +95,22 @@ describe("publishOpportunity", () => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
+    vi.mocked(isValidReferentialLabel).mockResolvedValue(true);
+  });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * `opportunityFormSchema` n'exigeait qu'une chaîne non vide, contrairement
+   * aux autres points d'écriture (profile/company/apply/onboarding) qui
+   * valident déjà contre le référentiel admin.
+   */
+  it("rejects a sector that isn't in the admin referential", async () => {
+    vi.mocked(isValidReferentialLabel).mockImplementation(async (type) => type !== "sector");
+
+    const result = await publishOpportunity(VALID_PUBLISH_INPUT);
+
+    expect(result.success).toBe(false);
+    expect(prisma.opportunity.create).not.toHaveBeenCalled();
   });
 
   it("creates a PENDING_MODERATION opportunity and alerts the admin", async () => {
@@ -488,6 +506,21 @@ describe("resubmitOpportunity", () => {
       name: "Jean-Pierre Rakoto",
       status: "ACTIVE",
     } as never);
+    vi.mocked(isValidReferentialLabel).mockResolvedValue(true);
+  });
+
+  it("rejects a type that isn't in the admin referential", async () => {
+    vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(
+      makeOpportunity({ authorId: "user_1", status: "REFUSED" })
+    );
+    vi.mocked(isValidReferentialLabel).mockImplementation(
+      async (type) => type !== "opportunity_type"
+    );
+
+    const result = await resubmitOpportunity("opp_1", VALID_PUBLISH_INPUT);
+
+    expect(result.success).toBe(false);
+    expect(prisma.opportunity.update).not.toHaveBeenCalled();
   });
 
   it("rejects someone who isn't the author", async () => {
