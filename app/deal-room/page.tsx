@@ -10,21 +10,19 @@ import {
   DEAL_ROOM_PAGE_SIZE,
   type DealRoomSearchParams,
 } from "@/lib/deal-room-query";
-import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { DealRoomFilters } from "@/components/deal-room/deal-room-filters";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Deal Room" };
 
-/** E6-T01 — liste opportunités, visibilité par tier (lib/deal-room-query.ts). */
+/** E6-T01 — liste des opportunités publiées, visible par tout membre actif. */
 export default async function DealRoomPage({
   searchParams,
 }: {
@@ -35,16 +33,15 @@ export default async function DealRoomPage({
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { creditBalance: true, ...VIEWER_TIER_INCLUDE },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
-  const [validTypes, validSectors, validCountries, contactCost] = await Promise.all([
+  const [validTypes, validSectors, validCountries] = await Promise.all([
     getReferentialLabels("opportunity_type"),
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
-    getDealRoomContactCost(),
   ]);
   const { where, orderBy, skip, take, page } = buildDealRoomQuery(searchParams, viewerTier, {
     validTypes,
@@ -74,12 +71,6 @@ export default async function DealRoomPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / DEAL_ROOM_PAGE_SIZE));
-  const available =
-    viewer.role === "CHAIRMAN"
-      ? null
-      : viewer.creditBalance
-        ? viewer.creditBalance.included + viewer.creditBalance.purchased - viewer.creditBalance.used
-        : 0;
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
@@ -98,20 +89,6 @@ export default async function DealRoomPage({
           <Link href="/deal-room/publier">+ Publier une opportunité</Link>
         </Button>
       </div>
-
-      <Alert variant="gold" className="mb-4">
-        <Diamond />
-        <AlertDescription>
-          <strong>Crédits disponibles : {available === null ? "Illimité" : available}</strong> —{" "}
-          {contactCost === 0
-            ? "La prise de contact est gratuite pour l'instant."
-            : `Chaque prise de contact coûte ${contactCost} crédit.`}{" "}
-          Les membres Chairman ont un accès illimité.{" "}
-          <Link href="/credits/acheter" className="font-semibold text-navy underline">
-            Acheter des crédits →
-          </Link>
-        </AlertDescription>
-      </Alert>
 
       <DealRoomFilters types={validTypes} sectors={validSectors} countries={validCountries} />
 
@@ -141,7 +118,6 @@ export default async function DealRoomPage({
                 role: opp.author.role,
               }}
               authorTier={getViewerTierFromCompany(opp.author.company)}
-              contactCost={contactCost}
             />
           ))}
         </div>

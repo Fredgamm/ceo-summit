@@ -51,14 +51,19 @@ describe("GET /api/rooms/[id]/messages", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects a viewer whose tier can't access the room", async () => {
+  /**
+   * Décision d'architecture (sept. 2026, conception/09) — accès égal pour
+   * tout membre dont l'entreprise a une offre active/validée : `minTier`
+   * n'est plus comparé.
+   */
+  it("allows reading regardless of tier vs. the room's minTier", async () => {
     vi.mocked(prisma.room.findUnique).mockResolvedValue({
       id: "room_1",
       status: "ACTIVE",
       minTier: "CHAIRMAN_ONLY",
     } as never);
     const res = await GET(makeRequest(), { params: { id: "room_1" } });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it("returns the most recent page in chronological order", async () => {

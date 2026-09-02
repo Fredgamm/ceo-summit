@@ -14,16 +14,15 @@ const REFERENTIALS = {
   validCountries: ["Madagascar"],
 };
 
+/**
+ * Décision d'architecture (sept. 2026, conception/09) — accès égal pour tout
+ * membre dont l'entreprise a une offre active/validée : toute opportunité
+ * publiée est visible dès qu'un tier existe, plus seulement à son rang.
+ */
 describe("allowedVisibilities", () => {
-  it("lets a MEMBER see only MEMBER-visibility opportunities", () => {
-    expect(allowedVisibilities("MEMBER")).toEqual(["MEMBER"]);
-  });
-
-  it("lets an EXECUTIVE see MEMBER and EXECUTIVE opportunities", () => {
-    expect(allowedVisibilities("EXECUTIVE")).toEqual(["MEMBER", "EXECUTIVE"]);
-  });
-
-  it("lets a CHAIRMAN see everything", () => {
+  it("lets any tier see every visibility level", () => {
+    expect(allowedVisibilities("MEMBER")).toEqual(["MEMBER", "EXECUTIVE", "CHAIRMAN"]);
+    expect(allowedVisibilities("EXECUTIVE")).toEqual(["MEMBER", "EXECUTIVE", "CHAIRMAN"]);
     expect(allowedVisibilities("CHAIRMAN")).toEqual(["MEMBER", "EXECUTIVE", "CHAIRMAN"]);
   });
 
@@ -34,11 +33,11 @@ describe("allowedVisibilities", () => {
 });
 
 describe("buildDealRoomQuery", () => {
-  it("defaults to published opportunities visible to the viewer's tier, recent-first", () => {
+  it("defaults to every published opportunity, recent-first", () => {
     const query = buildDealRoomQuery({}, "EXECUTIVE", REFERENTIALS);
     expect(query.where).toEqual({
       status: "PUBLISHED",
-      visibility: { in: ["MEMBER", "EXECUTIVE"] },
+      visibility: { in: ["MEMBER", "EXECUTIVE", "CHAIRMAN"] },
     });
     expect(query.orderBy).toEqual({ createdAt: "desc" });
     expect(query.skip).toBe(0);

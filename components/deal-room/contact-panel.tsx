@@ -10,23 +10,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface ContactPanelProps {
   opportunityId: string;
   authorName: string;
-  isChairman: boolean;
-  /** Configurable par l'admin (7 août 2026) — voir lib/deal-room-settings.ts. */
-  contactCost: number;
 }
 
 /**
- * E6-T02 — "Prendre contact" avec modal de confirmation avant déduction.
- * Si le solde est à 0, l'action renvoie code=INSUFFICIENT_CREDITS et cette
- * page redirige vers /credits/acheter (backlog : "Si solde 0 → redirect").
+ * E6-T02 — "Prendre contact" avec modal de confirmation.
+ *
+ * Décision d'architecture (sept. 2026, conception/09) — le coût en crédits
+ * et le bypass Chairman ont disparu avec le système de crédits Deal Room
+ * (retiré du chemin actif) : prendre contact est gratuit et illimité pour
+ * tout membre.
  */
-export function ContactPanel({
-  opportunityId,
-  authorName,
-  isChairman,
-  contactCost,
-}: ContactPanelProps) {
-  const isFree = isChairman || contactCost === 0;
+export function ContactPanel({ opportunityId, authorName }: ContactPanelProps) {
   const router = useRouter();
   const [confirming, setConfirming] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -39,10 +33,6 @@ export function ContactPanel({
     try {
       const result = await contactOpportunityAuthor(opportunityId);
       if (!result.success) {
-        if (result.code === "INSUFFICIENT_CREDITS") {
-          router.push("/credits/acheter");
-          return;
-        }
         setError(result.error);
         return;
       }
@@ -66,7 +56,7 @@ export function ContactPanel({
   if (!confirming) {
     return (
       <Button size="lg" className="w-full justify-center" onClick={() => setConfirming(true)}>
-        ✉ Contacter{isFree ? "" : ` (${contactCost} crédit${contactCost > 1 ? "s" : ""})`}
+        ✉ Contacter
       </Button>
     );
   }
@@ -74,11 +64,8 @@ export function ContactPanel({
   return (
     <div className="rounded-md border border-border p-4">
       <p className="mb-3 text-sm text-text-mid">
-        {isChairman
-          ? `Contacter ${authorName} ? En tant que Chairman, aucun crédit ne sera déduit.`
-          : contactCost === 0
-            ? `Contacter ${authorName} ? La prise de contact est gratuite pour l'instant.`
-            : `En utilisant ${contactCost} crédit${contactCost > 1 ? "s" : ""}, vous débloquez les coordonnées de ${authorName} et l'envoi d'un message d'introduction.`}
+        Contacter {authorName} ? Vous débloquez ses coordonnées et l&apos;envoi d&apos;un message
+        d&apos;introduction.
       </p>
       {error && (
         <Alert variant="destructive" className="mb-3">
@@ -90,11 +77,7 @@ export function ContactPanel({
           Annuler
         </Button>
         <Button onClick={handleConfirm} disabled={loading} className="flex-1 justify-center">
-          {loading
-            ? "Traitement…"
-            : isFree
-              ? "Confirmer le contact"
-              : `Utiliser ${contactCost} crédit${contactCost > 1 ? "s" : ""} et contacter`}
+          {loading ? "Traitement…" : "Confirmer le contact"}
         </Button>
       </div>
     </div>

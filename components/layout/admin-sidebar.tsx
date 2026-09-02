@@ -12,7 +12,6 @@ import {
   Diamond,
   LayoutGrid,
   Briefcase,
-  CreditCard,
   Mail,
   Landmark,
   Settings,
@@ -75,7 +74,6 @@ const SECTIONS: {
   {
     title: "Opérations",
     items: [
-      { href: "/admin/credits", label: "Crédits", icon: CreditCard, section: "credits" },
       { href: "/admin/entreprises", label: "Entreprises", icon: Building2, section: "entreprises" },
       { href: "/admin/adhesions", label: "Adhésions", icon: IdCard, section: "adhesions" },
       {

@@ -118,7 +118,13 @@ describe("room:join", () => {
     expect(result).toEqual({ ok: false, error: "not_found" });
   });
 
-  it("rejects when the member's tier is insufficient", async () => {
+  /**
+   * Décision d'architecture (sept. 2026, conception/09) — accès égal pour
+   * tout membre dont l'entreprise a une offre active/validée : `minTier`
+   * n'est plus comparé, un membre MEMBER rejoint désormais une salle
+   * CHAIRMAN_ONLY comme n'importe quelle autre.
+   */
+  it("lets any tier join a room regardless of minTier", async () => {
     vi.mocked(prisma.room.findUnique).mockResolvedValue({
       id: "room_1",
       status: "ACTIVE",
@@ -127,6 +133,20 @@ describe("room:join", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
+    vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("rejects a viewer with no active company access", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      status: "ACTIVE",
+      minTier: "ALL_MEMBERS",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ company: null } as never);
 
     const client = await connect("user_1");
     const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));

@@ -4,9 +4,6 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { getDealRoomContactCost } from "@/lib/deal-room-settings";
-import { CreditPackPricesForm } from "@/components/admin/settings/tariffs-form";
-import { DealRoomContactCostForm } from "@/components/admin/settings/deal-room-contact-cost-form";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { Badge } from "@/components/ui/badge";
@@ -44,9 +41,6 @@ export default async function AdminParametresPage({
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "tarifs") {
-    const creditPacks = await prisma.creditPackPrice.findMany({ orderBy: { credits: "asc" } });
-    const dealRoomContactCost = await getDealRoomContactCost();
-
     tabContent = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-white p-5">
@@ -59,8 +53,6 @@ export default async function AdminParametresPage({
             <Link href="/admin/plans">Gérer les offres →</Link>
           </Button>
         </div>
-        <CreditPackPricesForm packs={creditPacks} />
-        <DealRoomContactCostForm cost={dealRoomContactCost} />
       </div>
     );
   } else if (activeTab === "referentiels") {

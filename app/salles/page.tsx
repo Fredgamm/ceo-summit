@@ -4,7 +4,7 @@ import { MessagesSquare } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { buildRoomsWhere, meetsRoomAccess, type RoomsSearchParams } from "@/lib/rooms-query";
+import { buildRoomsWhere, type RoomsSearchParams } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
@@ -16,7 +16,7 @@ import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Salles thématiques" };
 
-/** E4-T02 — liste des salles, accès verrouillé par tier, badge "nouveau message". */
+/** E4-T02 — liste des salles, badge "nouveau message". */
 export default async function RoomsPage({ searchParams }: { searchParams: RoomsSearchParams }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -46,17 +46,14 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
   const lastMessageByRoom = new Map(latestMessages.map((m) => [m.roomId, m._max.createdAt]));
 
   const roomCards = rooms.map((room) => {
-    const locked = !meetsRoomAccess(viewerTier, room.minTier);
     const lastMessageAt = lastMessageByRoom.get(room.id);
     const lastReadAt = lastReadByRoom.get(room.id);
-    const unread = !locked && !!lastMessageAt && (!lastReadAt || lastMessageAt > lastReadAt);
+    const unread = !!lastMessageAt && (!lastReadAt || lastMessageAt > lastReadAt);
     return {
       id: room.id,
       name: room.name,
       description: room.description,
       sector: room.sector,
-      minTier: room.minTier,
-      locked,
       unread,
     };
   });

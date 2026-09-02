@@ -7,7 +7,6 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
-import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { profileCompleteness } from "@/lib/profile-completeness";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -19,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { formatDateFr, initials, meetsMinTier, tierLabel } from "@/lib/utils";
+import { formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Accueil" };
 
@@ -37,10 +36,7 @@ export default async function DashboardPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: {
-      creditBalance: true,
-      ...VIEWER_TIER_INCLUDE,
-    },
+    include: VIEWER_TIER_INCLUDE,
   });
   if (!user) redirect("/login");
 
@@ -57,7 +53,6 @@ export default async function DashboardPage() {
     acceptedContactsInitiated,
     unreadMessagesList,
     unreadMessages,
-    contactCost,
   ] = await Promise.all([
     prisma.event.findMany({
       where: { status: "PUBLISHED", date: { gte: new Date() } },
@@ -122,17 +117,9 @@ export default async function DashboardPage() {
       include: { sender: { select: { name: true } } },
     }),
     countUnreadMessages(user.id),
-    getDealRoomContactCost(),
   ]);
 
   const nextEvent = upcomingEvents[0] ?? null;
-
-  const creditsAvailable =
-    user.role === "CHAIRMAN"
-      ? null
-      : user.creditBalance
-        ? user.creditBalance.included + user.creditBalance.purchased - user.creditBalance.used
-        : 0;
 
   const completeness = profileCompleteness(user);
 
@@ -204,20 +191,6 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <div className="border-t border-border py-5">
-            <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-              Crédits Deal Room
-            </p>
-            <div className="rounded-lg border border-gold-light bg-gold-pale px-3.5 py-3">
-              <div className="text-xl font-bold text-navy">
-                {creditsAvailable === null ? "Illimité" : creditsAvailable}
-              </div>
-              {creditsAvailable !== null && (
-                <div className="text-[11.5px] text-text-muted">crédits disponibles</div>
-              )}
-            </div>
-          </div>
-
           {companySubscription && (
             <div className="border-t border-border py-5">
               <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
@@ -283,13 +256,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-lg border border-border bg-white px-5 py-4">
-          <div className="text-2xl font-bold text-navy">
-            {creditsAvailable === null ? "∞" : creditsAvailable}
-          </div>
-          <div className="mt-0.5 text-xs text-text-muted">Crédits Deal Room</div>
-        </div>
+      <div className="mb-8 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <div className="rounded-lg border border-border bg-white px-5 py-4">
           <div className="text-2xl font-bold text-navy">{dealRoomConnections}</div>
           <div className="mt-0.5 text-xs text-text-muted">Connexions Deal Room</div>
@@ -328,7 +295,6 @@ export default async function DashboardPage() {
                 createdAt={opp.createdAt}
                 author={opp.author}
                 authorTier={getViewerTierFromCompany(opp.author.company)}
-                contactCost={contactCost}
               />
             ))}
           </div>
@@ -356,10 +322,8 @@ export default async function DashboardPage() {
                 location={event.location}
                 isOnline={event.isOnline}
                 price={event.price}
-                minTier={event.minTier}
                 capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
                 isRegistered={event.registrations.length > 0}
-                tierOk={meetsMinTier(viewerTier, event.minTier)}
               />
             ))}
           </div>

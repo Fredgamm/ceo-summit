@@ -5,7 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { markRoomAsRead } from "@/app/actions/rooms";
-import { meetsRoomAccess, ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
+import { meetsRoomAccess } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getSignedDownloadUrl } from "@/lib/r2";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -16,11 +16,6 @@ import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Salle" };
 
-const ACCESS_BADGE = {
-  ALL_MEMBERS: "member",
-  EXECUTIVE_PLUS: "executive",
-  CHAIRMAN_ONLY: "chairman",
-} as const;
 const MESSAGE_PAGE_SIZE = 50;
 
 /** E4-T03 — chat de salle, historique initial + composant temps réel côté client. */
@@ -82,7 +77,6 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{room.sector}</Badge>
-        <Badge variant={ACCESS_BADGE[room.minTier]}>{ROOM_ACCESS_LABEL[room.minTier]}</Badge>
       </div>
 
       <RoomChat

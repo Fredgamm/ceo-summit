@@ -4,20 +4,16 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { opportunityFormSchema } from "@/lib/validations/opportunity";
-import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
-import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
 import OpportunityContactRequestEmail from "@/emails/opportunity-contact-request-email";
 
-type ActionResult<T = undefined> =
-  { success: true; data: T } | { success: false; error: string; code?: "INSUFFICIENT_CREDITS" };
+type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
-class InsufficientCreditsError extends Error {}
 class ContactAlreadyHandledError extends Error {}
 
 /** E6-T03 — publication (gratuite, statut pending_moderation → email admin). */
@@ -71,9 +67,14 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
 }
 
 /**
- * E6-T02/E6-T04 — "Prendre contact" : déduction atomique de 1 crédit
- * (transaction Prisma) sous verrou Redis (anti double-clic / requêtes
- * concurrentes), bypass total pour Chairman.
+ * E6-T02/E6-T04 — "Prendre contact".
+ *
+ * Décision d'architecture (sept. 2026, conception/09) — le système de
+ * crédits Deal Room est retiré du chemin actif (pas supprimé : le schéma et
+ * `lib/credit-deduction-lock.ts`/`lib/deal-room-settings.ts` restent
+ * intacts pour une réintégration future). Prendre contact est désormais
+ * gratuit et illimité pour tout membre dont l'entreprise a une offre
+ * active/validée — plus de verrou, plus de vérification de solde.
  */
 export async function contactOpportunityAuthor(opportunityId: string): Promise<ActionResult> {
   const viewerResult = await requireViewer();
@@ -112,62 +113,14 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
     return { success: false, error: "Vous avez déjà pris contact pour cette opportunité." };
   }
 
-  const isChairman = viewerTier === "CHAIRMAN";
-  /**
-   * Coût configurable (7 août 2026, demande admin) — un admin peut le
-   * mettre à 0 depuis /admin/parametres pour rendre le contact gratuit pour
-   * tout le monde, sans toucher au code. Chairman reste de toute façon
-   * toujours gratuit, indépendamment de ce réglage.
-   */
-  const contactCost = await getDealRoomContactCost();
-  const shouldCharge = !isChairman && contactCost > 0;
-
-  try {
-    await withCreditDeductionLock(viewer.id, () =>
-      prisma.$transaction(async (tx) => {
-        if (shouldCharge) {
-          const balance = await tx.creditBalance.findUnique({ where: { userId: viewer.id } });
-          const available = balance ? balance.included + balance.purchased - balance.used : 0;
-          if (available < contactCost) {
-            throw new InsufficientCreditsError();
-          }
-          await tx.creditBalance.update({
-            where: { userId: viewer.id },
-            data: { used: { increment: contactCost } },
-          });
-          await tx.creditTransaction.create({
-            data: {
-              userId: viewer.id,
-              amount: -contactCost,
-              type: "DEDUCTION",
-              reason: `Contact — ${opportunity.title}`,
-            },
-          });
-        }
-
-        await tx.opportunityContact.create({
-          data: {
-            opportunityId,
-            initiatorId: viewer.id,
-            receiverId: opportunity.authorId,
-            creditsSpent: shouldCharge ? contactCost : 0,
-          },
-        });
-      })
-    );
-  } catch (err) {
-    if (err instanceof InsufficientCreditsError) {
-      return {
-        success: false,
-        error: "Solde de crédits insuffisant.",
-        code: "INSUFFICIENT_CREDITS",
-      };
-    }
-    if (err instanceof CreditDeductionLockBusyError) {
-      return { success: false, error: err.message };
-    }
-    throw err;
-  }
+  await prisma.opportunityContact.create({
+    data: {
+      opportunityId,
+      initiatorId: viewer.id,
+      receiverId: opportunity.authorId,
+      creditsSpent: 0,
+    },
+  });
 
   try {
     await sendTransactionalEmail({
@@ -180,10 +133,10 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
       }),
     });
   } catch (err) {
-    // Le crédit est déjà débité et le contact déjà créé à ce stade — un
-    // échec d'envoi de la notification à l'auteur ne doit pas faire
-    // échouer l'action (même bug de classe que celui corrigé sur
-    // signup() le 1er août 2026, et sur publishOpportunity le 7 août).
+    // Le contact est déjà créé à ce stade — un échec d'envoi de la
+    // notification à l'auteur ne doit pas faire échouer l'action (même bug
+    // de classe que celui corrigé sur signup() le 1er août 2026, et sur
+    // publishOpportunity le 7 août).
     console.error("[contactOpportunityAuthor] failed to send notification email", err);
   }
 
@@ -228,54 +181,30 @@ export async function acceptOpportunityContact(
 }
 
 /**
- * Sprint de correction (5 août 2026, EX-T01) — le crédit dépensé par
- * l'initiateur pour "prendre contact" n'était jamais remboursé si la
- * demande n'aboutissait pas (déclinée, ou retirée par l'initiateur
- * lui-même faute de réponse — voir withdrawOpportunityContact). Partagé
- * entre les deux, seule la vérification d'autorisation diffère à l'appel.
+ * Partagé entre declineOpportunityContact et withdrawOpportunityContact —
+ * seule la vérification d'autorisation diffère à l'appel.
  *
  * Correctif (7 août 2026, audit) — la vérification `status !== "PENDING"`
- * se faisait chez l'appelant, sur une lecture antérieure à la transaction,
- * et l'`update` ici n'était pas conditionné sur le statut : deux appels
- * concurrents (double-clic, ou refus et retrait au même instant) passaient
- * tous deux la vérification obsolète et remboursaient tous les deux le
- * même crédit déjà dépensé. Verrouillé comme la dépense elle-même
- * (`withCreditDeductionLock`, même clé par utilisateur) et le passage à
- * `DECLINED` est désormais conditionné sur `status: "PENDING"` dans la
- * transaction — un second appel concurrent trouve 0 ligne mise à jour et
- * lève `ContactAlreadyHandledError` au lieu de rembourser une seconde fois.
+ * se faisait chez l'appelant, sur une lecture antérieure à l'update, sans
+ * condition sur l'update lui-même : deux appels concurrents (double-clic,
+ * ou refus et retrait au même instant) passaient tous deux la vérification
+ * obsolète. Le passage à `DECLINED` est désormais conditionné sur
+ * `status: "PENDING"` — un second appel concurrent trouve 0 ligne mise à
+ * jour et lève `ContactAlreadyHandledError`.
+ *
+ * Décision d'architecture (sept. 2026, conception/09) — le remboursement de
+ * crédit qui vivait ici a disparu avec le système de crédits Deal Room
+ * (retiré du chemin actif, pas supprimé) : prendre contact ne coûte plus
+ * rien à rembourser.
  */
-async function refundAndDeclineContact(contact: {
-  id: string;
-  initiatorId: string;
-  creditsSpent: number;
-  opportunity: { title: string };
-}): Promise<void> {
-  await withCreditDeductionLock(contact.initiatorId, () =>
-    prisma.$transaction(async (tx) => {
-      const { count } = await tx.opportunityContact.updateMany({
-        where: { id: contact.id, status: "PENDING" },
-        data: { status: "DECLINED" },
-      });
-      if (count === 0) {
-        throw new ContactAlreadyHandledError();
-      }
-      if (contact.creditsSpent > 0) {
-        await tx.creditBalance.update({
-          where: { userId: contact.initiatorId },
-          data: { used: { decrement: contact.creditsSpent } },
-        });
-        await tx.creditTransaction.create({
-          data: {
-            userId: contact.initiatorId,
-            amount: contact.creditsSpent,
-            type: "REFUND",
-            reason: `Remboursement — contact non abouti (${contact.opportunity.title})`,
-          },
-        });
-      }
-    })
-  );
+async function declineContact(contact: { id: string }): Promise<void> {
+  const { count } = await prisma.opportunityContact.updateMany({
+    where: { id: contact.id, status: "PENDING" },
+    data: { status: "DECLINED" },
+  });
+  if (count === 0) {
+    throw new ContactAlreadyHandledError();
+  }
 }
 
 export async function declineOpportunityContact(contactId: string): Promise<ActionResult> {
@@ -295,13 +224,10 @@ export async function declineOpportunityContact(contactId: string): Promise<Acti
   }
 
   try {
-    await refundAndDeclineContact(contact);
+    await declineContact(contact);
   } catch (err) {
     if (err instanceof ContactAlreadyHandledError) {
       return { success: false, error: "Cette demande a déjà été traitée." };
-    }
-    if (err instanceof CreditDeductionLockBusyError) {
-      return { success: false, error: err.message };
     }
     throw err;
   }
@@ -312,11 +238,10 @@ export async function declineOpportunityContact(contactId: string): Promise<Acti
 
 /**
  * Sprint de correction (5 août 2026, EX-T01) — l'initiateur d'une demande de
- * contact restée sans réponse n'avait auparavant aucun moyen d'agir : ni
- * récupérer son crédit, ni relancer ailleurs. Il peut désormais retirer
- * lui-même sa demande, ce qui la clôt et rembourse le crédit dépensé —
- * couvre le cas "jamais répondu" sans nécessiter de tâche planifiée
- * (aucune infra de cron dans ce projet, voir BACKLOG_DEV.md).
+ * contact restée sans réponse n'avait auparavant aucun moyen d'agir. Il peut
+ * désormais retirer lui-même sa demande, ce qui la clôt — couvre le cas
+ * "jamais répondu" sans nécessiter de tâche planifiée (aucune infra de cron
+ * dans ce projet, voir BACKLOG_DEV.md).
  */
 export async function withdrawOpportunityContact(contactId: string): Promise<ActionResult> {
   const viewerResult = await requireViewer();
@@ -335,13 +260,10 @@ export async function withdrawOpportunityContact(contactId: string): Promise<Act
   }
 
   try {
-    await refundAndDeclineContact(contact);
+    await declineContact(contact);
   } catch (err) {
     if (err instanceof ContactAlreadyHandledError) {
       return { success: false, error: "Cette demande a déjà été traitée." };
-    }
-    if (err instanceof CreditDeductionLockBusyError) {
-      return { success: false, error: err.message };
     }
     throw err;
   }

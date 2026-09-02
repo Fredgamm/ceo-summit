@@ -5,7 +5,6 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { allowedVisibilities } from "@/lib/deal-room-query";
-import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getSignedDownloadUrl } from "@/lib/r2";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -80,7 +79,6 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
 
   const authorTier = getViewerTierFromCompany(opportunity.author.company);
   const unreadMessages = await countUnreadMessages(viewer.id);
-  const contactCost = await getDealRoomContactCost();
 
   // B4 (audit du 29 juillet 2026) — attachments are R2 keys in a private
   // bucket, resolved to short-lived signed URLs only after the visibility
@@ -216,12 +214,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                 Demande refusée
               </Badge>
             ) : (
-              <ContactPanel
-                opportunityId={opportunity.id}
-                authorName={opportunity.author.name}
-                isChairman={viewer.role === "CHAIRMAN"}
-                contactCost={contactCost}
-              />
+              <ContactPanel opportunityId={opportunity.id} authorName={opportunity.author.name} />
             )}
           </div>
 

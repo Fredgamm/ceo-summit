@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import type { EventCapacityBadge } from "@/lib/events-query";
 import { Badge } from "@/components/ui/badge";
-import { formatAriary, formatDateFr, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr } from "@/lib/utils";
 
 const TYPE_LABEL: Record<string, string> = {
   SUMMIT: "Summit",
@@ -28,10 +28,8 @@ interface EventCardProps {
   location: string;
   isOnline: boolean;
   price: number;
-  minTier: string;
   capacityBadge: EventCapacityBadge;
   isRegistered: boolean;
-  tierOk: boolean;
 }
 
 export function EventCard({
@@ -42,10 +40,8 @@ export function EventCard({
   location,
   isOnline,
   price,
-  minTier,
   capacityBadge,
   isRegistered,
-  tierOk,
 }: EventCardProps) {
   const capacity = CAPACITY_BADGE[capacityBadge];
 
@@ -62,7 +58,6 @@ export function EventCard({
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex flex-wrap gap-1.5">
           <Badge variant="secondary">{TYPE_LABEL[type] ?? type}</Badge>
-          {minTier !== "MEMBER" && <Badge variant="secondary">{tierLabel(minTier)}+</Badge>}
           {capacity && <Badge variant={capacity.variant}>{capacity.label}</Badge>}
           {isRegistered && <Badge variant="approved">Inscrit ✓</Badge>}
         </div>
@@ -72,11 +67,7 @@ export function EventCard({
           </span>
           {!isRegistered && (
             <span className="text-xs font-semibold text-navy-mid">
-              {!tierOk
-                ? `Accès ${tierLabel(minTier)} requis`
-                : capacityBadge === "complet"
-                  ? "Complet"
-                  : "S'inscrire →"}
+              {capacityBadge === "complet" ? "Complet" : "S'inscrire →"}
             </span>
           )}
         </div>

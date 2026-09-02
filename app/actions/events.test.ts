@@ -163,12 +163,17 @@ describe("registerForEvent", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects when the viewer's tier is below the event's minTier", async () => {
+  /**
+   * Décision d'architecture (sept. 2026, conception/09) — accès égal pour
+   * tout membre dont l'entreprise a une offre active/validée : `minTier`
+   * n'est plus comparé, seule la présence d'un tier compte.
+   */
+  it("allows registration regardless of tier vs. the event's minTier", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent({ minTier: "CHAIRMAN" }));
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
 
     const result = await registerForEvent("event_1", "MOBILE_MONEY");
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   /**

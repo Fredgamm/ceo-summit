@@ -61,7 +61,12 @@ describe("POST /api/rooms/attachment", () => {
     expect(uploadPrivateObject).not.toHaveBeenCalled();
   });
 
-  it("rejects a viewer whose tier can't access the room", async () => {
+  /**
+   * Décision d'architecture (sept. 2026, conception/09) — accès égal pour
+   * tout membre dont l'entreprise a une offre active/validée : `minTier`
+   * n'est plus comparé.
+   */
+  it("allows upload regardless of tier vs. the room's minTier", async () => {
     vi.mocked(prisma.room.findUnique).mockResolvedValue({
       id: "room_1",
       status: "ACTIVE",
@@ -69,7 +74,7 @@ describe("POST /api/rooms/attachment", () => {
     } as never);
     const file = new File(["bytes"], "doc.pdf", { type: "application/pdf" });
     const res = await POST(makeRequest(file));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it("uploads a valid file to the documents bucket and returns its key, not a public URL", async () => {

@@ -8,7 +8,6 @@ import { eventCapacityBadge } from "@/lib/events-query";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getActivePlans } from "@/lib/plans-query";
 import { RegistrationWizard } from "@/components/events/registration-wizard";
-import { meetsMinTier } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Inscription à l'événement" };
 
@@ -16,8 +15,8 @@ const TAKEN_STATUSES: RegistrationStatus[] = ["CONFIRMED", "PENDING_PAYMENT"];
 
 /**
  * E3-T03 — server-side re-validation of every condition the /evenements/[id]
- * CTA already encodes (tier, capacity, already registered, event date) —
- * the disabled button there is a UX hint, not the actual gate.
+ * CTA already encodes (platform access, capacity, already registered, event
+ * date) — the disabled button there is a UX hint, not the actual gate.
  */
 export default async function EventRegistrationPage({ params }: { params: { id: string } }) {
   const session = await auth();
@@ -39,7 +38,7 @@ export default async function EventRegistrationPage({ params }: { params: { id: 
   if (!event || event.status !== "PUBLISHED") notFound();
   if (!viewer) redirect("/login");
 
-  const tierOk = meetsMinTier(getViewerTierFromCompany(viewer.company), event.minTier);
+  const hasAccess = getViewerTierFromCompany(viewer.company) != null;
   const isPast = event.date < new Date();
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
 
@@ -50,7 +49,13 @@ export default async function EventRegistrationPage({ params }: { params: { id: 
     getActivePlans({ selfServiceOnly: true, eventId: event.id }),
   ]);
 
-  if (!tierOk || isPast || capacity === "complet" || alreadyRegistered || eventOffers.length > 0) {
+  if (
+    !hasAccess ||
+    isPast ||
+    capacity === "complet" ||
+    alreadyRegistered ||
+    eventOffers.length > 0
+  ) {
     redirect(`/evenements/${event.id}`);
   }
 

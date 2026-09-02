@@ -43,15 +43,17 @@ export interface DealRoomQuery {
 }
 
 /**
- * Backlog: "Visibilité : Executive voit toutes · Member voit seulement
- * secteurs ouverts" — read as: a Member only sees opportunities the author
- * opened to everyone (`visibility: MEMBER`); Executive/Chairman see any
- * opportunity at or below their own tier.
+ * Décision d'architecture (sept. 2026, conception/09) — accès égal pour tout
+ * membre dont l'entreprise a une offre active/validée : toute opportunité
+ * publiée est visible dès qu'un tier existe (peu importe lequel), plus
+ * seulement celles à son rang ou en dessous. `viewerTier` non nul veut déjà
+ * dire "offre active/expirée mais valable" (getViewerTierFromCompany,
+ * RG-12) — c'est cette présence qui compte, plus le rang. `Opportunity.
+ * visibility` reste en base et dans le formulaire de publication, juste
+ * plus filtrant.
  */
 export function allowedVisibilities(viewerTier: Tier | null | undefined): Tier[] {
-  const rank = viewerTier ? LEGACY_TIER_ORDER.indexOf(viewerTier) : -1;
-  if (rank < 0) return [];
-  return LEGACY_TIER_ORDER.slice(0, rank + 1);
+  return viewerTier != null ? [...LEGACY_TIER_ORDER] : [];
 }
 
 export function buildDealRoomQuery(

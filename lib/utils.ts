@@ -1,8 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-import { legacyTierRank } from "@/lib/plan-access";
-
 /**
  * Merge Tailwind classes intelligently, resolving conflicts (shadcn/ui standard helper).
  * Used by every shadcn component and across the app for conditional classNames.
@@ -43,12 +41,14 @@ export function tierLabel(tier?: string | null): string {
 }
 
 /**
- * Whether a member's tier satisfies a minimum tier requirement (e.g. an
- * event's legacy `minTier`). Ranking sourced from lib/plan-access.ts — see
- * that file's header comment for why this is the legacy-only fallback path,
- * not the canonical `Plan.rank` comparison.
+ * Décision d'architecture (sept. 2026, conception/09) — accès égal pour tout
+ * membre dont l'entreprise a une offre active/validée : un événement reste
+ * accessible dès qu'un tier existe, plus seulement à partir de son
+ * `minTier`. `userTier` non nul veut déjà dire "offre active/expirée mais
+ * valable" (getViewerTierFromCompany, RG-12). `minTier` reste au paramètre
+ * — et `Event.minTier` en base — pour ne pas casser les appelants.
  */
-export function meetsMinTier(userTier: string | null | undefined, minTier: string): boolean {
-  if (!userTier) return false;
-  return legacyTierRank(userTier) >= legacyTierRank(minTier);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept so callers/signature don't change; see doc-comment above
+export function meetsMinTier(userTier: string | null | undefined, _minTier: string): boolean {
+  return userTier != null;
 }

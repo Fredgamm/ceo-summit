@@ -22,8 +22,6 @@ interface OpportunityCardProps {
   createdAt: Date;
   author: { name: string; title: string | null; avatarUrl: string | null; role: string };
   authorTier: Tier | null;
-  /** Configurable par l'admin (7 août 2026) — voir lib/deal-room-settings.ts. */
-  contactCost: number;
 }
 
 export function OpportunityCard({
@@ -37,7 +35,6 @@ export function OpportunityCard({
   createdAt,
   author,
   authorTier,
-  contactCost,
 }: OpportunityCardProps) {
   return (
     <Link
@@ -68,9 +65,6 @@ export function OpportunityCard({
           {author.title && <p className="truncate text-xs text-text-muted">{author.title}</p>}
         </div>
         {authorTier && <Badge variant={TIER_BADGE[authorTier]}>{tierLabel(authorTier)}</Badge>}
-        <span className="shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-bold text-navy">
-          {contactCost === 0 ? "Gratuit" : `${contactCost} crédit${contactCost > 1 ? "s" : ""}`}
-        </span>
       </div>
     </Link>
   );

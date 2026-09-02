@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getDealRoomContactCost } from "@/lib/deal-room-settings";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
@@ -35,12 +34,11 @@ export default async function EditOpportunityPage({ params }: { params: { id: st
     redirect(`/deal-room/${opportunity.id}`);
   }
 
-  const [unreadMessages, types, sectors, countries, contactCost] = await Promise.all([
+  const [unreadMessages, types, sectors, countries] = await Promise.all([
     countUnreadMessages(viewer.id),
     getReferentialLabels("opportunity_type"),
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
-    getDealRoomContactCost(),
   ]);
 
   return (
@@ -59,7 +57,6 @@ export default async function EditOpportunityPage({ params }: { params: { id: st
         types={types}
         sectors={sectors}
         countries={countries}
-        contactCost={contactCost}
         editOpportunityId={opportunity.id}
         initialValues={{
           type: opportunity.type,

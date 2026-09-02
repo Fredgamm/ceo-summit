@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
-import { formatAriary, formatDateFr, initials, meetsMinTier, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -60,7 +60,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
-  const tierOk = meetsMinTier(viewerTier, event.minTier);
   const isRegistered = event.registrations.some((r) => r.user.id === viewer.id);
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
@@ -252,10 +251,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
                 <Button disabled className="mt-4 w-full justify-center">
                   Événement passé
                 </Button>
-              ) : !tierOk ? (
-                <Button disabled className="mt-4 w-full justify-center">
-                  Accès {tierLabel(event.minTier)} requis
-                </Button>
               ) : capacity === "complet" ? (
                 <Button disabled className="mt-4 w-full justify-center">
                   Complet
@@ -266,7 +261,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
                 </Button>
               )}
 
-              {!isRegistered && tierOk && !isPast && capacity !== "complet" && (
+              {!isRegistered && !isPast && capacity !== "complet" && (
                 <p className="mt-2 text-xs text-text-muted">
                   {capacity === "limite"
                     ? `⚡ Plus que ${spotsLeft} places`
@@ -288,10 +283,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
                 <dd className="font-semibold text-navy">
                   {event.isOnline ? "En ligne" : event.location}
                 </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-text-muted">Accès</dt>
-                <dd className="font-semibold text-navy">{tierLabel(event.minTier)}+</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-text-muted">Capacité</dt>

@@ -2,27 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import { buildRoomsWhere, meetsRoomAccess, ROOM_ACCESS_LABEL } from "./rooms-query";
 
+/**
+ * Décision d'architecture (sept. 2026, conception/09) — accès égal pour tout
+ * membre dont l'entreprise a une offre active/validée : `minTier` n'est plus
+ * comparé, seule la présence d'un tier (= accès plateforme) compte.
+ */
 describe("meetsRoomAccess", () => {
-  it("lets any tier into an ALL_MEMBERS room", () => {
+  it("lets any tier into any room regardless of minTier", () => {
     expect(meetsRoomAccess("MEMBER", "ALL_MEMBERS")).toBe(true);
-    expect(meetsRoomAccess("EXECUTIVE", "ALL_MEMBERS")).toBe(true);
-    expect(meetsRoomAccess("CHAIRMAN", "ALL_MEMBERS")).toBe(true);
-  });
-
-  it("blocks a MEMBER from an EXECUTIVE_PLUS room", () => {
-    expect(meetsRoomAccess("MEMBER", "EXECUTIVE_PLUS")).toBe(false);
-    expect(meetsRoomAccess("EXECUTIVE", "EXECUTIVE_PLUS")).toBe(true);
-    expect(meetsRoomAccess("CHAIRMAN", "EXECUTIVE_PLUS")).toBe(true);
-  });
-
-  it("only lets CHAIRMAN into a CHAIRMAN_ONLY room", () => {
-    expect(meetsRoomAccess("EXECUTIVE", "CHAIRMAN_ONLY")).toBe(false);
+    expect(meetsRoomAccess("MEMBER", "EXECUTIVE_PLUS")).toBe(true);
+    expect(meetsRoomAccess("MEMBER", "CHAIRMAN_ONLY")).toBe(true);
+    expect(meetsRoomAccess("EXECUTIVE", "CHAIRMAN_ONLY")).toBe(true);
     expect(meetsRoomAccess("CHAIRMAN", "CHAIRMAN_ONLY")).toBe(true);
   });
 
-  it("blocks a viewer with no active membership", () => {
+  it("blocks a viewer with no active platform access", () => {
     expect(meetsRoomAccess(null, "ALL_MEMBERS")).toBe(false);
     expect(meetsRoomAccess(undefined, "ALL_MEMBERS")).toBe(false);
+    expect(meetsRoomAccess(null, "CHAIRMAN_ONLY")).toBe(false);
   });
 });
 

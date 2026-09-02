@@ -13,15 +13,15 @@ import { RoomCard, type RoomCardData } from "@/components/rooms/room-card";
  */
 export function RoomsGrid({ rooms }: { rooms: RoomCardData[] }) {
   const [onlineCounts, setOnlineCounts] = React.useState<Record<string, number>>({});
-  const unlockedIds = React.useMemo(() => rooms.filter((r) => !r.locked).map((r) => r.id), [rooms]);
+  const roomIds = React.useMemo(() => rooms.map((r) => r.id), [rooms]);
 
   React.useEffect(() => {
-    if (unlockedIds.length === 0) return;
+    if (roomIds.length === 0) return;
     let cancelled = false;
 
     getSocketClient()
       .then((socket) => {
-        socket.emit("rooms:presence", unlockedIds, (counts: Record<string, number>) => {
+        socket.emit("rooms:presence", roomIds, (counts: Record<string, number>) => {
           if (!cancelled) setOnlineCounts(counts);
         });
       })
@@ -33,7 +33,7 @@ export function RoomsGrid({ rooms }: { rooms: RoomCardData[] }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unlockedIds.join(",")]);
+  }, [roomIds.join(",")]);
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

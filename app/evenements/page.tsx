@@ -17,7 +17,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { EventFilters } from "@/components/events/event-filters";
 import { EventCard } from "@/components/events/event-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { tierLabel, meetsMinTier } from "@/lib/utils";
+import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Événements" };
 
@@ -90,10 +90,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
               location={event.location}
               isOnline={event.isOnline}
               price={event.price}
-              minTier={event.minTier}
               capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
               isRegistered={event.registrations.length > 0}
-              tierOk={meetsMinTier(viewerTier, event.minTier)}
             />
           ))}
         </div>
@@ -115,10 +113,8 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
                 location={event.location}
                 isOnline={event.isOnline}
                 price={event.price}
-                minTier={event.minTier}
                 capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
                 isRegistered={event.registrations.length > 0}
-                tierOk={meetsMinTier(viewerTier, event.minTier)}
               />
             ))}
           </div>

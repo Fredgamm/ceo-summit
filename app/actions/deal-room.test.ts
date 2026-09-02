@@ -7,31 +7,14 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     opportunity: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     user: { findUnique: vi.fn() },
-    opportunityContact: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
-    creditBalance: { findUnique: vi.fn(), update: vi.fn() },
-    creditTransaction: { create: vi.fn() },
-    platformSetting: { findUnique: vi.fn().mockResolvedValue(null) },
-    $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockTx)),
+    opportunityContact: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
   },
 }));
-
-const mockTx = {
-  creditBalance: { findUnique: vi.fn(), update: vi.fn() },
-  creditTransaction: { create: vi.fn() },
-  opportunityContact: {
-    create: vi.fn(),
-    update: vi.fn(),
-    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-  },
-};
-
-vi.mock("@/lib/credit-deduction-lock", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/credit-deduction-lock")>();
-  return {
-    ...actual,
-    withCreditDeductionLock: vi.fn((_userId: string, fn: () => Promise<unknown>) => fn()),
-  };
-});
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/admin-opportunity-alert-email", () => ({ default: vi.fn(() => null) }));
@@ -40,7 +23,6 @@ vi.mock("@/lib/conversations", () => ({ getOrCreateConversation: vi.fn() }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { withCreditDeductionLock, CreditDeductionLockBusyError } from "@/lib/credit-deduction-lock";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { sendTransactionalEmail } from "@/lib/resend";
 import {
@@ -149,44 +131,40 @@ describe("publishOpportunity", () => {
   });
 });
 
+/**
+ * Décision d'architecture (sept. 2026, conception/09) — le système de
+ * crédits Deal Room est retiré du chemin actif : prendre contact est
+ * désormais gratuit et illimité pour tout membre dont l'entreprise a une
+ * offre active/validée, quel que soit son tier.
+ */
 describe("contactOpportunityAuthor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
     vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(null);
-    mockTx.creditBalance.findUnique.mockResolvedValue({ included: 10, purchased: 0, used: 2 });
-    mockTx.creditBalance.update.mockResolvedValue({});
-    mockTx.creditTransaction.create.mockResolvedValue({});
-    mockTx.opportunityContact.create.mockResolvedValue({});
+    vi.mocked(prisma.opportunityContact.create).mockResolvedValue({} as never);
   });
 
-  it("deducts 1 credit and creates the contact for a non-Chairman member", async () => {
+  it("creates the contact for free", async () => {
     vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
 
     const result = await contactOpportunityAuthor("opp_1");
 
     expect(result.success).toBe(true);
-    expect(mockTx.creditBalance.update).toHaveBeenCalledWith({
-      where: { userId: "user_1" },
-      data: { used: { increment: 1 } },
-    });
-    expect(mockTx.creditTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ amount: -1, type: "DEDUCTION" }) })
-    );
-    expect(mockTx.opportunityContact.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ creditsSpent: 1 }) })
+    expect(prisma.opportunityContact.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          opportunityId: "opp_1",
+          initiatorId: "user_1",
+          receiverId: "author_1",
+          creditsSpent: 0,
+        }),
+      })
     );
   });
 
-  /**
-   * Bug réel (7 août 2026) — même classe que publishOpportunity ci-dessus :
-   * le crédit était déjà débité (transaction commitée) quand l'envoi de la
-   * notification à l'auteur échouait (RESEND_API_KEY placeholder), et
-   * l'exception non protégée faisait échouer toute l'action — le membre
-   * voyait une erreur alors que son crédit avait bien été dépensé.
-   */
-  it("still spends the credit and creates the contact even if the notification email fails", async () => {
+  it("still creates the contact even if the notification email fails", async () => {
     vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
     vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("boom"));
@@ -194,50 +172,10 @@ describe("contactOpportunityAuthor", () => {
     const result = await contactOpportunityAuthor("opp_1");
 
     expect(result.success).toBe(true);
-    expect(mockTx.opportunityContact.create).toHaveBeenCalled();
+    expect(prisma.opportunityContact.create).toHaveBeenCalled();
   });
 
-  it("bypasses the balance check and spends 0 credits for a Chairman", async () => {
-    vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(
-      makeViewer({ company: { subscription: { status: "ACTIVE", plan: { rank: 3 } } } })
-    );
-
-    const result = await contactOpportunityAuthor("opp_1");
-
-    expect(result.success).toBe(true);
-    expect(mockTx.creditBalance.findUnique).not.toHaveBeenCalled();
-    expect(mockTx.creditBalance.update).not.toHaveBeenCalled();
-    expect(mockTx.opportunityContact.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ creditsSpent: 0 }) })
-    );
-  });
-
-  /**
-   * (7 août 2026, demande admin) — le coût du contact Deal Room est
-   * maintenant configurable (`/admin/parametres`) au lieu d'être fixe à 1 ;
-   * un admin peut le mettre à 0 pour rendre le contact gratuit pour tous
-   * les membres, pas seulement les Chairman.
-   */
-  it("does not deduct any credit when the admin has set the contact cost to 0", async () => {
-    vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
-    vi.mocked(prisma.platformSetting.findUnique).mockResolvedValueOnce({
-      key: "deal_room_contact_cost",
-      value: "0",
-    } as never);
-
-    const result = await contactOpportunityAuthor("opp_1");
-
-    expect(result.success).toBe(true);
-    expect(mockTx.creditBalance.findUnique).not.toHaveBeenCalled();
-    expect(mockTx.creditBalance.update).not.toHaveBeenCalled();
-    expect(mockTx.opportunityContact.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ creditsSpent: 0 }) })
-    );
-  });
-
-  it("rejects a viewer whose tier is below the opportunity's visibility", async () => {
+  it("allows a viewer regardless of tier vs. the opportunity's visibility", async () => {
     vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(
       makeOpportunity({ visibility: "CHAIRMAN" })
     );
@@ -247,8 +185,8 @@ describe("contactOpportunityAuthor", () => {
 
     const result = await contactOpportunityAuthor("opp_1");
 
-    expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(prisma.opportunityContact.create).toHaveBeenCalled();
   });
 
   it("rejects a viewer with no active company access (null tier) regardless of visibility", async () => {
@@ -260,19 +198,7 @@ describe("contactOpportunityAuthor", () => {
     const result = await contactOpportunityAuthor("opp_1");
 
     expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
-  });
-
-  it("returns INSUFFICIENT_CREDITS when the balance is exhausted", async () => {
-    vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
-    mockTx.creditBalance.findUnique.mockResolvedValue({ included: 10, purchased: 0, used: 10 });
-
-    const result = await contactOpportunityAuthor("opp_1");
-
-    expect(result.success).toBe(false);
-    if (!result.success) expect(result.code).toBe("INSUFFICIENT_CREDITS");
-    expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
+    expect(prisma.opportunityContact.create).not.toHaveBeenCalled();
   });
 
   it("rejects contacting your own opportunity", async () => {
@@ -283,7 +209,7 @@ describe("contactOpportunityAuthor", () => {
 
     const result = await contactOpportunityAuthor("opp_1");
     expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
+    expect(prisma.opportunityContact.create).not.toHaveBeenCalled();
   });
 
   it("rejects a second contact attempt on the same opportunity", async () => {
@@ -293,7 +219,7 @@ describe("contactOpportunityAuthor", () => {
 
     const result = await contactOpportunityAuthor("opp_1");
     expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
+    expect(prisma.opportunityContact.create).not.toHaveBeenCalled();
   });
 
   it("rejects an opportunity that isn't published", async () => {
@@ -304,16 +230,6 @@ describe("contactOpportunityAuthor", () => {
 
     const result = await contactOpportunityAuthor("opp_1");
     expect(result.success).toBe(false);
-  });
-
-  it("surfaces a friendly error when the credit lock is busy", async () => {
-    vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(makeOpportunity());
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
-    vi.mocked(withCreditDeductionLock).mockRejectedValueOnce(new CreditDeductionLockBusyError());
-
-    const result = await contactOpportunityAuthor("opp_1");
-    expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.create).not.toHaveBeenCalled();
   });
 });
 
@@ -378,6 +294,7 @@ describe("declineOpportunityContact", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.opportunityContact.updateMany).mockResolvedValue({ count: 1 } as never);
   });
 
   it("rejects someone who isn't the receiver", async () => {
@@ -386,7 +303,7 @@ describe("declineOpportunityContact", () => {
     );
     const result = await declineOpportunityContact("contact_1");
     expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.update).not.toHaveBeenCalled();
+    expect(prisma.opportunityContact.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects an already-processed request", async () => {
@@ -395,47 +312,26 @@ describe("declineOpportunityContact", () => {
     );
     const result = await declineOpportunityContact("contact_1");
     expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.update).not.toHaveBeenCalled();
+    expect(prisma.opportunityContact.updateMany).not.toHaveBeenCalled();
   });
 
-  it("marks the contact declined and refunds the credit the initiator spent", async () => {
+  it("marks the contact declined", async () => {
     vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(makeContact());
     const result = await declineOpportunityContact("contact_1");
     expect(result.success).toBe(true);
-    expect(mockTx.opportunityContact.updateMany).toHaveBeenCalledWith({
+    expect(prisma.opportunityContact.updateMany).toHaveBeenCalledWith({
       where: { id: "contact_1", status: "PENDING" },
       data: { status: "DECLINED" },
     });
-    expect(mockTx.creditBalance.update).toHaveBeenCalledWith({
-      where: { userId: "user_2" },
-      data: { used: { decrement: 1 } },
-    });
-    expect(mockTx.creditTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ userId: "user_2", amount: 1, type: "REFUND" }),
-      })
-    );
   });
 
-  it("does not touch credits for a Chairman contact (creditsSpent: 0)", async () => {
-    vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(
-      makeContact({ creditsSpent: 0 })
-    );
-    const result = await declineOpportunityContact("contact_1");
-    expect(result.success).toBe(true);
-    expect(mockTx.creditBalance.update).not.toHaveBeenCalled();
-    expect(mockTx.creditTransaction.create).not.toHaveBeenCalled();
-  });
-
-  it("does not double-refund when the status flip races (updateMany affects 0 rows)", async () => {
+  it("does not double-process when the status flip races (updateMany affects 0 rows)", async () => {
     vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(makeContact());
-    mockTx.opportunityContact.updateMany.mockResolvedValueOnce({ count: 0 });
+    vi.mocked(prisma.opportunityContact.updateMany).mockResolvedValueOnce({ count: 0 } as never);
 
     const result = await declineOpportunityContact("contact_1");
 
     expect(result.success).toBe(false);
-    expect(mockTx.creditBalance.update).not.toHaveBeenCalled();
-    expect(mockTx.creditTransaction.create).not.toHaveBeenCalled();
   });
 });
 
@@ -443,6 +339,7 @@ describe("withdrawOpportunityContact", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.opportunityContact.updateMany).mockResolvedValue({ count: 1 } as never);
   });
 
   it("rejects someone who isn't the initiator", async () => {
@@ -451,7 +348,7 @@ describe("withdrawOpportunityContact", () => {
     );
     const result = await withdrawOpportunityContact("contact_1");
     expect(result.success).toBe(false);
-    expect(mockTx.opportunityContact.update).not.toHaveBeenCalled();
+    expect(prisma.opportunityContact.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects an already-processed request", async () => {
@@ -462,19 +359,15 @@ describe("withdrawOpportunityContact", () => {
     expect(result.success).toBe(false);
   });
 
-  it("lets the initiator withdraw their own pending request and refunds the credit", async () => {
+  it("lets the initiator withdraw their own pending request", async () => {
     vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(
       makeContact({ initiatorId: "user_1" })
     );
     const result = await withdrawOpportunityContact("contact_1");
     expect(result.success).toBe(true);
-    expect(mockTx.opportunityContact.updateMany).toHaveBeenCalledWith({
+    expect(prisma.opportunityContact.updateMany).toHaveBeenCalledWith({
       where: { id: "contact_1", status: "PENDING" },
       data: { status: "DECLINED" },
-    });
-    expect(mockTx.creditBalance.update).toHaveBeenCalledWith({
-      where: { userId: "user_1" },
-      data: { used: { decrement: 1 } },
     });
   });
 });
