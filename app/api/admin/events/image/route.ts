@@ -5,6 +5,7 @@ import sharp from "sharp";
 
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { uploadObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   EVENT_IMAGE_ALLOWED_MIME_TYPES,
   EVENT_IMAGE_MAX_BYTES,
@@ -19,14 +20,17 @@ import {
  * returned URL is submitted as part of the event form afterwards.
  */
 export async function POST(req: Request) {
+  let adminId: string;
   try {
-    await requireAdmin("evenements");
+    ({ userId: adminId } = await requireAdmin("evenements"));
   } catch (err) {
     if (err instanceof AdminAccessError) {
       return NextResponse.json({ error: err.message }, { status: 403 });
     }
     throw err;
   }
+  const rateLimited = await checkUploadRateLimit(adminId);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

@@ -57,6 +57,18 @@ describe("approveOpportunity / requestOpportunityChanges / rejectOpportunity", (
     expect(sendTransactionalEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: "membre@example.com" })
     );
+    // Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+    // "aucun test n'affirme sur les écritures d'audit log" de modération.
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          actorId: "admin_1",
+          action: "opportunity.approve",
+          targetType: "Opportunity",
+          targetId: "opp_1",
+        }),
+      })
+    );
   });
 
   it("rejects approving an opportunity that isn't pending", async () => {
@@ -74,6 +86,11 @@ describe("approveOpportunity / requestOpportunityChanges / rejectOpportunity", (
     expect(prisma.opportunity.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "CHANGES_REQUESTED" }) })
     );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "opportunity.request_changes", targetId: "opp_1" }),
+      })
+    );
   });
 
   it("rejects an empty changes-requested message", async () => {
@@ -90,6 +107,11 @@ describe("approveOpportunity / requestOpportunityChanges / rejectOpportunity", (
     );
     expect(sendTransactionalEmail).toHaveBeenCalledWith(
       expect.objectContaining({ to: "membre@example.com" })
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "opportunity.reject", targetId: "opp_1" }),
+      })
     );
   });
 
@@ -116,6 +138,11 @@ describe("unpublishOpportunity / republishOpportunity", () => {
       where: { id: "opp_1" },
       data: { status: "UNPUBLISHED" },
     });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "opportunity.unpublish", targetId: "opp_1" }),
+      })
+    );
   });
 
   it("rejects unpublishing a non-active opportunity", async () => {
@@ -136,6 +163,11 @@ describe("unpublishOpportunity / republishOpportunity", () => {
       where: { id: "opp_1" },
       data: { status: "PUBLISHED" },
     });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "opportunity.republish", targetId: "opp_1" }),
+      })
+    );
   });
 });
 

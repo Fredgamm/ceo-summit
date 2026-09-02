@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadPrivateObject } from "@/lib/r2";
 import { meetsRoomAccess } from "@/lib/rooms-query";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   ROOM_ATTACHMENT_MAX_BYTES,
   ROOM_ATTACHMENT_ALLOWED_MIME_TYPES,
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
   }
+  const rateLimited = await checkUploadRateLimit(session.user.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

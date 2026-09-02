@@ -10,10 +10,12 @@ vi.mock("@/lib/prisma", () => ({
     user: { findUnique: vi.fn() },
   },
 }));
+vi.mock("@/lib/upload-rate-limit", () => ({ checkUploadRateLimit: vi.fn() }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadPrivateObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import { POST } from "./route";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
@@ -37,6 +39,17 @@ describe("POST /api/rooms/attachment", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(null);
+  });
+
+  it("rejects a request past the per-user upload rate limit", async () => {
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(
+      Response.json({ error: "Trop de téléversements." }, { status: 429 }) as never
+    );
+    const file = new File(["bytes"], "doc.pdf", { type: "application/pdf" });
+    const res = await POST(makeRequest(file));
+    expect(res.status).toBe(429);
+    expect(uploadPrivateObject).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated request", async () => {

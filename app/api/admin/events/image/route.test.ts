@@ -22,10 +22,12 @@ vi.mock("@/lib/prisma", () => ({ prisma: { adminUser: { findUnique: vi.fn() } } 
 vi.mock("@/lib/r2", () => ({
   uploadObject: vi.fn().mockResolvedValue("https://cdn.example.com/events/x.jpg"),
 }));
+vi.mock("@/lib/upload-rate-limit", () => ({ checkUploadRateLimit: vi.fn() }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import { POST } from "./route";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
@@ -44,6 +46,17 @@ describe("POST /api/admin/events/image", () => {
     sharpChain.toBuffer.mockResolvedValue(Buffer.from("resized-bytes"));
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(null);
+  });
+
+  it("rejects a request past the per-admin upload rate limit", async () => {
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(
+      Response.json({ error: "Trop de téléversements." }, { status: 429 }) as never
+    );
+    const file = new File(["bytes"], "banner.jpg", { type: "image/jpeg" });
+    const res = await POST(makeRequest(file));
+    expect(res.status).toBe(429);
+    expect(uploadObject).not.toHaveBeenCalled();
   });
 
   it("rejects a non-admin caller", async () => {

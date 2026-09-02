@@ -24,10 +24,12 @@ vi.mock("@/lib/r2", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: { user: { update: vi.fn().mockResolvedValue({}) } },
 }));
+vi.mock("@/lib/upload-rate-limit", () => ({ checkUploadRateLimit: vi.fn() }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import { POST } from "./route";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
@@ -45,6 +47,19 @@ describe("POST /api/profile/avatar", () => {
     sharpChain.jpeg.mockReturnValue(sharpChain);
     sharpChain.toBuffer.mockResolvedValue(Buffer.from("resized-bytes"));
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(null);
+  });
+
+  it("rejects a request past the per-user upload rate limit", async () => {
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(
+      Response.json({ error: "Trop de téléversements." }, { status: 429 }) as never
+    );
+    const file = new File(["bytes"], "photo.jpg", { type: "image/jpeg" });
+
+    const res = await POST(makeRequest(file));
+
+    expect(res.status).toBe(429);
+    expect(uploadObject).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated request", async () => {

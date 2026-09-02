@@ -4,9 +4,11 @@ vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/r2", () => ({
   uploadPrivateObject: vi.fn().mockResolvedValue({ key: "deal-room/user_1/doc.pdf" }),
 }));
+vi.mock("@/lib/upload-rate-limit", () => ({ checkUploadRateLimit: vi.fn() }));
 
 import { auth } from "@/auth";
 import { uploadPrivateObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import { POST } from "./route";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
@@ -24,6 +26,17 @@ describe("POST /api/deal-room/attachment", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(null);
+  });
+
+  it("rejects a request past the per-user upload rate limit", async () => {
+    vi.mocked(checkUploadRateLimit).mockResolvedValue(
+      Response.json({ error: "Trop de téléversements." }, { status: 429 }) as never
+    );
+    const file = new File(["%PDF"], "doc.pdf", { type: "application/pdf" });
+    const res = await POST(makeRequest(file));
+    expect(res.status).toBe(429);
+    expect(uploadPrivateObject).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated request", async () => {

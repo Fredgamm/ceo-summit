@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { uploadPrivateObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES,
   OPPORTUNITY_ATTACHMENT_MAX_BYTES,
@@ -24,6 +25,8 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
   }
+  const rateLimited = await checkUploadRateLimit(session.user.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

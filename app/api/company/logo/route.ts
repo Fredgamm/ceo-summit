@@ -5,6 +5,7 @@ import sharp from "sharp";
 
 import { auth } from "@/auth";
 import { uploadObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import { AVATAR_ALLOWED_MIME_TYPES, AVATAR_MAX_BYTES } from "@/lib/validations/profile";
 
 const LOGO_SIZE_PX = 400;
@@ -22,6 +23,8 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
   }
+  const rateLimited = await checkUploadRateLimit(session.user.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");
