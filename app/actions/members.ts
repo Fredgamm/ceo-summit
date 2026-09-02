@@ -55,7 +55,7 @@ export async function grantCredits(
   amount: number,
   reason: string
 ): Promise<ActionResult> {
-  const { userId: adminId } = await requireAdmin("membres");
+  const { userId: adminId } = await requireAdmin("credits");
 
   const parsed = grantCreditsSchema.safeParse({ amount, reason });
   if (!parsed.success) {

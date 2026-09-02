@@ -140,20 +140,40 @@ export async function activateAccount(
 
   const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
 
-  const user = await prisma.$transaction(async (tx) => {
-    const updated = await tx.user.update({
-      where: { id: record.userId },
-      data: { passwordHash, status: "ACTIVE", emailVerifiedAt: new Date() },
+  // Correctif (refactor dette technique, sept. 2026) — la lecture du token
+  // et son marquage `usedAt` étaient deux étapes séparées (`findUnique` puis
+  // `update` inconditionnel) : deux appels concurrents sur le même lien
+  // passaient tous les deux la vérification `if (record.usedAt)` (basée sur
+  // la même lecture obsolète) puis activaient tous les deux le compte —
+  // même classe de bug que la race de double-remboursement déjà documentée
+  // dans l'audit du 7 août (§2). `updateMany` avec `usedAt: null` dans son
+  // `where` rend la "réclamation" du token atomique : seul le premier appel
+  // concurrent trouve encore une ligne à mettre à jour.
+  try {
+    const user = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.activationToken.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new ActivationTokenAlreadyUsedError();
+      }
+      return tx.user.update({
+        where: { id: record.userId },
+        data: { passwordHash, status: "ACTIVE", emailVerifiedAt: new Date() },
+      });
     });
-    await tx.activationToken.update({
-      where: { id: record.id },
-      data: { usedAt: new Date() },
-    });
-    return updated;
-  });
 
-  return { success: true, data: { email: user.email } };
+    return { success: true, data: { email: user.email } };
+  } catch (err) {
+    if (err instanceof ActivationTokenAlreadyUsedError) {
+      return { success: false, error: "Ce lien a déjà été utilisé." };
+    }
+    throw err;
+  }
 }
+
+class ActivationTokenAlreadyUsedError extends Error {}
 
 // ═══════════════════════════════════════════════
 // E1-T03 — Renvoi du lien d'activation
@@ -170,6 +190,16 @@ type ResendActivationResult =
  * anti-enumeration doesn't apply the same way.
  */
 export async function resendActivationLink(email: string): Promise<ResendActivationResult> {
+  // Correctif (refactor dette technique, sept. 2026) — la limite existante
+  // (RG-P1-04, 3 renvois/24h) est scopée par email, pas par IP : elle ne
+  // freine pas une énumération volumétrique de toute la base au débit
+  // maximum du serveur (audit du 7 août, §1). Même garde-fou par IP que
+  // signup/requestPasswordReset.
+  const rateLimit = await checkRateLimit(`resend-activation:${getClientIp()}`, 5, 60 * 60);
+  if (!rateLimit.allowed) {
+    return { success: false, error: RATE_LIMITED_ERROR };
+  }
+
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Email invalide" };

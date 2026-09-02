@@ -27,4 +27,15 @@ describe("toCsv", () => {
   it("leaves plain fields unquoted", () => {
     expect(toCsv([["plain"]])).toBe("plain");
   });
+
+  it.each(["=SUM(A1)", "+1+1", "-1+1", "@SUM(A1)"])(
+    "neutralizes formula injection for a field starting with %s",
+    (field) => {
+      expect(toCsv([[field]])).toBe(`'${field}`);
+    }
+  );
+
+  it("does not alter a field with = elsewhere than the start", () => {
+    expect(toCsv([["a=b"]])).toBe("a=b");
+  });
 });

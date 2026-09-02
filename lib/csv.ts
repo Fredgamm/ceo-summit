@@ -4,8 +4,13 @@ export function toCsv(rows: string[][]): string {
 }
 
 function escapeCsvField(field: string): string {
-  if (/[",\r\n]/.test(field)) {
-    return `"${field.replace(/"/g, '""')}"`;
+  // Neutralize formula injection: a field starting with =, +, -, or @ is
+  // interpreted as a formula by Excel/Sheets on open. Prefixing with a
+  // single quote forces text interpretation without changing the visible
+  // value in either tool.
+  const value = /^[=+\-@]/.test(field) ? `'${field}` : field;
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
   }
-  return field;
+  return value;
 }

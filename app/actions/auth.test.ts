@@ -2,9 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { findUnique: vi.fn(), create: vi.fn() },
+    user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     plan: { findFirst: vi.fn() },
     passwordResetToken: { create: vi.fn() },
+    activationToken: { findUnique: vi.fn(), count: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
+    // Tests below exercise the transaction body directly against the same
+    // top-level mocks (tx.* === prisma.* here) rather than a separate fake
+    // client — sufficient since none of this file's transactions rely on
+    // real cross-statement isolation.
+    $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(prismaMock)),
   },
 }));
 
@@ -12,11 +18,15 @@ vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/request-ip", () => ({ getClientIp: vi.fn(() => "127.0.0.1") }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/reset-password-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("@/emails/activation-email", () => ({ default: vi.fn(() => null) }));
 
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { signup, requestPasswordReset } from "./auth";
+import { signup, requestPasswordReset, activateAccount, resendActivationLink } from "./auth";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see $transaction mock above
+const prismaMock = prisma as any;
 
 const VALID = {
   name: "Jean-Pierre Rakoto",
@@ -168,5 +178,132 @@ describe("requestPasswordReset", () => {
 
     expect(result.success).toBe(false);
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("activateAccount", () => {
+  const PASSWORD = { password: "Password1", confirmPassword: "Password1" };
+  const RECORD = {
+    id: "tok_1",
+    userId: "user_1",
+    usedAt: null,
+    expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.activationToken.findUnique).mockResolvedValue(RECORD as never);
+    vi.mocked(prisma.activationToken.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue({
+      id: "user_1",
+      email: "jp@example.mg",
+    } as never);
+  });
+
+  it("sets the password, activates the account, and atomically claims the token", async () => {
+    const result = await activateAccount("tok_1", PASSWORD.password, PASSWORD.confirmPassword);
+
+    expect(result).toEqual({ success: true, data: { email: "jp@example.mg" } });
+    expect(prisma.activationToken.updateMany).toHaveBeenCalledWith({
+      where: { id: "tok_1", usedAt: null },
+      data: { usedAt: expect.any(Date) },
+    });
+  });
+
+  it("rejects an unknown token", async () => {
+    vi.mocked(prisma.activationToken.findUnique).mockResolvedValue(null);
+
+    const result = await activateAccount("bad", PASSWORD.password, PASSWORD.confirmPassword);
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an expired token", async () => {
+    vi.mocked(prisma.activationToken.findUnique).mockResolvedValue({
+      ...RECORD,
+      expiresAt: new Date(Date.now() - 1000),
+    } as never);
+
+    const result = await activateAccount("tok_1", PASSWORD.password, PASSWORD.confirmPassword);
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a token already marked used at the initial read", async () => {
+    vi.mocked(prisma.activationToken.findUnique).mockResolvedValue({
+      ...RECORD,
+      usedAt: new Date(),
+    } as never);
+
+    const result = await activateAccount("tok_1", PASSWORD.password, PASSWORD.confirmPassword);
+
+    expect(result.success).toBe(false);
+    expect(prisma.activationToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects concurrent double-activation even when the initial read still shows the token unused", async () => {
+    // Simulates a second concurrent call arriving right after a first one
+    // already claimed the token: this call's own `findUnique` still read
+    // `usedAt: null` (stale), but the conditional `updateMany` finds no row
+    // left to claim.
+    vi.mocked(prisma.activationToken.updateMany).mockResolvedValue({ count: 0 } as never);
+
+    const result = await activateAccount("tok_1", PASSWORD.password, PASSWORD.confirmPassword);
+
+    expect(result).toEqual({ success: false, error: "Ce lien a déjà été utilisé." });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("resendActivationLink", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, retryAfterSec: 0 });
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      email: "jp@example.mg",
+      name: "Jean-Pierre",
+      status: "PENDING_ACTIVATION",
+    } as never);
+    vi.mocked(prisma.activationToken.count).mockResolvedValue(0);
+  });
+
+  it("sends a new activation email for a pending account", async () => {
+    const result = await resendActivationLink("jp@example.mg");
+
+    expect(result.success).toBe(true);
+    expect(prisma.activationToken.create).toHaveBeenCalled();
+    expect(sendTransactionalEmail).toHaveBeenCalled();
+  });
+
+  it("rejects when the per-IP rate limit is exceeded, before ever touching the database", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: false, retryAfterSec: 60 });
+
+    const result = await resendActivationLink("jp@example.mg");
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rejects an already-active account", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      email: "jp@example.mg",
+      status: "ACTIVE",
+    } as never);
+
+    const result = await resendActivationLink("jp@example.mg");
+
+    expect(result.success).toBe(false);
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects past the per-email daily resend cap (RG-P1-04, 3/24h)", async () => {
+    vi.mocked(prisma.activationToken.count).mockResolvedValue(3);
+
+    const result = await resendActivationLink("jp@example.mg");
+
+    expect(result.success).toBe(false);
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 });
