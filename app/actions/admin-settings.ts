@@ -120,8 +120,48 @@ export async function createReferentialItem(
   return { success: true, data: { id: item.id } };
 }
 
+/**
+ * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+ * contrairement à `deletePlan`, cette suppression était inconditionnelle.
+ * `Company.sector`/`Opportunity.sector`/`.country`/`.type` sont de simples
+ * colonnes `String` (pas de clé étrangère vers `Referential`) — supprimer
+ * une entrée encore utilisée laissait les enregistrements concernés
+ * orphelins, silencieusement invalides jusqu'à leur prochaine sauvegarde.
+ */
+async function countReferentialUsage(
+  type: (typeof REFERENTIAL_TYPES)[number],
+  label: string
+): Promise<number> {
+  if (type === "opportunity_type") {
+    return prisma.opportunity.count({ where: { type: label } });
+  }
+  const field = type; // "sector" | "country" — same column name on both models
+  const [companies, opportunities, users] = await Promise.all([
+    prisma.company.count({ where: { [field]: label } }),
+    prisma.opportunity.count({ where: { [field]: label } }),
+    field === "sector"
+      ? prisma.user.count({ where: { sectors: { has: label } } })
+      : prisma.user.count({ where: { country: label } }),
+  ]);
+  return companies + opportunities + users;
+}
+
 export async function deleteReferentialItem(id: string): Promise<ActionResult> {
   await requireAdmin("parametres");
+
+  const item = await prisma.referential.findUnique({ where: { id } });
+  if (!item) return { success: false, error: "Élément introuvable." };
+
+  const usageCount = await countReferentialUsage(
+    item.type as (typeof REFERENTIAL_TYPES)[number],
+    item.label
+  );
+  if (usageCount > 0) {
+    return {
+      success: false,
+      error: `Impossible de supprimer "${item.label}" : encore utilisé par ${usageCount} enregistrement(s).`,
+    };
+  }
 
   await prisma.referential.delete({ where: { id } });
 
