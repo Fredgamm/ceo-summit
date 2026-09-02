@@ -115,6 +115,12 @@ describe("candidature admin actions", () => {
         AdminAccessError
       );
     });
+
+    it("rejects a tier value outside the enum", async () => {
+      const result = await approveApplication("app_1", "GOLD_VIP" as never);
+      expect(result.success).toBe(false);
+      expect(prisma.membershipApplication.findUnique).not.toHaveBeenCalled();
+    });
   });
 
   describe("refuseApplication", () => {
@@ -157,6 +163,23 @@ describe("candidature admin actions", () => {
 
     it("rejects an empty message", async () => {
       const result = await requestMoreInfo("app_1", "   ");
+      expect(result.success).toBe(false);
+      expect(sendTransactionalEmail).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+     * contrairement à approve/refuseApplication, cette action n'avait aucune
+     * garde de statut — une soumission en double pouvait relancer une
+     * demande d'infos vers un candidat déjà approuvé/refusé.
+     */
+    it("rejects when the application is no longer pending", async () => {
+      vi.mocked(prisma.membershipApplication.findUnique).mockResolvedValue(
+        makeApplication({ status: "APPROVED" })
+      );
+
+      const result = await requestMoreInfo("app_1", "Merci de préciser votre secteur.");
+
       expect(result.success).toBe(false);
       expect(sendTransactionalEmail).not.toHaveBeenCalled();
     });

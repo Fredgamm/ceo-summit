@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Tier } from "@prisma/client";
+import { Tier } from "@prisma/client";
+import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
@@ -13,6 +14,14 @@ import ApplicationRefusedEmail from "@/emails/application-refused-email";
 import ApplicationMoreInfoEmail from "@/emails/application-more-info-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+// Correctif (refactor dette technique, sept. 2026) — audit du 7 août, §3
+// "candidatures.ts sans aucune validation Zod", 8e fichier de la même
+// catégorie que les 7 déjà corrigés au sprint du 5 août (EX-T01).
+const tierSchema = z.nativeEnum(Tier);
+const internalReasonSchema = z.string().trim().max(2000).optional().default("");
+const messageSchema = z.string().trim().min(1, "Le message ne peut pas être vide.").max(2000);
+const noteSchema = z.string().trim().max(5000);
 
 /**
  * E8-T03 — gestion candidatures.
@@ -26,6 +35,10 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  */
 export async function approveApplication(applicationId: string, tier: Tier): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("candidatures");
+
+  const parsedTier = tierSchema.safeParse(tier);
+  if (!parsedTier.success) return { success: false, error: "Tier invalide." };
+  tier = parsedTier.data;
 
   const application = await prisma.membershipApplication.findUnique({
     where: { id: applicationId },
@@ -93,6 +106,10 @@ export async function refuseApplication(
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("candidatures");
 
+  const parsedReason = internalReasonSchema.safeParse(internalReason);
+  if (!parsedReason.success) return { success: false, error: "Motif invalide." };
+  internalReason = parsedReason.data;
+
   const application = await prisma.membershipApplication.findUnique({
     where: { id: applicationId },
   });
@@ -137,14 +154,23 @@ export async function requestMoreInfo(
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("candidatures");
 
-  if (!message.trim()) {
-    return { success: false, error: "Le message ne peut pas être vide." };
+  const parsedMessage = messageSchema.safeParse(message);
+  if (!parsedMessage.success) {
+    return { success: false, error: parsedMessage.error.issues[0]?.message ?? "Message invalide." };
   }
+  message = parsedMessage.data;
 
   const application = await prisma.membershipApplication.findUnique({
     where: { id: applicationId },
   });
   if (!application) return { success: false, error: "Candidature introuvable." };
+  // Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+  // "requestMoreInfo sans garde de statut, contrairement à
+  // approve/refuseApplication" : une soumission en double pouvait
+  // envoyer une demande d'infos à un candidat déjà décidé.
+  if (application.status !== "PENDING") {
+    return { success: false, error: "Cette candidature a déjà été traitée." };
+  }
 
   const noteEntry = `[${new Date().toISOString()}] Info demandée : ${message}`;
   await prisma.membershipApplication.update({
@@ -179,9 +205,12 @@ export async function saveApplicationNote(
 ): Promise<ActionResult> {
   await requireAdmin("candidatures");
 
+  const parsed = noteSchema.safeParse(note);
+  if (!parsed.success) return { success: false, error: "Note invalide." };
+
   await prisma.membershipApplication.update({
     where: { id: applicationId },
-    data: { adminNote: note },
+    data: { adminNote: parsed.data },
   });
 
   revalidatePath(`/admin/candidatures/${applicationId}`);
