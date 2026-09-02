@@ -274,18 +274,27 @@ export async function acceptOpportunityContact(
  * `DECLINED` est désormais conditionné sur `status: "PENDING"` dans la
  * transaction — un second appel concurrent trouve 0 ligne mise à jour et
  * lève `ContactAlreadyHandledError` au lieu de rembourser une seconde fois.
+ *
+ * `finalStatus` (refactor dette technique, sept. 2026) — refus (par le
+ * destinataire) et retrait (par l'initiateur) partagent le même
+ * remboursement mais doivent aboutir à des statuts distincts (`DECLINED`
+ * vs `WITHDRAWN`), sans quoi l'UI affichait "Demande refusée" même quand
+ * c'est l'initiateur qui a annulé lui-même sa propre demande.
  */
-async function refundAndDeclineContact(contact: {
-  id: string;
-  initiatorId: string;
-  creditsSpent: number;
-  opportunity: { title: string };
-}): Promise<void> {
+async function refundAndDeclineContact(
+  contact: {
+    id: string;
+    initiatorId: string;
+    creditsSpent: number;
+    opportunity: { title: string };
+  },
+  finalStatus: "DECLINED" | "WITHDRAWN"
+): Promise<void> {
   await withCreditDeductionLock(contact.initiatorId, () =>
     prisma.$transaction(async (tx) => {
       const { count } = await tx.opportunityContact.updateMany({
         where: { id: contact.id, status: "PENDING" },
-        data: { status: "DECLINED" },
+        data: { status: finalStatus },
       });
       if (count === 0) {
         throw new ContactAlreadyHandledError();
@@ -325,7 +334,7 @@ export async function declineOpportunityContact(contactId: string): Promise<Acti
   }
 
   try {
-    await refundAndDeclineContact(contact);
+    await refundAndDeclineContact(contact, "DECLINED");
   } catch (err) {
     if (err instanceof ContactAlreadyHandledError) {
       return { success: false, error: "Cette demande a déjà été traitée." };
@@ -365,7 +374,7 @@ export async function withdrawOpportunityContact(contactId: string): Promise<Act
   }
 
   try {
-    await refundAndDeclineContact(contact);
+    await refundAndDeclineContact(contact, "WITHDRAWN");
   } catch (err) {
     if (err instanceof ContactAlreadyHandledError) {
       return { success: false, error: "Cette demande a déjà été traitée." };

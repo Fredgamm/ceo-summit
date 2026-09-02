@@ -100,6 +100,11 @@ enum ContactStatus {
   PENDING
   ACCEPTED
   DECLINED
+  /// Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+  /// refus (par le destinataire) et retrait (par l'initiateur lui-même)
+  /// collapsaient tous les deux sur DECLINED, affichant "Demande refusée"
+  /// même quand c'est l'initiateur qui a annulé sa propre demande.
+  WITHDRAWN
 }
 
 enum CreditTransactionType {

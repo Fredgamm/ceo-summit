@@ -480,6 +480,10 @@ describe("withdrawOpportunityContact", () => {
     expect(result.success).toBe(false);
   });
 
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * refus et retrait collapsaient auparavant sur le même statut DECLINED.
+   */
   it("lets the initiator withdraw their own pending request and refunds the credit", async () => {
     vi.mocked(prisma.opportunityContact.findUnique).mockResolvedValue(
       makeContact({ initiatorId: "user_1" })
@@ -488,7 +492,7 @@ describe("withdrawOpportunityContact", () => {
     expect(result.success).toBe(true);
     expect(mockTx.opportunityContact.updateMany).toHaveBeenCalledWith({
       where: { id: "contact_1", status: "PENDING" },
-      data: { status: "DECLINED" },
+      data: { status: "WITHDRAWN" },
     });
     expect(mockTx.creditBalance.update).toHaveBeenCalledWith({
       where: { userId: "user_1" },

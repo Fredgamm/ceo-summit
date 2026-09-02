@@ -215,6 +215,10 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
               <Badge variant="refused" className="w-full justify-center py-2">
                 Demande refusée
               </Badge>
+            ) : myContact?.status === "WITHDRAWN" ? (
+              <Badge variant="refused" className="w-full justify-center py-2">
+                Demande retirée
+              </Badge>
             ) : (
               <ContactPanel
                 opportunityId={opportunity.id}
