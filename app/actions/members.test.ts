@@ -6,7 +6,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    user: { update: vi.fn() },
+    user: { findUnique: vi.fn(), update: vi.fn() },
     creditBalance: { upsert: vi.fn() },
     creditTransaction: { create: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -21,6 +21,7 @@ import {
   reactivateMember,
   grantCredits,
   saveMemberNote,
+  eraseUserData,
 } from "./members";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
@@ -89,6 +90,60 @@ describe("member admin actions", () => {
         where: { id: "user_1" },
         data: { adminNote: "À surveiller." },
       });
+    });
+  });
+
+  /**
+   * RGPD — droit à l'effacement (audit du 7 août : "impossible, relations
+   * Prisma en Restrict"). Anonymisation en place plutôt qu'une vraie
+   * suppression de ligne, pour ne pas casser les FK Restrict de tout ce que
+   * ce membre a produit ni invalider les échanges des autres membres avec
+   * lui.
+   */
+  describe("eraseUserData", () => {
+    beforeEach(() => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: "user_1",
+        erasedAt: null,
+      } as never);
+    });
+
+    it("anonymizes the member's personal data, excludes the account, and logs it", async () => {
+      const result = await eraseUserData("user_1");
+
+      expect(result.success).toBe(true);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user_1" },
+        data: expect.objectContaining({
+          name: "Membre supprimé",
+          email: "erased-user_1@erased.ceosummit.invalid",
+          passwordHash: null,
+          status: "CANCELLED",
+          erasedAt: expect.any(Date),
+        }),
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: "member.erase_data", targetId: "user_1" }),
+        })
+      );
+    });
+
+    it("rejects an unknown member", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+      const result = await eraseUserData("user_x");
+      expect(result.success).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("rejects a member whose data was already erased", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: "user_1",
+        erasedAt: new Date("2026-08-01"),
+      } as never);
+      const result = await eraseUserData("user_1");
+      expect(result.success).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 });

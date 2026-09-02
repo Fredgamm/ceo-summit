@@ -220,7 +220,7 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
           </TabsContent>
         </Tabs>
 
-        <MemberActionsPanel userId={member.id} status={member.status} />
+        <MemberActionsPanel userId={member.id} status={member.status} erasedAt={member.erasedAt} />
       </div>
     </div>
   );

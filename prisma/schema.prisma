@@ -205,6 +205,16 @@ model User {
   onboardingCompletedAt DateTime?
   /// E8-T04 — internal admin note on this member, visible only in /admin/membres/[id].
   adminNote             String?   @db.Text
+  /// Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+  /// RGPD : "droit à l'effacement impossible (relations Prisma en Restrict)".
+  /// Une vraie suppression de ligne casserait les FK Restrict de tout ce que
+  /// ce membre a produit (messages, opportunités, logs d'audit...) et
+  /// invaliderait les échanges des AUTRES utilisateurs avec lui. Approche
+  /// retenue à la place : anonymisation en place (voir
+  /// app/actions/members.ts::eraseUserData) — la ligne survit, les données
+  /// personnelles identifiantes non. Ce champ trace la demande, séparément
+  /// de `status` (mis à CANCELLED au passage, ce qui coupe aussi l'accès).
+  erasedAt              DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

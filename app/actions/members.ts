@@ -50,6 +50,60 @@ export const excludeMember = (userId: string) =>
 export const reactivateMember = (userId: string) =>
   setMemberStatus(userId, "ACTIVE", "member.reactivate");
 
+/**
+ * RGPD — droit à l'effacement (audit du 7 août : "impossible, relations
+ * Prisma en Restrict"). Une vraie suppression de ligne `User` casserait les
+ * FK Restrict de tout ce que ce membre a produit (messages, opportunités,
+ * logs d'audit...) et invaliderait rétroactivement les échanges des AUTRES
+ * membres avec lui. Anonymise à la place : la ligne survit (intégrité
+ * référentielle préservée pour tout le monde), les données personnelles
+ * identifiantes non. `status` passe à CANCELLED au même moment, ce qui coupe
+ * aussi l'accès (voir requireViewer()/requireAdmin() — vérifiés à chaque
+ * appel depuis le sprint du 7 août). Irréversible : contrairement à
+ * suspendre/exclure, aucune action "annuler" n'existe pour ceci.
+ *
+ * Hors périmètre volontaire : les fichiers déjà uploadés sur R2 (avatar,
+ * pièces jointes envoyées) ne sont pas supprimés du bucket — nécessiterait
+ * un accès R2 réel pour être vérifié, pas disponible dans cet environnement
+ * de dev. La note admin interne (`adminNote`) n'est pas effacée non plus :
+ * historique de modération, pas une donnée personnelle du membre lui-même.
+ * Si le membre est admin d'une entreprise, cette action ne réassigne pas
+ * automatiquement ce rôle — utiliser `reassignCompanyAdmin` séparément.
+ */
+export async function eraseUserData(userId: string): Promise<ActionResult> {
+  const { userId: adminId } = await requireAdmin("membres");
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { success: false, error: "Membre introuvable." };
+  if (user.erasedAt) {
+    return { success: false, error: "Les données de ce membre ont déjà été effacées." };
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      name: "Membre supprimé",
+      email: `erased-${userId}@erased.ceosummit.invalid`,
+      passwordHash: null,
+      title: null,
+      bio: null,
+      avatarUrl: null,
+      linkedinUrl: null,
+      phone: null,
+      country: null,
+      sectors: [],
+      status: "CANCELLED",
+      erasedAt: new Date(),
+    },
+  });
+  await prisma.auditLog.create({
+    data: { actorId: adminId, action: "member.erase_data", targetType: "User", targetId: userId },
+  });
+
+  revalidatePath(`/admin/membres/${userId}`);
+  return { success: true, data: undefined };
+}
+
 export async function grantCredits(
   userId: string,
   amount: number,

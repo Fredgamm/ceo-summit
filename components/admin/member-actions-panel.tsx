@@ -9,6 +9,7 @@ import {
   excludeMember,
   reactivateMember,
   grantCredits,
+  eraseUserData,
 } from "@/app/actions/members";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 interface MemberActionsPanelProps {
   userId: string;
   status: MembershipStatus;
+  erasedAt: Date | null;
 }
 
 /**
@@ -26,7 +28,7 @@ interface MemberActionsPanelProps {
  * retiré : le tier vient du rang de l'offre plateforme de l'entreprise,
  * plus un attribut personnel modifiable ici (voir app/actions/members.ts).
  */
-export function MemberActionsPanel({ userId, status }: MemberActionsPanelProps) {
+export function MemberActionsPanel({ userId, status, erasedAt }: MemberActionsPanelProps) {
   const router = useRouter();
   const [creditsAmount, setCreditsAmount] = React.useState("5");
   const [creditsReason, setCreditsReason] = React.useState("");
@@ -110,6 +112,39 @@ export function MemberActionsPanel({ userId, status }: MemberActionsPanelProps) 
             {loading === "credits" ? "…" : "Attribuer"}
           </Button>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-white p-5">
+        <p className="mb-1 text-sm font-bold text-navy">Droit à l&apos;effacement (RGPD)</p>
+        {erasedAt ? (
+          <p className="text-sm text-text-muted">
+            Données effacées le {erasedAt.toLocaleDateString("fr-FR")}.
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-sm text-text-muted">
+              Remplace les données personnelles (nom, email, téléphone, bio...) par des valeurs
+              anonymisées. Le compte est aussi exclu. Irréversible.
+            </p>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!!loading}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    "Effacer définitivement les données personnelles de ce membre ? Cette action est irréversible."
+                  )
+                ) {
+                  return;
+                }
+                run("erase", () => eraseUserData(userId));
+              }}
+            >
+              Effacer les données
+            </Button>
+          </>
+        )}
       </div>
 
       {error && (
