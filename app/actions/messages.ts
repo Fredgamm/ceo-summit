@@ -2,8 +2,8 @@
 
 import { z } from "zod";
 
-import { auth } from "@/auth";
 import { getOrCreateConversation } from "@/lib/conversations";
+import { requireViewer } from "@/lib/require-viewer";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -22,18 +22,23 @@ export async function startConversation(
   otherUserId: string,
   opportunityId?: string
 ): Promise<ActionResult<{ id: string }>> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  // Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+  // "session non révoquée après sanction" : cette action ne vérifiait que la
+  // présence d'une session, jamais `User.status` en base, contrairement aux
+  // autres actions déjà migrées vers `requireViewer()`.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const parsed = startConversationSchema.safeParse({ otherUserId, opportunityId });
   if (!parsed.success) return { success: false, error: "Requête invalide." };
 
-  if (session.user.id === parsed.data.otherUserId) {
+  if (viewer.id === parsed.data.otherUserId) {
     return { success: false, error: "Vous ne pouvez pas vous envoyer un message à vous-même." };
   }
 
   const conversation = await getOrCreateConversation(
-    session.user.id,
+    viewer.id,
     parsed.data.otherUserId,
     parsed.data.opportunityId
   );

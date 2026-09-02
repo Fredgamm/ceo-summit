@@ -26,7 +26,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     prisma.membershipApplication.count({ where: { status: "PENDING" } }),
     prisma.opportunity.count({ where: { status: "PENDING_MODERATION" } }),
   ]);
-  if (!user) redirect("/login");
+  if (!user || user.status !== "ACTIVE") redirect("/login");
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+   * "session non révoquée après sanction" : `adminUser` était déjà relu en
+   * base à chaque rendu (juste en dessous, pour afficher le rôle), mais rien
+   * n'agissait sur `active === false` — un admin désactivé gardait un accès
+   * complet à toutes les pages `/admin/*` jusqu'à l'expiration de son JWT
+   * (24h), alors que `requireAdmin()` (Server Actions) applique déjà cette
+   * règle depuis le 7 août. Ferme le même trou côté navigation de page.
+   */
+  if (adminUser?.active === false) redirect("/login");
 
   return (
     <AdminShell

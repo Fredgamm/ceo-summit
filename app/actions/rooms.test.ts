@@ -22,11 +22,12 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { markRoomAsRead, reportRoomMessage } from "./rooms";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
-const ALL_MEMBERS_VIEWER = {
+const ALL_MEMBERS_VIEWER: Record<string, unknown> = {
   id: "user_1",
   name: "Jean-Pierre",
+  status: "ACTIVE",
   company: { subscription: { status: "ACTIVE", plan: { rank: 0 } } },
-} as never;
+};
 
 describe("markRoomAsRead", () => {
   beforeEach(() => {
@@ -36,7 +37,7 @@ describe("markRoomAsRead", () => {
       id: "room_1",
       minTier: "ALL_MEMBERS",
     } as never);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(ALL_MEMBERS_VIEWER);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(ALL_MEMBERS_VIEWER as never);
   });
 
   it("rejects an unauthenticated call", async () => {
@@ -75,6 +76,21 @@ describe("markRoomAsRead", () => {
     expect(result.success).toBe(false);
     expect(prisma.roomRead.upsert).not.toHaveBeenCalled();
   });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+   * "session non révoquée après sanction" : migré vers `requireViewer()`,
+   * qui relit `User.status` en base au lieu d'un `auth()` brut.
+   */
+  it("rejects a suspended/excluded member even with a valid session", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      ...ALL_MEMBERS_VIEWER,
+      status: "SUSPENDED",
+    } as never);
+    const result = await markRoomAsRead("room_1");
+    expect(result.success).toBe(false);
+    expect(prisma.roomRead.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("reportRoomMessage", () => {
@@ -87,7 +103,7 @@ describe("reportRoomMessage", () => {
       room: { id: "room_1", name: "Énergie & Environnement", minTier: "ALL_MEMBERS" },
     } as never);
     vi.mocked(prisma.roomReport.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue(ALL_MEMBERS_VIEWER);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(ALL_MEMBERS_VIEWER as never);
     process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
   });
 
@@ -100,6 +116,16 @@ describe("reportRoomMessage", () => {
       id: "msg_1",
       deletedAt: null,
       room: { id: "room_1", name: "Énergie", minTier: "CHAIRMAN_ONLY" },
+    } as never);
+    const result = await reportRoomMessage("msg_1");
+    expect(result.success).toBe(false);
+    expect(prisma.roomReport.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a suspended/excluded member even with a valid session", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      ...ALL_MEMBERS_VIEWER,
+      status: "SUSPENDED",
     } as never);
     const result = await reportRoomMessage("msg_1");
     expect(result.success).toBe(false);
