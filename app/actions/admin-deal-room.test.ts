@@ -71,6 +71,13 @@ describe("approveOpportunity / requestOpportunityChanges / rejectOpportunity", (
     );
   });
 
+  it("still reports success when the approval email fails to send", async () => {
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("Resend down"));
+    const result = await approveOpportunity("opp_1");
+    expect(result.success).toBe(true);
+    expect(prisma.opportunity.update).toHaveBeenCalled();
+  });
+
   it("rejects approving an opportunity that isn't pending", async () => {
     vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(
       makeOpportunity({ status: "PUBLISHED" })

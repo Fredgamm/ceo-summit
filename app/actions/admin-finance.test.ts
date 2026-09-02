@@ -97,4 +97,16 @@ describe("sendEventPaymentReminder", () => {
       expect.objectContaining({ to: "fatima@example.com" })
     );
   });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * contrairement aux autres emails admin de ce lot, il n'y a ici aucune
+   * écriture préalable à protéger — envoyer cet email EST l'action, un
+   * échec doit donc être rapporté à l'appelant, pas avalé.
+   */
+  it("reports failure when the reminder email fails to send", async () => {
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("Resend down"));
+    const result = await sendEventPaymentReminder("reg_1");
+    expect(result.success).toBe(false);
+  });
 });

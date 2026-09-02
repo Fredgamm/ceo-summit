@@ -179,6 +179,20 @@ describe("requestPasswordReset", () => {
     expect(result.success).toBe(false);
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+   * "pattern try/catch email admin appliqué de façon inégale" : le token
+   * existe déjà en base à ce stade.
+   */
+  it("still reports success when the reset email fails to send", async () => {
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("Resend down"));
+
+    const result = await requestPasswordReset("jp@example.mg");
+
+    expect(result.success).toBe(true);
+    expect(prisma.passwordResetToken.create).toHaveBeenCalled();
+  });
 });
 
 describe("activateAccount", () => {
@@ -305,5 +319,14 @@ describe("resendActivationLink", () => {
 
     expect(result.success).toBe(false);
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
+  });
+
+  it("still reports success when the activation email fails to send", async () => {
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("Resend down"));
+
+    const result = await resendActivationLink("jp@example.mg");
+
+    expect(result.success).toBe(true);
+    expect(prisma.activationToken.create).toHaveBeenCalled();
   });
 });

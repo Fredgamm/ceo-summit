@@ -121,6 +121,30 @@ describe("candidature admin actions", () => {
       expect(result.success).toBe(false);
       expect(prisma.membershipApplication.findUnique).not.toHaveBeenCalled();
     });
+
+    /**
+     * Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+     * "pattern try/catch email admin appliqué de façon inégale" : le compte
+     * et le token d'activation existent déjà en base à ce stade, un échec
+     * Resend ne doit pas faire échouer l'approbation.
+     */
+    it("still reports success when the activation email fails to send", async () => {
+      vi.mocked(prisma.membershipApplication.findUnique).mockResolvedValue(makeApplication());
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.user.create).mockResolvedValue({
+        id: "user_1",
+        email: "sonia@example.com",
+        name: "Sonia Bouchard",
+      } as never);
+      vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("Resend down"));
+
+      const result = await approveApplication("app_1", "EXECUTIVE");
+
+      expect(result.success).toBe(true);
+      expect(prisma.membershipApplication.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: "APPROVED" }) })
+      );
+    });
   });
 
   describe("refuseApplication", () => {

@@ -86,15 +86,23 @@ export async function approveApplication(applicationId: string, tier: Tier): Pro
     },
   });
 
-  await sendTransactionalEmail({
-    to: user.email,
-    subject: "Votre accès CEO Summit est prêt — activez votre compte",
-    react: ActivationEmail({
-      memberName: user.name,
-      tier: tierLabel(tier),
-      activationUrl: `${process.env.NEXTAUTH_URL}/activer/${token}`,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: user.email,
+      subject: "Votre accès CEO Summit est prêt — activez votre compte",
+      react: ActivationEmail({
+        memberName: user.name,
+        tier: tierLabel(tier),
+        activationUrl: `${process.env.NEXTAUTH_URL}/activer/${token}`,
+      }),
+    });
+  } catch (err) {
+    // Le compte et le token existent déjà en base à ce stade — un échec
+    // d'envoi ne doit pas faire échouer l'approbation (même bug de classe
+    // que celui corrigé sur signup() le 1er août 2026 ; audit du 7 août,
+    // "pattern try/catch email admin appliqué de façon inégale").
+    console.error("[approveApplication] failed to send activation email", err);
+  }
 
   revalidatePath("/admin/candidatures");
   return { success: true, data: undefined };
@@ -138,11 +146,15 @@ export async function refuseApplication(
   });
 
   // RG-07 — the internal reason is never included in this email.
-  await sendTransactionalEmail({
-    to: application.email,
-    subject: "Votre candidature au CEO Summit",
-    react: ApplicationRefusedEmail({ candidateName: application.fullName }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: application.email,
+      subject: "Votre candidature au CEO Summit",
+      react: ApplicationRefusedEmail({ candidateName: application.fullName }),
+    });
+  } catch (err) {
+    console.error("[refuseApplication] failed to send decline email", err);
+  }
 
   revalidatePath("/admin/candidatures");
   return { success: true, data: undefined };
@@ -189,11 +201,15 @@ export async function requestMoreInfo(
     },
   });
 
-  await sendTransactionalEmail({
-    to: application.email,
-    subject: "Complément d'information — votre candidature CEO Summit",
-    react: ApplicationMoreInfoEmail({ candidateName: application.fullName, message }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: application.email,
+      subject: "Complément d'information — votre candidature CEO Summit",
+      react: ApplicationMoreInfoEmail({ candidateName: application.fullName, message }),
+    });
+  } catch (err) {
+    console.error("[requestMoreInfo] failed to send info-request email", err);
+  }
 
   revalidatePath(`/admin/candidatures/${applicationId}`);
   return { success: true, data: undefined };

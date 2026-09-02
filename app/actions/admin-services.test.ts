@@ -60,6 +60,18 @@ describe("approveServiceListing", () => {
     expect(result.success).toBe(false);
     expect(prisma.serviceListing.update).not.toHaveBeenCalled();
   });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+   * "pattern try/catch email admin appliqué de façon inégale" : la
+   * publication et l'audit log sont déjà commités à ce stade.
+   */
+  it("still reports success when the approval email fails to send", async () => {
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("Resend down"));
+    const result = await approveServiceListing("svc_1");
+    expect(result.success).toBe(true);
+    expect(prisma.serviceListing.update).toHaveBeenCalled();
+  });
 });
 
 describe("rejectServiceListing", () => {

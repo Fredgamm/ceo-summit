@@ -36,15 +36,25 @@ export async function sendEventPaymentReminder(registrationId: string): Promise<
   });
   if (!registration) return { success: false, error: "Inscription introuvable." };
 
-  await sendTransactionalEmail({
-    to: registration.user.email,
-    subject: `Paiement en attente — ${registration.event.title}`,
-    react: EventPaymentReminderEmail({
-      memberName: registration.user.name,
-      eventTitle: registration.event.title,
-      amount: registration.event.price,
-    }),
-  });
+  // Contrairement aux autres correctifs de ce lot (audit du 7 août, "pattern
+  // try/catch email admin appliqué de façon inégale") : ici il n'y a aucune
+  // écriture préalable à protéger — l'envoi de cet email EST l'action.
+  // Un échec doit donc être rapporté à l'appelant ({success:false}), pas
+  // avalé comme un effet de bord secondaire.
+  try {
+    await sendTransactionalEmail({
+      to: registration.user.email,
+      subject: `Paiement en attente — ${registration.event.title}`,
+      react: EventPaymentReminderEmail({
+        memberName: registration.user.name,
+        eventTitle: registration.event.title,
+        amount: registration.event.price,
+      }),
+    });
+  } catch (err) {
+    console.error("[sendEventPaymentReminder] failed to send reminder email", err);
+    return { success: false, error: "L'envoi de la relance a échoué. Réessayez." };
+  }
 
   return { success: true, data: undefined };
 }
