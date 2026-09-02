@@ -15,7 +15,10 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * compilation : vérifiés ici contre la liste actuelle, partagé entre
  * `createCompany` et `updateCompany` (même contrainte dans les deux cas).
  */
-async function validateSectorAndCountry(sector: string, country: string): Promise<string | null> {
+export async function validateSectorAndCountry(
+  sector: string,
+  country: string
+): Promise<string | null> {
   const [validSectors, validCountries] = await Promise.all([
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
