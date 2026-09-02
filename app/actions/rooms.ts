@@ -6,6 +6,8 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { meetsRoomAccess } from "@/lib/rooms-query";
+import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import AdminRoomReportAlertEmail from "@/emails/admin-room-report-alert-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -17,6 +19,20 @@ export async function markRoomAsRead(roomId: string): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Non authentifié." };
   if (!idSchema.safeParse(roomId).success) return { success: false, error: "Requête invalide." };
+
+  // Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+  // contrairement à handleJoin/handleMessage (server/socket-server.ts) et à
+  // la route d'upload, cette action ne revérifiait jamais le tier — un id
+  // de salle deviné (cuid) permettait de marquer une salle non autorisée
+  // comme lue. Faible exploitabilité mais gap réel.
+  const [room, viewer] = await Promise.all([
+    prisma.room.findUnique({ where: { id: roomId } }),
+    prisma.user.findUnique({ where: { id: session.user.id }, include: VIEWER_TIER_INCLUDE }),
+  ]);
+  if (!room) return { success: false, error: "Salle introuvable." };
+  if (!viewer || !meetsRoomAccess(getViewerTierFromCompany(viewer.company), room.minTier)) {
+    return { success: false, error: "Accès non autorisé à cette salle." };
+  }
 
   await prisma.roomRead.upsert({
     where: { roomId_userId: { roomId, userId: session.user.id } },
@@ -50,8 +66,16 @@ export async function reportRoomMessage(roomMessageId: string): Promise<ActionRe
     return { success: false, error: "Vous avez déjà signalé ce message." };
   }
 
-  const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const viewer = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: VIEWER_TIER_INCLUDE,
+  });
   if (!viewer) return { success: false, error: "Non authentifié." };
+  // Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+  // même gap que markRoomAsRead, cette fois sur un id de message.
+  if (!meetsRoomAccess(getViewerTierFromCompany(viewer.company), message.room.minTier)) {
+    return { success: false, error: "Accès non autorisé à cette salle." };
+  }
 
   await prisma.roomReport.create({
     data: { roomMessageId, reportedById: viewer.id, status: "PENDING" },

@@ -5,6 +5,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    room: { findUnique: vi.fn() },
     roomRead: { upsert: vi.fn() },
     roomMessage: { findUnique: vi.fn() },
     roomReport: { findFirst: vi.fn(), create: vi.fn() },
@@ -21,11 +22,21 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { markRoomAsRead, reportRoomMessage } from "./rooms";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
+const ALL_MEMBERS_VIEWER = {
+  id: "user_1",
+  name: "Jean-Pierre",
+  company: { subscription: { status: "ACTIVE", plan: { rank: 0 } } },
+} as never;
 
 describe("markRoomAsRead", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      minTier: "ALL_MEMBERS",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(ALL_MEMBERS_VIEWER);
   });
 
   it("rejects an unauthenticated call", async () => {
@@ -42,6 +53,28 @@ describe("markRoomAsRead", () => {
       expect.objectContaining({ where: { roomId_userId: { roomId: "room_1", userId: "user_1" } } })
     );
   });
+
+  it("rejects an unknown room", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue(null);
+    const result = await markRoomAsRead("room_x");
+    expect(result.success).toBe(false);
+    expect(prisma.roomRead.upsert).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * cette action ne revérifiait jamais le tier, contrairement au reste des
+   * chemins de salle.
+   */
+  it("rejects a viewer whose tier can't access the room", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      minTier: "CHAIRMAN_ONLY",
+    } as never);
+    const result = await markRoomAsRead("room_1");
+    expect(result.success).toBe(false);
+    expect(prisma.roomRead.upsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("reportRoomMessage", () => {
@@ -51,14 +84,26 @@ describe("reportRoomMessage", () => {
     vi.mocked(prisma.roomMessage.findUnique).mockResolvedValue({
       id: "msg_1",
       deletedAt: null,
-      room: { id: "room_1", name: "Énergie & Environnement" },
+      room: { id: "room_1", name: "Énergie & Environnement", minTier: "ALL_MEMBERS" },
     } as never);
     vi.mocked(prisma.roomReport.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({
-      id: "user_1",
-      name: "Jean-Pierre",
-    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(ALL_MEMBERS_VIEWER);
     process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+  });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * même gap que markRoomAsRead, cette fois sur un id de message.
+   */
+  it("rejects a viewer whose tier can't access the room", async () => {
+    vi.mocked(prisma.roomMessage.findUnique).mockResolvedValue({
+      id: "msg_1",
+      deletedAt: null,
+      room: { id: "room_1", name: "Énergie", minTier: "CHAIRMAN_ONLY" },
+    } as never);
+    const result = await reportRoomMessage("msg_1");
+    expect(result.success).toBe(false);
+    expect(prisma.roomReport.create).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated call", async () => {
