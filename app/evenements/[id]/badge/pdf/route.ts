@@ -1,4 +1,3 @@
-import QRCode from "qrcode";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
@@ -40,7 +39,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Badge non disponible." }, { status: 403 });
   }
 
-  const qrCodeDataUrl = await QRCode.toDataURL(registration.badgeQrCode, { width: 220, margin: 1 });
   const tier = getViewerTierFromCompany(viewer.company);
   const accessLabel = registration.plan?.name ?? tierLabel(tier);
 
@@ -53,7 +51,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     companyName: viewer.company?.name ?? null,
     avatarUrl: viewer.avatarUrl,
     accessLabel,
-    qrCodeDataUrl,
   });
 
   return new NextResponse(new Uint8Array(pdf), {

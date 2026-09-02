@@ -11,6 +11,11 @@ import { initials } from "@/lib/utils";
  * tailwind.config.ts, mais aucun fichier logo n'existe encore dans le
  * projet — à remplacer dès qu'un visuel est fourni (voir `styles.logoSlot`,
  * actuellement du texte).
+ *
+ * Décision d'architecture (sept. 2026, conception/09) — le QR code est
+ * retiré : ce badge reste une confirmation d'inscription imprimable (nom,
+ * entreprise, offre), sans crédential de check-in physique (un système
+ * externe, Evolia, en devient responsable).
  */
 
 const NAVY_DARK = "#0D1B42";
@@ -86,16 +91,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
   },
-  qrCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-    padding: 10,
-    alignItems: "center",
-  },
-  qrImage: {
-    width: 160,
-    height: 160,
-  },
   footerNote: {
     marginTop: 10,
     fontSize: 7,
@@ -113,7 +108,6 @@ export interface EventBadgePdfProps {
   companyName: string | null;
   avatarUrl: string | null;
   accessLabel: string;
-  qrCodeDataUrl: string;
 }
 
 function EventBadgeDocument(props: EventBadgePdfProps) {
@@ -148,14 +142,7 @@ function EventBadgeDocument(props: EventBadgePdfProps) {
           </View>
         </View>
 
-        <View style={styles.qrCard}>
-          {/* eslint-disable-next-line jsx-a11y/alt-text */}
-          <Image src={props.qrCodeDataUrl} style={styles.qrImage} />
-        </View>
-
-        <Text style={styles.footerNote}>
-          Présentez ce badge (écran ou imprimé) à l&apos;accueil.
-        </Text>
+        <Text style={styles.footerNote}>CEO Summit — Océan Indien</Text>
       </Page>
     </Document>
   );

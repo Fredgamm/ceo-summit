@@ -94,9 +94,6 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
           <Button asChild variant="outline" size="sm">
             <a href={`/api/admin/evenements/${event.id}/export`}>↓ Export CSV</a>
           </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/admin/evenements/${event.id}/checkin`}>Check-in</Link>
-          </Button>
         </div>
       </div>
 
@@ -112,7 +109,6 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                 <th className="px-4 py-2.5 text-left">Offre</th>
                 <th className="px-4 py-2.5 text-left">Inscrit le</th>
                 <th className="px-4 py-2.5 text-left">Paiement</th>
-                <th className="px-4 py-2.5 text-left">Check-in</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -139,15 +135,6 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                           ? ` · ${formatAriary(r.plan.priceAr)}`
                           : event.price > 0 && ` · ${formatAriary(event.price)}`)}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {r.checkedIn ? (
-                      <span className="text-emerald-700">
-                        ✓ {r.checkedInAt && formatDateFr(r.checkedInAt)}
-                      </span>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
                   </td>
                 </tr>
               ))}

@@ -1,6 +1,5 @@
 "use server";
 
-import QRCode from "qrcode";
 import { z } from "zod";
 
 import { auth } from "@/auth";
@@ -118,8 +117,6 @@ export async function registerForEvent(
     throw err;
   }
 
-  const qrCodeDataUrl = await QRCode.toDataURL(registration.badgeQrCode);
-
   try {
     await sendTransactionalEmail({
       to: viewer.email,
@@ -129,7 +126,6 @@ export async function registerForEvent(
         eventTitle: event.title,
         eventDateLabel: formatDateFr(event.date),
         eventLocation: event.isOnline ? "En ligne" : event.location,
-        qrCodeDataUrl,
         requiresManualValidation: method === "VIREMENT",
       }),
     });

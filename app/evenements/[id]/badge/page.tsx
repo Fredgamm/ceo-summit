@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -20,9 +19,12 @@ const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
 /**
  * E3-T04 — badge numérique. "Si l'inscription n'est pas confirmée (paiement
  * en attente), badge non disponible" — redirige plutôt que d'afficher un
- * badge à moitié valide. Fonctionne hors-ligne une fois chargée : le QR
- * code est une image data: URI intégrée à la page, aucun appel réseau au
- * moment de le montrer à l'accueil.
+ * badge à moitié valide.
+ *
+ * Décision d'architecture (sept. 2026, conception/09) — le QR code et le
+ * check-in physique sont retirés du chemin actif (un système externe,
+ * Evolia, en devient responsable) : ce badge reste une confirmation
+ * d'inscription imprimable/consultable, sans QR ni mention d'accueil.
  */
 export default async function EventBadgePage({ params }: { params: { id: string } }) {
   const session = await auth();
@@ -45,7 +47,6 @@ export default async function EventBadgePage({ params }: { params: { id: string 
     redirect(`/evenements/${event.id}`);
   }
 
-  const qrCodeDataUrl = await QRCode.toDataURL(registration.badgeQrCode, { width: 220, margin: 1 });
   const tier = getViewerTierFromCompany(viewer.company);
 
   return (
@@ -68,20 +69,7 @@ export default async function EventBadgePage({ params }: { params: { id: string 
           {tier && <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>}
         </div>
 
-        <div className="mt-6 rounded-xl bg-white p-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={qrCodeDataUrl}
-            alt="QR code du badge"
-            className="mx-auto h-auto w-full max-w-[220px]"
-          />
-        </div>
-
-        <p className="mt-4 text-center text-xs text-white/60">
-          Présentez ce QR code à l&apos;accueil de l&apos;événement.
-        </p>
-
-        <Button asChild variant="secondary" className="mt-4 w-full justify-center">
+        <Button asChild variant="secondary" className="mt-6 w-full justify-center">
           <a href={`/evenements/${event.id}/badge/pdf`} download>
             Télécharger le badge (PDF)
           </a>

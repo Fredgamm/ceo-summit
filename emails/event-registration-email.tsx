@@ -1,4 +1,4 @@
-import { Img, Text } from "@react-email/components";
+import { Text } from "@react-email/components";
 
 import { EmailLayout, emailColors } from "@/emails/components/email-layout";
 
@@ -7,22 +7,23 @@ interface EventRegistrationEmailProps {
   eventTitle: string;
   eventDateLabel: string;
   eventLocation: string;
-  qrCodeDataUrl: string;
   requiresManualValidation: boolean;
 }
 
 /**
- * Sent right after registration is recorded (E3-T03). The QR code (badge)
- * is issued immediately — it doubles as the check-in credential once
- * payment is validated (E3-T04 check-in flow checks `checkedIn` +
- * registration status, not just badge possession).
+ * Sent right after registration is recorded (E3-T03).
+ *
+ * Décision d'architecture (sept. 2026, conception/09) — le QR code de badge
+ * et le check-in physique sont retirés du chemin actif : CEO Summit ne gère
+ * plus les entrées/sorties, un système externe (Evolia) en sera responsable
+ * en aval. `EventRegistration.badgeQrCode`/`checkedIn` restent en base
+ * (non supprimés), simplement plus générés/affichés ici.
  */
 export default function EventRegistrationEmail({
   memberName = "Jean-Pierre Rakoto",
   eventTitle = "CEO Summit 2026 — La Réunion",
   eventDateLabel = "15–16 novembre 2026",
   eventLocation = "Saint-Denis, La Réunion",
-  qrCodeDataUrl = "",
   requiresManualValidation = false,
 }: EventRegistrationEmailProps) {
   return (
@@ -37,27 +38,17 @@ export default function EventRegistrationEmail({
 
       {requiresManualValidation ? (
         <Text style={{ fontSize: 14, lineHeight: 1.6, color: "#4A4A4A", margin: "0 0 16px" }}>
-          Votre paiement par virement est en cours de validation par l&apos;équipe CEO Summit. Votre
-          badge ci-dessous sera activé dès confirmation du paiement.
+          Votre paiement par virement est en cours de validation par l&apos;équipe CEO Summit. Vous
+          recevrez une confirmation dès validation.
         </Text>
       ) : (
         <Text style={{ fontSize: 14, lineHeight: 1.6, color: "#4A4A4A", margin: "0 0 16px" }}>
-          Voici votre badge digital — présentez ce QR code à l&apos;accueil de l&apos;événement.
+          Retrouvez les détails de votre inscription à tout moment depuis votre espace CEO Summit.
         </Text>
       )}
 
-      {qrCodeDataUrl && (
-        <Img
-          src={qrCodeDataUrl}
-          width={160}
-          height={160}
-          alt="Badge QR code"
-          style={{ display: "block", margin: "0 auto 16px" }}
-        />
-      )}
-
       <Text style={{ fontSize: 12, color: "#8A8A8A", margin: "20px 0 0" }}>
-        Vous retrouverez votre badge à tout moment depuis votre espace CEO Summit.
+        À bientôt à {eventTitle} !
       </Text>
     </EmailLayout>
   );

@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
-import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -264,7 +263,6 @@ export async function acceptCompanyInvite(
 
     if (outcome) {
       try {
-        const qrCodeDataUrl = await QRCode.toDataURL(outcome.registration.badgeQrCode);
         await sendTransactionalEmail({
           to: newUser.email,
           subject: `Inscription confirmée — ${outcome.event.title}`,
@@ -273,7 +271,6 @@ export async function acceptCompanyInvite(
             eventTitle: outcome.event.title,
             eventDateLabel: formatDateFr(outcome.event.date),
             eventLocation: outcome.event.isOnline ? "En ligne" : outcome.event.location,
-            qrCodeDataUrl,
             requiresManualValidation: false,
           }),
         });

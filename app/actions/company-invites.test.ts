@@ -210,11 +210,13 @@ describe("acceptCompanyInvite", () => {
 
   /**
    * Correctif (7 août 2026) — jusqu'ici aucun email n'informait le
-   * collaborateur de son inscription automatique (RG-14) ni ne lui
-   * transmettait son badge/QR, contrairement au parcours d'inscription
-   * individuelle (registerForEvent).
+   * collaborateur de son inscription automatique (RG-14), contrairement au
+   * parcours d'inscription individuelle (registerForEvent).
+   *
+   * Décision d'architecture (sept. 2026, conception/09) — cet email ne
+   * transmet plus de QR de check-in (retiré du chemin actif).
    */
-  it("emails the collaborator their badge/QR when auto-registered to the event (RG-14)", async () => {
+  it("emails the collaborator their registration confirmation when auto-registered to the event (RG-14)", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       status: "ACTIVE",
       plan: { id: "plan_1", eventId: "event_1" },
@@ -227,9 +229,7 @@ describe("acceptCompanyInvite", () => {
       location: "Saint-Denis",
       capacity: 300,
     } as never);
-    vi.mocked(prisma.eventRegistration.upsert).mockResolvedValue({
-      badgeQrCode: "qr_token_1",
-    } as never);
+    vi.mocked(prisma.eventRegistration.upsert).mockResolvedValue({} as never);
 
     await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
 

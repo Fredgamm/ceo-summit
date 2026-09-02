@@ -21,7 +21,6 @@ describe("renderEventBadgePdf", () => {
       companyName: "TechOcean",
       avatarUrl: TINY_PNG_DATA_URL,
       accessLabel: "Executive pass",
-      qrCodeDataUrl: TINY_PNG_DATA_URL,
     });
 
     expect(Buffer.isBuffer(pdf)).toBe(true);
@@ -38,7 +37,6 @@ describe("renderEventBadgePdf", () => {
       companyName: null,
       avatarUrl: null,
       accessLabel: "Member",
-      qrCodeDataUrl: TINY_PNG_DATA_URL,
     });
 
     expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");

@@ -1,5 +1,3 @@
-import QRCode from "qrcode";
-
 import { prisma } from "@/lib/prisma";
 import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
@@ -223,7 +221,6 @@ export async function confirmEventRegistrationPaymentCore(
   }
 
   try {
-    const qrCodeDataUrl = await QRCode.toDataURL(registration.badgeQrCode);
     await sendTransactionalEmail({
       to: registration.user.email,
       subject: `Paiement confirmé — ${registration.event.title}`,
@@ -232,7 +229,6 @@ export async function confirmEventRegistrationPaymentCore(
         eventTitle: registration.event.title,
         eventDateLabel: formatDateFr(registration.event.date),
         eventLocation: registration.event.isOnline ? "En ligne" : registration.event.location,
-        qrCodeDataUrl,
         requiresManualValidation: false,
       }),
     });
