@@ -517,6 +517,14 @@ model CompanyInvite {
   token       String              @unique
   status      CompanyInviteStatus @default(PENDING)
   createdAt   DateTime            @default(now())
+  /// Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+  /// contrairement à ActivationToken/PasswordResetToken, cette invitation
+  /// n'expirait jamais — un lien vieux de plusieurs mois restait acceptable,
+  /// et une invitation jamais acceptée occupait indéfiniment un siège dans
+  /// le calcul du plafond de collaborateurs (voir inviteTeammate). Défaut
+  /// posé en application (lib/tokens.ts::COMPANY_INVITE_TTL_MS), comme les
+  /// deux autres tokens.
+  expiresAt   DateTime
   acceptedAt  DateTime?
 
   @@index([companyId, status])

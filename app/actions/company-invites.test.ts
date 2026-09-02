@@ -75,6 +75,47 @@ describe("inviteTeammate", () => {
     );
   });
 
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * CompanyInvite n'avait pas de champ d'expiration, contrairement à
+   * ActivationToken/PasswordResetToken.
+   */
+  it("sets an expiresAt roughly 7 days out", async () => {
+    const before = Date.now();
+    await inviteTeammate("company_1", { name: "Marie Dupont", email: "marie@example.mg" });
+
+    const call = vi.mocked(prisma.companyInvite.create).mock.calls[0][0];
+    const expiresAt = (call.data as { expiresAt: Date }).expiresAt;
+    const deltaMs = expiresAt.getTime() - before;
+    expect(deltaMs).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
+    expect(deltaMs).toBeLessThanOrEqual(7 * 24 * 60 * 60 * 1000 + 1000);
+  });
+
+  it("does not count an expired pending invite against the seat cap", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      id: "company_1",
+      name: "Rakoto Holding",
+      companyAdminId: "admin_user_1",
+      subscription: { plan: { maxTeamMembers: 2 } },
+    } as never);
+    vi.mocked(prisma.user.count).mockResolvedValue(1);
+    // The mock itself doesn't apply the `where` filter — this test only
+    // documents that the count query is scoped to non-expired invites.
+    vi.mocked(prisma.companyInvite.count).mockResolvedValue(0);
+
+    const result = await inviteTeammate("company_1", {
+      name: "Marie Dupont",
+      email: "marie@example.mg",
+    });
+
+    expect(result.success).toBe(true);
+    expect(prisma.companyInvite.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ expiresAt: { gt: expect.any(Date) } }),
+      })
+    );
+  });
+
   it("rejects a caller who isn't the company admin", async () => {
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       id: "company_1",
@@ -165,6 +206,7 @@ describe("acceptCompanyInvite", () => {
       email: "marie@example.mg",
       name: "Marie Dupont",
       status: "PENDING",
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.$transaction).mockResolvedValue([{ id: "user_new" }, {}] as never);
@@ -291,6 +333,26 @@ describe("acceptCompanyInvite", () => {
 
     const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
     expect(result.success).toBe(false);
+  });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+   * cette invitation n'expirait jamais auparavant.
+   */
+  it("rejects an expired invite", async () => {
+    vi.mocked(prisma.companyInvite.findUnique).mockResolvedValue({
+      id: "invite_1",
+      companyId: "company_1",
+      email: "marie@example.mg",
+      name: "Marie Dupont",
+      status: "PENDING",
+      expiresAt: new Date(Date.now() - 1000),
+    } as never);
+
+    const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects when an account already exists for that email", async () => {

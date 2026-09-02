@@ -17,7 +17,9 @@ export default async function InvitationPage({ params }: { params: { token: stri
     include: { company: { select: { name: true } } },
   });
 
-  if (!invite || invite.status !== "PENDING") {
+  const isExpired = invite != null && invite.status === "PENDING" && invite.expiresAt < new Date();
+
+  if (!invite || invite.status !== "PENDING" || isExpired) {
     return (
       <AuthCard title="Invitation invalide">
         <Alert variant="destructive" className="mb-4">
@@ -27,7 +29,9 @@ export default async function InvitationPage({ params }: { params: { token: stri
               ? "Ce lien d'invitation est introuvable."
               : invite.status === "ACCEPTED"
                 ? "Cette invitation a déjà été acceptée."
-                : "Cette invitation a été révoquée."}
+                : isExpired
+                  ? "Cette invitation a expiré. Demandez-en une nouvelle à l'administrateur de votre entreprise."
+                  : "Cette invitation a été révoquée."}
           </AlertDescription>
         </Alert>
         <Button asChild className="w-full justify-center">

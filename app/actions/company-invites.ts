@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { generateSecureToken } from "@/lib/tokens";
+import { generateSecureToken, COMPANY_INVITE_TTL_MS } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
@@ -74,7 +74,11 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   if (applicableCap != null) {
     const [memberCount, pendingInviteCount] = await Promise.all([
       prisma.user.count({ where: { companyId } }),
-      prisma.companyInvite.count({ where: { companyId, status: "PENDING" } }),
+      // Une invitation expirée jamais acceptée ne doit plus occuper de siège
+      // (correctif audit du 7 août — voir la note sur CompanyInvite.expiresAt).
+      prisma.companyInvite.count({
+        where: { companyId, status: "PENDING", expiresAt: { gt: new Date() } },
+      }),
     ]);
     if (memberCount + pendingInviteCount >= applicableCap) {
       return {
@@ -89,7 +93,7 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
     return { success: false, error: "Un compte existe déjà avec cet email." };
   }
   const existingInvite = await prisma.companyInvite.findFirst({
-    where: { companyId, email, status: "PENDING" },
+    where: { companyId, email, status: "PENDING", expiresAt: { gt: new Date() } },
   });
   if (existingInvite) {
     return { success: false, error: "Une invitation est déjà en attente pour cet email." };
@@ -97,7 +101,14 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
 
   const token = generateSecureToken();
   await prisma.companyInvite.create({
-    data: { companyId, email, name: parsed.data.name, invitedById: session.user.id, token },
+    data: {
+      companyId,
+      email,
+      name: parsed.data.name,
+      invitedById: session.user.id,
+      token,
+      expiresAt: new Date(Date.now() + COMPANY_INVITE_TTL_MS),
+    },
   });
 
   const inviteUrl = `${process.env.NEXTAUTH_URL}/invitation/${token}`;
@@ -165,6 +176,13 @@ export async function acceptCompanyInvite(
     return { success: false, error: "Cette invitation a été révoquée." };
   if (invite.status === "ACCEPTED") {
     return { success: false, error: "Cette invitation a déjà été acceptée." };
+  }
+  if (invite.expiresAt < new Date()) {
+    return {
+      success: false,
+      error:
+        "Cette invitation a expiré. Demandez-en une nouvelle à l'administrateur de votre entreprise.",
+    };
   }
 
   const parsedPassword = setPasswordSchema.safeParse({ password, confirmPassword });
