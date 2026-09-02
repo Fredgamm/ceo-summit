@@ -41,9 +41,16 @@ export interface OnboardingStatusItem {
 export function getOnboardingStatus(input: OnboardingStatusInput): OnboardingStatusItem[] {
   const { hasCompany, hasInvites, subscriptionStatus } = input;
 
-  const paymentSubmitted =
-    subscriptionStatus === "PENDING_REVIEW" || subscriptionStatus === "ACTIVE";
-  const accessActive = subscriptionStatus === "ACTIVE";
+  // Correctif (refactor dette technique, sept. 2026) — audit du 7 août :
+  // "getOnboardingStatus n'applique pas la règle RG-12 ('EXPIRED compte
+  // comme ACTIVE')" — seul l'accès à l'édition d'évènement expire
+  // (lib/company-subscription-status.ts), les avantages plateforme
+  // persistent, comme déjà traité par getViewerTierFromCompany
+  // (lib/plan-access.ts). Sans ce correctif, une entreprise à l'accès
+  // pleinement actif voyait sa checklist prétendre le contraire dès que le
+  // statut brut passait à EXPIRED.
+  const accessActive = subscriptionStatus === "ACTIVE" || subscriptionStatus === "EXPIRED";
+  const paymentSubmitted = subscriptionStatus === "PENDING_REVIEW" || accessActive;
   const planSelected = subscriptionStatus != null && subscriptionStatus !== "DRAFT";
 
   return [

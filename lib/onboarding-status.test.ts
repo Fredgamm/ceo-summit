@@ -59,4 +59,18 @@ describe("getOnboardingStatus", () => {
     });
     expect(items.every((i) => i.done)).toBe(true);
   });
+
+  /**
+   * Correctif (refactor dette technique, sept. 2026) — audit du 7 août,
+   * RG-12 : EXPIRED ne concerne que l'accès à l'édition d'évènement, les
+   * avantages plateforme (et donc l'onboarding lui-même) restent actifs.
+   */
+  it("still marks every item done once the subscription is EXPIRED (RG-12)", () => {
+    const items = getOnboardingStatus({
+      hasCompany: true,
+      hasInvites: true,
+      subscriptionStatus: "EXPIRED",
+    });
+    expect(items.every((i) => i.done)).toBe(true);
+  });
 });
