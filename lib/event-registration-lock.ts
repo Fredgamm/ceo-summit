@@ -1,5 +1,17 @@
 import { withRedisLock, LockBusyError } from "@/lib/redis-lock";
 
+/**
+ * Correctif (refactor dette technique, sept. 2026) — audit du 7 août, §3
+ * "EventRegistration.status + .paymentStatus maintenus synchronisés 'par
+ * convention' dans 3 fichiers différents" (lib/payment-confirmations.ts,
+ * app/actions/company-invites.ts) : le même couple littéral était répété à
+ * chaque confirmation de paiement plutôt que déclaré une seule fois.
+ */
+export const CONFIRMED_PAID_EVENT_REGISTRATION = {
+  status: "CONFIRMED",
+  paymentStatus: "PAID",
+} as const;
+
 export class RegistrationLockBusyError extends Error {
   constructor() {
     super(

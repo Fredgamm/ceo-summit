@@ -12,7 +12,10 @@ import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
 import { seatCap } from "@/lib/company-payment-amount";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
-import { withEventRegistrationLock } from "@/lib/event-registration-lock";
+import {
+  withEventRegistrationLock,
+  CONFIRMED_PAID_EVENT_REGISTRATION,
+} from "@/lib/event-registration-lock";
 import { BCRYPT_ROUNDS } from "@/lib/password";
 import { formatDateFr } from "@/lib/utils";
 import CompanyInviteEmail from "@/emails/company-invite-email";
@@ -256,8 +259,8 @@ export async function acceptCompanyInvite(
 
       const registration = await prisma.eventRegistration.upsert({
         where: { eventId_userId: { eventId, userId: newUser.id } },
-        update: { status: "CONFIRMED", paymentStatus: "PAID", planId },
-        create: { eventId, userId: newUser.id, status: "CONFIRMED", paymentStatus: "PAID", planId },
+        update: { ...CONFIRMED_PAID_EVENT_REGISTRATION, planId },
+        create: { eventId, userId: newUser.id, ...CONFIRMED_PAID_EVENT_REGISTRATION, planId },
       });
       return { registration, event };
     });

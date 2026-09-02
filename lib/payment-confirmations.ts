@@ -1,7 +1,10 @@
 import QRCode from "qrcode";
 
 import { prisma } from "@/lib/prisma";
-import { withEventRegistrationLock } from "@/lib/event-registration-lock";
+import {
+  withEventRegistrationLock,
+  CONFIRMED_PAID_EVENT_REGISTRATION,
+} from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
@@ -109,12 +112,11 @@ export async function confirmCompanyPaymentCore(
           .map((u) =>
             prisma.eventRegistration.upsert({
               where: { eventId_userId: { eventId, userId: u.id } },
-              update: { status: "CONFIRMED", paymentStatus: "PAID", planId: plan.id },
+              update: { ...CONFIRMED_PAID_EVENT_REGISTRATION, planId: plan.id },
               create: {
                 eventId,
                 userId: u.id,
-                status: "CONFIRMED",
-                paymentStatus: "PAID",
+                ...CONFIRMED_PAID_EVENT_REGISTRATION,
                 planId: plan.id,
               },
             })
@@ -205,7 +207,7 @@ export async function confirmEventRegistrationPaymentCore(
 
   const { count } = await prisma.eventRegistration.updateMany({
     where: { id: registrationId, paymentStatus: "PENDING" },
-    data: { status: "CONFIRMED", paymentStatus: "PAID" },
+    data: CONFIRMED_PAID_EVENT_REGISTRATION,
   });
   if (count === 0) {
     return { success: false, error: "Ce paiement a déjà été traité." };
