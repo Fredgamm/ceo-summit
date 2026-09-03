@@ -197,22 +197,12 @@ async function main() {
   });
 
   // ── Catalogue de sponsoring 2026 (validé 3 septembre 2026, coté en €) ──
-  // Offre technique jamais vendue directement (isSelfService: false) — sert
-  // uniquement de linkedPlatformPlanId aux offres de groupement ci-dessous
-  // (avantages permanents hérités à la confirmation de paiement, RG-13).
-  const groupementPlatformBase = await prisma.plan.upsert({
-    where: { slug: "acces-plateforme-groupement" },
-    update: {},
-    create: {
-      name: "Accès plateforme (groupement)",
-      slug: "acces-plateforme-groupement",
-      priceAr: 0,
-      rank: 1,
-      isActive: true,
-      isSelfService: false,
-    },
-  });
-
+  // Réflexion du 3 septembre 2026 : plus de distinction offre
+  // plateforme/évènement pour ce MVP — une seule offre, l'accès à la
+  // plateforme est identique pour tous les payants, seule varie la limite
+  // de collaborateurs (`maxTeamMembers`). `pricingMode: FIXED_BUNDLE`
+  // impératif ici (sinon computeDueAmount facturerait priceAr × nombre
+  // déclaré au lieu du forfait fixe).
   const eurToArRate = await convertEurToAr(1);
 
   const sponsoringOffers = [
@@ -239,6 +229,7 @@ async function main() {
         slug: offer.slug,
         priceEur: offer.priceEur,
         priceAr: Math.round(offer.priceEur * eurToArRate),
+        pricingMode: "FIXED_BUNDLE",
         maxTeamMembers: offer.maxTeamMembers,
         rank: index + 2,
         isActive: true,
@@ -268,9 +259,9 @@ async function main() {
     },
   });
 
-  // Groupement +10/+30 — tarif dégressif par participant, réservé aux
-  // offres d'évènement (voir conception/11, 3 septembre 2026 : le mode
-  // PER_PARTICIPANT est "sans objet" pour une offre plateforme).
+  // Groupement +10/+30 — offres plateforme comme les autres (pas d'eventId),
+  // seul le mode de tarification change : PER_PARTICIPANT avec un seuil
+  // minimum, pour le tarif dégressif par personne.
   const groupementOffers = [
     {
       name: "Groupement +10 pers",
@@ -297,12 +288,10 @@ async function main() {
       create: {
         name: offer.name,
         slug: offer.slug,
-        eventId: summit.id,
         priceEur: offer.priceEur,
         priceAr: Math.round(offer.priceEur * eurToArRate),
         pricingMode: "PER_PARTICIPANT",
         minParticipants: offer.minParticipants,
-        linkedPlatformPlanId: groupementPlatformBase.id,
         rank: offer.rank,
         isActive: true,
         isSelfService: true,

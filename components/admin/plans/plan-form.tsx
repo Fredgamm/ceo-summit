@@ -268,27 +268,25 @@ export function PlanForm({
           />
         </div>
 
-        {isEventOffer && (
-          <div className="flex flex-col gap-1.5">
-            <Label>Mode de tarification</Label>
-            <Select
-              value={values.pricingMode ?? "PER_PARTICIPANT"}
-              onValueChange={(v) => set("pricingMode", v as PlanPricingMode)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PER_PARTICIPANT">Par participant</SelectItem>
-                <SelectItem value="FIXED_BUNDLE">Forfait fixe</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+        <div className="flex flex-col gap-1.5">
+          <Label>Mode de tarification</Label>
+          <Select
+            value={values.pricingMode ?? "FIXED_BUNDLE"}
+            onValueChange={(v) => set("pricingMode", v as PlanPricingMode)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="FIXED_BUNDLE">Forfait fixe</SelectItem>
+              <SelectItem value="PER_PARTICIPANT">Par participant (tarif dégressif)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        {isEventOffer && values.pricingMode === "FIXED_BUNDLE" ? (
+        {isEventOffer && values.pricingMode === "FIXED_BUNDLE" && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-included-seats">Nombre de sièges inclus</Label>
+            <Label htmlFor="plan-included-seats">Nombre de sièges inclus (cette édition)</Label>
             <Input
               id="plan-included-seats"
               type="number"
@@ -297,11 +295,13 @@ export function PlanForm({
               onChange={(e) => set("includedSeats", e.target.value ? Number(e.target.value) : null)}
             />
             <p className="text-xs text-text-muted">
-              Le prix (Ar) ci-dessus est un forfait total pour ce nombre de sièges, quel que soit le
-              nombre exact de collaborateurs inscrits.
+              Réservé aux offres d&apos;évènement — pour une offre plateforme, le nombre max de
+              collaborateurs ci-dessous suffit.
             </p>
           </div>
-        ) : isEventOffer ? (
+        )}
+
+        {values.pricingMode === "PER_PARTICIPANT" && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="plan-min-participants">
               Seuil minimum de participants (prix dégressif)
@@ -319,7 +319,7 @@ export function PlanForm({
               Le prix (Ar) ci-dessus s&apos;applique par participant, pas au total.
             </p>
           </div>
-        ) : null}
+        )}
 
         {!isEventOffer && (
           <div className="flex flex-col gap-1.5">

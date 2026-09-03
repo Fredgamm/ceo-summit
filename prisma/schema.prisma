@@ -338,19 +338,22 @@ model Plan {
   /// offre d'évènement, lire ce champ sur `linkedPlatformPlan`, jamais sur
   /// l'offre d'évènement elle-même (4 août 2026, split plateforme/évènement).
   maxTeamMembers       Int?
-  /// Seuil minimum de participants pour bénéficier du tarif dégressif d'une
-  /// offre d'évènement en mode `PER_PARTICIPANT` (ex. "Light corporate pass"
-  /// exige ≥10 collaborateurs). Sans objet en mode `FIXED_BUNDLE`. `null` =
+  /// Seuil minimum de participants pour bénéficier du tarif dégressif en
+  /// mode `PER_PARTICIPANT` (ex. Groupement +10 pers exige ≥11
+  /// collaborateurs déclarés). Sans objet en mode `FIXED_BUNDLE`. `null` =
   /// aucun seuil.
   minParticipants      Int?
-  /// 4 août 2026 (split plateforme/évènement) — mode de facturation d'une
-  /// offre d'évènement : `PER_PARTICIPANT` (priceAr × nombre déclaré,
-  /// comportement historique) ou `FIXED_BUNDLE` (priceAr fixe pour
-  /// `includedSeats` sièges). `null` pour une offre plateforme (`eventId`
-  /// nul) — elle ne se vend jamais directement par ce mécanisme.
+  /// 4 août 2026 (split plateforme/évènement), généralisé le 3 septembre
+  /// 2026 à toute offre (plus seulement les offres d'évènement) — mode de
+  /// facturation : `PER_PARTICIPANT` (priceAr × nombre déclaré) ou
+  /// `FIXED_BUNDLE` (priceAr fixe, éventuellement pour `includedSeats`
+  /// sièges sur une offre d'évènement — une offre plateforme utilise plutôt
+  /// `maxTeamMembers`, son quota permanent). `null` = comportement
+  /// historique (équivalent à `PER_PARTICIPANT` dans computeDueAmount).
   pricingMode          PlanPricingMode?
-  /// Nombre de sièges inclus dans le forfait — pertinent uniquement en mode
-  /// `FIXED_BUNDLE`.
+  /// Nombre de sièges inclus dans le forfait d'une offre d'évènement en mode
+  /// `FIXED_BUNDLE` — sur une offre plateforme, `maxTeamMembers` suffit déjà
+  /// à représenter ce quota, ce champ n'a pas besoin d'être renseigné.
   includedSeats        Int?
   /// 4 août 2026 (split plateforme/évènement) — référence, pour une offre
   /// d'évènement (`eventId` non nul), vers l'offre plateforme (`eventId`
