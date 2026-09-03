@@ -31,7 +31,7 @@ const SECTIONS: {
     label: string;
     icon: typeof Home;
     section: AdminSection;
-    badgeKey?: "candidatures" | "opportunities";
+    badgeKey?: "candidatures" | "opportunities" | "companies";
   }[];
 }[] = [
   {
@@ -74,7 +74,13 @@ const SECTIONS: {
   {
     title: "Opérations",
     items: [
-      { href: "/admin/entreprises", label: "Entreprises", icon: Building2, section: "entreprises" },
+      {
+        href: "/admin/entreprises",
+        label: "Entreprises",
+        icon: Building2,
+        section: "entreprises",
+        badgeKey: "companies",
+      },
       { href: "/admin/adhesions", label: "Adhésions", icon: IdCard, section: "adhesions" },
       {
         href: "/admin/communications",
@@ -96,7 +102,7 @@ const SECTIONS: {
 
 interface AdminSidebarProps {
   admin: { name: string; email: string; role: AdminRole };
-  badges?: Partial<Record<"candidatures" | "opportunities", number>>;
+  badges?: Partial<Record<"candidatures" | "opportunities" | "companies", number>>;
 }
 
 /**

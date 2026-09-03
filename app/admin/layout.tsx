@@ -20,18 +20,24 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await auth();
   if (!session?.user?.id || !session.user.isPlatformAdmin) redirect("/dashboard");
 
-  const [user, adminUser, pendingCandidatures, pendingOpportunities] = await Promise.all([
-    prisma.user.findUnique({ where: { id: session.user.id } }),
-    prisma.adminUser.findUnique({ where: { userId: session.user.id } }),
-    prisma.membershipApplication.count({ where: { status: "PENDING" } }),
-    prisma.opportunity.count({ where: { status: "PENDING_MODERATION" } }),
-  ]);
+  const [user, adminUser, pendingCandidatures, pendingOpportunities, pendingCompanies] =
+    await Promise.all([
+      prisma.user.findUnique({ where: { id: session.user.id } }),
+      prisma.adminUser.findUnique({ where: { userId: session.user.id } }),
+      prisma.membershipApplication.count({ where: { status: "PENDING" } }),
+      prisma.opportunity.count({ where: { status: "PENDING_MODERATION" } }),
+      prisma.companySubscription.count({ where: { status: "PENDING_REVIEW" } }),
+    ]);
   if (!user) redirect("/login");
 
   return (
     <AdminShell
       admin={{ name: user.name, email: user.email, role: adminUser?.role ?? "MODERATEUR" }}
-      badges={{ candidatures: pendingCandidatures, opportunities: pendingOpportunities }}
+      badges={{
+        candidatures: pendingCandidatures,
+        opportunities: pendingOpportunities,
+        companies: pendingCompanies,
+      }}
       title="Tableau de bord"
     >
       {children}
