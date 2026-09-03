@@ -7,6 +7,7 @@ import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getSignedDownloadUrl } from "@/lib/r2";
 import { Badge } from "@/components/ui/badge";
 import { CompanyPaymentActions } from "@/components/admin/entreprises/company-payment-actions";
+import { PaymentProofViewer } from "@/components/admin/entreprises/payment-proof-viewer";
 import { ReassignAdminForm } from "@/components/admin/entreprises/reassign-admin-form";
 import { formatAriary, formatDateFr } from "@/lib/utils";
 
@@ -128,14 +129,9 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
             )}
           </dl>
           {proofUrl ? (
-            <a
-              href={proofUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-block text-sm font-medium text-navy-mid"
-            >
-              Voir la preuve de paiement →
-            </a>
+            <div className="mt-3">
+              <PaymentProofViewer url={proofUrl} fileName={latestPendingPayment.proofFileKey} />
+            </div>
           ) : (
             <p className="mt-3 text-xs text-text-muted">
               Aperçu de la preuve indisponible (stockage R2 non configuré dans cet environnement).
