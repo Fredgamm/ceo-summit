@@ -70,12 +70,36 @@ interface CompanyPathViewer {
   } | null;
 }
 
+/** Statuts qui donnent déjà accès à la plateforme (RG-12) — si on atterrit
+ * quand même ici avec l'un de ces statuts, ce n'est pas l'entreprise qui
+ * bloque : c'est la session (JWT) de ce navigateur qui date d'avant la
+ * validation et n'a jamais été rafraîchie. */
+const ALREADY_GRANTED_STATUSES = ["ACTIVE", "EXPIRED"];
+
 function CompanyPath({ viewer }: { viewer: CompanyPathViewer }) {
+  const subscriptionStatus = viewer.company?.subscription?.status;
   const statusItems = getOnboardingStatus({
     hasCompany: true,
     hasInvites: (viewer.company?.invites.length ?? 0) > 0,
-    subscriptionStatus: viewer.company?.subscription?.status as never,
+    subscriptionStatus: subscriptionStatus as never,
   });
+
+  if (subscriptionStatus && ALREADY_GRANTED_STATUSES.includes(subscriptionStatus)) {
+    return (
+      <>
+        <p className="mb-6 text-sm leading-relaxed text-text-mid">
+          Bonne nouvelle : votre accès a été validé entretemps ! Votre session actuelle date
+          d&apos;avant cette validation — reconnectez-vous pour en profiter.
+        </p>
+        <SignOutButton className="mb-4 flex w-full items-center justify-center gap-2 rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white shadow-card hover:bg-navy-mid">
+          Me reconnecter
+        </SignOutButton>
+        <div className="mb-2 text-left">
+          <OnboardingStatusList items={statusItems} />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -86,7 +110,7 @@ function CompanyPath({ viewer }: { viewer: CompanyPathViewer }) {
       <div className="mb-6 text-left">
         <OnboardingStatusList items={statusItems} />
       </div>
-      {viewer.company?.subscription?.status === "PENDING_PAYMENT" && (
+      {subscriptionStatus === "PENDING_PAYMENT" && (
         <Button asChild className="mb-4 w-full justify-center">
           <Link href="/entreprise/paiement">Soumettre le paiement</Link>
         </Button>

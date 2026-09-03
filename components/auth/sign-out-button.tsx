@@ -10,11 +10,21 @@ import { LogOut } from "lucide-react";
  * renvoyait immédiatement l'utilisateur "déconnecté" vers /dashboard. Ce
  * composant est le point d'appel réel — utilisé ici et dans MemberSidebar.
  */
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: React.ReactNode;
+}) {
   return (
     <button type="button" onClick={() => signOut({ callbackUrl: "/login" })} className={className}>
-      <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
-      <span>Déconnexion</span>
+      {children ?? (
+        <>
+          <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
+          <span>Déconnexion</span>
+        </>
+      )}
     </button>
   );
 }
