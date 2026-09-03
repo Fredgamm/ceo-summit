@@ -51,6 +51,7 @@ export function PaymentProofForm({
   minParticipants,
   pricingMode,
   includedSeats,
+  maxTeamMembers,
   headcount,
 }: {
   companySubscriptionId: string;
@@ -58,6 +59,8 @@ export function PaymentProofForm({
   minParticipants: number | null;
   pricingMode: PlanPricingMode | null;
   includedSeats: number | null;
+  /** Repli d'affichage pour une offre plateforme, qui n'a pas d'`includedSeats` propre. */
+  maxTeamMembers: number | null;
   /** Nombre de collaborateurs déjà rattachés — utilisé seulement comme valeur de départ suggérée. */
   headcount: number;
 }) {
@@ -159,7 +162,9 @@ export function PaymentProofForm({
 
       <div className="rounded-md border border-border bg-surface p-4">
         {isFixedBundle ? (
-          <p className="text-sm text-text-mid">Forfait — {includedSeats ?? "?"} sièges inclus</p>
+          <p className="text-sm text-text-mid">
+            Forfait — {includedSeats ?? maxTeamMembers ?? "?"} sièges inclus
+          </p>
         ) : (
           <p className="text-sm text-text-mid">
             {declaredCount} participant(s) × {formatAriary(priceAr)}

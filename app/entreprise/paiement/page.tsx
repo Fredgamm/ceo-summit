@@ -79,7 +79,7 @@ export default async function CompanyPaymentPage({
             <p className="mb-4 text-sm text-text-muted">
               {formatAriary(subscription.plan.priceAr)}
               {subscription.plan.pricingMode === "FIXED_BUNDLE"
-                ? ` — forfait ${subscription.plan.includedSeats ?? "?"} sièges`
+                ? ` — forfait ${subscription.plan.includedSeats ?? subscription.plan.maxTeamMembers ?? "?"} sièges`
                 : " / participant / an"}
               . Choisissez votre mode de paiement, uploadez une preuve (bordereau, reçu, capture) —
               l&apos;équipe CEO Summit valide manuellement chaque paiement.
@@ -102,6 +102,7 @@ export default async function CompanyPaymentPage({
                   minParticipants={subscription.plan.minParticipants}
                   pricingMode={subscription.plan.pricingMode}
                   includedSeats={subscription.plan.includedSeats}
+                  maxTeamMembers={subscription.plan.maxTeamMembers}
                   headcount={headcount}
                 />
               </div>
