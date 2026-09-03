@@ -259,46 +259,12 @@ async function main() {
     },
   });
 
-  // Groupement +10/+30 — offres plateforme comme les autres (pas d'eventId),
-  // seul le mode de tarification change : PER_PARTICIPANT avec un seuil
-  // minimum, pour le tarif dégressif par personne.
-  const groupementOffers = [
-    {
-      name: "Groupement +10 pers",
-      slug: "groupement-10",
-      priceEur: 650,
-      minParticipants: 11,
-      rank: 9,
-      displayOrder: 8,
-    },
-    {
-      name: "Groupement +30 pers",
-      slug: "groupement-30",
-      priceEur: 500,
-      minParticipants: 31,
-      rank: 10,
-      displayOrder: 9,
-    },
-  ];
-
-  for (const offer of groupementOffers) {
-    await prisma.plan.upsert({
-      where: { slug: offer.slug },
-      update: {},
-      create: {
-        name: offer.name,
-        slug: offer.slug,
-        priceEur: offer.priceEur,
-        priceAr: Math.round(offer.priceEur * eurToArRate),
-        pricingMode: "PER_PARTICIPANT",
-        minParticipants: offer.minParticipants,
-        rank: offer.rank,
-        isActive: true,
-        isSelfService: true,
-        displayOrder: offer.displayOrder,
-      },
-    });
-  }
+  // Groupement +10/+30 pers (validé 3 septembre 2026) — PAS un forfait
+  // catalogue à seeder : c'est une grille tarifaire de référence (650€/pers
+  // pour ≥11, 500€/pers pour ≥31) que l'admin utilise pour créer, à chaque
+  // négociation de groupe, une offre FIXED_BUNDLE dédiée à ce prospect
+  // (prix et effectif fixés par l'admin, pas déclarés par l'entreprise —
+  // même principe que Partenaire Institutionnel). Rien à seeder ici.
 
   // E10 — agenda dynamique multi-salles (5 août 2026) : remplace l'ancien
   // `program` (JSON libre) par des sessions structurées. Le créneau
