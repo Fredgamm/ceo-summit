@@ -28,6 +28,16 @@ const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
 ];
 
 /**
+ * 3 septembre 2026 — carte bancaire et mobile money passeront par Evolia
+ * (redirection, pas de preuve à uploader), mais ce pont n'est pas encore
+ * construit côté Evolia (conception/11 §3, en attente de leur réponse) :
+ * en attendant, ces deux méthodes restent sélectionnables mais ne mènent
+ * à aucun parcours de paiement fonctionnel — seuls virement et chèque
+ * (validation manuelle par preuve) sont opérationnels aujourd'hui.
+ */
+const EVOLIA_METHODS: PaymentMethod[] = ["CARTE_BANCAIRE", "MOBILE_MONEY"];
+
+/**
  * 4 août 2026 (RG-04/RG-06, split plateforme/évènement) — pour une offre
  * `PER_PARTICIPANT`, le montant vient du nombre de participants **déclaré**
  * par l'entreprise (saisi ici, pas déduit du headcount réel — voir
@@ -68,6 +78,7 @@ export function PaymentProofForm({
   const declaredCount = isFixedBundle ? 1 : Number(declaredParticipants) || 0;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
   const amount = computeDueAmount(plan, declaredCount);
+  const isEvoliaMethod = EVOLIA_METHODS.includes(method);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -179,29 +190,41 @@ export function PaymentProofForm({
         </Select>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="payment-proof">Preuve de paiement (image ou PDF) *</Label>
-        <Input
-          id="payment-proof"
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={handleFileChange}
-          disabled={uploading}
-        />
-        {uploading && <p className="text-xs text-text-muted">Envoi en cours…</p>}
-        {proof && <p className="text-xs text-emerald-700">✓ {proof.name}</p>}
-      </div>
+      {isEvoliaMethod ? (
+        <Alert variant="gold">
+          <AlertDescription>
+            Ce mode de paiement sera bientôt disponible — vous serez alors redirigé vers Evolia pour
+            le finaliser, sans preuve à fournir. En attendant, choisissez virement bancaire ou
+            chèque.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="payment-proof">Preuve de paiement (image ou PDF) *</Label>
+            <Input
+              id="payment-proof"
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+            {uploading && <p className="text-xs text-text-muted">Envoi en cours…</p>}
+            {proof && <p className="text-xs text-emerald-700">✓ {proof.name}</p>}
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="payment-comment">Commentaire (optionnel)</Label>
-        <Textarea
-          id="payment-comment"
-          rows={3}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          maxLength={1000}
-        />
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="payment-comment">Commentaire (optionnel)</Label>
+            <Textarea
+              id="payment-comment"
+              rows={3}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              maxLength={1000}
+            />
+          </div>
+        </>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -211,7 +234,7 @@ export function PaymentProofForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || !meetsThreshold}
+        disabled={submitting || uploading || !meetsThreshold || isEvoliaMethod}
         className="justify-center"
       >
         {submitting ? "Envoi…" : "Soumettre pour validation"}
