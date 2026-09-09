@@ -10,6 +10,9 @@ vi.mock("@/lib/prisma", () => ({
     eventRegistration: {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    companyPayment: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
   },
 }));
 
@@ -23,6 +26,10 @@ vi.mock("@/lib/payment-confirmations", () => ({
   confirmCreditPurchaseCore: vi.fn().mockResolvedValue({ success: true, data: undefined }),
 }));
 
+vi.mock("@/lib/rate-limit", () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, retryAfterSec: 0 }),
+}));
+
 import { POST } from "./route";
 import { prisma } from "@/lib/prisma";
 import {
@@ -30,6 +37,7 @@ import {
   confirmCreditPurchaseCore,
   confirmEventRegistrationPaymentCore,
 } from "@/lib/payment-confirmations";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const SECRET = "test-payment-secret";
 
@@ -49,6 +57,8 @@ describe("POST /api/webhooks/payments", () => {
     vi.clearAllMocks();
     vi.mocked(prisma.webhookLog.create).mockResolvedValue({ id: "log_1" } as never);
     vi.mocked(prisma.eventRegistration.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(null as never);
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, retryAfterSec: 0 });
     vi.mocked(confirmCompanyPaymentCore).mockResolvedValue({
       success: true,
       data: { companyId: "company_1" },
@@ -200,5 +210,62 @@ describe("POST /api/webhooks/payments", () => {
 
     expect(res.status).toBe(200);
     expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+  });
+
+  it("rejects with 429 when the per-IP rate limit is exceeded, before touching the database", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: false, retryAfterSec: 30 });
+
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(429);
+    expect(prisma.webhookLog.create).not.toHaveBeenCalled();
+    expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+  });
+
+  it("still confirms but logs a warning when the confirmed amount differs from the amount due", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ amount: 2500000 } as never);
+
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+      amount: 1,
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(confirmCompanyPaymentCore).toHaveBeenCalledWith("payment_1", null);
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "PROCESSED",
+          error: expect.stringContaining("Montant confirmé"),
+        }),
+      })
+    );
+  });
+
+  it("confirms without a warning when the confirmed amount matches the amount due", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ amount: 2500000 } as never);
+
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+      amount: 2500000,
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "PROCESSED", error: null }),
+      })
+    );
   });
 });
