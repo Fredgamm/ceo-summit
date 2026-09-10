@@ -42,7 +42,7 @@ export default function CompanyPaymentRejectedEmail({
       >
         {reason}
       </Text>
-      <a href="https://app.ceosummit.mg/entreprise/paiement" style={emailButtonStyle}>
+      <a href="https://app.ceo-summit.mg/entreprise/paiement" style={emailButtonStyle}>
         Soumettre un nouveau paiement
       </a>
     </EmailLayout>

@@ -78,7 +78,7 @@ describe("publishOpportunity", () => {
   });
 
   it("creates a PENDING_MODERATION opportunity and alerts the admin", async () => {
-    process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+    process.env.ADMIN_ALERT_EMAIL = "admin@ceo-summit.mg";
     vi.mocked(prisma.opportunity.create).mockResolvedValue({
       id: "opp_1",
       title: VALID_PUBLISH_INPUT.title,
@@ -118,7 +118,7 @@ describe("publishOpportunity", () => {
    * était déjà créée en base (l'utilisateur croyait sa soumission perdue).
    */
   it("still creates the opportunity even if the admin alert email fails", async () => {
-    process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+    process.env.ADMIN_ALERT_EMAIL = "admin@ceo-summit.mg";
     vi.mocked(prisma.opportunity.create).mockResolvedValue({
       id: "opp_1",
       title: VALID_PUBLISH_INPUT.title,

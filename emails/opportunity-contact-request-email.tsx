@@ -16,7 +16,7 @@ interface OpportunityContactRequestEmailProps {
 export default function OpportunityContactRequestEmail({
   initiatorName = "Jean-Pierre Rakoto",
   opportunityTitle = "Partenariat distribution solaire — Nord Madagascar",
-  opportunityUrl = "https://app.ceosummit.mg/deal-room/opp_1",
+  opportunityUrl = "https://app.ceo-summit.mg/deal-room/opp_1",
 }: OpportunityContactRequestEmailProps) {
   return (
     <EmailLayout preview={`${initiatorName} souhaite vous contacter — ${opportunityTitle}`}>

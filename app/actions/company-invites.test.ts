@@ -50,7 +50,7 @@ const SESSION = { user: { id: "admin_user_1" } } as never;
 describe("inviteTeammate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.NEXTAUTH_URL = "https://app.ceosummit.mg";
+    process.env.NEXTAUTH_URL = "https://app.ceo-summit.mg";
     vi.mocked(auth).mockResolvedValue(SESSION);
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       id: "company_1",

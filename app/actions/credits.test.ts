@@ -60,7 +60,7 @@ describe("requestCreditPurchase", () => {
   });
 
   it("creates a pending purchase and alerts the admin", async () => {
-    process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+    process.env.ADMIN_ALERT_EMAIL = "admin@ceo-summit.mg";
     vi.mocked(prisma.creditPackPrice.findUnique).mockResolvedValue({
       credits: 5,
       priceAr: 100000,

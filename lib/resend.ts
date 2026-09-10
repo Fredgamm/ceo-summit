@@ -59,7 +59,7 @@ interface SendTransactionalEmailArgs {
  * this so we have one place to add retry/logging/bounce handling later.
  */
 export async function sendTransactionalEmail({ to, subject, react }: SendTransactionalEmailArgs) {
-  const from = process.env.EMAIL_FROM || "noreply@ceosummit.mg";
+  const from = process.env.EMAIL_FROM || "noreply@ceo-summit.mg";
 
   if (isMailDevMode()) {
     const html = await render(react);

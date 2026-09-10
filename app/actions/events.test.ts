@@ -125,7 +125,7 @@ describe("registerForEvent", () => {
   });
 
   it("alerts the admin when the payment method is virement", async () => {
-    process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+    process.env.ADMIN_ALERT_EMAIL = "admin@ceo-summit.mg";
     vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent());
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
 

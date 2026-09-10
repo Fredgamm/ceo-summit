@@ -16,7 +16,7 @@ interface ActivationEmailProps {
 export default function ActivationEmail({
   memberName = "Jean-Pierre Rakoto",
   tier = "Executive",
-  activationUrl = "https://app.ceosummit.mg/activer/token",
+  activationUrl = "https://app.ceo-summit.mg/activer/token",
 }: ActivationEmailProps) {
   return (
     <EmailLayout preview={`Votre accès CEO Summit ${tier} est prêt — activez votre compte`}>
@@ -32,8 +32,8 @@ export default function ActivationEmail({
         Activer mon compte
       </a>
       <Text style={{ fontSize: 12, color: "#8A8A8A", margin: "20px 0 0" }}>
-        Ce lien est valable 72 heures. Passé ce délai, vous pourrez en demander un nouveau
-        depuis la page de connexion.
+        Ce lien est valable 72 heures. Passé ce délai, vous pourrez en demander un nouveau depuis la
+        page de connexion.
       </Text>
     </EmailLayout>
   );

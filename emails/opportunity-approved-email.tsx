@@ -10,7 +10,7 @@ interface OpportunityApprovedEmailProps {
 /** E8-T06 — "Valider et publier" : l'opportunité est immédiatement visible par les membres. */
 export default function OpportunityApprovedEmail({
   opportunityTitle = "Partenariat distribution solaire — Nord Madagascar",
-  opportunityUrl = "https://app.ceosummit.mg/deal-room/opp_1",
+  opportunityUrl = "https://app.ceo-summit.mg/deal-room/opp_1",
 }: OpportunityApprovedEmailProps) {
   return (
     <EmailLayout preview={`Votre opportunité "${opportunityTitle}" est publiée`}>

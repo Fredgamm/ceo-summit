@@ -12,7 +12,7 @@ interface CompanyInviteEmailProps {
 export default function CompanyInviteEmail({
   inviteeName = "Jean-Pierre Rakoto",
   companyName = "Rakoto Holding",
-  inviteUrl = "https://app.ceosummit.mg/invitation/token",
+  inviteUrl = "https://app.ceo-summit.mg/invitation/token",
 }: CompanyInviteEmailProps) {
   return (
     <EmailLayout preview={`${companyName} vous invite à rejoindre CEO Summit`}>

@@ -139,7 +139,7 @@ seules, pas besoin de les lancer à la main.
 
 ## 7. Charger les données de démonstration (optionnel)
 
-Pour avoir un compte admin (`admin@ceosummit.mg` / `ChangeMe123!`) et des
+Pour avoir un compte admin (`admin@ceo-summit.mg` / `ChangeMe123!`) et des
 données de démo, comme en local :
 
 ```bash

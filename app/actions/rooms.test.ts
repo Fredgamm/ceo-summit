@@ -58,7 +58,7 @@ describe("reportRoomMessage", () => {
       id: "user_1",
       name: "Jean-Pierre",
     } as never);
-    process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+    process.env.ADMIN_ALERT_EMAIL = "admin@ceo-summit.mg";
   });
 
   it("rejects an unauthenticated call", async () => {

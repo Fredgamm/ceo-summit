@@ -22,7 +22,7 @@ cp .env.example .env
 # 4. Schéma + client Prisma
 npm run db:migrate      # applique prisma/migrations/ (baseline "init" déjà committée)
 npm run db:generate
-npm run db:seed        # crée admin@ceosummit.mg / ChangeMe123! et demo@ceosummit.mg / Demo1234!
+npm run db:seed        # crée admin@ceo-summit.mg / ChangeMe123! et demo@ceo-summit.mg / Demo1234!
 
 # 5. Lancer le serveur de dev
 npm run dev
@@ -37,10 +37,10 @@ temps réel (compteur en ligne, messages live) et affichent une erreur de connex
 
 ## Comptes de test (après seed)
 
-| Rôle                | Email              | Mot de passe |
-| ------------------- | ------------------ | ------------ |
-| Admin (Super Admin) | admin@ceosummit.mg | ChangeMe123! |
-| Membre (Chairman)   | demo@ceosummit.mg  | Demo1234!    |
+| Rôle                | Email               | Mot de passe |
+| ------------------- | ------------------- | ------------ |
+| Admin (Super Admin) | admin@ceo-summit.mg | ChangeMe123! |
+| Membre (Chairman)   | demo@ceo-summit.mg  | Demo1234!    |
 
 **Changer ces mots de passe avant tout déploiement staging/prod.**
 

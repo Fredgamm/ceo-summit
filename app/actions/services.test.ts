@@ -46,7 +46,7 @@ describe("submitServiceListing", () => {
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
     vi.mocked(prisma.serviceListing.findFirst).mockResolvedValue(null);
-    process.env.ADMIN_ALERT_EMAIL = "admin@ceosummit.mg";
+    process.env.ADMIN_ALERT_EMAIL = "admin@ceo-summit.mg";
   });
 
   it("rejects an unauthenticated call", async () => {

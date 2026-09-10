@@ -84,10 +84,10 @@ async function main() {
   // ── Admin account ──
   const adminPassword = await bcrypt.hash("ChangeMe123!", BCRYPT_ROUNDS);
   const admin = await prisma.user.upsert({
-    where: { email: "admin@ceosummit.mg" },
+    where: { email: "admin@ceo-summit.mg" },
     update: {},
     create: {
-      email: "admin@ceosummit.mg",
+      email: "admin@ceo-summit.mg",
       name: "Admin CEO Summit",
       passwordHash: adminPassword,
       role: Role.ADMIN,
@@ -109,10 +109,10 @@ async function main() {
   // l'entreprise (lib/plan-access.ts::getViewerTierFromCompany).
   const demoPassword = await bcrypt.hash("Demo1234!", BCRYPT_ROUNDS);
   const demoMember = await prisma.user.upsert({
-    where: { email: "demo@ceosummit.mg" },
+    where: { email: "demo@ceo-summit.mg" },
     update: {},
     create: {
-      email: "demo@ceosummit.mg",
+      email: "demo@ceo-summit.mg",
       name: "Sarah Razanamahery",
       title: "CEO",
       passwordHash: demoPassword,
@@ -696,8 +696,8 @@ async function main() {
   });
 
   console.log("✅ Seed complete.");
-  console.log("   Admin:  admin@ceosummit.mg / ChangeMe123!");
-  console.log("   Member: demo@ceosummit.mg / Demo1234!");
+  console.log("   Admin:  admin@ceo-summit.mg / ChangeMe123!");
+  console.log("   Member: demo@ceo-summit.mg / Demo1234!");
 }
 
 main()

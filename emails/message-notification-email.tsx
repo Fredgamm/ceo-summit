@@ -15,7 +15,7 @@ interface MessageNotificationEmailProps {
 export default function MessageNotificationEmail({
   senderName = "Rabe Andriamahefa",
   preview = "Bonjour, je voulais revenir sur votre intérêt pour notre opportunité…",
-  conversationUrl = "https://app.ceosummit.mg/messagerie/conv_1",
+  conversationUrl = "https://app.ceo-summit.mg/messagerie/conv_1",
 }: MessageNotificationEmailProps) {
   return (
     <EmailLayout preview={`${senderName} vous a envoyé un message`}>

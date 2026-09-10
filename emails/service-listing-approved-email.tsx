@@ -9,7 +9,7 @@ interface ServiceListingApprovedEmailProps {
 
 export default function ServiceListingApprovedEmail({
   serviceTitle = "Audit stratégique & accompagnement levée de fonds",
-  serviceUrl = "https://app.ceosummit.mg/catalogue/services/svc_1",
+  serviceUrl = "https://app.ceo-summit.mg/catalogue/services/svc_1",
 }: ServiceListingApprovedEmailProps) {
   return (
     <EmailLayout preview={`Votre fiche "${serviceTitle}" est publiée`}>
