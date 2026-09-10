@@ -68,6 +68,11 @@ services:
     command: sh -c "npx prisma migrate deploy && npm run start"
     ports:
       - "127.0.0.1:3020:3000"
+    volumes:
+      # Interim disk-based file storage while R2 isn't configured yet (see
+      # lib/r2.ts) — without this, every `up -d --build` (a fresh container)
+      # would silently drop already-uploaded payment proofs/avatars/etc.
+      - ceo_summit_local_storage:/app/.local-storage
 
   socket:
     build:
@@ -89,3 +94,4 @@ services:
 volumes:
   ceo_summit_pg_data:
   ceo_summit_redis_data:
+  ceo_summit_local_storage:

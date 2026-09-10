@@ -12,7 +12,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
  */
 let client: S3Client | null = null;
 
-function isR2Configured(): boolean {
+export function isR2Configured(): boolean {
   return Boolean(
     process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
   );
@@ -36,12 +36,18 @@ function getR2Client(): S3Client {
 }
 
 /**
- * Repli développement local uniquement (jamais en production — voir chaque
- * appelant ci-dessous) : sans identifiants R2 dans `.env`, tout upload
- * échouait silencieusement pour quiconque testait l'appli en local (aucun
- * compte R2 de dev n'existe). Écrit sur disque hors de `public/` (fichiers
- * "privés" comme publics) et sert via /api/dev/local-storage, qui refuse de
- * répondre si NODE_ENV !== "development".
+ * Repli disque : actif dès que R2 n'est pas configuré, en dev comme en
+ * prod. Introduit pour le dev local (sans lui, tout upload échouait
+ * silencieusement sans compte R2 de dev), et volontairement réutilisé tel
+ * quel pour le premier déploiement prod (9 sept 2026) — R2 pas encore
+ * configuré (voir DEPLOY.md), un seul VPS/domaine, pas encore de vrai
+ * besoin de CDN. Écrit sur disque hors de `public/` (fichiers "privés"
+ * comme publics) et sert via /api/dev/local-storage — le nom garde le
+ * préfixe "dev" par cohérence avec le code existant, mais la route répond
+ * tant que R2 n'est pas configuré, pas seulement en développement (voir ce
+ * fichier). Monté sur un volume Docker nommé en prod (docker-compose.prod.yml)
+ * pour survivre aux redéploiements — à remplacer par R2 avant que le volume
+ * de fichiers ne devienne un vrai problème d'échelle/CDN/backup.
  */
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), ".local-storage");
 
@@ -75,7 +81,7 @@ export async function uploadObject({
   body,
   contentType,
 }: UploadObjectArgs): Promise<string> {
-  if (!isR2Configured() && process.env.NODE_ENV === "development") {
+  if (!isR2Configured()) {
     await writeLocalObject(bucket, key, body, contentType);
     return localObjectUrl(bucket, key);
   }
@@ -115,7 +121,7 @@ export async function uploadPrivateObject({
   body,
   contentType,
 }: UploadPrivateObjectArgs): Promise<{ key: string }> {
-  if (!isR2Configured() && process.env.NODE_ENV === "development") {
+  if (!isR2Configured()) {
     await writeLocalObject(bucket, key, body, contentType);
     return { key };
   }
@@ -138,7 +144,7 @@ export async function getSignedDownloadUrl(
   key: string,
   expiresInSeconds = 3600
 ): Promise<string> {
-  if (!isR2Configured() && process.env.NODE_ENV === "development") {
+  if (!isR2Configured()) {
     return localObjectUrl(bucket, key);
   }
 

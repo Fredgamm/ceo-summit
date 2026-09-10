@@ -4,16 +4,19 @@ import path from "path";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
+import { isR2Configured } from "@/lib/r2";
 
 const LOCAL_STORAGE_DIR = path.join(process.cwd(), ".local-storage");
 
 /**
- * Sert les fichiers écrits par le repli local de lib/r2.ts (identifiants R2
- * absents en développement). N'existe qu'en dev — en production, R2 est
- * toujours configuré et cette route ne doit jamais être atteignable.
+ * Sert les fichiers écrits par le repli local de lib/r2.ts. Répond tant que
+ * R2 n'est pas configuré (dev, ou prod avant que R2 soit mis en place — voir
+ * le commentaire au-dessus de LOCAL_STORAGE_DIR dans lib/r2.ts) ; une fois
+ * R2 configuré, cette route redevient injoignable (404), cohérent avec
+ * lib/r2.ts qui n'écrit plus localement dans ce cas.
  */
 export async function GET(req: Request, { params }: { params: { segments: string[] } }) {
-  if (process.env.NODE_ENV !== "development") {
+  if (isR2Configured()) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
 
