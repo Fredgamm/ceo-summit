@@ -50,6 +50,18 @@ const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+/**
+ * lib/r2.ts's local-storage fallback serves files (payment proofs, avatars…)
+ * from our own origin instead of R2's, so the global `X-Frame-Options: DENY`
+ * / `frame-ancestors 'none'` below — meant to stop OTHER sites framing our
+ * pages — also blocks components/admin/entreprises/payment-proof-viewer.tsx
+ * from previewing a PDF in its own same-origin <iframe>. Once R2 is
+ * configured this route stops being reachable (see lib/r2.ts) and files are
+ * framed straight from R2's domain, so this override becomes moot rather
+ * than harmful to remove.
+ */
+const LOCAL_STORAGE_FRAME_CSP = CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -76,6 +88,13 @@ const nextConfig = {
             value: "max-age=63072000; includeSubDomains; preload",
           },
           { key: "Content-Security-Policy", value: CSP },
+        ],
+      },
+      {
+        source: "/api/dev/local-storage/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: LOCAL_STORAGE_FRAME_CSP },
         ],
       },
     ];
