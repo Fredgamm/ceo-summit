@@ -139,19 +139,24 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
   });
 
   const activationUrl = `${process.env.NEXTAUTH_URL}/activer/${token}`;
-  await sendTransactionalEmail({
-    to: user.email,
-    subject: "Votre nouveau lien d'activation CEO Summit",
-    react: ActivationEmail({
-      memberName: user.name,
-      // Correctif (7 août 2026, audit) — utilisait une copie locale de
-      // tierLabel() dupliquant lib/utils.ts, avec un texte de repli anglais
-      // ("Member") détonnant dans un email entièrement en français —
-      // désormais "Membre", cohérent avec le reste de la plateforme.
-      tier: tierLabel(undefined),
-      activationUrl,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: user.email,
+      subject: "Votre nouveau lien d'activation CEO Summit",
+      react: ActivationEmail({
+        memberName: user.name,
+        // Correctif (7 août 2026, audit) — utilisait une copie locale de
+        // tierLabel() dupliquant lib/utils.ts, avec un texte de repli anglais
+        // ("Member") détonnant dans un email entièrement en français —
+        // désormais "Membre", cohérent avec le reste de la plateforme.
+        tier: tierLabel(undefined),
+        activationUrl,
+      }),
+    });
+  } catch (err) {
+    console.error("[resendActivationLink] failed to send activation email", err);
+    return { success: false, error: "Échec de l'envoi de l'email. Réessayez plus tard." };
+  }
 
   return { success: true, data: undefined };
 }
@@ -192,11 +197,18 @@ export async function requestPasswordReset(email: string): Promise<ActionResult>
     });
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/reinitialiser/${token}`;
-    await sendTransactionalEmail({
-      to: user.email,
-      subject: "Réinitialisez votre mot de passe CEO Summit",
-      react: ResetPasswordEmail({ memberName: user.name, resetUrl }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: user.email,
+        subject: "Réinitialisez votre mot de passe CEO Summit",
+        react: ResetPasswordEmail({ memberName: user.name, resetUrl }),
+      });
+    } catch (err) {
+      // Toujours "success" ci-dessous (anti-enumeration, voir la doc de
+      // cette fonction) — un échec d'envoi ne doit donc pas non plus le
+      // révéler en faisant échouer l'action.
+      console.error("[requestPasswordReset] failed to send reset email", err);
+    }
   }
 
   return { success: true, data: undefined };

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
+import { isResendConfigured } from "@/lib/resend";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { Badge } from "@/components/ui/badge";
@@ -92,7 +93,7 @@ export default async function AdminParametresPage({
     tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
   } else if (activeTab === "integrations") {
     const paymentWebhookConfigured = Boolean(process.env.PAYMENT_WEBHOOK_SECRET);
-    const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+    const resendConfigured = isResendConfigured();
     const r2Configured = Boolean(
       process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
     );

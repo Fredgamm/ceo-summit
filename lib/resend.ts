@@ -29,8 +29,15 @@ function getResendClient(apiKey: string): Resend {
  */
 function isMailDevMode(): boolean {
   if (process.env.MAIL_DEV_MODE === "true") return true;
+  return !isResendConfigured();
+}
+
+/** Whether a real (non-placeholder) Resend key is present — used by the
+ * admin settings page to show accurate "Connecté"/"Non configuré" status,
+ * independent of the MAIL_DEV_MODE override above. */
+export function isResendConfigured(): boolean {
   const key = process.env.RESEND_API_KEY;
-  return !key || key === "re_xxxxxxxxxxxx";
+  return Boolean(key) && key !== "re_xxxxxxxxxxxx";
 }
 
 let devTransport: nodemailer.Transporter | null = null;

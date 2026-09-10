@@ -50,14 +50,18 @@ export async function approveOpportunity(opportunityId: string): Promise<ActionR
     },
   });
 
-  await sendTransactionalEmail({
-    to: opportunity.author.email,
-    subject: `Votre opportunité "${opportunity.title}" est publiée`,
-    react: OpportunityApprovedEmail({
-      opportunityTitle: opportunity.title,
-      opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: opportunity.author.email,
+      subject: `Votre opportunité "${opportunity.title}" est publiée`,
+      react: OpportunityApprovedEmail({
+        opportunityTitle: opportunity.title,
+        opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
+      }),
+    });
+  } catch (err) {
+    console.error("[approveOpportunity] failed to send approval email", err);
+  }
 
   revalidatePath("/admin/deal-room");
   revalidatePath("/deal-room");
@@ -91,11 +95,15 @@ export async function requestOpportunityChanges(
     },
   });
 
-  await sendTransactionalEmail({
-    to: opportunity.author.email,
-    subject: `Modifications demandées — ${opportunity.title}`,
-    react: OpportunityChangesRequestedEmail({ opportunityTitle: opportunity.title, message }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: opportunity.author.email,
+      subject: `Modifications demandées — ${opportunity.title}`,
+      react: OpportunityChangesRequestedEmail({ opportunityTitle: opportunity.title, message }),
+    });
+  } catch (err) {
+    console.error("[requestOpportunityChanges] failed to send email", err);
+  }
 
   revalidatePath("/admin/deal-room");
   return { success: true, data: undefined };
@@ -128,11 +136,15 @@ export async function rejectOpportunity(
     },
   });
 
-  await sendTransactionalEmail({
-    to: opportunity.author.email,
-    subject: `Votre opportunité "${opportunity.title}" n'a pas été retenue`,
-    react: OpportunityRefusedEmail({ opportunityTitle: opportunity.title, reason }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: opportunity.author.email,
+      subject: `Votre opportunité "${opportunity.title}" n'a pas été retenue`,
+      react: OpportunityRefusedEmail({ opportunityTitle: opportunity.title, reason }),
+    });
+  } catch (err) {
+    console.error("[rejectOpportunity] failed to send rejection email", err);
+  }
 
   revalidatePath("/admin/deal-room");
   return { success: true, data: undefined };

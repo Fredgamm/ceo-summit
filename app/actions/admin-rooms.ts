@@ -122,11 +122,17 @@ export async function resolveRoomReport(
       data: { deletedAt: new Date() },
     });
   } else if (decision === "RESOLVED_WARNED") {
-    await sendTransactionalEmail({
-      to: roomMessage.author.email,
-      subject: `Avertissement — salle ${roomMessage.room.name}`,
-      react: MemberRoomWarningEmail({ roomName: roomMessage.room.name }),
-    });
+    try {
+      await sendTransactionalEmail({
+        to: roomMessage.author.email,
+        subject: `Avertissement — salle ${roomMessage.room.name}`,
+        react: MemberRoomWarningEmail({ roomName: roomMessage.room.name }),
+      });
+    } catch (err) {
+      // Ne doit pas empêcher l'enregistrement de la décision de modération
+      // ci-dessous.
+      console.error("[resolveRoomReport] failed to send warning email", err);
+    }
   } else if (decision === "RESOLVED_EXCLUDED") {
     const days = durationDays && durationDays > 0 ? durationDays : 7;
     await prisma.roomSuspension.create({

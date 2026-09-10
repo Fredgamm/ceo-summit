@@ -36,15 +36,20 @@ export async function sendEventPaymentReminder(registrationId: string): Promise<
   });
   if (!registration) return { success: false, error: "Inscription introuvable." };
 
-  await sendTransactionalEmail({
-    to: registration.user.email,
-    subject: `Paiement en attente — ${registration.event.title}`,
-    react: EventPaymentReminderEmail({
-      memberName: registration.user.name,
-      eventTitle: registration.event.title,
-      amount: registration.event.price,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: registration.user.email,
+      subject: `Paiement en attente — ${registration.event.title}`,
+      react: EventPaymentReminderEmail({
+        memberName: registration.user.name,
+        eventTitle: registration.event.title,
+        amount: registration.event.price,
+      }),
+    });
+  } catch (err) {
+    console.error("[sendEventPaymentReminder] failed to send reminder email", err);
+    return { success: false, error: "Échec de l'envoi de l'email. Réessayez plus tard." };
+  }
 
   return { success: true, data: undefined };
 }

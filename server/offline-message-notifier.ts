@@ -40,15 +40,23 @@ export async function sendOfflineEmailIfNeeded(
   ]);
   if (!recipient || !sender) return;
 
-  await sendTransactionalEmail({
-    to: recipient.email,
-    subject: `Nouveau message de ${sender.name}`,
-    react: MessageNotificationEmail({
-      senderName: sender.name,
-      preview,
-      conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversationId}`,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: recipient.email,
+      subject: `Nouveau message de ${sender.name}`,
+      react: MessageNotificationEmail({
+        senderName: sender.name,
+        preview,
+        conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversationId}`,
+      }),
+    });
+  } catch (err) {
+    // Ne marque pas lastEmailNotifiedAt ci-dessous si l'envoi échoue, pour
+    // qu'un prochain message hors-ligne retente plutôt que de rester
+    // silencieux pendant toute la fenêtre anti-spam.
+    console.error("[sendOfflineEmailIfNeeded] failed to send notification email", err);
+    return;
+  }
 
   await prisma.conversation.update({
     where: { id: conversationId },

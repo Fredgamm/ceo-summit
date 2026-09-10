@@ -33,14 +33,18 @@ export async function approveServiceListing(listingId: string): Promise<ActionRe
     },
   });
 
-  await sendTransactionalEmail({
-    to: listing.author.email,
-    subject: `Votre fiche "${listing.title}" est publiée`,
-    react: ServiceListingApprovedEmail({
-      serviceTitle: listing.title,
-      serviceUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/catalogue/services/${listingId}`,
-    }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: listing.author.email,
+      subject: `Votre fiche "${listing.title}" est publiée`,
+      react: ServiceListingApprovedEmail({
+        serviceTitle: listing.title,
+        serviceUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/catalogue/services/${listingId}`,
+      }),
+    });
+  } catch (err) {
+    console.error("[approveServiceListing] failed to send approval email", err);
+  }
 
   revalidatePath("/admin/catalogue-services");
   revalidatePath("/catalogue/services");
@@ -69,11 +73,15 @@ export async function rejectServiceListing(listingId: string): Promise<ActionRes
     },
   });
 
-  await sendTransactionalEmail({
-    to: listing.author.email,
-    subject: `Votre fiche "${listing.title}" n'a pas été retenue`,
-    react: ServiceListingRefusedEmail({ serviceTitle: listing.title }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: listing.author.email,
+      subject: `Votre fiche "${listing.title}" n'a pas été retenue`,
+      react: ServiceListingRefusedEmail({ serviceTitle: listing.title }),
+    });
+  } catch (err) {
+    console.error("[rejectServiceListing] failed to send rejection email", err);
+  }
 
   revalidatePath("/admin/catalogue-services");
   return { success: true, data: undefined };

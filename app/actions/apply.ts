@@ -70,11 +70,17 @@ export async function submitApplication(input: ApplicationInput): Promise<Action
     },
   });
 
-  await sendTransactionalEmail({
-    to: email,
-    subject: "Votre candidature au CEO Summit a bien été reçue",
-    react: ApplicationReceivedEmail({ candidateName: parsed.data.fullName }),
-  });
+  try {
+    await sendTransactionalEmail({
+      to: email,
+      subject: "Votre candidature au CEO Summit a bien été reçue",
+      react: ApplicationReceivedEmail({ candidateName: parsed.data.fullName }),
+    });
+  } catch (err) {
+    // La candidature est déjà enregistrée à ce stade — un échec d'envoi ne
+    // doit pas faire croire au candidat que sa soumission a échoué.
+    console.error("[submitApplication] failed to send confirmation email", err);
+  }
 
   return { success: true, data: undefined };
 }
