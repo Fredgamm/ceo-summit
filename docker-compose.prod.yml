@@ -1,8 +1,18 @@
 # Production stack for the OVH VPS — separate from docker-compose.yml
 # (which stays as-is for local dev: Postgres/Redis/Adminer only, no app).
 #
-# Usage on the VPS:
+# Usage on the VPS — two phases, not a single `up -d --build`:
+#   docker compose -f docker-compose.prod.yml up -d postgres redis
+#   # wait for postgres to report healthy (docker compose ps)
 #   docker compose -f docker-compose.prod.yml up -d --build
+# Why: app/demande-acces/page.tsx is deliberately built as ISR (reads
+# Referential rows via Prisma), so `next build` needs a reachable, migrated(-
+# enough, an empty table is fine) Postgres already running *during* the
+# `app`/`socket` image build, not just at container start — see the
+# `build.network` below, which is what lets that build reach `postgres` by
+# its service name. Building before Postgres exists fails with "Environment
+# variable not found: DATABASE_URL" — really a live-connection problem, not
+# a missing-var one.
 #
 # This VPS is shared with other projects (own Postgres/Redis on the host's
 # standard ports, own nginx already bound to 80/443) — see DEPLOY.md. So,
@@ -12,6 +22,10 @@
 # `app`/`socket` publish to 127.0.0.1-only ports that the host's own nginx
 # (one vhost per project, /etc/nginx/conf.d/ceo-summit.conf) reverse-proxies
 # to.
+networks:
+  default:
+    name: ceo-summit-net
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -38,8 +52,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: ceo-summit-net
       args:
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+        DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
     env_file: .env
     depends_on:
@@ -57,8 +73,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: ceo-summit-net
       args:
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+        DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
     env_file: .env
     depends_on:

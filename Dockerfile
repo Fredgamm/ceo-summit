@@ -23,6 +23,13 @@ COPY . .
 # hardcoded localhost default from lib/socket-client.ts in every deployment.
 ARG NEXT_PUBLIC_SOCKET_URL
 ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+# /demande-acces reads Referential rows via Prisma and is deliberately built
+# as ISR (see app/demande-acces/page.tsx), so `next build` prerenders it once
+# at image-build time — it needs a reachable, migrated Postgres right here,
+# not just this connection string. The caller must build with `--network`
+# pointed at a compose network where that Postgres is already up.
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
 RUN npx prisma generate
 RUN npm run build
 
