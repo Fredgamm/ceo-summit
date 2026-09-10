@@ -1,0 +1,7 @@
+[Unit]
+Description=CEO Summit — nightly Postgres + uploads backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ceo-summit/deploy/backup.sh

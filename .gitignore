@@ -20,6 +20,9 @@
 # lib/r2.ts local dev fallback (R2 credentials absent) — files written to disk
 /.local-storage/
 
+# deploy/backup.sh output on the VPS — never committed
+/backups/
+
 # next-pwa — generated service worker (E9-T01), rebuilt on every `next build`
 /public/sw.js
 /public/sw.js.map

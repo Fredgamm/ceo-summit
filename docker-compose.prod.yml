@@ -72,7 +72,9 @@ services:
       # Interim disk-based file storage while R2 isn't configured yet (see
       # lib/r2.ts) — without this, every `up -d --build` (a fresh container)
       # would silently drop already-uploaded payment proofs/avatars/etc.
-      - ceo_summit_local_storage:/app/.local-storage
+      # Bind mount (not a named volume) so it's a known, backupable path on
+      # the host — see deploy/backup.sh — at /opt/ceo-summit/.local-storage.
+      - ./.local-storage:/app/.local-storage
 
   socket:
     build:
@@ -94,4 +96,3 @@ services:
 volumes:
   ceo_summit_pg_data:
   ceo_summit_redis_data:
-  ceo_summit_local_storage:

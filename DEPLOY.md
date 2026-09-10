@@ -194,15 +194,40 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-## 11. Sauvegardes Postgres
+## 11. Sauvegardes — Postgres + fichiers uploadés
+
+Automatisées via `deploy/backup.sh` (dump Postgres + tar de
+`.local-storage`, le repli disque de `lib/r2.ts` tant que R2 n'est pas
+configuré), déclenché chaque nuit à 3h30 par un
+timer systemd — **pas de cron** : ce Debian ne l'a pas installé, et
+certbot utilise déjà un timer systemd pour son propre renouvellement sur
+ce VPS, donc on reste cohérent avec ça.
+
+Installation (une seule fois) :
 
 ```bash
-docker compose -f docker-compose.prod.yml exec postgres \
-  pg_dump -U ceosummit ceo_summit > backup-$(date +%Y%m%d).sql
+chmod +x deploy/backup.sh
+cp deploy/ceo-summit-backup.service deploy/ceo-summit-backup.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ceo-summit-backup.timer
 ```
 
-À automatiser via un cron sur le VPS une fois le déploiement stabilisé —
-aucune sauvegarde automatique n'est configurée par défaut.
+Vérifier / lancer manuellement :
+
+```bash
+systemctl list-timers ceo-summit-backup.timer
+systemctl start ceo-summit-backup.service   # lance une sauvegarde tout de suite
+ls -la backups/
+```
+
+Rétention : 14 jours glissants, purge automatique dans le script.
+
+**Limite connue** : les sauvegardes atterrissent sur le même disque que les
+données qu'elles protègent (`/opt/ceo-summit/backups`, partition dédiée
+CEO Summit sur ce VPS) — ça protège contre une suppression accidentelle ou
+une commande Docker malheureuse, **pas** contre une panne physique du
+disque. Pour ça, activer un snapshot/sauvegarde OVH du VPS entier depuis le
+manager OVH (hors de portée de ce dépôt).
 
 ## 12. CI/CD (déploiement automatique)
 
