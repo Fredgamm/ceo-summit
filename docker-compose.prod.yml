@@ -4,10 +4,14 @@
 # Usage on the VPS:
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# Postgres/Redis are NOT published to the public internet (127.0.0.1 only,
-# or not published at all) — only Nginx exposes a port, and only 80 for now
-# (IP-only deployment, no TLS yet — see DEPLOY.md for the HTTPS migration
-# path once a domain is pointed here).
+# This VPS is shared with other projects (own Postgres/Redis on the host's
+# standard ports, own nginx already bound to 80/443) — see DEPLOY.md. So,
+# unlike a dedicated single-tenant VPS: Postgres/Redis are never published
+# to the host at all (only reachable by `app`/`socket` over the internal
+# Docker network, by service name), there's no nginx service here, and
+# `app`/`socket` publish to 127.0.0.1-only ports that the host's own nginx
+# (one vhost per project, /etc/nginx/conf.d/ceo-summit.conf) reverse-proxies
+# to.
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,8 +22,6 @@ services:
       POSTGRES_DB: ceo_summit
     volumes:
       - ceo_summit_pg_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ceosummit}"]
       interval: 5s
@@ -31,8 +33,6 @@ services:
     restart: unless-stopped
     volumes:
       - ceo_summit_redis_data:/data
-    ports:
-      - "127.0.0.1:6379:6379"
 
   app:
     build:
@@ -50,8 +50,8 @@ services:
     # see the EPERM/offline-migration notes in README.md for why that
     # distinction mattered throughout this project's local dev history).
     command: sh -c "npx prisma migrate deploy && npm run start"
-    expose:
-      - "3000"
+    ports:
+      - "127.0.0.1:3020:3000"
 
   socket:
     build:
@@ -65,20 +65,8 @@ services:
       - postgres
       - redis
     command: npx tsx server/socket-server.ts
-    expose:
-      - "3001"
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    depends_on:
-      - app
-      - socket
-    volumes:
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "80:80"
-      # - "443:443"   # décommenter une fois un domaine + certificat en place, voir DEPLOY.md
+      - "127.0.0.1:3021:3001"
 
 volumes:
   ceo_summit_pg_data:
