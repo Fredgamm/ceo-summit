@@ -17,6 +17,12 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# NEXT_PUBLIC_* vars are inlined into the browser bundle at `next build` time,
+# but .env is excluded from the Docker build context (.dockerignore) — so it
+# must come in as a build ARG instead, or the client falls back to the
+# hardcoded localhost default from lib/socket-client.ts in every deployment.
+ARG NEXT_PUBLIC_SOCKET_URL
+ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 RUN npx prisma generate
 RUN npm run build
 
