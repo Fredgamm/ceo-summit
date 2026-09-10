@@ -46,7 +46,15 @@ export const metadata: Metadata = { title: "Profil entreprise" };
  * E2-T05 — profil entreprise. Deal Room and Services tabs are placeholders
  * for the same reason as /membres/[id] (E2-T01): E5/E6 don't exist yet.
  */
-export default async function CompanyProfilePage({ params }: { params: { id: string } }) {
+const TAB_VALUES = ["apercu", "membres", "deal-room", "services", "gestion"] as const;
+
+export default async function CompanyProfilePage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { tab?: string };
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -71,6 +79,17 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
   if (!company) notFound();
 
   const isCompanyAdmin = company.companyAdminId === viewer.id;
+  // Deep-link support (?tab=gestion) so links elsewhere (e.g. the
+  // dashboard's "Mon équipe" widget) can land directly on a specific tab —
+  // "gestion" only honored for the company admin, who's the only one who
+  // sees that tab at all.
+  const requestedTab = searchParams.tab;
+  const defaultTab =
+    requestedTab &&
+    (TAB_VALUES as readonly string[]).includes(requestedTab) &&
+    (requestedTab !== "gestion" || isCompanyAdmin)
+      ? requestedTab
+      : "apercu";
   const unreadMessages = await countUnreadMessages(viewer.id);
   const subscriptionStatus = company.subscription
     ? computeEffectiveStatus(company.subscription.status, company.subscription.plan.event?.date)
@@ -109,7 +128,7 @@ export default async function CompanyProfilePage({ params }: { params: { id: str
         </div>
       </div>
 
-      <Tabs defaultValue="apercu">
+      <Tabs defaultValue={defaultTab}>
         <TabsList>
           <TabsTrigger value="apercu">Aperçu</TabsTrigger>
           <TabsTrigger value="membres">Membres ({company.users.length})</TabsTrigger>

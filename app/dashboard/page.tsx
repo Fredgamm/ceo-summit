@@ -42,6 +42,7 @@ export default async function DashboardPage() {
 
   const viewerTier = getViewerTierFromCompany(user.company);
   const companySubscription = user.company?.subscription;
+  const isCompanyAdmin = user.company?.companyAdminId === user.id;
 
   const [
     upcomingEvents,
@@ -53,6 +54,8 @@ export default async function DashboardPage() {
     acceptedContactsInitiated,
     unreadMessagesList,
     unreadMessages,
+    teammates,
+    teamSize,
   ] = await Promise.all([
     prisma.event.findMany({
       where: { status: "PUBLISHED", date: { gte: new Date() } },
@@ -117,6 +120,17 @@ export default async function DashboardPage() {
       include: { sender: { select: { name: true } } },
     }),
     countUnreadMessages(user.id),
+    user.companyId
+      ? prisma.user.findMany({
+          where: { companyId: user.companyId, status: "ACTIVE", id: { not: user.id } },
+          select: { id: true, name: true, title: true, avatarUrl: true },
+          orderBy: { createdAt: "asc" },
+          take: 5,
+        })
+      : Promise.resolve([]),
+    user.companyId
+      ? prisma.user.count({ where: { companyId: user.companyId, status: "ACTIVE" } })
+      : Promise.resolve(0),
   ]);
 
   const nextEvent = upcomingEvents[0] ?? null;
@@ -204,6 +218,51 @@ export default async function DashboardPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {user.companyId && (
+            <div className="border-t border-border py-5">
+              <div className="mb-2.5 flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                  Mon équipe
+                </p>
+                <span className="text-sm font-bold text-navy">{teamSize}</span>
+              </div>
+              {teammates.length === 0 ? (
+                <p className="mb-2 text-xs text-text-muted">
+                  Vous êtes seul pour l&apos;instant sur ce compte entreprise.
+                </p>
+              ) : (
+                <div className="mb-2 flex flex-col gap-2">
+                  {teammates.map((teammate) => (
+                    <Link
+                      key={teammate.id}
+                      href={`/membres/${teammate.id}`}
+                      className="flex items-center gap-2"
+                    >
+                      <Avatar className="h-7 w-7">
+                        <AvatarImage src={teammate.avatarUrl ?? undefined} alt={teammate.name} />
+                        <AvatarFallback className="text-[10px]">
+                          {initials(teammate.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-navy">{teammate.name}</p>
+                        {teammate.title && (
+                          <p className="truncate text-[11px] text-text-muted">{teammate.title}</p>
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <Link
+                href={`/entreprises/${user.companyId}?tab=${isCompanyAdmin ? "gestion" : "membres"}`}
+                className="text-xs text-navy-mid"
+              >
+                {isCompanyAdmin ? "Inviter des collaborateurs →" : "Voir mon entreprise →"}
+              </Link>
             </div>
           )}
 
