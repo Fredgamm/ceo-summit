@@ -11,7 +11,7 @@ const ITEMS = [
   { href: "/evenements", label: "Événements", icon: CalendarDays },
   { href: "/deal-room", label: "Deal Room", icon: Diamond },
   { href: "/messagerie", label: "Messages", icon: Mail, badgeKey: "messages" as const },
-  { href: "/profil", label: "Profil", icon: User },
+  { href: "/profil/editer", label: "Profil", icon: User },
 ];
 
 /**
@@ -19,11 +19,7 @@ const ITEMS = [
  * Direct implementation of the .mobile-nav pattern added to /wireframe/style.css.
  * Replaces the desktop sidebar entirely on small screens (see AppShell).
  */
-export function MobileBottomNav({
-  badges = {},
-}: {
-  badges?: Partial<Record<"messages", number>>;
-}) {
+export function MobileBottomNav({ badges = {} }: { badges?: Partial<Record<"messages", number>> }) {
   const pathname = usePathname();
 
   return (

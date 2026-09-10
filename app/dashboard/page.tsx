@@ -168,7 +168,10 @@ export default async function DashboardPage() {
       badges={{ messages: unreadMessages || undefined }}
       rightPanel={
         <div className="flex flex-col">
-          <Link href="/profil" className="flex flex-col items-center gap-1 pb-5 text-center">
+          <Link
+            href={`/membres/${user.id}`}
+            className="flex flex-col items-center gap-1 pb-5 text-center"
+          >
             <Avatar className="mb-1 h-16 w-16">
               <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
               <AvatarFallback>{initials(user.name)}</AvatarFallback>
