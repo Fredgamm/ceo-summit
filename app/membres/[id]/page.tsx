@@ -62,8 +62,8 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
       <div className="mb-4 overflow-hidden rounded-lg border border-border bg-white">
         <div className="h-24 bg-navy" />
         <div className="flex flex-wrap items-end justify-between gap-4 p-6 pt-0">
-          <div className="-mt-10 flex items-end gap-4">
-            <Avatar className="h-24 w-24 border-4 border-white">
+          <div className="flex items-end gap-4">
+            <Avatar className="-mt-10 h-24 w-24 shrink-0 border-4 border-white">
               <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
               <AvatarFallback className="text-lg">{initials(user.name)}</AvatarFallback>
             </Avatar>
