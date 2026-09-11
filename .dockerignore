@@ -10,3 +10,13 @@ npm-debug.log*
 coverage
 .vscode
 .idea
+
+# VPS-only runtime state that happens to live inside this same directory
+# (the Docker build context is the whole repo root, "context: ." in
+# docker-compose.prod.yml) — never meant to be sent to the build. Skipping
+# .docker-data especially matters: without it, every build tries to tar up
+# Docker's own data-root (see DEPLOY.md), which contains sockets/pipes tar
+# can't archive and enough data to exhaust disk space building the context.
+.docker-data
+.local-storage
+backups
