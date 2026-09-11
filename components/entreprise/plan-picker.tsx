@@ -73,11 +73,6 @@ export function PlanPicker({
                 <li>Réservé aux entreprises inscrivant ≥ {plan.minParticipants} participants</li>
               )}
               {plan.maxTeamMembers && <li>Jusqu&apos;à {plan.maxTeamMembers} collaborateurs</li>}
-              <li>
-                {plan.hasUnlimitedCredits
-                  ? "Crédits Deal Room illimités"
-                  : `${plan.includedCredits} crédits Deal Room inclus`}
-              </li>
               {plan.eligibilityNote && <li>{plan.eligibilityNote}</li>}
             </ul>
             <Button

@@ -4,15 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { MembershipStatus } from "@prisma/client";
 
-import {
-  suspendMember,
-  excludeMember,
-  reactivateMember,
-  grantCredits,
-} from "@/app/actions/members";
+import { suspendMember, excludeMember, reactivateMember } from "@/app/actions/members";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface MemberActionsPanelProps {
@@ -21,15 +14,16 @@ interface MemberActionsPanelProps {
 }
 
 /**
- * E8-T04 — suspendre / exclure / réactiver / attribuer crédits.
+ * E8-T04 — suspendre / exclure / réactiver.
  * 4 août 2026 (CEO Summit devenu intégralement B2B) — "Changer le tier"
  * retiré : le tier vient du rang de l'offre plateforme de l'entreprise,
  * plus un attribut personnel modifiable ici (voir app/actions/members.ts).
+ * "Attribuer des crédits" retiré (sept. 2026) — le système de crédits Deal
+ * Room n'est plus consommé nulle part (voir lib/deal-room-settings.ts),
+ * attribuer un solde qui ne sert plus à rien n'a plus de sens.
  */
 export function MemberActionsPanel({ userId, status }: MemberActionsPanelProps) {
   const router = useRouter();
-  const [creditsAmount, setCreditsAmount] = React.useState("5");
-  const [creditsReason, setCreditsReason] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState<string | null>(null);
 
@@ -82,33 +76,6 @@ export function MemberActionsPanel({ userId, status }: MemberActionsPanelProps) 
               Réactiver
             </Button>
           )}
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-white p-5">
-        <p className="mb-3 text-sm font-bold text-navy">Attribuer des crédits</p>
-        <div className="flex flex-col gap-2">
-          <Input
-            type="number"
-            min={1}
-            value={creditsAmount}
-            onChange={(e) => setCreditsAmount(e.target.value)}
-          />
-          <Textarea
-            placeholder="Motif (facultatif)"
-            rows={2}
-            value={creditsReason}
-            onChange={(e) => setCreditsReason(e.target.value)}
-          />
-          <Button
-            size="sm"
-            disabled={loading === "credits"}
-            onClick={() =>
-              run("credits", () => grantCredits(userId, Number(creditsAmount), creditsReason))
-            }
-          >
-            {loading === "credits" ? "…" : "Attribuer"}
-          </Button>
         </div>
       </div>
 
