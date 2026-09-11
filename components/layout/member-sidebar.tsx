@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Accueil", icon: Home },
   { href: "/deal-room", label: "Deal Room", icon: Diamond, badgeKey: "opportunities" as const },
   { href: "/evenements", label: "Événements", icon: CalendarDays },
-  { href: "/catalogue", label: "Catalogue", icon: LayoutGrid },
+  { href: "/catalogue", label: "Liste des membres", icon: LayoutGrid },
   { href: "/salles", label: "Salles", icon: MessagesSquare, badgeKey: "rooms" as const },
   { href: "/messagerie", label: "Messagerie", icon: Mail, badgeKey: "messages" as const },
 ];

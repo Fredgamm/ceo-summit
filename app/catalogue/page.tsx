@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { tierLabel } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Catalogue des membres" };
+export const metadata: Metadata = { title: "Liste des membres" };
 
 /**
  * E2-T03 — accès réservé aux membres actifs : déjà garanti par middleware.ts
@@ -75,7 +75,7 @@ export default async function CataloguePage({
       badges={{ messages: unreadMessages || undefined }}
     >
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-navy">Catalogue des membres</h1>
+        <h1 className="text-xl font-bold text-navy">Liste des membres</h1>
         <span className="text-sm text-text-muted">
           {total} membre{total !== 1 ? "s" : ""} affiché{total !== 1 ? "s" : ""}
         </span>
