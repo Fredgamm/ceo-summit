@@ -57,3 +57,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# Docker daemon data-root relocated here on the shared VPS (see DEPLOY.md) —
+# never committed, just runtime state (images/containers/volumes).
+/.docker-data/

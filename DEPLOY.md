@@ -54,6 +54,24 @@ docker --version
 docker compose version
 ```
 
+**Sur le VPS partagé actuel (app.ceo-summit.mg)** : ce serveur héberge aussi
+Healthy AI, sur sa propre partition (`/`, ~45 Go). Docker stocke ses données
+(images, conteneurs, volumes) dans `/var/lib/docker` par défaut — sur `/`,
+donc sur le disque de Healthy AI, pas sur la partition dédiée CEO Summit.
+Après plusieurs rebuilds ça a fini par saturer `/` (images/build cache non
+nettoyés) et fait planter Healthy AI aussi bien que CEO Summit. Corrigé en
+déplaçant le `data-root` de Docker vers `/opt/ceo-summit/.docker-data`
+(sur la partition dédiée) via `/etc/docker/daemon.json` :
+
+```json
+{ "data-root": "/opt/ceo-summit/.docker-data" }
+```
+
+Penser aussi à nettoyer régulièrement (`docker image prune -af` après
+chaque déploiement) — le déplacement limite les dégâts en cas d'oubli
+(la partition dédiée déborde sans toucher à Healthy AI), mais ne remplace
+pas un nettoyage périodique.
+
 ## 3. Pare-feu (UFW)
 
 Seuls SSH (22) et HTTP (80) doivent être accessibles depuis l'extérieur —
