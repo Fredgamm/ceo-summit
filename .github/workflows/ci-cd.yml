@@ -114,8 +114,13 @@ jobs:
             docker image prune -f
 
       - name: Health check
+        # 14 septembre 2026 — nginx sur le VPS sert désormais un vrai domaine
+        # en HTTPS (app.ceo-summit.mg, certificat Certbot) ; le port 80 sur
+        # l'IP brute ne fait plus que rediriger ce host précis et renvoie 404
+        # pour tout le reste, y compris une requête par IP -- DEPLOY.md
+        # (HTTP sur l'IP seule) est resté périmé après cette bascule HTTPS.
         run: |
           sleep 10
-          curl -sf -o /dev/null "http://${{ secrets.VPS_HOST }}/login" \
+          curl -sf -o /dev/null "https://app.ceo-summit.mg/login" \
             && echo "OK — /login répond." \
             || (echo "Échec du health check post-déploiement." && exit 1)
