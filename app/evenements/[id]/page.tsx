@@ -220,7 +220,10 @@ export default async function EventDetailPage({ params }: { params: { id: string
                     {eventOffers.map((plan) => (
                       <Button key={plan.id} asChild variant="outline" className="justify-center">
                         <Link href={`/entreprise/creer?offre=${plan.slug}`}>
-                          {plan.name} — {formatAriary(plan.priceAr)}/participant
+                          {plan.name} —{" "}
+                          {plan.pricingMode === "TIERED_GROUP"
+                            ? "tarif dégressif par groupe"
+                            : `${formatAriary(plan.priceAr)}/participant`}
                         </Link>
                       </Button>
                     ))}

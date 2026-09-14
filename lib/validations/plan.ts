@@ -38,9 +38,24 @@ const basePlanFormSchema = z.object({
   maxTeamMembers: z.coerce.number().int().min(1).optional().nullable(),
   minParticipants: z.coerce.number().int().min(1).optional().nullable(),
   /// Offre d'évènement uniquement — sans objet pour une offre plateforme.
-  pricingMode: z.enum(["PER_PARTICIPANT", "FIXED_BUNDLE"]).optional().nullable(),
+  pricingMode: z.enum(["PER_PARTICIPANT", "FIXED_BUNDLE", "TIERED_GROUP"]).optional().nullable(),
   /// Nombre de sièges du forfait — pertinent seulement si pricingMode = FIXED_BUNDLE.
   includedSeats: z.coerce.number().int().min(1).optional().nullable(),
+  /// 14 septembre 2026 — paliers de prix par taille de groupe, pertinent
+  /// seulement si pricingMode = TIERED_GROUP (voir PlanPriceBracket). Comme
+  /// pour priceEur/priceAr, unitPriceEur (si renseigné) est la source, et
+  /// unitPriceAr est recalculé côté serveur au taux du jour.
+  priceBrackets: z
+    .array(
+      z.object({
+        minParticipants: z.coerce.number().int().min(1),
+        maxParticipants: z.coerce.number().int().min(1).optional().nullable(),
+        unitPriceAr: z.coerce.number().int().min(0),
+        unitPriceEur: z.coerce.number().int().min(0).optional().nullable(),
+      })
+    )
+    .optional()
+    .default([]),
   includedCredits: z.coerce.number().int().min(0).default(0),
   hasUnlimitedCredits: z.coerce.boolean().default(false),
   rank: z.coerce.number().int().min(1, "Le rang doit être un entier positif"),
@@ -78,6 +93,46 @@ export const planFormSchema = basePlanFormSchema.superRefine((data, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ["includedSeats"],
         message: "Le nombre de sièges est requis pour un forfait fixe.",
+      });
+    }
+  }
+  if (data.pricingMode === "TIERED_GROUP") {
+    if (data.priceBrackets.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["priceBrackets"],
+        message: "Au moins un palier est requis pour une tarification par palier.",
+      });
+    } else {
+      const sorted = [...data.priceBrackets].sort((a, b) => a.minParticipants - b.minParticipants);
+      sorted.forEach((bracket, i) => {
+        if (bracket.maxParticipants != null && bracket.maxParticipants < bracket.minParticipants) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["priceBrackets"],
+            message: `Le palier à partir de ${bracket.minParticipants} a une borne haute inférieure à sa borne basse.`,
+          });
+        }
+        const isLast = i === sorted.length - 1;
+        if (bracket.maxParticipants == null && !isLast) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["priceBrackets"],
+            message: "Seul le dernier palier peut être ouvert (sans borne haute).",
+          });
+        }
+        const next = sorted[i + 1];
+        if (
+          next &&
+          bracket.maxParticipants != null &&
+          next.minParticipants <= bracket.maxParticipants
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["priceBrackets"],
+            message: "Les paliers ne peuvent pas se chevaucher.",
+          });
+        }
       });
     }
   }

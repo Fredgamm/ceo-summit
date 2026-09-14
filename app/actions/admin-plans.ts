@@ -46,6 +46,23 @@ async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
   };
 }
 
+/**
+ * Paliers prêts pour une écriture imbriquée Prisma (`priceBrackets: { create: [...] }`).
+ * Même conversion EUR->Ar que `toPlanData` : `unitPriceEur` (si renseigné)
+ * est la source, `unitPriceAr` est toujours recalculé côté serveur.
+ */
+async function toBracketCreateData(f: ReturnType<typeof planFormSchema.parse>) {
+  return Promise.all(
+    f.priceBrackets.map(async (b, i) => ({
+      minParticipants: b.minParticipants,
+      maxParticipants: b.maxParticipants ?? null,
+      unitPriceAr: b.unitPriceEur ? await convertEurToAr(b.unitPriceEur) : b.unitPriceAr,
+      unitPriceEur: b.unitPriceEur ?? null,
+      displayOrder: i,
+    }))
+  );
+}
+
 export async function createPlan(input: unknown): Promise<ActionResult<{ id: string }>> {
   const { userId: adminId } = await requireAdmin("plans");
 
@@ -59,7 +76,12 @@ export async function createPlan(input: unknown): Promise<ActionResult<{ id: str
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
-  const plan = await prisma.plan.create({ data: await toPlanData(parsed.data) });
+  const plan = await prisma.plan.create({
+    data: {
+      ...(await toPlanData(parsed.data)),
+      priceBrackets: { create: await toBracketCreateData(parsed.data) },
+    },
+  });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.create", targetType: "Plan", targetId: plan.id },
   });
@@ -81,7 +103,13 @@ export async function updatePlan(planId: string, input: unknown): Promise<Action
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
-  await prisma.plan.update({ where: { id: planId }, data: await toPlanData(parsed.data) });
+  await prisma.plan.update({
+    where: { id: planId },
+    data: {
+      ...(await toPlanData(parsed.data)),
+      priceBrackets: { deleteMany: {}, create: await toBracketCreateData(parsed.data) },
+    },
+  });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.update", targetType: "Plan", targetId: planId },
   });

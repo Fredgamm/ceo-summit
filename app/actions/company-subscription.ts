@@ -89,7 +89,7 @@ export async function submitPaymentProof(
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
-    include: { company: true, plan: true },
+    include: { company: true, plan: { include: { priceBrackets: true } } },
   });
   if (!subscription) return { success: false, error: "Abonnement introuvable." };
   if (subscription.company.companyAdminId !== session.user.id) {

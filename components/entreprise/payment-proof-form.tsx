@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import type { PaymentMethod, PlanPricingMode } from "@prisma/client";
 
 import { submitPaymentProof } from "@/app/actions/company-subscription";
-import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import {
+  computeDueAmount,
+  meetsMinParticipants,
+  type PricingBracket,
+} from "@/lib/company-payment-amount";
 import { formatAriary } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -52,6 +56,7 @@ export function PaymentProofForm({
   pricingMode,
   includedSeats,
   maxTeamMembers,
+  priceBrackets,
   headcount,
 }: {
   companySubscriptionId: string;
@@ -61,11 +66,14 @@ export function PaymentProofForm({
   includedSeats: number | null;
   /** Repli d'affichage pour une offre plateforme, qui n'a pas d'`includedSeats` propre. */
   maxTeamMembers: number | null;
+  /** Paliers de l'offre — pertinent seulement en mode TIERED_GROUP. */
+  priceBrackets: PricingBracket[];
   /** Nombre de collaborateurs déjà rattachés — utilisé seulement comme valeur de départ suggérée. */
   headcount: number;
 }) {
   const router = useRouter();
   const isFixedBundle = pricingMode === "FIXED_BUNDLE";
+  const isTieredGroup = pricingMode === "TIERED_GROUP";
   const [method, setMethod] = React.useState<PaymentMethod>("VIREMENT");
   const [comment, setComment] = React.useState("");
   const [declaredParticipants, setDeclaredParticipants] = React.useState(
@@ -77,10 +85,17 @@ export function PaymentProofForm({
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
 
-  const plan = { priceAr, minParticipants, pricingMode, includedSeats };
+  const plan = { priceAr, minParticipants, pricingMode, includedSeats, priceBrackets };
   const declaredCount = isFixedBundle ? 1 : Number(declaredParticipants) || 0;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
   const amount = computeDueAmount(plan, declaredCount);
+  const reachedBracket = isTieredGroup
+    ? priceBrackets.find(
+        (b) =>
+          declaredCount >= b.minParticipants &&
+          (b.maxParticipants === null || declaredCount <= b.maxParticipants)
+      )
+    : undefined;
   const isEvoliaMethod = EVOLIA_METHODS.includes(method);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -165,16 +180,28 @@ export function PaymentProofForm({
           <p className="text-sm text-text-mid">
             Forfait — {includedSeats ?? maxTeamMembers ?? "?"} sièges inclus
           </p>
+        ) : isTieredGroup ? (
+          <p className="text-sm text-text-mid">
+            {reachedBracket
+              ? `${declaredCount} participant(s) × ${formatAriary(reachedBracket.unitPriceAr)} (palier ${reachedBracket.minParticipants}${reachedBracket.maxParticipants ? `-${reachedBracket.maxParticipants}` : "+"})`
+              : `${declaredCount} participant(s) — aucun palier atteint`}
+          </p>
         ) : (
           <p className="text-sm text-text-mid">
             {declaredCount} participant(s) × {formatAriary(priceAr)}
           </p>
         )}
         <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
-        {!isFixedBundle && minParticipants && !meetsThreshold && (
+        {!isFixedBundle && !isTieredGroup && minParticipants && !meetsThreshold && (
           <p className="mt-1 text-xs text-red-600">
             Il manque {minParticipants - declaredCount} participant(s) déclaré(s) pour atteindre le
             seuil minimum de {minParticipants} de cette offre.
+          </p>
+        )}
+        {isTieredGroup && !meetsThreshold && (
+          <p className="mt-1 text-xs text-red-600">
+            Il faut au moins {Math.min(...priceBrackets.map((b) => b.minParticipants))}{" "}
+            participant(s) déclaré(s) pour cette offre.
           </p>
         )}
       </div>

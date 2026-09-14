@@ -208,8 +208,9 @@ export default async function CompanyProfilePage({
                 {company.subscription ? (
                   <p className="text-sm text-text-mid">
                     {company.subscription.plan.name} —{" "}
-                    {formatAriary(company.subscription.plan.priceAr)}
-                    /an
+                    {company.subscription.plan.pricingMode === "TIERED_GROUP"
+                      ? "tarif dégressif par groupe"
+                      : `${formatAriary(company.subscription.plan.priceAr)}/an`}
                   </p>
                 ) : (
                   <p className="text-sm text-text-muted">

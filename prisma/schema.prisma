@@ -302,6 +302,36 @@ model MembershipApplication {
 enum PlanPricingMode {
   PER_PARTICIPANT
   FIXED_BUNDLE
+  /// 14 septembre 2026 — tarif dégressif par taille de groupe : prix
+  /// unitaire par participant qui dépend du palier atteint (voir
+  /// `PlanPriceBracket`), applicable à toute offre comme les deux autres
+  /// modes.
+  TIERED_GROUP
+}
+
+/// 14 septembre 2026 — un palier d'une offre en mode `TIERED_GROUP` : tous
+/// les participants déclarés sont facturés au prix unitaire du palier dans
+/// lequel tombe leur nombre total (ex. 10-29 participants -> 650 Ar/pers.,
+/// 30 et plus -> 500 Ar/pers.). `unitPriceEur`/`unitPriceAr` suivent la même
+/// convention que `Plan.priceEur`/`priceAr` (3 septembre 2026) : quand
+/// `unitPriceEur` est renseigné, `unitPriceAr` est recalculé côté serveur au
+/// taux du jour (lib/currency-conversion.ts) et n'est jamais lu que pour
+/// l'affichage — le montant dû (lib/company-payment-amount.ts) est toujours
+/// `unitPriceAr × declaredParticipants`.
+model PlanPriceBracket {
+  id              String   @id @default(cuid())
+  planId          String
+  plan            Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  /// Borne basse incluse (ex. 10).
+  minParticipants Int
+  /// Borne haute incluse ; `null` = palier ouvert ("30 et plus").
+  maxParticipants Int?
+  unitPriceAr     Int
+  unitPriceEur    Int?
+  displayOrder    Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([planId])
 }
 
 /// Admin-creatable offer/plan — replaces the fixed `Tier` enum as the source
@@ -392,6 +422,7 @@ model Plan {
   opportunitiesAsVisibilityPlan Opportunity[]         @relation("OpportunityVisibilityPlan")
   companySubscriptions          CompanySubscription[]
   eventRegistrations            EventRegistration[]
+  priceBrackets                 PlanPriceBracket[]
 
   @@index([isActive, displayOrder])
   @@index([eventId])

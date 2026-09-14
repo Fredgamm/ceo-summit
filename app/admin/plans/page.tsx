@@ -114,7 +114,18 @@ export default async function AdminPlansPage({
                   <td className="px-4 py-3 text-text-mid">
                     {plan.eventId ? "Offre d'évènement" : "Offre plateforme"}
                   </td>
-                  <td className="px-4 py-3 text-text-mid">{formatPlanPrice(plan)}</td>
+                  <td className="px-4 py-3 text-text-mid">
+                    {plan.pricingMode === "TIERED_GROUP"
+                      ? plan.priceBrackets
+                          .slice()
+                          .sort((a, b) => a.minParticipants - b.minParticipants)
+                          .map(
+                            (b) =>
+                              `${b.minParticipants}${b.maxParticipants ? `-${b.maxParticipants}` : "+"} : ${formatPlanPrice({ priceAr: b.unitPriceAr, priceEur: b.unitPriceEur })}`
+                          )
+                          .join(" · ") || "Aucun palier"
+                      : formatPlanPrice(plan)}
+                  </td>
                   <td className="px-4 py-3 text-text-mid">
                     {plan.hasUnlimitedCredits ? "Illimité" : plan.includedCredits}
                   </td>

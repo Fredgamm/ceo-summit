@@ -40,7 +40,7 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
         orderBy: { createdAt: "asc" },
         include: {
           user: { select: { name: true, email: true, role: true, title: true } },
-          plan: { select: { name: true, priceAr: true } },
+          plan: { select: { name: true, priceAr: true, pricingMode: true } },
         },
       },
     },
@@ -132,7 +132,7 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                       {PAYMENT_LABEL[r.paymentStatus]}
                       {r.paymentStatus === "PAID" &&
                         (r.plan
-                          ? ` · ${formatAriary(r.plan.priceAr)}`
+                          ? ` · ${r.plan.pricingMode === "TIERED_GROUP" ? "tarif dégressif par groupe" : formatAriary(r.plan.priceAr)}`
                           : event.price > 0 && ` · ${formatAriary(event.price)}`)}
                     </span>
                   </td>

@@ -1,8 +1,14 @@
-import type { Event, Plan } from "@prisma/client";
+import type { Event, Plan, PlanPriceBracket } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-export type PlanWithEvent = Plan & { event: Event | null };
+/// 14 septembre 2026 (TIERED_GROUP) — toute lecture de `Plan` destinée au
+/// calcul ou à l'affichage d'un prix doit inclure `priceBrackets`
+/// (lib/company-payment-amount.ts en dépend pour ce mode).
+export type PlanWithBrackets = Plan & { priceBrackets: PlanPriceBracket[] };
+export type PlanWithEvent = PlanWithBrackets & { event: Event | null };
+
+const BRACKETS_INCLUDE = { priceBrackets: { orderBy: { displayOrder: "asc" as const } } };
 
 /**
  * Phase 1 offres dynamiques (30 juillet 2026) — single place every page/
@@ -28,7 +34,7 @@ export type PlanWithEvent = Plan & { event: Event | null };
 export async function getActivePlans(opts?: {
   selfServiceOnly?: boolean;
   eventId?: string;
-}): Promise<Plan[]> {
+}): Promise<PlanWithBrackets[]> {
   return prisma.plan.findMany({
     where: {
       isActive: true,
@@ -36,11 +42,12 @@ export async function getActivePlans(opts?: {
       eventId: opts?.eventId ?? null,
     },
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
+    include: BRACKETS_INCLUDE,
   });
 }
 
-export async function getPlanById(id: string): Promise<Plan | null> {
-  return prisma.plan.findUnique({ where: { id } });
+export async function getPlanById(id: string): Promise<PlanWithBrackets | null> {
+  return prisma.plan.findUnique({ where: { id }, include: BRACKETS_INCLUDE });
 }
 
 /**
@@ -56,7 +63,7 @@ export async function getPlanById(id: string): Promise<Plan | null> {
 export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null> {
   return prisma.plan.findFirst({
     where: { slug, isActive: true, isSelfService: true },
-    include: { event: true },
+    include: { event: true, ...BRACKETS_INCLUDE },
   });
 }
 
@@ -66,9 +73,10 @@ export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null>
  * when provided; omitted returns every plan regardless of event scope
  * (unlike getActivePlans, the admin list should show everything by default).
  */
-export async function getAllPlans(eventId?: string): Promise<Plan[]> {
+export async function getAllPlans(eventId?: string): Promise<PlanWithBrackets[]> {
   return prisma.plan.findMany({
     where: eventId ? { eventId } : undefined,
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
+    include: BRACKETS_INCLUDE,
   });
 }

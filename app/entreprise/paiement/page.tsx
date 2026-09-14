@@ -41,7 +41,7 @@ export default async function CompanyPaymentPage({
     prisma.company.findUnique({
       where: { id: viewer.companyId },
       include: {
-        subscription: { include: { plan: true } },
+        subscription: { include: { plan: { include: { priceBrackets: true } } } },
         users: { select: { id: true } },
       },
     }),
@@ -77,10 +77,11 @@ export default async function CompanyPaymentPage({
               Paiement — {subscription.plan.name}
             </h1>
             <p className="mb-4 text-sm text-text-muted">
-              {formatAriary(subscription.plan.priceAr)}
               {subscription.plan.pricingMode === "FIXED_BUNDLE"
-                ? ` — forfait ${subscription.plan.includedSeats ?? subscription.plan.maxTeamMembers ?? "?"} sièges`
-                : " / participant / an"}
+                ? `${formatAriary(subscription.plan.priceAr)} — forfait ${subscription.plan.includedSeats ?? subscription.plan.maxTeamMembers ?? "?"} sièges`
+                : subscription.plan.pricingMode === "TIERED_GROUP"
+                  ? "Tarif dégressif par taille de groupe — voir le détail ci-dessous"
+                  : `${formatAriary(subscription.plan.priceAr)} / participant / an`}
               . Choisissez votre mode de paiement, uploadez une preuve (bordereau, reçu, capture) —
               l&apos;équipe CEO Summit valide manuellement chaque paiement.
             </p>
@@ -103,6 +104,7 @@ export default async function CompanyPaymentPage({
                   pricingMode={subscription.plan.pricingMode}
                   includedSeats={subscription.plan.includedSeats}
                   maxTeamMembers={subscription.plan.maxTeamMembers}
+                  priceBrackets={subscription.plan.priceBrackets}
                   headcount={headcount}
                 />
               </div>

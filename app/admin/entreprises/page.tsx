@@ -43,7 +43,7 @@ export default async function AdminEntreprisesPage() {
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: {
       company: { select: { id: true, name: true, companyAdmin: { select: { name: true } } } },
-      plan: { select: { name: true, priceAr: true } },
+      plan: { select: { name: true, priceAr: true, pricingMode: true } },
       payments: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
@@ -82,7 +82,10 @@ export default async function AdminEntreprisesPage() {
                     {sub.company.companyAdmin?.name ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-text-mid">
-                    {sub.plan.name} · {formatAriary(sub.plan.priceAr)}
+                    {sub.plan.name} ·{" "}
+                    {sub.plan.pricingMode === "TIERED_GROUP"
+                      ? "tarif dégressif par groupe"
+                      : formatAriary(sub.plan.priceAr)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={STATUS_BADGE[sub.status]}>{STATUS_LABEL[sub.status]}</Badge>

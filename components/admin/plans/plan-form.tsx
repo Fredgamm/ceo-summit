@@ -19,6 +19,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+export interface PlanPriceBracketFormValues {
+  minParticipants: number;
+  maxParticipants: number | null;
+  unitPriceAr: number;
+  unitPriceEur: number | null;
+}
+
 export interface PlanFormValues {
   name: string;
   slug: string;
@@ -29,6 +36,7 @@ export interface PlanFormValues {
   minParticipants: number | null;
   pricingMode: PlanPricingMode | null;
   includedSeats: number | null;
+  priceBrackets: PlanPriceBracketFormValues[];
   includedCredits: number;
   hasUnlimitedCredits: boolean;
   rank: number;
@@ -50,6 +58,7 @@ const EMPTY_VALUES: PlanFormValues = {
   minParticipants: null,
   pricingMode: null,
   includedSeats: null,
+  priceBrackets: [],
   includedCredits: 0,
   hasUnlimitedCredits: false,
   rank: 1,
@@ -68,6 +77,128 @@ function slugify(name: string): string {
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+const EMPTY_BRACKET: PlanPriceBracketFormValues = {
+  minParticipants: 1,
+  maxParticipants: null,
+  unitPriceAr: 0,
+  unitPriceEur: null,
+};
+
+/**
+ * 14 septembre 2026 (TIERED_GROUP) — éditeur de la liste de paliers d'une
+ * offre à tarif dégressif par taille de groupe (ex. 10-29 participants ->
+ * 650 Ar/pers., 30 et plus -> 500 Ar/pers.). Nombre de paliers illimité,
+ * ajoutés/retirés librement par l'admin — la validation de la cohérence
+ * (chevauchement, ordre) se fait côté serveur (lib/validations/plan.ts).
+ * Même convention € -> Ar que le prix de base de l'offre : quand un prix
+ * unitaire en euros est renseigné, l'ariary correspondant est recalculé au
+ * taux du jour à l'enregistrement (voir app/actions/admin-plans.ts).
+ */
+function PriceBracketEditor({
+  brackets,
+  onChange,
+}: {
+  brackets: PlanPriceBracketFormValues[];
+  onChange: (brackets: PlanPriceBracketFormValues[]) => void;
+}) {
+  function updateBracket(index: number, patch: Partial<PlanPriceBracketFormValues>) {
+    onChange(brackets.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+  }
+
+  function removeBracket(index: number) {
+    onChange(brackets.filter((_, i) => i !== index));
+  }
+
+  function addBracket() {
+    const last = brackets[brackets.length - 1];
+    const nextMin =
+      last?.maxParticipants != null ? last.maxParticipants + 1 : (last?.minParticipants ?? 0) + 1;
+    onChange([...brackets, { ...EMPTY_BRACKET, minParticipants: nextMin }]);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Paliers de prix par taille de groupe</Label>
+      <div className="flex flex-col gap-2">
+        {brackets.map((bracket, i) => (
+          <div key={i} className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] items-end gap-2">
+            <div className="flex flex-col gap-1">
+              {i === 0 && <span className="text-xs text-text-muted">À partir de</span>}
+              <Input
+                type="number"
+                min={1}
+                value={bracket.minParticipants}
+                onChange={(e) => updateBracket(i, { minParticipants: Number(e.target.value) })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              {i === 0 && (
+                <span className="text-xs text-text-muted">Jusqu&apos;à (vide = illimité)</span>
+              )}
+              <Input
+                type="number"
+                min={1}
+                value={bracket.maxParticipants ?? ""}
+                onChange={(e) =>
+                  updateBracket(i, {
+                    maxParticipants: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              {i === 0 && <span className="text-xs text-text-muted">Prix unitaire (€)</span>}
+              <Input
+                type="number"
+                min={0}
+                placeholder="Laisser vide pour coter en Ar"
+                value={bracket.unitPriceEur ?? ""}
+                onChange={(e) =>
+                  updateBracket(i, {
+                    unitPriceEur: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              {i === 0 && (
+                <span className="text-xs text-text-muted">
+                  {bracket.unitPriceEur != null ? "≈ Prix (Ar)" : "Prix unitaire (Ar)"}
+                </span>
+              )}
+              <Input
+                type="number"
+                min={0}
+                disabled={bracket.unitPriceEur != null}
+                value={bracket.unitPriceAr}
+                onChange={(e) => updateBracket(i, { unitPriceAr: Number(e.target.value) })}
+              />
+            </div>
+            <Button type="button" variant="secondary" size="sm" onClick={() => removeBracket(i)}>
+              ✕
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        onClick={addBracket}
+        className="self-start"
+      >
+        + Ajouter un palier
+      </Button>
+      <p className="text-xs text-text-muted">
+        Chaque participant est facturé au prix unitaire du palier atteint par le nombre total de
+        participants déclarés (ex. 12 participants dans un palier 10-29 à 650 Ar/pers. ⇒ 12 × 650 Ar
+        au total). Laissez la borne haute du dernier palier vide pour un palier ouvert (&quot;30 et
+        plus&quot;).
+      </p>
+    </div>
+  );
 }
 
 interface PlanFormProps {
@@ -234,21 +365,26 @@ export function PlanForm({
               placeholder="Laisser vide pour coter en Ar"
               value={values.priceEur ?? ""}
               onChange={(e) => set("priceEur", e.target.value ? Number(e.target.value) : null)}
+              disabled={values.pricingMode === "TIERED_GROUP"}
             />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="plan-price">
-              {values.priceEur != null ? "≈ Prix (Ar) — calculé au taux du jour" : "Prix (Ar) *"}
+              {values.pricingMode === "TIERED_GROUP"
+                ? "Prix (Ar) — non utilisé (voir les paliers ci-dessous)"
+                : values.priceEur != null
+                  ? "≈ Prix (Ar) — calculé au taux du jour"
+                  : "Prix (Ar) *"}
             </Label>
             <Input
               id="plan-price"
               type="number"
               min={0}
-              disabled={values.priceEur != null}
+              disabled={values.priceEur != null || values.pricingMode === "TIERED_GROUP"}
               value={values.priceAr}
               onChange={(e) => set("priceAr", Number(e.target.value))}
             />
-            {values.priceEur != null && (
+            {values.priceEur != null && values.pricingMode !== "TIERED_GROUP" && (
               <p className="text-xs text-text-muted">
                 Recalculé au taux du jour à chaque enregistrement — informatif, jamais utilisé pour
                 valider un paiement.
@@ -280,9 +416,17 @@ export function PlanForm({
             <SelectContent>
               <SelectItem value="FIXED_BUNDLE">Forfait fixe</SelectItem>
               <SelectItem value="PER_PARTICIPANT">Par participant (tarif dégressif)</SelectItem>
+              <SelectItem value="TIERED_GROUP">Palier par groupe (dégressif)</SelectItem>
             </SelectContent>
           </Select>
         </div>
+
+        {values.pricingMode === "TIERED_GROUP" && (
+          <PriceBracketEditor
+            brackets={values.priceBrackets}
+            onChange={(brackets) => set("priceBrackets", brackets)}
+          />
+        )}
 
         {isEventOffer && values.pricingMode === "FIXED_BUNDLE" && (
           <div className="flex flex-col gap-1.5">

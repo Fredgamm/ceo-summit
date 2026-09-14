@@ -19,7 +19,10 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
   }
 
   const [plan, events, platformPlans] = await Promise.all([
-    prisma.plan.findUnique({ where: { id: params.id } }),
+    prisma.plan.findUnique({
+      where: { id: params.id },
+      include: { priceBrackets: { orderBy: { displayOrder: "asc" } } },
+    }),
     prisma.event.findMany({ select: { id: true, title: true }, orderBy: { date: "desc" } }),
     prisma.plan.findMany({
       where: { eventId: null, isActive: true, id: { not: params.id } },
@@ -57,6 +60,12 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           minParticipants: plan.minParticipants,
           pricingMode: plan.pricingMode,
           includedSeats: plan.includedSeats,
+          priceBrackets: plan.priceBrackets.map((b) => ({
+            minParticipants: b.minParticipants,
+            maxParticipants: b.maxParticipants,
+            unitPriceAr: b.unitPriceAr,
+            unitPriceEur: b.unitPriceEur,
+          })),
           includedCredits: plan.includedCredits,
           hasUnlimitedCredits: plan.hasUnlimitedCredits,
           rank: plan.rank,
