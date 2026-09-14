@@ -99,6 +99,17 @@ jobs:
             git fetch origin
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
+            # docker-compose.prod.yml build.network=ceo-summit-net (next
+            # build needs a live Postgres, see the file's own header
+            # comment) requires the network to exist first (created when
+            # postgres/redis start) and BuildKit doesn't support attaching a
+            # build to an arbitrary user network the way the classic
+            # builder does -- forcing the classic builder via
+            # DOCKER_BUILDKIT=0 sidesteps that entirely.
+            export DOCKER_BUILDKIT=0
+            export COMPOSE_DOCKER_CLI_BUILD=0
+            docker compose -f docker-compose.prod.yml up -d postgres redis
+            timeout 60 sh -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" $(docker compose -f docker-compose.prod.yml ps -q postgres))" = "healthy" ]; do sleep 2; done'
             docker compose -f docker-compose.prod.yml up -d --build
             docker image prune -f
 
