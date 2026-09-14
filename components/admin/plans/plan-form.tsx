@@ -355,6 +355,10 @@ export function PlanForm({
           </div>
         )}
 
+        <p className="mt-2 text-xs font-bold uppercase tracking-wide text-text-muted">
+          Tarification
+        </p>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="plan-price-eur">Prix (€)</Label>
@@ -465,9 +469,13 @@ export function PlanForm({
           </div>
         )}
 
+        <p className="mt-2 text-xs font-bold uppercase tracking-wide text-text-muted">
+          Avantages &amp; quotas
+        </p>
+
         {!isEventOffer && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="plan-max-members">Nombre max de collaborateurs</Label>
+            <Label htmlFor="plan-max-members">Plafond de collaborateurs (optionnel)</Label>
             <Input
               id="plan-max-members"
               type="number"
@@ -478,8 +486,11 @@ export function PlanForm({
               }
             />
             <p className="text-xs text-text-muted">
-              Quota de collaborateurs de cet avantage plateforme — indépendant de toute édition
-              d&apos;évènement.
+              Limite le nombre de collaborateurs que l&apos;entreprise peut inviter sous cette offre
+              plateforme.{" "}
+              {values.pricingMode === "TIERED_GROUP"
+                ? "Indépendant des paliers ci-dessus, qui ne fixent que le tarif par participant — laissez vide si les paliers suffisent, sans plafond séparé."
+                : "Laissez vide pour ne fixer aucune limite."}
             </p>
           </div>
         )}
