@@ -9,7 +9,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, mvp-connect-simple]
   pull_request:
     branches: [main]
 
@@ -75,10 +75,19 @@ jobs:
 
   deploy:
     needs: ci
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: >-
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mvp-connect-simple') &&
+      github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to VPS
+        # 14 septembre 2026 — checkout explicite de github.ref_name plutôt
+        # qu'un `git pull origin main` en dur : le VPS suit désormais
+        # mvp-connect-simple (le système d'offres/paiement à jour, dont la
+        # tarification par palier), main n'a plus ce modèle de données et ne
+        # doit pas être déployé tel quel avant reconciliation. Fonctionne
+        # aussi bien pour un futur retour à main une fois cette réconciliation
+        # faite.
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -87,7 +96,9 @@ jobs:
           script: |
             set -e
             cd /opt/ceo-summit
-            git pull origin main
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
             docker compose -f docker-compose.prod.yml up -d --build
             docker image prune -f
 
