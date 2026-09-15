@@ -24,17 +24,28 @@ export async function checkRateLimit(
   windowSec: number
 ): Promise<RateLimitResult> {
   if (process.env.REDIS_URL) {
-    const redis = getRedisClient();
-    const redisKey = `ratelimit:${key}`;
-    const count = await redis.incr(redisKey);
-    if (count === 1) {
-      await redis.pexpire(redisKey, windowSec * 1000);
+    try {
+      const redis = getRedisClient();
+      const redisKey = `ratelimit:${key}`;
+      const count = await redis.incr(redisKey);
+      if (count === 1) {
+        await redis.pexpire(redisKey, windowSec * 1000);
+      }
+      if (count > limit) {
+        const ttlMs = await redis.pttl(redisKey);
+        return { allowed: false, retryAfterSec: Math.max(1, Math.ceil(ttlMs / 1000)) };
+      }
+      return { allowed: true, retryAfterSec: 0 };
+    } catch (err) {
+      // 15 septembre 2026 — un Redis en échec d'écriture (MISCONF disque
+      // plein/permissions, vu en prod) faisait planter tout appelant
+      // (signup, login, etc.) avec une 500, alors qu'un simple garde-fou
+      // anti-abus ne doit jamais bloquer un usage légitime : on ouvre plutôt
+      // que de casser, même compromis que la dégradation "pas de Redis"
+      // ci-dessous.
+      console.error("[rate-limit] Redis error, failing open", err);
+      return { allowed: true, retryAfterSec: 0 };
     }
-    if (count > limit) {
-      const ttlMs = await redis.pttl(redisKey);
-      return { allowed: false, retryAfterSec: Math.max(1, Math.ceil(ttlMs / 1000)) };
-    }
-    return { allowed: true, retryAfterSec: 0 };
   }
 
   const now = Date.now();
