@@ -260,12 +260,20 @@ export default async function DashboardPage() {
                   ))}
                 </div>
               )}
-              <Link
-                href={`/entreprises/${user.companyId}?tab=${isCompanyAdmin ? "gestion" : "membres"}`}
-                className="text-xs text-navy-mid"
-              >
-                {isCompanyAdmin ? "Inviter des collaborateurs →" : "Voir mon entreprise →"}
-              </Link>
+              {isCompanyAdmin ? (
+                <Button asChild size="sm" className="w-full justify-center">
+                  <Link href={`/entreprises/${user.companyId}?tab=gestion`}>
+                    Inviter des collaborateurs →
+                  </Link>
+                </Button>
+              ) : (
+                <Link
+                  href={`/entreprises/${user.companyId}?tab=membres`}
+                  className="text-xs text-navy-mid"
+                >
+                  Voir mon entreprise →
+                </Link>
+              )}
             </div>
           )}
 
