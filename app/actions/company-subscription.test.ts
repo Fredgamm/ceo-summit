@@ -365,6 +365,29 @@ describe("purchaseUpsellSeats", () => {
     expect(prisma.companyPayment.create).not.toHaveBeenCalled();
   });
 
+  it("accepts a Groupement plan as a supplement even when isUpsell isn't set", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({
+      id: "plan_groupement",
+      isActive: true,
+      isUpsell: false,
+      pricingMode: "PER_PARTICIPANT",
+      minParticipants: 10,
+      priceAr: 650_000,
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", {
+      ...VALID_INPUT,
+      upsellPlanId: "plan_groupement",
+      quantity: 10,
+    });
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ amount: 10 * 650_000 }),
+      })
+    );
+  });
+
   it("keeps a Groupement upsell's minimum headcount even bought as a supplement", async () => {
     vi.mocked(prisma.plan.findUnique).mockResolvedValue({
       id: "plan_upsell",

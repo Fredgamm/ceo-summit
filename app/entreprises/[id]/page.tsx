@@ -10,6 +10,7 @@ import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { seatCap } from "@/lib/company-seats";
+import { UPSELL_ELIGIBLE_WHERE } from "@/lib/upsell-plans";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +91,7 @@ export default async function CompanyProfilePage({
       .length + company.invites.length;
   const upsellPlans = isCompanyAdmin
     ? await prisma.plan.findMany({
-        where: { isUpsell: true, isActive: true },
+        where: UPSELL_ELIGIBLE_WHERE,
         orderBy: { displayOrder: "asc" },
       })
     : [];

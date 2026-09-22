@@ -10,6 +10,7 @@ import {
   purchaseUpsellSeatsSchema,
 } from "@/lib/validations/company-payment";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import AdminCompanyPaymentAlertEmail from "@/emails/admin-company-payment-alert-email";
 
@@ -238,7 +239,7 @@ export async function purchaseUpsellSeats(
   }
 
   const upsellPlan = await prisma.plan.findUnique({ where: { id: f.upsellPlanId } });
-  if (!upsellPlan || !upsellPlan.isActive || !upsellPlan.isUpsell) {
+  if (!upsellPlan || !upsellPlan.isActive || !isUpsellEligible(upsellPlan)) {
     return { success: false, error: "Offre supplément invalide." };
   }
   // Un supplément Groupement (ex-ante minParticipants) garde son seuil même
