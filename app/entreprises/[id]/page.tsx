@@ -286,7 +286,6 @@ export default async function CompanyProfilePage({
                     <UpsellPurchaseForm
                       companySubscriptionId={company.subscription.id}
                       upsellPlans={upsellPlans}
-                      seatsNeeded={usedSeats - applicableCap + 1}
                     />
                   </div>
                 )}
