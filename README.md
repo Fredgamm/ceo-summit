@@ -58,7 +58,7 @@ components/
 lib/                     Prisma singleton, utils (cn, formatAriary, formatDateFr)
 prisma/                  schema.prisma, migrations/, seed.ts
 types/                   Extensions de types (next-auth.d.ts)
-emails/                  Templates React Email (Resend) : activation, reset password
+emails/                  Templates React Email (envoyés en SMTP, lib/resend.ts) : activation, reset password
 ```
 
 ## Design system

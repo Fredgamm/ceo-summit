@@ -1,43 +1,34 @@
-import { Resend } from "resend";
 import { render } from "@react-email/render";
 import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
 
 /**
- * Resend singleton. Ref: CEO_Summit_Architecture_Technique.docx
- *   "Email transactionnel — Resend. Templates : React Email."
- * Lazily instantiated so the app doesn't crash at import time in
- * environments without RESEND_API_KEY set (e.g. this sandbox / early dev).
- */
-let client: Resend | null = null;
-
-function getResendClient(apiKey: string): Resend {
-  if (!client) {
-    client = new Resend(apiKey);
-  }
-  return client;
-}
-
-/**
- * 3 septembre 2026 — mode dev local : sans clé Resend réelle (absente ou
- * encore la valeur placeholder de .env.example), on route tous les emails
- * transactionnels vers Maildev (SMTP local, aucune authentification) plutôt
- * que d'échouer contre l'API Resend. Activable aussi explicitement via
- * MAIL_DEV_MODE=true (utile si une vraie clé traîne en local mais qu'on
- * veut quand même tester sans consommer de quota / sans risque d'envoi
- * réel). Voir Maildev : `npx maildev`, UI sur http://localhost:1080.
+ * 22 septembre 2026 — remplace l'envoi via l'API Resend par un envoi SMTP
+ * direct sur la boîte mail existante de ceo-summit.mg, plutôt que d'ouvrir un
+ * nouveau compte chez un prestataire tiers. Le fichier garde son nom
+ * (`lib/resend.ts`, 30+ imports ailleurs dans le projet) pour ne pas propager
+ * un renommage sans rapport avec ce changement.
+ *
+ * Conséquence assumée : le suivi "taux d'ouverture" des campagnes (E8-T09,
+ * `app/api/webhooks/resend/route.ts`) reposait sur le tracking automatique de
+ * Resend — plus aucun évènement n'arrivera sur ce webhook une fois basculé
+ * en SMTP pur. La route reste en place (fonctionnalité déjà construite,
+ * inoffensive à laisser inactive) mais `openedAt`/`openCount` ne
+ * progresseront plus tant qu'aucun prestataire équivalent n'est rebranché.
  */
 function isMailDevMode(): boolean {
   if (process.env.MAIL_DEV_MODE === "true") return true;
-  return !isResendConfigured();
+  return !isSmtpConfigured();
 }
 
-/** Whether a real (non-placeholder) Resend key is present — used by the
+/** Whether real (non-placeholder) SMTP credentials are present — used by the
  * admin settings page to show accurate "Connecté"/"Non configuré" status,
  * independent of the MAIL_DEV_MODE override above. */
-export function isResendConfigured(): boolean {
-  const key = process.env.RESEND_API_KEY;
-  return Boolean(key) && key !== "re_xxxxxxxxxxxx";
+export function isSmtpConfigured(): boolean {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const password = process.env.SMTP_PASSWORD;
+  return Boolean(host && user && password) && host !== "smtp.exemple.mg";
 }
 
 let devTransport: nodemailer.Transporter | null = null;
@@ -54,6 +45,27 @@ function getDevTransport(): nodemailer.Transporter {
   return devTransport;
 }
 
+let smtpTransport: nodemailer.Transporter | null = null;
+
+function getSmtpTransport(): nodemailer.Transporter {
+  if (!smtpTransport) {
+    const port = Number(process.env.SMTP_PORT || 587);
+    smtpTransport = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port,
+      // 465 = TLS implicite dès la connexion ; tout autre port (587, 25)
+      // démarre en clair puis passe en TLS via STARTTLS — nodemailer le fait
+      // automatiquement quand secure: false et que le serveur l'annonce.
+      secure: port === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASSWORD,
+      },
+    });
+  }
+  return smtpTransport;
+}
+
 interface SendTransactionalEmailArgs {
   to: string;
   subject: string;
@@ -67,14 +79,14 @@ interface SendTransactionalEmailArgs {
  */
 export async function sendTransactionalEmail({ to, subject, react }: SendTransactionalEmailArgs) {
   const from = process.env.EMAIL_FROM || "noreply@ceo-summit.mg";
+  const html = await render(react);
 
   if (isMailDevMode()) {
-    const html = await render(react);
     try {
       await getDevTransport().sendMail({ from, to, subject, html });
     } catch (err) {
       console.error(
-        "[resend] MAIL_DEV_MODE actif mais Maildev est injoignable sur " +
+        "[mail] MAIL_DEV_MODE actif mais Maildev est injoignable sur " +
           `${process.env.MAILDEV_HOST || "localhost"}:${process.env.MAILDEV_PORT || 1025}` +
           " — lance `npx maildev` (UI sur http://localhost:1080).",
         err
@@ -84,14 +96,12 @@ export async function sendTransactionalEmail({ to, subject, react }: SendTransac
     return { id: "maildev-local" };
   }
 
-  const resend = getResendClient(process.env.RESEND_API_KEY!);
-  const { data, error } = await resend.emails.send({ from, to, subject, react });
-
-  if (error) {
+  try {
+    const info = await getSmtpTransport().sendMail({ from, to, subject, html });
+    return { id: info.messageId };
+  } catch (err) {
     // Caller decides whether to throw/retry; we always log for the audit trail.
-    console.error("[resend] failed to send email", { to, subject, error });
-    throw new Error(`Failed to send email: ${error.message}`);
+    console.error("[mail] failed to send email via SMTP", { to, subject, err });
+    throw new Error(`Failed to send email: ${err instanceof Error ? err.message : String(err)}`);
   }
-
-  return data;
 }

@@ -133,7 +133,7 @@ Colle ces 3 valeurs dans `.env` (`NEXTAUTH_SECRET`,
 pré-remplis avec `http://167.114.96.153` dans le modèle — laisse tel quel
 pour l'instant (IP seule, pas de domaine).
 
-Les identifiants Resend/R2/Zoom/webhook paiement sont optionnels pour un premier
+Les identifiants SMTP/R2/Zoom/webhook paiement sont optionnels pour un premier
 déploiement de test — sans eux, les emails et uploads de fichiers
 échoueront proprement (comportement déjà documenté dans le projet pour
 l'environnement de dev), mais le reste de la plateforme fonctionne.
@@ -345,6 +345,6 @@ Secret HMAC : `PAYMENT_WEBHOOK_SECRET` (voir `.env.example`).
 - **Pas de sauvegarde automatique** — voir section 11.
 - **Rate limiting toujours absent** (`EX-T01`, voir l'audit sécurité) — à
   garder en tête avant une exposition publique large.
-- **Emails/uploads de fichiers inertes tant que Resend/R2 ne sont pas
+- **Emails/uploads de fichiers inertes tant que SMTP/R2 ne sont pas
   configurés** dans `.env` — comportement déjà documenté pour
   l'environnement de dev, identique ici.

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { isResendConfigured } from "@/lib/resend";
+import { isSmtpConfigured } from "@/lib/resend";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +93,7 @@ export default async function AdminParametresPage({
     tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
   } else if (activeTab === "integrations") {
     const paymentWebhookConfigured = Boolean(process.env.PAYMENT_WEBHOOK_SECRET);
-    const resendConfigured = isResendConfigured();
+    const smtpConfigured = isSmtpConfigured();
     const r2Configured = Boolean(
       process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
     );
@@ -112,9 +112,12 @@ export default async function AdminParametresPage({
           ]}
         />
         <IntegrationCard
-          title="Email transactionnel — Resend"
-          configured={resendConfigured}
-          rows={[{ label: "Adresse expéditeur", value: process.env.EMAIL_FROM ?? "non configuré" }]}
+          title="Email transactionnel — SMTP (ceo-summit.mg)"
+          configured={smtpConfigured}
+          rows={[
+            { label: "Serveur SMTP", value: process.env.SMTP_HOST ?? "non configuré" },
+            { label: "Adresse expéditeur", value: process.env.EMAIL_FROM ?? "non configuré" },
+          ]}
         />
         <IntegrationCard
           title="Stockage fichiers — Cloudflare R2"
