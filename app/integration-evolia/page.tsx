@@ -19,7 +19,7 @@ export default function EvoliaIntegrationPage() {
       </p>
       <h1 className="mb-3 text-2xl font-bold text-navy">Intégration API — CEO Summit × Evolia</h1>
       <p className="mb-8 text-sm text-text-muted">
-        Version 1.3 — révisée le 22 septembre 2026. Remplace tout échange ou document antérieur
+        Version 1.4 — révisée le 22 septembre 2026. Remplace tout échange ou document antérieur
         (spécifications envoyées par email, export PDF/HTML) — c&apos;est cette page qui fait foi.
       </p>
 
@@ -30,8 +30,9 @@ export default function EvoliaIntegrationPage() {
               Le principe : c&apos;est CEO Summit qui vous envoie les données, vous n&apos;avez rien
               à interroger ni à récupérer chez nous.
             </strong>{" "}
-            Deux appels HTTP, chacun dans un sens, pas de redirection, pas d&apos;URL de retour à
-            gérer :
+            Deux appels <strong className="text-navy">HTTPS</strong> (jamais de HTTP en clair — voir
+            la note sécurité ci-dessous), chacun dans un sens, pas de redirection, pas d&apos;URL de
+            retour à gérer :
           </p>
           <ol className="list-decimal pl-5">
             <li>
@@ -67,6 +68,17 @@ export default function EvoliaIntegrationPage() {
               ],
             ]}
           />
+
+          <Callout>
+            <strong>Sécurité du transport.</strong> Les deux échanges se font exclusivement en{" "}
+            <strong>HTTPS (TLS)</strong>, jamais en HTTP en clair — non négociable des deux côtés,
+            données d&apos;entreprises et de participants en jeu. En plus du chiffrement du
+            transport, l&apos;échange 2 (notre webhook, §2) exige une{" "}
+            <strong>signature HMAC-SHA256</strong> sur chaque requête pour garantir que l&apos;appel
+            vient bien de vous — voir le détail en §2. Nous demandons la réciproque pour
+            l&apos;échange 1 (§3, point 1) : dites-nous comment vous voulez qu&apos;on
+            s&apos;authentifie auprès de votre endpoint.
+          </Callout>
 
           <Callout>
             <strong>Le virement bancaire ne passe pas par Evolia.</strong> CEO Summit propose deux
