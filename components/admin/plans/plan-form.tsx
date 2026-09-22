@@ -253,22 +253,6 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
           </div>
         )}
 
-        {isGroupOffer ? (
-          <p className="text-xs text-text-muted">
-            Une offre Groupement est automatiquement proposable en supplément à une entreprise ayant
-            atteint son plafond — rien à cocher.
-          </p>
-        ) : (
-          <label className="flex items-center gap-2 text-sm text-text-mid">
-            <Checkbox
-              checked={values.isUpsell}
-              onCheckedChange={(c) => set("isUpsell", c === true)}
-            />
-            Proposable en supplément d&apos;un abonnement déjà actif (ex. Executive Pass — une
-            entreprise au plafond peut en acheter plusieurs pour ajouter des places)
-          </label>
-        )}
-
         <p className="mt-2 text-xs font-bold uppercase tracking-wide text-text-muted">
           Publication
         </p>
