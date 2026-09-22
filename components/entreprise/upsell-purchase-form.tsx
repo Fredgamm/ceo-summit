@@ -52,16 +52,45 @@ export function UpsellPurchaseForm({
   const [submitted, setSubmitted] = React.useState(false);
 
   const selectedPlan = upsellPlans.find((p) => p.id === planId);
-  const declaredQuantity = Number(quantity) || 0;
+  // `quantity` ne contient jamais que des chiffres (voir handleQuantityChange) —
+  // vide tant que saisi, jamais négatif ni décimal, contrairement à un simple
+  // Number(input.value) qui laisserait passer "1e5", "-3" ou "1.5".
+  const declaredQuantity = quantity === "" ? 0 : parseInt(quantity, 10);
   const amount = selectedPlan ? selectedPlan.priceAr * declaredQuantity : 0;
   // Un supplément Groupement garde son seuil minimum même acheté en plus
-  // d'un abonnement déjà actif (voir meetsMinParticipants côté serveur).
+  // d'un abonnement déjà actif (voir meetsMinParticipants côté serveur) — la
+  // quantité doit donc toujours rester proportionnée à l'offre choisie.
   const minQuantity =
     selectedPlan?.pricingMode === "PER_PARTICIPANT" ? (selectedPlan.minParticipants ?? 1) : 1;
+  const isQuantityTooLow = declaredQuantity > 0 && declaredQuantity < minQuantity;
 
-  React.useEffect(() => {
-    setQuantity((prev) => (Number(prev) < minQuantity ? String(minQuantity) : prev));
-  }, [minQuantity]);
+  // Changer d'offre change ce que "quantité" veut dire (places à l'unité vs.
+  // effectif d'un lot) — on la recale sur le nouveau seuil au lieu de laisser
+  // une quantité valide pour l'ancienne offre mais insuffisante pour la
+  // nouvelle.
+  function handlePlanChange(nextPlanId: string) {
+    setPlanId(nextPlanId);
+    const nextPlan = upsellPlans.find((p) => p.id === nextPlanId);
+    const nextMin =
+      nextPlan?.pricingMode === "PER_PARTICIPANT" ? (nextPlan.minParticipants ?? 1) : 1;
+    setQuantity((prev) => {
+      const parsed = prev === "" ? 0 : parseInt(prev, 10);
+      return parsed < nextMin ? String(nextMin) : prev;
+    });
+  }
+
+  function handleQuantityChange(raw: string) {
+    // Chiffres uniquement : bloque signe négatif, décimales et notation
+    // scientifique dès la saisie plutôt que de les valider après coup.
+    setQuantity(raw.replace(/[^0-9]/g, ""));
+  }
+
+  function handleQuantityBlur() {
+    setQuantity((prev) => {
+      const parsed = prev === "" ? 0 : parseInt(prev, 10);
+      return parsed < minQuantity ? String(minQuantity) : prev;
+    });
+  }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -129,7 +158,7 @@ export function UpsellPurchaseForm({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <Label>Offre</Label>
-          <Select value={planId} onValueChange={setPlanId}>
+          <Select value={planId} onValueChange={handlePlanChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -147,12 +176,24 @@ export function UpsellPurchaseForm({
           <Input
             id="upsell-quantity"
             type="number"
+            inputMode="numeric"
             min={minQuantity}
+            step={1}
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(e) => handleQuantityChange(e.target.value)}
+            onBlur={handleQuantityBlur}
+            className={isQuantityTooLow ? "border-red-500 focus-visible:ring-red-500" : undefined}
           />
-          {selectedPlan?.pricingMode === "PER_PARTICIPANT" && (
-            <p className="text-xs text-text-muted">Cette offre démarre à {minQuantity} place(s).</p>
+          {isQuantityTooLow ? (
+            <p className="text-xs text-red-600">
+              Cette offre démarre à {minQuantity} place(s) — indiquez au moins ce nombre.
+            </p>
+          ) : (
+            selectedPlan?.pricingMode === "PER_PARTICIPANT" && (
+              <p className="text-xs text-text-muted">
+                Cette offre démarre à {minQuantity} place(s).
+              </p>
+            )
           )}
         </div>
       </div>
@@ -212,7 +253,7 @@ export function UpsellPurchaseForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || declaredQuantity < minQuantity}
+        disabled={submitting || uploading || declaredQuantity < minQuantity || !selectedPlan}
         className="justify-center"
       >
         {submitting ? "Envoi…" : "Acheter ces places"}
