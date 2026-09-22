@@ -280,8 +280,8 @@ export default async function CompanyProfilePage({
                       Ajouter des places supplémentaires
                     </h2>
                     <p className="mb-3 text-xs text-text-muted">
-                      Vous avez atteint les {applicableCap} place(s) de votre offre — achetez des
-                      places additionnelles pour inscrire plus de participants.
+                      Vous avez atteint les {applicableCap} place(s) de votre offre. Pour ajouter
+                      d&apos;autres participants, veuillez choisir une offre ci-dessous.
                     </p>
                     <UpsellPurchaseForm
                       companySubscriptionId={company.subscription.id}
