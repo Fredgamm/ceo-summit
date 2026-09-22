@@ -30,6 +30,7 @@ const PUBLIC_ROUTES = [
   "/inscription",
   "/cgu",
   "/confidentialite",
+  "/integration-evolia",
   "/",
   "/~offline",
 ];
