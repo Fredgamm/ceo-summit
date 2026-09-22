@@ -272,18 +272,21 @@ export default async function CompanyProfilePage({
 
               {company.subscription &&
                 (subscriptionStatus === "ACTIVE" || subscriptionStatus === "EXPIRED") &&
-                upsellPlans.length > 0 && (
+                upsellPlans.length > 0 &&
+                applicableCap != null &&
+                usedSeats >= applicableCap && (
                   <div className="rounded-lg border border-border bg-white p-5">
                     <h2 className="mb-1 text-sm font-bold text-navy">
                       Ajouter des places supplémentaires
                     </h2>
                     <p className="mb-3 text-xs text-text-muted">
-                      Votre offre est limitée — achetez des places additionnelles pour inscrire plus
-                      de participants.
+                      Vous avez atteint les {applicableCap} place(s) de votre offre — achetez des
+                      places additionnelles pour inscrire plus de participants.
                     </p>
                     <UpsellPurchaseForm
                       companySubscriptionId={company.subscription.id}
                       upsellPlans={upsellPlans}
+                      seatsNeeded={usedSeats - applicableCap + 1}
                     />
                   </div>
                 )}

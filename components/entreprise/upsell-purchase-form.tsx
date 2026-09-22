@@ -33,13 +33,16 @@ const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
 export function UpsellPurchaseForm({
   companySubscriptionId,
   upsellPlans,
+  seatsNeeded = 1,
 }: {
   companySubscriptionId: string;
   upsellPlans: Plan[];
+  /** Nombre de places manquantes à cet instant — présélectionné comme quantité de départ. */
+  seatsNeeded?: number;
 }) {
   const router = useRouter();
   const [planId, setPlanId] = React.useState(upsellPlans[0]?.id ?? "");
-  const [quantity, setQuantity] = React.useState("1");
+  const [quantity, setQuantity] = React.useState(String(Math.max(seatsNeeded, 1)));
   const [method, setMethod] = React.useState<PaymentMethod>("VIREMENT");
   const [comment, setComment] = React.useState("");
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
