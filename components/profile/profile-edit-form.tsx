@@ -237,9 +237,6 @@ export function ProfileEditForm({
               value={websiteUrl}
               onChange={(e) => setWebsiteUrl(e.target.value)}
             />
-            <p className="text-xs text-text-muted">
-              &quot;https://&quot; est ajouté automatiquement si besoin.
-            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -250,9 +247,6 @@ export function ProfileEditForm({
               value={linkedinUrl}
               onChange={(e) => setLinkedinUrl(e.target.value)}
             />
-            <p className="text-xs text-text-muted">
-              &quot;https://&quot; est ajouté automatiquement si besoin.
-            </p>
           </div>
         </CardContent>
       </Card>
