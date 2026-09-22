@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { submitPaymentProofSchema } from "@/lib/validations/company-payment";
+import {
+  submitPaymentProofSchema,
+  purchaseUpsellSeatsSchema,
+} from "@/lib/validations/company-payment";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import AdminCompanyPaymentAlertEmail from "@/emails/admin-company-payment-alert-email";
@@ -186,5 +189,90 @@ export async function submitPaymentProof(
 
   revalidatePath(`/entreprises/${subscription.companyId}`);
   revalidatePath("/entreprise/paiement");
+  return { success: true, data: undefined };
+}
+
+/**
+ * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
+ * participants (offre `isUpsell`, ex. Executive Pass = +1 place), en plus
+ * d'un abonnement déjà actif. Délibérément séparé de `submitPaymentProof` :
+ * ne touche jamais `CompanySubscription.status` (l'entreprise garde son
+ * accès pendant la revue) — seule la confirmation admin incrémente
+ * `extraSeats` (voir `lib/payment-confirmations.ts`).
+ */
+export async function purchaseUpsellSeats(
+  companySubscriptionId: string,
+  input: unknown
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const subscription = await prisma.companySubscription.findUnique({
+    where: { id: companySubscriptionId },
+    include: { company: true, plan: { include: { event: { select: { date: true } } } } },
+  });
+  if (!subscription) return { success: false, error: "Abonnement introuvable." };
+  if (subscription.company.companyAdminId !== session.user.id) {
+    return { success: false, error: "Seul l'admin de l'entreprise peut acheter un supplément." };
+  }
+
+  const effectiveStatus = computeEffectiveStatus(
+    subscription.status,
+    subscription.plan.event?.date
+  );
+  if (effectiveStatus !== "ACTIVE" && effectiveStatus !== "EXPIRED") {
+    return {
+      success: false,
+      error: "Un abonnement actif est requis pour acheter des places supplémentaires.",
+    };
+  }
+
+  const parsed = purchaseUpsellSeatsSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
+  }
+  const f = parsed.data;
+
+  if (!f.proofFileKey.startsWith(`company-payments/${session.user.id}/`)) {
+    return { success: false, error: "Preuve de paiement invalide." };
+  }
+
+  const upsellPlan = await prisma.plan.findUnique({ where: { id: f.upsellPlanId } });
+  if (!upsellPlan || !upsellPlan.isActive || !upsellPlan.isUpsell) {
+    return { success: false, error: "Offre supplément invalide." };
+  }
+
+  const amount = upsellPlan.priceAr * f.quantity;
+
+  await prisma.companyPayment.create({
+    data: {
+      companySubscriptionId,
+      amount,
+      method: f.method,
+      proofFileKey: f.proofFileKey,
+      comment: f.comment || null,
+      submittedById: session.user.id,
+      upsellPlanId: upsellPlan.id,
+      upsellQuantity: f.quantity,
+    },
+  });
+
+  if (process.env.ADMIN_ALERT_EMAIL) {
+    try {
+      await sendTransactionalEmail({
+        to: process.env.ADMIN_ALERT_EMAIL,
+        subject: `Supplément de participants à valider — ${subscription.company.name}`,
+        react: AdminCompanyPaymentAlertEmail({
+          companyName: subscription.company.name,
+          amount,
+          method: f.method,
+        }),
+      });
+    } catch (err) {
+      console.error("[purchaseUpsellSeats] failed to send admin alert email", err);
+    }
+  }
+
+  revalidatePath(`/entreprises/${subscription.companyId}`);
   return { success: true, data: undefined };
 }

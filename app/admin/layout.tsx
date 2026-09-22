@@ -26,7 +26,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       prisma.adminUser.findUnique({ where: { userId: session.user.id } }),
       prisma.membershipApplication.count({ where: { status: "PENDING" } }),
       prisma.opportunity.count({ where: { status: "PENDING_MODERATION" } }),
-      prisma.companySubscription.count({ where: { status: "PENDING_REVIEW" } }),
+      // 22 septembre 2026 (`conception/12` §3.2) — inclut les suppléments de
+      // participants en attente, qui ne changent pas le statut de
+      // l'abonnement (déjà actif) — voir app/admin/entreprises/page.tsx.
+      prisma.companySubscription.count({
+        where: {
+          OR: [{ status: "PENDING_REVIEW" }, { payments: { some: { status: "PENDING" } } }],
+        },
+      }),
     ]);
   if (!user) redirect("/login");
 

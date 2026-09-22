@@ -47,6 +47,12 @@ export async function rejectCompanyPayment(
     return { success: false, error: "Ce paiement a déjà été traité." };
   }
 
+  /**
+   * 22 septembre 2026 (`conception/12` §3.2) — refuser un supplément ne
+   * doit pas toucher l'abonnement, déjà actif et sans rapport avec ce
+   * paiement-là (contrairement au refus du paiement initial, qui repasse
+   * bien l'abonnement en attente).
+   */
   await prisma.$transaction([
     prisma.companyPayment.update({
       where: { id: companyPaymentId },
@@ -57,10 +63,14 @@ export async function rejectCompanyPayment(
         rejectionReason: reason.trim(),
       },
     }),
-    prisma.companySubscription.update({
-      where: { id: payment.companySubscriptionId },
-      data: { status: "PENDING_PAYMENT" },
-    }),
+    ...(payment.upsellQuantity == null
+      ? [
+          prisma.companySubscription.update({
+            where: { id: payment.companySubscriptionId },
+            data: { status: "PENDING_PAYMENT" as const },
+          }),
+        ]
+      : []),
   ]);
 
   await prisma.auditLog.create({

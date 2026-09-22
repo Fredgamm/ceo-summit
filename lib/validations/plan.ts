@@ -55,6 +55,8 @@ export const planFormSchema = z
     eligibilityNote: z.string().trim().max(500).optional().default(""),
     isActive: z.coerce.boolean().default(true),
     isSelfService: z.coerce.boolean().default(true),
+    /** Achetable en quantité comme supplément d'un abonnement déjà actif (ex. Executive Pass). */
+    isUpsell: z.coerce.boolean().default(false),
     displayOrder: z.coerce.number().int().default(0),
   })
   .superRefine((data, ctx) => {

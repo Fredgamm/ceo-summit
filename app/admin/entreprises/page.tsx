@@ -48,7 +48,15 @@ export default async function AdminEntreprisesPage() {
     },
   });
 
-  const pendingReviewCount = subscriptions.filter((s) => s.status === "PENDING_REVIEW").length;
+  /**
+   * 22 septembre 2026 (`conception/12` §3.2) — un supplément de participants
+   * en attente n'est pas reflété par `status` (l'abonnement reste ACTIVE,
+   * voir lib/payment-confirmations.ts) : compter aussi les abonnements avec
+   * un paiement PENDING, quel que soit leur statut.
+   */
+  const pendingReviewCount = subscriptions.filter(
+    (s) => s.status === "PENDING_REVIEW" || s.payments.length > 0
+  ).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,6 +95,11 @@ export default async function AdminEntreprisesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={STATUS_BADGE[sub.status]}>{STATUS_LABEL[sub.status]}</Badge>
+                    {sub.status !== "PENDING_REVIEW" && sub.payments.length > 0 && (
+                      <Badge variant="pending" className="ml-1.5">
+                        Supplément à valider
+                      </Badge>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-text-mid">{formatDateFr(sub.updatedAt)}</td>
                   <td className="px-4 py-3">

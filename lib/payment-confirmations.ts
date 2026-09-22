@@ -49,6 +49,40 @@ export async function confirmCompanyPaymentCore(
   if (!payment) return { success: false, error: "Paiement introuvable." };
 
   const now = new Date();
+
+  /**
+   * 22 septembre 2026 (`conception/12` §3.2) — un paiement de supplément
+   * (`upsellQuantity` non nul) n'active rien : l'abonnement est déjà actif.
+   * Confirmer un tel paiement se limite à incrémenter `extraSeats` — pas de
+   * transition de statut, pas de ré-inscription à l'évènement, pas de
+   * recalcul des crédits (retirés du produit, voir `conception/09`).
+   */
+  if (payment.upsellQuantity != null) {
+    const { count } = await prisma.companyPayment.updateMany({
+      where: { id: companyPaymentId, status: "PENDING" },
+      data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+    });
+    if (count === 0) {
+      return { success: false, error: "Ce paiement a déjà été traité." };
+    }
+    await prisma.companySubscription.update({
+      where: { id: payment.companySubscriptionId },
+      data: { extraSeats: { increment: payment.upsellQuantity } },
+    });
+    if (actorId) {
+      await prisma.auditLog.create({
+        data: {
+          actorId,
+          action: "company_payment.confirm_upsell",
+          targetType: "CompanyPayment",
+          targetId: companyPaymentId,
+          metadata: { extraSeats: payment.upsellQuantity },
+        },
+      });
+    }
+    return { success: true, data: { companyId: payment.companySubscription.companyId } };
+  }
+
   const oneYearLater = new Date(now);
   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
 

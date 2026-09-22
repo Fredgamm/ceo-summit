@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateSecureToken } from "@/lib/tokens";
+import { seatCap } from "@/lib/company-seats";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
@@ -17,6 +18,36 @@ import CompanyInviteEmail from "@/emails/company-invite-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+/**
+ * 22 septembre 2026 (`conception/12` §3.3) — case « Je participe » : bascule
+ * si le gestionnaire lui-même consomme une place de l'offre. Ne bloque
+ * jamais sur le plafond en l'activant — un gestionnaire qui se déclare
+ * participant après coup, une fois le plafond atteint par ailleurs, doit
+ * pouvoir le faire (c'est à lui de retirer un collaborateur si besoin,
+ * pas à cette action de le faire à sa place).
+ */
+export async function setAdminParticipates(
+  companyId: string,
+  participates: boolean
+): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!company) return { success: false, error: "Entreprise introuvable." };
+  if (company.companyAdminId !== session.user.id) {
+    return { success: false, error: "Seul l'admin de l'entreprise peut modifier ce choix." };
+  }
+
+  await prisma.company.update({
+    where: { id: companyId },
+    data: { adminParticipates: participates },
+  });
+
+  revalidatePath(`/entreprises/${companyId}`);
+  return { success: true, data: undefined };
+}
 
 /**
  * Phase 2 offres/paiement (30 juillet 2026) — seul l'admin entreprise invite.
@@ -31,7 +62,7 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    include: { subscription: { include: { plan: { include: { linkedPlatformPlan: true } } } } },
+    include: { subscription: { include: { plan: true } } },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
   if (company.companyAdminId !== session.user.id) {
@@ -47,28 +78,24 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   }
   const email = parsed.data.email.toLowerCase();
 
-  /**
-   * 22 septembre 2026 (`conception/12` §2.2) — un seul champ porte le
-   * nombre de places : `maxTeamMembers` pour une offre forfaitaire, et
-   * l'effectif déclaré au paiement pour une offre groupement (dont le
-   * nombre de places est précisément ce qui a été payé). `includedSeats`,
-   * qui faisait doublon, n'est plus lu.
-   */
-  const subscribedPlan = company.subscription?.plan;
-  const applicableCap =
-    subscribedPlan?.pricingMode === "PER_PARTICIPANT"
-      ? (company.subscription?.declaredParticipants ?? null)
-      : (subscribedPlan?.maxTeamMembers ?? null);
-
+  const applicableCap = company.subscription ? seatCap(company.subscription) : null;
   if (applicableCap != null) {
     const [memberCount, pendingInviteCount] = await Promise.all([
-      prisma.user.count({ where: { companyId } }),
+      // 22 septembre 2026 (`conception/12` §3.3) — le gestionnaire ne
+      // consomme une place que s'il a coché « Je participe » ; ce n'est
+      // sinon qu'un compte admin, pas un participant à l'évènement.
+      prisma.user.count({
+        where: {
+          companyId,
+          ...(company.adminParticipates ? {} : { id: { not: company.companyAdminId } }),
+        },
+      }),
       prisma.companyInvite.count({ where: { companyId, status: "PENDING" } }),
     ]);
     if (memberCount + pendingInviteCount >= applicableCap) {
       return {
         success: false,
-        error: `Plafond de ${applicableCap} collaborateur(s) atteint pour l'offre actuelle.`,
+        error: `Plafond de ${applicableCap} participant(s) atteint pour l'offre actuelle.`,
       };
     }
   }

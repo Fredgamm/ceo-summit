@@ -18,7 +18,7 @@ vi.mock("@/emails/admin-company-payment-alert-email", () => ({ default: vi.fn(()
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { selectPlan, submitPaymentProof } from "./company-subscription";
+import { selectPlan, submitPaymentProof, purchaseUpsellSeats } from "./company-subscription";
 
 const SESSION = { user: { id: "admin_user_1" } } as never;
 
@@ -270,5 +270,98 @@ describe("submitPaymentProof", () => {
     });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("purchaseUpsellSeats", () => {
+  const VALID_INPUT = {
+    upsellPlanId: "plan_upsell",
+    quantity: 3,
+    method: "VIREMENT" as const,
+    proofFileKey: "company-payments/admin_user_1/proof.pdf",
+    comment: "",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(SESSION);
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "ACTIVE",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: { event: null },
+    } as never);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({
+      id: "plan_upsell",
+      isActive: true,
+      isUpsell: true,
+      priceAr: 4_715_800,
+    } as never);
+  });
+
+  it("creates a payment for quantity × unit price without touching the subscription status", async () => {
+    const result = await purchaseUpsellSeats("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amount: 3 * 4_715_800,
+          upsellPlanId: "plan_upsell",
+          upsellQuantity: 3,
+        }),
+      })
+    );
+    expect(prisma.companySubscription.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the subscription isn't ACTIVE or EXPIRED", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: { event: null },
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a caller who isn't the company admin", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "ACTIVE",
+      company: { companyAdminId: "someone_else", name: "Rakoto Holding" },
+      plan: { event: null },
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", VALID_INPUT);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a plan that isn't marked isUpsell", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({
+      id: "plan_upsell",
+      isActive: true,
+      isUpsell: false,
+      priceAr: 4_715_800,
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a proofFileKey that doesn't belong to the calling admin", async () => {
+    const result = await purchaseUpsellSeats("sub_1", {
+      ...VALID_INPUT,
+      proofFileKey: "company-payments/someone_else/proof.pdf",
+    });
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
   });
 });

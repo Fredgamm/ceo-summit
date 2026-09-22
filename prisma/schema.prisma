@@ -374,6 +374,11 @@ model Plan {
   /// manuellement) : exclues de getActivePlans({selfServiceOnly:true}) et de
   /// la résolution de lien profond, mais toujours listées à l'admin.
   isSelfService        Boolean          @default(true)
+  /// 22 septembre 2026 (`conception/12` §3.1, `5` — supplément participants)
+  /// — offre achetable en quantité, en supplément d'un abonnement déjà
+  /// actif (ex. Executive Pass, +1 place par unité), jamais comme offre
+  /// principale au checkout initial.
+  isUpsell             Boolean          @default(false)
   displayOrder         Int              @default(0)
   /// Phase 2quater (1er août 2026) — rattache cette offre à un évènement
   /// précis (ex. les pass "Engagement 2025 — CEO Summit") plutôt qu'à la
@@ -393,6 +398,7 @@ model Plan {
   opportunitiesAsVisibilityPlan Opportunity[]         @relation("OpportunityVisibilityPlan")
   companySubscriptions          CompanySubscription[]
   eventRegistrations            EventRegistration[]
+  upsellPayments                CompanyPayment[]      @relation("UpsellPlan")
 
   @@index([isActive, displayOrder])
   @@index([eventId])
@@ -415,6 +421,12 @@ model Company {
   /// fermée de réseaux.
   socialLinks    Json?
   additionalInfo String?  @db.Text
+  /// 22 septembre 2026 (`conception/12` §3.3) — case « Je participe » : le
+  /// gestionnaire qui inscrit l'entreprise et paie n'assiste pas forcément
+  /// lui-même à l'évènement (souvent une secrétaire). `false` par défaut —
+  /// il ne consomme une place que s'il coche explicitement cette case
+  /// depuis la composition de la liste des participants.
+  adminParticipates Boolean @default(false)
   createdAt      DateTime @default(now())
 
   /// Phase 2 offres/paiement (30 juillet 2026) — le créateur de la fiche
@@ -464,6 +476,13 @@ model CompanySubscription {
   /// soumission, ou toujours pour une offre `FIXED_BUNDLE` (le nombre de
   /// sièges vient de `Plan.includedSeats`, pas d'ici).
   declaredParticipants Int?
+  /// 22 septembre 2026 (`conception/12` §3.2, §5) — places achetées en
+  /// supplément de l'offre principale, via une ou plusieurs offres
+  /// `isUpsell` (ex. 3 Executive Pass = +3). Incrémenté uniquement à la
+  /// confirmation admin d'un paiement de supplément — jamais décrémenté
+  /// (un supplément payé n'est pas repris). Places totales = quota de
+  /// l'offre + ce champ.
+  extraSeats           Int                       @default(0)
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
@@ -502,6 +521,14 @@ model CompanyPayment {
   reviewedById          String?
   reviewedAt            DateTime?
   rejectionReason       String?             @db.Text
+  /// 22 septembre 2026 — non nul uniquement pour l'achat d'un supplément
+  /// de participants (offre `Plan.isUpsell`) : `upsellQuantity` unités de
+  /// cette offre, en plus de l'abonnement déjà actif. Sa confirmation
+  /// n'active pas l'abonnement (déjà actif) et n'y touche pas — elle
+  /// incrémente seulement `CompanySubscription.extraSeats`.
+  upsellPlanId          String?
+  upsellPlan            Plan?               @relation("UpsellPlan", fields: [upsellPlanId], references: [id])
+  upsellQuantity        Int?
   createdAt             DateTime            @default(now())
 
   @@index([status])

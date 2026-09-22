@@ -36,6 +36,7 @@ async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     eligibilityNote: f.eligibilityNote || null,
     isActive: f.isActive,
     isSelfService: f.isSelfService,
+    isUpsell: f.isUpsell,
     displayOrder: f.displayOrder,
     /**
      * 22 septembre 2026 (`conception/12` §2.5) — `rank` ne compare plus

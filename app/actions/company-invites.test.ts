@@ -95,7 +95,12 @@ describe("inviteTeammate", () => {
       id: "company_1",
       name: "Rakoto Holding",
       companyAdminId: "admin_user_1",
-      subscription: { plan: { maxTeamMembers: 2 } },
+      adminParticipates: false,
+      subscription: {
+        plan: { pricingMode: "FIXED_BUNDLE", maxTeamMembers: 2 },
+        declaredParticipants: null,
+        extraSeats: 0,
+      },
     } as never);
     vi.mocked(prisma.user.count).mockResolvedValue(1);
     vi.mocked(prisma.companyInvite.count).mockResolvedValue(1);

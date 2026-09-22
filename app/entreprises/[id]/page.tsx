@@ -9,6 +9,7 @@ import { countUnreadMessages } from "@/lib/conversations";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
+import { seatCap } from "@/lib/company-seats";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { InviteTeammateForm } from "@/components/entreprise/invite-teammate-form";
+import { AdminParticipatesToggle } from "@/components/entreprise/admin-participates-toggle";
+import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { initials, tierLabel, formatAriary } from "@/lib/utils";
 
@@ -79,6 +82,18 @@ export default async function CompanyProfilePage({
   if (!company) notFound();
 
   const isCompanyAdmin = company.companyAdminId === viewer.id;
+  const applicableCap = company.subscription ? seatCap(company.subscription) : null;
+  // 22 septembre 2026 (`conception/12` §3.3) — le gestionnaire ne consomme
+  // une place que s'il a coché « Je participe ».
+  const usedSeats =
+    company.users.filter((u) => company.adminParticipates || u.id !== company.companyAdminId)
+      .length + company.invites.length;
+  const upsellPlans = isCompanyAdmin
+    ? await prisma.plan.findMany({
+        where: { isUpsell: true, isActive: true },
+        orderBy: { displayOrder: "asc" },
+      })
+    : [];
   // Deep-link support (?tab=gestion) so links elsewhere (e.g. the
   // dashboard's "Mon équipe" widget) can land directly on a specific tab —
   // "gestion" only honored for the company admin, who's the only one who
@@ -238,9 +253,40 @@ export default async function CompanyProfilePage({
               </div>
 
               <div className="rounded-lg border border-border bg-white p-5">
-                <h2 className="mb-3 text-sm font-bold text-navy">Inviter des collaborateurs</h2>
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-navy">Participants à l&apos;évènement</h2>
+                  {applicableCap != null && (
+                    <span className="text-xs font-semibold text-text-muted">
+                      {usedSeats} / {applicableCap} place(s)
+                    </span>
+                  )}
+                </div>
+                <div className="mb-4">
+                  <AdminParticipatesToggle
+                    companyId={company.id}
+                    participates={company.adminParticipates}
+                  />
+                </div>
                 <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
               </div>
+
+              {company.subscription &&
+                (subscriptionStatus === "ACTIVE" || subscriptionStatus === "EXPIRED") &&
+                upsellPlans.length > 0 && (
+                  <div className="rounded-lg border border-border bg-white p-5">
+                    <h2 className="mb-1 text-sm font-bold text-navy">
+                      Ajouter des places supplémentaires
+                    </h2>
+                    <p className="mb-3 text-xs text-text-muted">
+                      Votre offre est limitée — achetez des places additionnelles pour inscrire plus
+                      de participants.
+                    </p>
+                    <UpsellPurchaseForm
+                      companySubscriptionId={company.subscription.id}
+                      upsellPlans={upsellPlans}
+                    />
+                  </div>
+                )}
             </div>
           </TabsContent>
         )}

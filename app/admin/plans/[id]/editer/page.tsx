@@ -49,6 +49,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           eligibilityNote: plan.eligibilityNote ?? "",
           isActive: plan.isActive,
           isSelfService: plan.isSelfService,
+          isUpsell: plan.isUpsell,
           displayOrder: plan.displayOrder,
         }}
       />

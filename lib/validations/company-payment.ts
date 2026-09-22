@@ -26,3 +26,17 @@ export const submitPaymentProofSchema = z.object({
   comment: z.string().trim().max(1000).optional().default(""),
   declaredParticipants: z.coerce.number().int().min(1).optional(),
 });
+
+/**
+ * 22 septembre 2026 (`conception/12` §3.2) — achat d'une offre supplément
+ * (`Plan.isUpsell`) en quantité, en plus d'un abonnement déjà actif. Même
+ * mécanique de preuve que `submitPaymentProofSchema`, plus la quantité —
+ * le montant (`unitPriceAr × quantity`) reste calculé côté serveur.
+ */
+export const purchaseUpsellSeatsSchema = z.object({
+  upsellPlanId: z.string().min(1),
+  quantity: z.coerce.number().int().min(1, "Indiquez au moins 1"),
+  method: z.enum(["VIREMENT", "CHEQUE", "CARTE_BANCAIRE", "MOBILE_MONEY"]),
+  proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
+  comment: z.string().trim().max(1000).optional().default(""),
+});

@@ -217,6 +217,10 @@ async function main() {
       priceEur: 950,
       maxTeamMembers: 1,
       displayOrder: 6,
+      // 22 septembre 2026 (`conception/12` §3.2) — aussi achetable en
+      // supplément (quantité libre) une fois une autre offre déjà active :
+      // c'est l'unité de référence "+1 place" du modèle cible.
+      isUpsell: true,
     },
   ];
 
@@ -231,6 +235,7 @@ async function main() {
         priceAr: Math.round(offer.priceEur * eurToArRate),
         pricingMode: "FIXED_BUNDLE",
         maxTeamMembers: offer.maxTeamMembers,
+        isUpsell: offer.isUpsell ?? false,
         rank: index + 2,
         isActive: true,
         isSelfService: true,

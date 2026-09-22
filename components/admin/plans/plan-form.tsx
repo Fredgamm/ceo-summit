@@ -31,6 +31,7 @@ export interface PlanFormValues {
   eligibilityNote: string;
   isActive: boolean;
   isSelfService: boolean;
+  isUpsell: boolean;
   displayOrder: number;
 }
 
@@ -46,6 +47,7 @@ const EMPTY_VALUES: PlanFormValues = {
   eligibilityNote: "",
   isActive: true,
   isSelfService: true,
+  isUpsell: false,
   displayOrder: 0,
 };
 
@@ -249,6 +251,17 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
               cette offre (ex. Bronze : 2).
             </p>
           </div>
+        )}
+
+        {!isGroupOffer && (
+          <label className="flex items-center gap-2 text-sm text-text-mid">
+            <Checkbox
+              checked={values.isUpsell}
+              onCheckedChange={(c) => set("isUpsell", c === true)}
+            />
+            Proposable en supplément d&apos;un abonnement déjà actif (ex. Executive Pass — une
+            entreprise au plafond peut en acheter plusieurs pour ajouter des places)
+          </label>
         )}
 
         <p className="mt-2 text-xs font-bold uppercase tracking-wide text-text-muted">

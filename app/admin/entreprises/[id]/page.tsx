@@ -37,7 +37,7 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
       subscription: {
         include: {
           plan: true,
-          payments: { orderBy: { createdAt: "desc" } },
+          payments: { orderBy: { createdAt: "desc" }, include: { upsellPlan: true } },
         },
       },
     },
@@ -105,7 +105,18 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
 
       {latestPendingPayment && (
         <div className="rounded-lg border border-border bg-white p-6">
-          <h2 className="mb-3 text-base font-bold text-navy">Paiement à valider</h2>
+          <h2 className="mb-3 text-base font-bold text-navy">
+            {latestPendingPayment.upsellQuantity != null
+              ? "Supplément de participants à valider"
+              : "Paiement à valider"}
+          </h2>
+          {latestPendingPayment.upsellQuantity != null && latestPendingPayment.upsellPlan && (
+            <p className="mb-3 text-sm text-text-mid">
+              {latestPendingPayment.upsellQuantity} × {latestPendingPayment.upsellPlan.name} —
+              n&apos;active pas l&apos;abonnement (déjà actif), ajoute{" "}
+              {latestPendingPayment.upsellQuantity} place(s) à la confirmation.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-xs uppercase text-text-muted">Montant déclaré</dt>
