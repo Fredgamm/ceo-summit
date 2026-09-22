@@ -78,10 +78,32 @@ export function PaymentProofForm({
   const [submitted, setSubmitted] = React.useState(false);
 
   const plan = { priceAr, minParticipants, pricingMode };
-  const declaredCount = isGroupOffer ? Number(declaredParticipants) || 0 : 1;
+  // `declaredParticipants` ne contient jamais que des chiffres (voir
+  // handleDeclaredParticipantsChange) — jamais négatif ni décimal, contrairement
+  // à un simple Number(input.value) qui laisserait passer "1e5", "-3" ou "1.5"
+  // (même durcissement que UpsellPurchaseForm).
+  const declaredCount = isGroupOffer
+    ? declaredParticipants === ""
+      ? 0
+      : parseInt(declaredParticipants, 10)
+    : 1;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
   const amount = computeDueAmount(plan, declaredCount);
   const isEvoliaMethod = EVOLIA_METHODS.includes(method);
+
+  function handleDeclaredParticipantsChange(raw: string) {
+    // Chiffres uniquement : bloque signe négatif, décimales et notation
+    // scientifique dès la saisie plutôt que de les valider après coup.
+    setDeclaredParticipants(raw.replace(/[^0-9]/g, ""));
+  }
+
+  function handleDeclaredParticipantsBlur() {
+    setDeclaredParticipants((prev) => {
+      const parsed = prev === "" ? 0 : parseInt(prev, 10);
+      const min = minParticipants ?? 1;
+      return parsed < min ? String(min) : prev;
+    });
+  }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -149,9 +171,13 @@ export function PaymentProofForm({
           <Input
             id="declared-participants"
             type="number"
+            inputMode="numeric"
             min={minParticipants ?? 1}
+            step={1}
             value={declaredParticipants}
-            onChange={(e) => setDeclaredParticipants(e.target.value)}
+            onChange={(e) => handleDeclaredParticipantsChange(e.target.value)}
+            onBlur={handleDeclaredParticipantsBlur}
+            className={!meetsThreshold ? "border-red-500 focus-visible:ring-red-500" : undefined}
           />
           <p className="text-xs text-text-muted">
             Cette offre se facture à la personne — indiquez combien de personnes vous engagez. Vous
