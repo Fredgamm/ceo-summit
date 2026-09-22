@@ -221,9 +221,9 @@ export default async function EventDetailPage({ params }: { params: { id: string
                       <Button key={plan.id} asChild variant="outline" className="justify-center">
                         <Link href={`/entreprise/creer?offre=${plan.slug}`}>
                           {plan.name} —{" "}
-                          {plan.pricingMode === "TIERED_GROUP"
-                            ? "tarif dégressif par groupe"
-                            : `${formatAriary(plan.priceAr)}/participant`}
+                          {plan.pricingMode === "PER_PARTICIPANT"
+                            ? `${formatAriary(plan.priceAr)}/participant`
+                            : formatAriary(plan.priceAr)}
                         </Link>
                       </Button>
                     ))}

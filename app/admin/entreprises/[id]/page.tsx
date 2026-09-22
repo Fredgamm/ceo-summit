@@ -93,10 +93,8 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
         ) : (
           <>
             <p className="text-sm text-text-mid">
-              {company.subscription.plan.name} —{" "}
-              {company.subscription.plan.pricingMode === "TIERED_GROUP"
-                ? "tarif dégressif par groupe"
-                : `${formatAriary(company.subscription.plan.priceAr)}/an`}
+              {company.subscription.plan.name} — {formatAriary(company.subscription.plan.priceAr)}
+              {company.subscription.plan.pricingMode === "PER_PARTICIPANT" && " par participant"}
             </p>
             <Badge variant={company.subscription.status === "ACTIVE" ? "active" : "pending"}>
               {company.subscription.status}

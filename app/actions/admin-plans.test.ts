@@ -28,12 +28,11 @@ const VALID_PLAN_INPUT = {
   name: "Sponsor Or",
   slug: "sponsor-or",
   description: "Offre sponsor niveau or",
+  pricingMode: "FIXED_BUNDLE" as const,
   priceAr: 5_000_000,
+  priceEur: null,
   maxTeamMembers: 20,
   minParticipants: null,
-  includedCredits: 100,
-  hasUnlimitedCredits: false,
-  rank: 4,
   eligibilityNote: "",
   isActive: true,
   isSelfService: true,
@@ -61,7 +60,7 @@ describe("createPlan", () => {
     expect(result).toEqual({ success: true, data: { id: "plan_1" } });
     expect(prisma.plan.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ name: "Sponsor Or", rank: 4 }),
+        data: expect.objectContaining({ name: "Sponsor Or", maxTeamMembers: 20 }),
       })
     );
     expect(prisma.auditLog.create).toHaveBeenCalledWith(
@@ -95,8 +94,18 @@ describe("updatePlan", () => {
     );
   });
 
-  it("rejects an invalid rank without updating anything", async () => {
-    const result = await updatePlan("plan_1", { ...VALID_PLAN_INPUT, rank: 0 });
+  it("rejects a fixed-bundle offer with no seat count, without updating anything", async () => {
+    const result = await updatePlan("plan_1", { ...VALID_PLAN_INPUT, maxTeamMembers: null });
+    expect(result.success).toBe(false);
+    expect(prisma.plan.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a group offer with no minimum headcount", async () => {
+    const result = await updatePlan("plan_1", {
+      ...VALID_PLAN_INPUT,
+      pricingMode: "PER_PARTICIPANT",
+      minParticipants: null,
+    });
     expect(result.success).toBe(false);
     expect(prisma.plan.update).not.toHaveBeenCalled();
   });

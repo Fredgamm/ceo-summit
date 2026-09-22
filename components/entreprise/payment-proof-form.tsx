@@ -5,11 +5,7 @@ import { useRouter } from "next/navigation";
 import type { PaymentMethod, PlanPricingMode } from "@prisma/client";
 
 import { submitPaymentProof } from "@/app/actions/company-subscription";
-import {
-  computeDueAmount,
-  meetsMinParticipants,
-  type PricingBracket,
-} from "@/lib/company-payment-amount";
+import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { formatAriary } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -42,42 +38,38 @@ const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
 const EVOLIA_METHODS: PaymentMethod[] = ["CARTE_BANCAIRE", "MOBILE_MONEY"];
 
 /**
- * 4 août 2026 (RG-04/RG-06, split plateforme/évènement) — pour une offre
- * `PER_PARTICIPANT`, le montant vient du nombre de participants **déclaré**
- * par l'entreprise (saisi ici, pas déduit du headcount réel — voir
- * lib/company-payment-amount.ts, même calcul rejoué côté serveur dans
- * submitPaymentProof, source de vérité). Pour `FIXED_BUNDLE`, le montant
- * est le forfait fixe de l'offre, aucune saisie requise.
+ * 22 septembre 2026 (`conception/12`) — deux cas, et deux seulement :
+ *
+ * - **Forfait** (`FIXED_BUNDLE`, toutes les offres principales) : rien à
+ *   déclarer, le montant est le prix de l'offre et le nombre de places est
+ *   celui fixé par l'admin. L'entreprise choisira *qui* participe plus
+ *   tard, depuis son espace — jamais au moment de payer.
+ * - **Groupement** (`PER_PARTICIPANT`) : l'effectif est déclaré ici parce
+ *   que le prix en dépend (prix unitaire × effectif, au-delà d'un seuil).
+ *
+ * Le même calcul est rejoué côté serveur dans `submitPaymentProof`, qui
+ * reste la source de vérité.
  */
 export function PaymentProofForm({
   companySubscriptionId,
   priceAr,
   minParticipants,
   pricingMode,
-  includedSeats,
   maxTeamMembers,
-  priceBrackets,
-  headcount,
 }: {
   companySubscriptionId: string;
   priceAr: number;
   minParticipants: number | null;
   pricingMode: PlanPricingMode | null;
-  includedSeats: number | null;
-  /** Repli d'affichage pour une offre plateforme, qui n'a pas d'`includedSeats` propre. */
+  /** Nombre de places de l'offre — affiché, jamais saisi ici. */
   maxTeamMembers: number | null;
-  /** Paliers de l'offre — pertinent seulement en mode TIERED_GROUP. */
-  priceBrackets: PricingBracket[];
-  /** Nombre de collaborateurs déjà rattachés — utilisé seulement comme valeur de départ suggérée. */
-  headcount: number;
 }) {
   const router = useRouter();
-  const isFixedBundle = pricingMode === "FIXED_BUNDLE";
-  const isTieredGroup = pricingMode === "TIERED_GROUP";
+  const isGroupOffer = pricingMode === "PER_PARTICIPANT";
   const [method, setMethod] = React.useState<PaymentMethod>("VIREMENT");
   const [comment, setComment] = React.useState("");
   const [declaredParticipants, setDeclaredParticipants] = React.useState(
-    String(Math.max(headcount, minParticipants ?? 1))
+    String(minParticipants ?? 1)
   );
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);
@@ -85,17 +77,10 @@ export function PaymentProofForm({
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
 
-  const plan = { priceAr, minParticipants, pricingMode, includedSeats, priceBrackets };
-  const declaredCount = isFixedBundle ? 1 : Number(declaredParticipants) || 0;
+  const plan = { priceAr, minParticipants, pricingMode };
+  const declaredCount = isGroupOffer ? Number(declaredParticipants) || 0 : 1;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
   const amount = computeDueAmount(plan, declaredCount);
-  const reachedBracket = isTieredGroup
-    ? priceBrackets.find(
-        (b) =>
-          declaredCount >= b.minParticipants &&
-          (b.maxParticipants === null || declaredCount <= b.maxParticipants)
-      )
-    : undefined;
   const isEvoliaMethod = EVOLIA_METHODS.includes(method);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -132,7 +117,7 @@ export function PaymentProofForm({
         method,
         proofFileKey: proof.key,
         comment,
-        ...(isFixedBundle ? {} : { declaredParticipants: declaredCount }),
+        ...(isGroupOffer ? { declaredParticipants: declaredCount } : {}),
       });
       if (!result.success) {
         setError(result.error);
@@ -158,50 +143,38 @@ export function PaymentProofForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {!isFixedBundle && (
+      {isGroupOffer && (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="declared-participants">Nombre de participants prévu *</Label>
+          <Label htmlFor="declared-participants">Effectif de votre groupe *</Label>
           <Input
             id="declared-participants"
             type="number"
-            min={1}
+            min={minParticipants ?? 1}
             value={declaredParticipants}
             onChange={(e) => setDeclaredParticipants(e.target.value)}
           />
           <p className="text-xs text-text-muted">
-            Vous pourrez inviter vos collaborateurs après paiement, à votre rythme, dans la limite
-            de ce nombre.
+            Cette offre se facture à la personne — indiquez combien de personnes vous engagez. Vous
+            désignerez qui exactement depuis votre espace, après paiement.
           </p>
         </div>
       )}
 
       <div className="rounded-md border border-border bg-surface p-4">
-        {isFixedBundle ? (
-          <p className="text-sm text-text-mid">
-            Forfait — {includedSeats ?? maxTeamMembers ?? "?"} sièges inclus
-          </p>
-        ) : isTieredGroup ? (
-          <p className="text-sm text-text-mid">
-            {reachedBracket
-              ? `${declaredCount} participant(s) × ${formatAriary(reachedBracket.unitPriceAr)} (palier ${reachedBracket.minParticipants}${reachedBracket.maxParticipants ? `-${reachedBracket.maxParticipants}` : "+"})`
-              : `${declaredCount} participant(s) — aucun palier atteint`}
-          </p>
-        ) : (
+        {isGroupOffer ? (
           <p className="text-sm text-text-mid">
             {declaredCount} participant(s) × {formatAriary(priceAr)}
           </p>
-        )}
-        <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
-        {!isFixedBundle && !isTieredGroup && minParticipants && !meetsThreshold && (
-          <p className="mt-1 text-xs text-red-600">
-            Il manque {minParticipants - declaredCount} participant(s) déclaré(s) pour atteindre le
-            seuil minimum de {minParticipants} de cette offre.
+        ) : (
+          <p className="text-sm text-text-mid">
+            Forfait — {maxTeamMembers ?? "?"} participant(s) inclus
           </p>
         )}
-        {isTieredGroup && !meetsThreshold && (
+        <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
+        {isGroupOffer && minParticipants && !meetsThreshold && (
           <p className="mt-1 text-xs text-red-600">
-            Il faut au moins {Math.min(...priceBrackets.map((b) => b.minParticipants))}{" "}
-            participant(s) déclaré(s) pour cette offre.
+            Cette offre démarre à {minParticipants} participants — il en manque{" "}
+            {minParticipants - declaredCount}.
           </p>
         )}
       </div>

@@ -296,42 +296,21 @@ model MembershipApplication {
   @@index([email])
 }
 
-/// 4 août 2026 (split plateforme/évènement) — mode de facturation d'une
-/// offre d'évènement. Sans objet pour une offre plateforme (`Plan.eventId`
-/// nul), qui ne se vend jamais directement.
+/// Deux modes, et deux seulement (audit du 22 septembre 2026,
+/// `conception/12`) :
+/// - `FIXED_BUNDLE` — forfait : prix fixe, nombre de places fixé par
+///   l'admin sur l'offre (`maxTeamMembers`). Rien n'est demandé à
+///   l'acheteur au paiement.
+/// - `PER_PARTICIPANT` — groupement : prix par personne à partir de
+///   `minParticipants`, seul cas où l'acheteur déclare un effectif.
+///
+/// Un troisième mode `TIERED_GROUP` (paliers dégressifs au sein d'une même
+/// offre, avec un modèle `PlanPriceBracket`) a existé du 14 au 22 septembre
+/// 2026 : jamais utilisé par aucune offre, retiré au profit de deux offres
+/// groupement distinctes.
 enum PlanPricingMode {
   PER_PARTICIPANT
   FIXED_BUNDLE
-  /// 14 septembre 2026 — tarif dégressif par taille de groupe : prix
-  /// unitaire par participant qui dépend du palier atteint (voir
-  /// `PlanPriceBracket`), applicable à toute offre comme les deux autres
-  /// modes.
-  TIERED_GROUP
-}
-
-/// 14 septembre 2026 — un palier d'une offre en mode `TIERED_GROUP` : tous
-/// les participants déclarés sont facturés au prix unitaire du palier dans
-/// lequel tombe leur nombre total (ex. 10-29 participants -> 650 Ar/pers.,
-/// 30 et plus -> 500 Ar/pers.). `unitPriceEur`/`unitPriceAr` suivent la même
-/// convention que `Plan.priceEur`/`priceAr` (3 septembre 2026) : quand
-/// `unitPriceEur` est renseigné, `unitPriceAr` est recalculé côté serveur au
-/// taux du jour (lib/currency-conversion.ts) et n'est jamais lu que pour
-/// l'affichage — le montant dû (lib/company-payment-amount.ts) est toujours
-/// `unitPriceAr × declaredParticipants`.
-model PlanPriceBracket {
-  id              String   @id @default(cuid())
-  planId          String
-  plan            Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
-  /// Borne basse incluse (ex. 10).
-  minParticipants Int
-  /// Borne haute incluse ; `null` = palier ouvert ("30 et plus").
-  maxParticipants Int?
-  unitPriceAr     Int
-  unitPriceEur    Int?
-  displayOrder    Int      @default(0)
-  createdAt       DateTime @default(now())
-
-  @@index([planId])
 }
 
 /// Admin-creatable offer/plan — replaces the fixed `Tier` enum as the source
@@ -348,12 +327,10 @@ model Plan {
   /// l'id cuid technique. Éditable dans /admin/plans.
   slug                 String           @unique
   description          String?          @db.Text
-  /// Prix unitaire, en Ariary — reste la valeur lue par tout calcul de
-  /// montant dû (lib/company-payment-amount.ts) et toute comparaison de
-  /// preuve de paiement. Pour une offre d'évènement (`eventId` non nul) en
-  /// mode `pricingMode: PER_PARTICIPANT`, prix par participant (montant dû =
-  /// priceAr × nombre déclaré) ; en mode `FIXED_BUNDLE`, montant total fixe
-  /// pour `includedSeats` sièges.
+  /// Prix en Ariary — seule valeur lue par tout calcul de montant dû
+  /// (lib/company-payment-amount.ts) et toute comparaison de preuve de
+  /// paiement. En `FIXED_BUNDLE`, c'est le prix total de l'offre ; en
+  /// `PER_PARTICIPANT`, le prix par personne.
   priceAr              Int
   /// 3 septembre 2026 (catalogue de sponsoring en euros) — prix officiel
   /// pour une offre cotée en euros ; `priceAr` est alors une estimation
@@ -363,28 +340,22 @@ model Plan {
   /// l'affichage informatif "≈ X Ar". `null` pour une offre restée cotée
   /// directement en Ariary (comportement historique, inchangé).
   priceEur             Int?
-  /// Quota de collaborateurs de l'avantage **plateforme** (offre avec
-  /// `eventId` nul) — indépendant de toute édition d'évènement. Pour une
-  /// offre d'évènement, lire ce champ sur `linkedPlatformPlan`, jamais sur
-  /// l'offre d'évènement elle-même (4 août 2026, split plateforme/évènement).
+  /// **Le** nombre de places d'une offre forfaitaire : combien de
+  /// participants l'entreprise pourra inscrire (Bronze = 2, Gold = 6…).
+  /// Sans objet en `PER_PARTICIPANT`, où le nombre de places est l'effectif
+  /// déclaré et payé. Le champ concurrent `includedSeats` a été fusionné
+  /// ici le 22 septembre 2026 (`conception/12` §2.2).
   maxTeamMembers       Int?
-  /// Seuil minimum de participants pour bénéficier du tarif dégressif en
-  /// mode `PER_PARTICIPANT` (ex. Groupement +10 pers exige ≥11
-  /// collaborateurs déclarés). Sans objet en mode `FIXED_BUNDLE`. `null` =
-  /// aucun seuil.
+  /// Effectif minimum d'une offre groupement (`PER_PARTICIPANT`) : en
+  /// dessous, l'offre n'est pas proposée ; au-dessus, le prix par personne
+  /// reste identique. Sans objet en `FIXED_BUNDLE`.
   minParticipants      Int?
-  /// 4 août 2026 (split plateforme/évènement), généralisé le 3 septembre
-  /// 2026 à toute offre (plus seulement les offres d'évènement) — mode de
-  /// facturation : `PER_PARTICIPANT` (priceAr × nombre déclaré) ou
-  /// `FIXED_BUNDLE` (priceAr fixe, éventuellement pour `includedSeats`
-  /// sièges sur une offre d'évènement — une offre plateforme utilise plutôt
-  /// `maxTeamMembers`, son quota permanent). `null` = comportement
-  /// historique (équivalent à `PER_PARTICIPANT` dans computeDueAmount).
+  /// Mode de facturation — voir `PlanPricingMode`. Nullable pour les offres
+  /// héritées d'avant le 3 septembre 2026 ; `null` est traité comme
+  /// `FIXED_BUNDLE` depuis l'audit du 22 septembre, pour qu'une offre sans
+  /// mode explicite ne se facture jamais à la personne par accident
+  /// (`conception/12` §2.1).
   pricingMode          PlanPricingMode?
-  /// Nombre de sièges inclus dans le forfait d'une offre d'évènement en mode
-  /// `FIXED_BUNDLE` — sur une offre plateforme, `maxTeamMembers` suffit déjà
-  /// à représenter ce quota, ce champ n'a pas besoin d'être renseigné.
-  includedSeats        Int?
   /// 4 août 2026 (split plateforme/évènement) — référence, pour une offre
   /// d'évènement (`eventId` non nul), vers l'offre plateforme (`eventId`
   /// nul) dont hériter les avantages permanents (crédits, quotas) à la
@@ -422,7 +393,6 @@ model Plan {
   opportunitiesAsVisibilityPlan Opportunity[]         @relation("OpportunityVisibilityPlan")
   companySubscriptions          CompanySubscription[]
   eventRegistrations            EventRegistration[]
-  priceBrackets                 PlanPriceBracket[]
 
   @@index([isActive, displayOrder])
   @@index([eventId])

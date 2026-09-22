@@ -128,9 +128,9 @@ function IntendedPlanPath({
     <>
       <p className="mb-6 text-sm leading-relaxed text-text-mid">
         Vous vous êtes inscrit pour <strong>{plan.name}</strong> (
-        {plan.pricingMode === "TIERED_GROUP"
-          ? "tarif dégressif par groupe"
-          : `${formatAriary(plan.priceAr)}/participant/an`}
+        {plan.pricingMode === "PER_PARTICIPANT"
+          ? `${formatAriary(plan.priceAr)} par participant`
+          : formatAriary(plan.priceAr)}
         ) — créez la fiche de votre entreprise pour continuer.
       </p>
       <Button asChild className="mb-4 w-full justify-center">

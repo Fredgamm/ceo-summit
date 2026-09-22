@@ -9,7 +9,6 @@ import { generateSecureToken } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
-import { seatCap } from "@/lib/company-payment-amount";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { BCRYPT_ROUNDS } from "@/lib/password";
@@ -49,23 +48,17 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   const email = parsed.data.email.toLowerCase();
 
   /**
-   * Deux plafonds indépendants, le plus restrictif s'applique :
-   * - RG-13 (split plateforme/évènement) : quota de collaborateurs de
-   *   l'avantage plateforme (`maxTeamMembers`), vit sur l'offre plateforme
-   *   liée, jamais sur l'offre d'évènement elle-même.
-   * - Nombre de sièges de *cette édition* — `includedSeats` en
-   *   `FIXED_BUNDLE`, ou `declaredParticipants` en `PER_PARTICIPANT` une
-   *   fois une preuve soumise (proposition "payer avant de rassembler").
+   * 22 septembre 2026 (`conception/12` §2.2) — un seul champ porte le
+   * nombre de places : `maxTeamMembers` pour une offre forfaitaire, et
+   * l'effectif déclaré au paiement pour une offre groupement (dont le
+   * nombre de places est précisément ce qui a été payé). `includedSeats`,
+   * qui faisait doublon, n'est plus lu.
    */
   const subscribedPlan = company.subscription?.plan;
-  const platformCap =
-    subscribedPlan?.linkedPlatformPlan?.maxTeamMembers ?? subscribedPlan?.maxTeamMembers ?? null;
-  const editionCap = subscribedPlan
-    ? (seatCap(subscribedPlan) ?? company.subscription?.declaredParticipants ?? null)
-    : null;
-  const applicableCap = [platformCap, editionCap]
-    .filter((c): c is number => c != null)
-    .reduce((min, c) => (min == null ? c : Math.min(min, c)), null as number | null);
+  const applicableCap =
+    subscribedPlan?.pricingMode === "PER_PARTICIPANT"
+      ? (company.subscription?.declaredParticipants ?? null)
+      : (subscribedPlan?.maxTeamMembers ?? null);
 
   if (applicableCap != null) {
     const [memberCount, pendingInviteCount] = await Promise.all([

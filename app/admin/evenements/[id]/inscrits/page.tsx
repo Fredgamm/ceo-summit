@@ -132,7 +132,7 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                       {PAYMENT_LABEL[r.paymentStatus]}
                       {r.paymentStatus === "PAID" &&
                         (r.plan
-                          ? ` · ${r.plan.pricingMode === "TIERED_GROUP" ? "tarif dégressif par groupe" : formatAriary(r.plan.priceAr)}`
+                          ? ` · ${formatAriary(r.plan.priceAr)}`
                           : event.price > 0 && ` · ${formatAriary(event.price)}`)}
                     </span>
                   </td>

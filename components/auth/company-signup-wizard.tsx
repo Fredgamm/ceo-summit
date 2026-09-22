@@ -71,9 +71,9 @@ export function CompanySignupWizard({
               {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
               <p className="mt-1 text-lg font-bold text-navy">
                 {formatPlanPrice(plan)}
-                {plan.pricingMode === "FIXED_BUNDLE"
-                  ? ` — forfait ${plan.includedSeats ?? "?"} sièges`
-                  : " / participant / an"}
+                {plan.pricingMode === "PER_PARTICIPANT"
+                  ? " / participant"
+                  : ` — ${plan.maxTeamMembers ?? "?"} participant(s) inclus`}
               </p>
               <Button onClick={() => setPlanId(plan.id)} className="mt-2 justify-center">
                 Choisir cette offre

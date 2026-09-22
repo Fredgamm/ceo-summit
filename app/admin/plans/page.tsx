@@ -94,8 +94,7 @@ export default async function AdminPlansPage({
                 <th className="px-4 py-2.5 text-left">Offre</th>
                 <th className="px-4 py-2.5 text-left">Type</th>
                 <th className="px-4 py-2.5 text-left">Prix</th>
-                <th className="px-4 py-2.5 text-left">Crédits inclus</th>
-                <th className="px-4 py-2.5 text-left">Rang</th>
+                <th className="px-4 py-2.5 text-left">Places</th>
                 <th className="px-4 py-2.5 text-left">Statut</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -105,31 +104,20 @@ export default async function AdminPlansPage({
                 <tr key={plan.id}>
                   <td className="px-4 py-3">
                     <p className="font-semibold text-navy">{plan.name}</p>
-                    {plan.maxTeamMembers && (
-                      <p className="text-xs text-text-muted">
-                        Max {plan.maxTeamMembers} collaborateur(s)
-                      </p>
-                    )}
+                    <p className="text-xs text-text-muted">{plan.slug}</p>
                   </td>
                   <td className="px-4 py-3 text-text-mid">
-                    {plan.eventId ? "Offre d'évènement" : "Offre plateforme"}
+                    {plan.pricingMode === "PER_PARTICIPANT" ? "Groupement" : "Forfait"}
                   </td>
                   <td className="px-4 py-3 text-text-mid">
-                    {plan.pricingMode === "TIERED_GROUP"
-                      ? plan.priceBrackets
-                          .slice()
-                          .sort((a, b) => a.minParticipants - b.minParticipants)
-                          .map(
-                            (b) =>
-                              `${b.minParticipants}${b.maxParticipants ? `-${b.maxParticipants}` : "+"} : ${formatPlanPrice({ priceAr: b.unitPriceAr, priceEur: b.unitPriceEur })}`
-                          )
-                          .join(" · ") || "Aucun palier"
-                      : formatPlanPrice(plan)}
+                    {formatPlanPrice(plan)}
+                    {plan.pricingMode === "PER_PARTICIPANT" && " / personne"}
                   </td>
                   <td className="px-4 py-3 text-text-mid">
-                    {plan.hasUnlimitedCredits ? "Illimité" : plan.includedCredits}
+                    {plan.pricingMode === "PER_PARTICIPANT"
+                      ? `dès ${plan.minParticipants ?? 1} pers.`
+                      : (plan.maxTeamMembers ?? "—")}
                   </td>
-                  <td className="px-4 py-3 text-text-mid">{plan.rank}</td>
                   <td className="px-4 py-3">
                     <Badge variant={plan.isActive ? "active" : "draft"}>
                       {plan.isActive ? "Active" : "Inactive"}

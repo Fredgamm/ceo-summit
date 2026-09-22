@@ -82,10 +82,8 @@ export default async function AdminEntreprisesPage() {
                     {sub.company.companyAdmin?.name ?? "—"}
                   </td>
                   <td className="px-4 py-3 text-text-mid">
-                    {sub.plan.name} ·{" "}
-                    {sub.plan.pricingMode === "TIERED_GROUP"
-                      ? "tarif dégressif par groupe"
-                      : formatAriary(sub.plan.priceAr)}
+                    {sub.plan.name} · {formatAriary(sub.plan.priceAr)}
+                    {sub.plan.pricingMode === "PER_PARTICIPANT" && " / participant"}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant={STATUS_BADGE[sub.status]}>{STATUS_LABEL[sub.status]}</Badge>

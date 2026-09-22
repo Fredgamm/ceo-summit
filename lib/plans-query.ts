@@ -1,14 +1,8 @@
-import type { Event, Plan, PlanPriceBracket } from "@prisma/client";
+import type { Event, Plan } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-/// 14 septembre 2026 (TIERED_GROUP) — toute lecture de `Plan` destinée au
-/// calcul ou à l'affichage d'un prix doit inclure `priceBrackets`
-/// (lib/company-payment-amount.ts en dépend pour ce mode).
-export type PlanWithBrackets = Plan & { priceBrackets: PlanPriceBracket[] };
-export type PlanWithEvent = PlanWithBrackets & { event: Event | null };
-
-const BRACKETS_INCLUDE = { priceBrackets: { orderBy: { displayOrder: "asc" as const } } };
+export type PlanWithEvent = Plan & { event: Event | null };
 
 /**
  * Phase 1 offres dynamiques (30 juillet 2026) — single place every page/
@@ -26,15 +20,14 @@ const BRACKETS_INCLUDE = { priceBrackets: { orderBy: { displayOrder: "asc" as co
  * `eventId` (Phase 2quater, 1er août 2026) — une offre peut être rattachée
  * à un évènement précis (`Plan.eventId`) plutôt qu'être une offre standard
  * plateforme. Non précisé : ne renvoie que les offres **standard**
- * (`eventId: null`) — les sélecteurs génériques (wizard entreprise, fourche
- * individuelle) ne doivent pas se retrouver mélangés avec le catalogue d'un
- * évènement passé. Passer un id explicite pour lister les offres d'un
- * évènement précis (page publique de l'évènement, admin évènement).
+ * (`eventId: null`). Ce rattachement n'est plus proposé à l'admin depuis
+ * l'audit du 22 septembre 2026 (`conception/12` §2.6) — seules les offres
+ * héritées, désactivées, en portent encore un.
  */
 export async function getActivePlans(opts?: {
   selfServiceOnly?: boolean;
   eventId?: string;
-}): Promise<PlanWithBrackets[]> {
+}): Promise<Plan[]> {
   return prisma.plan.findMany({
     where: {
       isActive: true,
@@ -42,12 +35,11 @@ export async function getActivePlans(opts?: {
       eventId: opts?.eventId ?? null,
     },
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
-    include: BRACKETS_INCLUDE,
   });
 }
 
-export async function getPlanById(id: string): Promise<PlanWithBrackets | null> {
-  return prisma.plan.findUnique({ where: { id }, include: BRACKETS_INCLUDE });
+export async function getPlanById(id: string): Promise<Plan | null> {
+  return prisma.plan.findUnique({ where: { id } });
 }
 
 /**
@@ -63,7 +55,7 @@ export async function getPlanById(id: string): Promise<PlanWithBrackets | null> 
 export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null> {
   return prisma.plan.findFirst({
     where: { slug, isActive: true, isSelfService: true },
-    include: { event: true, ...BRACKETS_INCLUDE },
+    include: { event: true },
   });
 }
 
@@ -73,10 +65,9 @@ export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null>
  * when provided; omitted returns every plan regardless of event scope
  * (unlike getActivePlans, the admin list should show everything by default).
  */
-export async function getAllPlans(eventId?: string): Promise<PlanWithBrackets[]> {
+export async function getAllPlans(eventId?: string): Promise<Plan[]> {
   return prisma.plan.findMany({
     where: eventId ? { eventId } : undefined,
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
-    include: BRACKETS_INCLUDE,
   });
 }

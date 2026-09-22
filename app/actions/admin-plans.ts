@@ -30,37 +30,22 @@ async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     description: f.description || null,
     priceAr,
     priceEur: f.priceEur ?? null,
+    pricingMode: f.pricingMode,
     maxTeamMembers: f.maxTeamMembers ?? null,
     minParticipants: f.minParticipants ?? null,
-    pricingMode: f.pricingMode ?? null,
-    includedSeats: f.includedSeats ?? null,
-    includedCredits: f.includedCredits,
-    hasUnlimitedCredits: f.hasUnlimitedCredits,
-    rank: f.rank,
     eligibilityNote: f.eligibilityNote || null,
     isActive: f.isActive,
     isSelfService: f.isSelfService,
     displayOrder: f.displayOrder,
-    eventId: f.eventId || null,
-    linkedPlatformPlanId: f.linkedPlatformPlanId || null,
+    /**
+     * 22 septembre 2026 (`conception/12` §2.5) — `rank` ne compare plus
+     * aucun accès depuis que tout membre payé a les mêmes droits : la
+     * colonne reste (non nullable, encore lue par `nearestLegacyTier`) mais
+     * n'est plus demandée à l'admin, elle suit simplement l'ordre
+     * d'affichage.
+     */
+    rank: f.displayOrder + 1,
   };
-}
-
-/**
- * Paliers prêts pour une écriture imbriquée Prisma (`priceBrackets: { create: [...] }`).
- * Même conversion EUR->Ar que `toPlanData` : `unitPriceEur` (si renseigné)
- * est la source, `unitPriceAr` est toujours recalculé côté serveur.
- */
-async function toBracketCreateData(f: ReturnType<typeof planFormSchema.parse>) {
-  return Promise.all(
-    f.priceBrackets.map(async (b, i) => ({
-      minParticipants: b.minParticipants,
-      maxParticipants: b.maxParticipants ?? null,
-      unitPriceAr: b.unitPriceEur ? await convertEurToAr(b.unitPriceEur) : b.unitPriceAr,
-      unitPriceEur: b.unitPriceEur ?? null,
-      displayOrder: i,
-    }))
-  );
 }
 
 export async function createPlan(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -76,12 +61,7 @@ export async function createPlan(input: unknown): Promise<ActionResult<{ id: str
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
-  const plan = await prisma.plan.create({
-    data: {
-      ...(await toPlanData(parsed.data)),
-      priceBrackets: { create: await toBracketCreateData(parsed.data) },
-    },
-  });
+  const plan = await prisma.plan.create({ data: await toPlanData(parsed.data) });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.create", targetType: "Plan", targetId: plan.id },
   });
@@ -103,13 +83,7 @@ export async function updatePlan(planId: string, input: unknown): Promise<Action
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
-  await prisma.plan.update({
-    where: { id: planId },
-    data: {
-      ...(await toPlanData(parsed.data)),
-      priceBrackets: { deleteMany: {}, create: await toBracketCreateData(parsed.data) },
-    },
-  });
+  await prisma.plan.update({ where: { id: planId }, data: await toPlanData(parsed.data) });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.update", targetType: "Plan", targetId: planId },
   });

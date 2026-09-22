@@ -41,8 +41,7 @@ export default async function CompanyPaymentPage({
     prisma.company.findUnique({
       where: { id: viewer.companyId },
       include: {
-        subscription: { include: { plan: { include: { priceBrackets: true } } } },
-        users: { select: { id: true } },
+        subscription: { include: { plan: true } },
       },
     }),
     getActivePlans({ selfServiceOnly: true }),
@@ -53,7 +52,6 @@ export default async function CompanyPaymentPage({
   if (company.subscription?.status === "ACTIVE") redirect(`/entreprises/${company.id}`);
 
   const subscription = company.subscription;
-  const headcount = company.users.length;
 
   // Une offre d'évènement (Phase 2quater) n'apparaît pas dans la liste
   // standard (getActivePlans filtre eventId: null par défaut) — on
@@ -77,11 +75,9 @@ export default async function CompanyPaymentPage({
               Paiement — {subscription.plan.name}
             </h1>
             <p className="mb-4 text-sm text-text-muted">
-              {subscription.plan.pricingMode === "FIXED_BUNDLE"
-                ? `${formatAriary(subscription.plan.priceAr)} — forfait ${subscription.plan.includedSeats ?? subscription.plan.maxTeamMembers ?? "?"} sièges`
-                : subscription.plan.pricingMode === "TIERED_GROUP"
-                  ? "Tarif dégressif par taille de groupe — voir le détail ci-dessous"
-                  : `${formatAriary(subscription.plan.priceAr)} / participant / an`}
+              {subscription.plan.pricingMode === "PER_PARTICIPANT"
+                ? `${formatAriary(subscription.plan.priceAr)} par participant, à partir de ${subscription.plan.minParticipants ?? 1}`
+                : `${formatAriary(subscription.plan.priceAr)} — ${subscription.plan.maxTeamMembers ?? "?"} participant(s) inclus`}
               . Choisissez votre mode de paiement, uploadez une preuve (bordereau, reçu, capture) —
               l&apos;équipe CEO Summit valide manuellement chaque paiement.
             </p>
@@ -102,10 +98,7 @@ export default async function CompanyPaymentPage({
                   priceAr={subscription.plan.priceAr}
                   minParticipants={subscription.plan.minParticipants}
                   pricingMode={subscription.plan.pricingMode}
-                  includedSeats={subscription.plan.includedSeats}
                   maxTeamMembers={subscription.plan.maxTeamMembers}
-                  priceBrackets={subscription.plan.priceBrackets}
-                  headcount={headcount}
                 />
               </div>
             )}

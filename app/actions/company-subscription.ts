@@ -89,7 +89,7 @@ export async function submitPaymentProof(
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
-    include: { company: true, plan: { include: { priceBrackets: true } } },
+    include: { company: true, plan: true },
   });
   if (!subscription) return { success: false, error: "Abonnement introuvable." };
   if (subscription.company.companyAdminId !== session.user.id) {
@@ -124,25 +124,23 @@ export async function submitPaymentProof(
   }
 
   /**
-   * RG-04/RG-06 (4 août 2026) — pour une offre `PER_PARTICIPANT`, le
-   * montant est calculé à partir du nombre de participants **déclaré** par
-   * l'entreprise (source de vérité), pas du headcount réel — remplace le
-   * blocage historique par seuil réel (Phase 2ter). Pour `FIXED_BUNDLE`,
-   * pas de déclaration nécessaire, le montant est le forfait fixe. Le
-   * nombre déclaré est persisté sur l'abonnement (verrouillé dès cette
-   * soumission — RG-06 : le modifier exige de changer d'offre, RG-11).
+   * 22 septembre 2026 (`conception/12`) — seule une offre groupement
+   * (`PER_PARTICIPANT`) demande un effectif au paiement, parce que son prix
+   * en dépend. Une offre forfaitaire ne demande rien : son nombre de places
+   * est fixé par l'admin sur l'offre, et l'entreprise désigne *qui*
+   * participe plus tard, depuis son espace.
    */
-  const isFixedBundle = subscription.plan.pricingMode === "FIXED_BUNDLE";
-  if (!isFixedBundle && !f.declaredParticipants) {
-    return { success: false, error: "Le nombre de participants prévu est requis." };
+  const isGroupOffer = subscription.plan.pricingMode === "PER_PARTICIPANT";
+  if (isGroupOffer && !f.declaredParticipants) {
+    return { success: false, error: "L'effectif de votre groupe est requis pour cette offre." };
   }
-  const declaredParticipants = isFixedBundle ? 1 : f.declaredParticipants!;
+  const declaredParticipants = isGroupOffer ? f.declaredParticipants! : 1;
 
   if (!meetsMinParticipants(subscription.plan, declaredParticipants)) {
     const missing = (subscription.plan.minParticipants ?? 1) - declaredParticipants;
     return {
       success: false,
-      error: `Il manque encore ${missing} participant(s) déclaré(s) pour atteindre le seuil minimum de cette offre (${subscription.plan.minParticipants}).`,
+      error: `Cette offre démarre à ${subscription.plan.minParticipants} participants — il en manque ${missing}.`,
     };
   }
   const amount = computeDueAmount(subscription.plan, declaredParticipants);
@@ -162,7 +160,7 @@ export async function submitPaymentProof(
       where: { id: companySubscriptionId },
       data: {
         status: "PENDING_REVIEW",
-        declaredParticipants: isFixedBundle ? null : declaredParticipants,
+        declaredParticipants: isGroupOffer ? declaredParticipants : null,
       },
     }),
   ]);

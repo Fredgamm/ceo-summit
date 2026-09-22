@@ -143,7 +143,7 @@ describe("submitPaymentProof", () => {
       companyId: "company_1",
       status: "PENDING_PAYMENT",
       company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
-      plan: { priceAr: 2_250_000, minParticipants: 10, pricingMode: null, includedSeats: null },
+      plan: { priceAr: 2_250_000, minParticipants: 10, pricingMode: "PER_PARTICIPANT" },
     } as never);
     vi.mocked(prisma.$transaction).mockResolvedValue(undefined as never);
   });
@@ -179,6 +179,23 @@ describe("submitPaymentProof", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it("bills a plan with no explicit pricing mode as a flat bundle, never per participant", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: { priceAr: 2_250_000, minParticipants: 10, pricingMode: null },
+    } as never);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 2_250_000 }) })
+    );
+  });
+
   it("computes a flat amount for a FIXED_BUNDLE plan, no declared count required", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       id: "sub_1",
@@ -189,7 +206,7 @@ describe("submitPaymentProof", () => {
         priceAr: 20_000_000,
         minParticipants: null,
         pricingMode: "FIXED_BUNDLE",
-        includedSeats: 10,
+        maxTeamMembers: 10,
       },
     } as never);
 

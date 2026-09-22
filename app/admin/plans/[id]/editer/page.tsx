@@ -18,18 +18,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
     throw err;
   }
 
-  const [plan, events, platformPlans] = await Promise.all([
-    prisma.plan.findUnique({
-      where: { id: params.id },
-      include: { priceBrackets: { orderBy: { displayOrder: "asc" } } },
-    }),
-    prisma.event.findMany({ select: { id: true, title: true }, orderBy: { date: "desc" } }),
-    prisma.plan.findMany({
-      where: { eventId: null, isActive: true, id: { not: params.id } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const plan = await prisma.plan.findUnique({ where: { id: params.id } });
   if (!plan) notFound();
 
   const shareUrl = plan.isActive && plan.isSelfService ? getPlanShareUrl(plan.slug) : null;
@@ -48,33 +37,19 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
       <PlanForm
         mode="edit"
         planId={plan.id}
-        events={events}
-        platformPlans={platformPlans}
         initialValues={{
           name: plan.name,
           slug: plan.slug,
           description: plan.description ?? "",
+          pricingMode: plan.pricingMode ?? "FIXED_BUNDLE",
           priceAr: plan.priceAr,
           priceEur: plan.priceEur,
-          maxTeamMembers: plan.maxTeamMembers,
           minParticipants: plan.minParticipants,
-          pricingMode: plan.pricingMode,
-          includedSeats: plan.includedSeats,
-          priceBrackets: plan.priceBrackets.map((b) => ({
-            minParticipants: b.minParticipants,
-            maxParticipants: b.maxParticipants,
-            unitPriceAr: b.unitPriceAr,
-            unitPriceEur: b.unitPriceEur,
-          })),
-          includedCredits: plan.includedCredits,
-          hasUnlimitedCredits: plan.hasUnlimitedCredits,
-          rank: plan.rank,
+          maxTeamMembers: plan.maxTeamMembers,
           eligibilityNote: plan.eligibilityNote ?? "",
           isActive: plan.isActive,
           isSelfService: plan.isSelfService,
           displayOrder: plan.displayOrder,
-          eventId: plan.eventId ?? "",
-          linkedPlatformPlanId: plan.linkedPlatformPlanId ?? "",
         }}
       />
     </div>
