@@ -364,4 +364,19 @@ describe("purchaseUpsellSeats", () => {
     expect(result.success).toBe(false);
     expect(prisma.companyPayment.create).not.toHaveBeenCalled();
   });
+
+  it("keeps a Groupement upsell's minimum headcount even bought as a supplement", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({
+      id: "plan_upsell",
+      isActive: true,
+      isUpsell: true,
+      pricingMode: "PER_PARTICIPANT",
+      minParticipants: 10,
+      priceAr: 650_000,
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", { ...VALID_INPUT, quantity: 3 });
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
 });

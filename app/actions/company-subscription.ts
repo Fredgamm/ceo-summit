@@ -241,6 +241,15 @@ export async function purchaseUpsellSeats(
   if (!upsellPlan || !upsellPlan.isActive || !upsellPlan.isUpsell) {
     return { success: false, error: "Offre supplément invalide." };
   }
+  // Un supplément Groupement (ex-ante minParticipants) garde son seuil même
+  // acheté en supplément — acheter 1 place d'un lot pensé pour 10 n'a pas de
+  // sens (voir meetsMinParticipants, même règle qu'à la souscription initiale).
+  if (!meetsMinParticipants(upsellPlan, f.quantity)) {
+    return {
+      success: false,
+      error: `Cette offre démarre à ${upsellPlan.minParticipants} place(s) — indiquez au moins ce nombre.`,
+    };
+  }
 
   const amount = upsellPlan.priceAr * f.quantity;
 

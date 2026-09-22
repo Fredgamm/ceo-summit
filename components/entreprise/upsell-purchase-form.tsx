@@ -54,6 +54,14 @@ export function UpsellPurchaseForm({
   const selectedPlan = upsellPlans.find((p) => p.id === planId);
   const declaredQuantity = Number(quantity) || 0;
   const amount = selectedPlan ? selectedPlan.priceAr * declaredQuantity : 0;
+  // Un supplément Groupement garde son seuil minimum même acheté en plus
+  // d'un abonnement déjà actif (voir meetsMinParticipants côté serveur).
+  const minQuantity =
+    selectedPlan?.pricingMode === "PER_PARTICIPANT" ? (selectedPlan.minParticipants ?? 1) : 1;
+
+  React.useEffect(() => {
+    setQuantity((prev) => (Number(prev) < minQuantity ? String(minQuantity) : prev));
+  }, [minQuantity]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -139,10 +147,13 @@ export function UpsellPurchaseForm({
           <Input
             id="upsell-quantity"
             type="number"
-            min={1}
+            min={minQuantity}
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
           />
+          {selectedPlan?.pricingMode === "PER_PARTICIPANT" && (
+            <p className="text-xs text-text-muted">Cette offre démarre à {minQuantity} place(s).</p>
+          )}
         </div>
       </div>
 
@@ -201,7 +212,7 @@ export function UpsellPurchaseForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || declaredQuantity < 1}
+        disabled={submitting || uploading || declaredQuantity < minQuantity}
         className="justify-center"
       >
         {submitting ? "Envoi…" : "Acheter ces places"}

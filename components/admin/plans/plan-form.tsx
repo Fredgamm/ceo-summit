@@ -253,16 +253,15 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
           </div>
         )}
 
-        {!isGroupOffer && (
-          <label className="flex items-center gap-2 text-sm text-text-mid">
-            <Checkbox
-              checked={values.isUpsell}
-              onCheckedChange={(c) => set("isUpsell", c === true)}
-            />
-            Proposable en supplément d&apos;un abonnement déjà actif (ex. Executive Pass — une
-            entreprise au plafond peut en acheter plusieurs pour ajouter des places)
-          </label>
-        )}
+        <label className="flex items-center gap-2 text-sm text-text-mid">
+          <Checkbox
+            checked={values.isUpsell}
+            onCheckedChange={(c) => set("isUpsell", c === true)}
+          />
+          Proposable en supplément d&apos;un abonnement déjà actif — une entreprise au plafond peut
+          acheter cette offre pour ajouter des places (ex. Executive Pass à l&apos;unité, ou un
+          Groupement pour un lot de places)
+        </label>
 
         <p className="mt-2 text-xs font-bold uppercase tracking-wide text-text-muted">
           Publication
