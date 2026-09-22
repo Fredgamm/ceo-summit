@@ -108,20 +108,23 @@ jobs:
             # lib/resend.ts). Évite un accès SSH manuel au VPS pour cette
             # config — le seul accès SSH qui marche de façon fiable ici est
             # celui déjà utilisé par ce workflow.
+            # Pas de sed avec le mot de passe injecté dans le motif/la
+            # substitution (un "|" ou "&" dans SMTP_PASSWORD y casserait la
+            # syntaxe sed et, sous set -e, ferait échouer tout le déploiement
+            # avant même d'atteindre docker compose — cause probable d'un 502
+            # après le premier essai de ce mécanisme). On retire les anciennes
+            # lignes puis on ré-écrit avec printf, qui n'interprète rien dans
+            # la valeur.
             if [ -n "$SMTP_PASSWORD" ]; then
-              for line in \
-                'SMTP_HOST="node158-eu.n0c.com"' \
-                'SMTP_PORT="465"' \
-                'SMTP_USER="hello@ceo-summit.mg"' \
-                "SMTP_PASSWORD=\"$SMTP_PASSWORD\"" \
-                'EMAIL_FROM="hello@ceo-summit.mg"'; do
-                key=$(echo "$line" | cut -d= -f1)
-                if grep -q "^$key=" .env; then
-                  sed -i "s|^$key=.*|$line|" .env
-                else
-                  echo "$line" >> .env
-                fi
-              done
+              grep -v -E '^(SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASSWORD|EMAIL_FROM)=' .env > .env.new || true
+              {
+                printf 'SMTP_HOST="node158-eu.n0c.com"\n'
+                printf 'SMTP_PORT="465"\n'
+                printf 'SMTP_USER="hello@ceo-summit.mg"\n'
+                printf 'SMTP_PASSWORD="%s"\n' "$SMTP_PASSWORD"
+                printf 'EMAIL_FROM="hello@ceo-summit.mg"\n'
+              } >> .env.new
+              mv .env.new .env
             fi
             # docker-compose.prod.yml build.network=ceo-summit-net (next
             # build needs a live Postgres, see the file's own header
