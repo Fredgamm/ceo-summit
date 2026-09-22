@@ -98,7 +98,7 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
     if (memberCount + pendingInviteCount >= applicableCap) {
       return {
         success: false,
-        error: `Plafond de ${applicableCap} participant(s) atteint pour l'offre actuelle.`,
+        error: `Plafond de ${applicableCap} participant(s) atteint pour l'offre actuelle. Pour ajouter d'autres participants, veuillez choisir une offre ci-dessous.`,
       };
     }
   }
