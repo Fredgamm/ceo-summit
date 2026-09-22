@@ -89,16 +89,40 @@ jobs:
         # aussi bien pour un futur retour à main une fois cette réconciliation
         # faite.
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: SMTP_PASSWORD
           script: |
             set -e
             cd /opt/ceo-summit
             git fetch origin
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
+            # 22 septembre 2026 — écrit/actualise les identifiants SMTP dans
+            # .env à chaque déploiement, à partir du secret GitHub
+            # SMTP_PASSWORD (seule valeur sensible ; le reste est fixe, voir
+            # lib/resend.ts). Évite un accès SSH manuel au VPS pour cette
+            # config — le seul accès SSH qui marche de façon fiable ici est
+            # celui déjà utilisé par ce workflow.
+            if [ -n "$SMTP_PASSWORD" ]; then
+              for line in \
+                'SMTP_HOST="node158-eu.n0c.com"' \
+                'SMTP_PORT="465"' \
+                'SMTP_USER="hello@ceo-summit.mg"' \
+                "SMTP_PASSWORD=\"$SMTP_PASSWORD\"" \
+                'EMAIL_FROM="hello@ceo-summit.mg"'; do
+                key=$(echo "$line" | cut -d= -f1)
+                if grep -q "^$key=" .env; then
+                  sed -i "s|^$key=.*|$line|" .env
+                else
+                  echo "$line" >> .env
+                fi
+              done
+            fi
             # docker-compose.prod.yml build.network=ceo-summit-net (next
             # build needs a live Postgres, see the file's own header
             # comment) requires the network to exist first (created when
