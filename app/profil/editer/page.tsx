@@ -56,6 +56,7 @@ export default async function EditProfilePage() {
           initialName={user.name}
           initialTitle={user.title ?? ""}
           initialBio={user.bio ?? ""}
+          initialWebsiteUrl={user.websiteUrl ?? ""}
           initialLinkedinUrl={user.linkedinUrl ?? ""}
           initialCountry={user.country ?? ""}
           initialSectors={user.sectors}

@@ -27,6 +27,7 @@ interface ProfileEditFormProps {
   initialName: string;
   initialTitle: string;
   initialBio: string;
+  initialWebsiteUrl: string;
   initialLinkedinUrl: string;
   initialCountry: string;
   initialSectors: string[];
@@ -48,6 +49,7 @@ export function ProfileEditForm({
   initialName,
   initialTitle,
   initialBio,
+  initialWebsiteUrl,
   initialLinkedinUrl,
   initialCountry,
   initialSectors,
@@ -62,6 +64,7 @@ export function ProfileEditForm({
   const [name, setName] = React.useState(initialName);
   const [title, setTitle] = React.useState(initialTitle);
   const [bio, setBio] = React.useState(initialBio);
+  const [websiteUrl, setWebsiteUrl] = React.useState(initialWebsiteUrl);
   const [linkedinUrl, setLinkedinUrl] = React.useState(initialLinkedinUrl);
   const [country, setCountry] = React.useState(initialCountry);
   const [phone, setPhone] = React.useState(initialPhone);
@@ -121,6 +124,7 @@ export function ProfileEditForm({
         name,
         title,
         bio,
+        websiteUrl,
         linkedinUrl,
         country,
         sectors,
@@ -175,11 +179,11 @@ export function ProfileEditForm({
         <CardContent className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-name">Nom complet</Label>
+              <Label htmlFor="edit-name">Nom complet *</Label>
               <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-title">Titre / Poste</Label>
+              <Label htmlFor="edit-title">Titre / Poste *</Label>
               <Input id="edit-title" value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
           </div>
@@ -226,13 +230,29 @@ export function ProfileEditForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="edit-website">Site web (optionnel)</Label>
+            <Input
+              id="edit-website"
+              placeholder="monentreprise.mg"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+            />
+            <p className="text-xs text-text-muted">
+              &quot;https://&quot; est ajouté automatiquement si besoin.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-linkedin">LinkedIn (optionnel)</Label>
             <Input
               id="edit-linkedin"
-              placeholder="https://linkedin.com/in/votre-profil"
+              placeholder="linkedin.com/in/votre-profil"
               value={linkedinUrl}
               onChange={(e) => setLinkedinUrl(e.target.value)}
             />
+            <p className="text-xs text-text-muted">
+              &quot;https://&quot; est ajouté automatiquement si besoin.
+            </p>
           </div>
         </CardContent>
       </Card>

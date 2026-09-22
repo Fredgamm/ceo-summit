@@ -6,6 +6,7 @@ const EMPTY = {
   title: null,
   bio: null,
   avatarUrl: null,
+  websiteUrl: null,
   linkedinUrl: null,
   phone: null,
   country: null,
@@ -24,6 +25,7 @@ describe("profileCompleteness", () => {
         title: "CEO",
         bio: "Some bio",
         avatarUrl: "https://example.com/a.png",
+        websiteUrl: "https://example.mg",
         linkedinUrl: "https://linkedin.com/in/x",
         phone: "+261 34 00 000 00",
         country: "Madagascar",
@@ -34,7 +36,7 @@ describe("profileCompleteness", () => {
   });
 
   it("rounds to the nearest percent for a partial profile", () => {
-    // 4 of 8 fields filled = 50%
+    // 4 of 9 fields filled ≈ 44%
     expect(
       profileCompleteness({
         ...EMPTY,
@@ -43,11 +45,11 @@ describe("profileCompleteness", () => {
         country: "Madagascar",
         phone: "0340000000",
       })
-    ).toBe(50);
+    ).toBe(44);
   });
 
   it("counts an empty sectors array as unfilled but a non-empty one as filled", () => {
     expect(profileCompleteness({ ...EMPTY, sectors: [] }).valueOf()).toBe(0);
-    expect(profileCompleteness({ ...EMPTY, sectors: ["Finance"] })).toBe(13);
+    expect(profileCompleteness({ ...EMPTY, sectors: ["Finance"] })).toBe(11);
   });
 });

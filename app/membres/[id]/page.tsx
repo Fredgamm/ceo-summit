@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Building2, Handshake, Briefcase, Linkedin } from "lucide-react";
+import { Building2, Globe, Handshake, Briefcase, Linkedin } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -132,15 +132,29 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
               </div>
             )}
 
-            {user.linkedinUrl && (
-              <a
-                href={user.linkedinUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-mid"
-              >
-                <Linkedin className="h-4 w-4" /> Profil LinkedIn
-              </a>
+            {(user.websiteUrl || user.linkedinUrl) && (
+              <div className="flex flex-wrap gap-4">
+                {user.websiteUrl && (
+                  <a
+                    href={user.websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-mid"
+                  >
+                    <Globe className="h-4 w-4" /> Site web
+                  </a>
+                )}
+                {user.linkedinUrl && (
+                  <a
+                    href={user.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-mid"
+                  >
+                    <Linkedin className="h-4 w-4" /> Profil LinkedIn
+                  </a>
+                )}
+              </div>
             )}
 
             {/* Phone is internal-use only per wireframe/profil.html — never shown on someone else's profile. */}

@@ -114,6 +114,7 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
             <div className="flex flex-col gap-3 rounded-lg border border-border bg-white p-6 text-sm">
               <Row label="Email" value={member.email} />
               <Row label="Téléphone" value={member.phone ?? "—"} />
+              <Row label="Site web" value={member.websiteUrl ?? "—"} />
               <Row label="LinkedIn" value={member.linkedinUrl ?? "—"} />
               <Row label="Secteurs" value={member.sectors.join(", ") || "—"} />
               <Row label="Bio" value={member.bio ?? "—"} />

@@ -1,5 +1,34 @@
 import { z } from "zod";
 
+import { normalizeUrl } from "@/lib/normalize-url";
+
+/**
+ * Champ URL optionnel — préfixe automatiquement "https://" si l'utilisateur
+ * n'a saisi qu'un domaine nu ("linkedin.com/in/x", "monsite.mg") avant de
+ * valider, plutôt que de rejeter une saisie qui n'a juste pas de schéma
+ * explicite (audit QA du 22 septembre 2026). `hostPattern`/`hostMessage`
+ * restreignent en plus le domaine accepté (ex. LinkedIn uniquement).
+ */
+function optionalUrlField(hostPattern?: RegExp, hostMessage?: string) {
+  return z
+    .string()
+    .trim()
+    .transform((raw, ctx) => {
+      if (raw === "") return "";
+      const normalized = normalizeUrl(raw);
+      if (!z.string().url().safeParse(normalized).success) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "URL invalide" });
+        return z.NEVER;
+      }
+      if (hostPattern && !hostPattern.test(normalized)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: hostMessage ?? "URL invalide" });
+        return z.NEVER;
+      }
+      return normalized;
+    })
+    .default("");
+}
+
 /**
  * E2-T02 — édition profil. Bio limit mirrors the onboarding step (E1-T05)
  * and the wireframe's "150 mots max" rule (~750 caractères).
@@ -7,27 +36,24 @@ import { z } from "zod";
  * `country`/`sectors` (E8-T11, 5 août 2026) — référentiels admin-éditables
  * désormais (lib/referentials-query.ts), validés en chaîne(s) non vide(s)
  * plutôt qu'en enum figé sur lib/countries.ts/lib/sectors.ts.
+ *
+ * `title` obligatoire (audit QA du 22 septembre 2026) — acceptait jusqu'ici
+ * une chaîne vide malgré l'astérisque affiché sur le formulaire.
  */
 export const profileSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),
-  title: z.string().trim().max(120).optional().default(""),
+  title: z.string().trim().min(1, "Le titre / poste est requis").max(120),
   bio: z
     .string()
     .trim()
     .max(750, "La bio ne doit pas dépasser 150 mots environ (750 caractères).")
     .optional()
     .default(""),
-  linkedinUrl: z
-    .string()
-    .trim()
-    .url("URL invalide")
-    .refine(
-      (url) => /^https?:\/\/([\w-]+\.)?linkedin\.com\//i.test(url),
-      "Doit être une URL LinkedIn"
-    )
-    .optional()
-    .or(z.literal(""))
-    .default(""),
+  websiteUrl: optionalUrlField(),
+  linkedinUrl: optionalUrlField(
+    /^https?:\/\/([\w-]+\.)?linkedin\.com\//i,
+    "Doit être une URL LinkedIn"
+  ),
   country: z.string().trim().optional().or(z.literal("")).default(""),
   sectors: z.array(z.string().trim().min(1)).default([]),
   /**

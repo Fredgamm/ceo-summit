@@ -20,7 +20,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
-  const { name, title, bio, linkedinUrl, country, sectors, phone } = parsed.data;
+  const { name, title, bio, websiteUrl, linkedinUrl, country, sectors, phone } = parsed.data;
 
   // E8-T11 (5 août 2026) — `country`/`sectors` sont des référentiels
   // admin-éditables (lib/referentials-query.ts), plus des enums figés à la
@@ -42,8 +42,9 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
     where: { id: session.user.id },
     data: {
       name,
-      title: title || null,
+      title,
       bio: bio || null,
+      websiteUrl: websiteUrl || null,
       linkedinUrl: linkedinUrl || null,
       country: country || null,
       sectors,

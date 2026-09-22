@@ -162,6 +162,7 @@ model User {
   bio          String?  @db.Text
   avatarUrl    String?
   linkedinUrl  String?
+  websiteUrl   String?
   phone        String?
   country      String?
   sectors      String[] // secteurs d'intérêt (référentiel dans AdminSettings)

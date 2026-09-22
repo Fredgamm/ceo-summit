@@ -25,6 +25,7 @@ const VALID_INPUT = {
   name: "Marie Dupont",
   title: "Directrice Générale",
   bio: "Quelques lignes.",
+  websiteUrl: "",
   linkedinUrl: "https://linkedin.com/in/marie-dupont",
   country: "Madagascar",
   sectors: ["Finance & Banque"],
@@ -47,12 +48,50 @@ describe("updateProfile", () => {
         name: "Marie Dupont",
         title: "Directrice Générale",
         bio: "Quelques lignes.",
+        websiteUrl: null,
         linkedinUrl: "https://linkedin.com/in/marie-dupont",
         country: "Madagascar",
         sectors: ["Finance & Banque"],
         phone: null,
       },
     });
+  });
+
+  it("rejects an empty title without touching the database", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, title: "" });
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Audit QA (22 septembre 2026) — les champs URL rejetaient toute saisie
+   * sans "https://" explicite ; ils sont désormais normalisés avant
+   * validation (voir lib/normalize-url.ts).
+   */
+  it("normalizes a bare domain into a full URL before persisting", async () => {
+    const result = await updateProfile({
+      ...VALID_INPUT,
+      websiteUrl: "monentreprise.mg",
+      linkedinUrl: "linkedin.com/in/marie-dupont",
+    });
+
+    expect(result.success).toBe(true);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          websiteUrl: "https://monentreprise.mg",
+          linkedinUrl: "https://linkedin.com/in/marie-dupont",
+        }),
+      })
+    );
+  });
+
+  it("rejects an invalid website URL without touching the database", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, websiteUrl: "not a url" });
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   /**

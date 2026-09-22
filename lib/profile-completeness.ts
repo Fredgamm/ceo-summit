@@ -9,6 +9,7 @@ export interface ProfileCompletenessInput {
   title: string | null;
   bio: string | null;
   avatarUrl: string | null;
+  websiteUrl: string | null;
   linkedinUrl: string | null;
   phone: string | null;
   country: string | null;
@@ -16,13 +17,14 @@ export interface ProfileCompletenessInput {
   sectors: string[];
 }
 
-const TRACKED_FIELDS = 8;
+const TRACKED_FIELDS = 9;
 
 export function profileCompleteness(user: ProfileCompletenessInput): number {
   let filled = 0;
   if (user.title) filled++;
   if (user.bio) filled++;
   if (user.avatarUrl) filled++;
+  if (user.websiteUrl) filled++;
   if (user.linkedinUrl) filled++;
   if (user.phone) filled++;
   if (user.country) filled++;
