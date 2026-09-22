@@ -12,7 +12,7 @@ vi.mock("@/lib/prisma", () => ({
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     companySubscription: { update: vi.fn() },
-    company: { update: vi.fn() },
+    company: { update: vi.fn(), findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn() },
     eventRegistration: {
@@ -42,6 +42,7 @@ vi.mock("@/emails/company-payment-rejected-email", () => ({ default: vi.fn(() =>
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
+import { sendTransactionalEmail } from "@/lib/resend";
 import {
   confirmCompanyPayment,
   rejectCompanyPayment,
@@ -279,10 +280,17 @@ describe("rejectCompanyPayment", () => {
 });
 
 describe("reassignCompanyAdmin", () => {
-  it("reassigns when the target is a member of the company", async () => {
+  it("reassigns when the target is a member of the company, notifying both admins", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user_2",
       companyId: "company_1",
+      name: "Hery Andria",
+      email: "hery@example.mg",
+    } as never);
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      id: "company_1",
+      name: "Rakoto Holding",
+      companyAdmin: { id: "user_1", name: "Marie Dupont", email: "marie@example.mg" },
     } as never);
 
     const result = await reassignCompanyAdmin("company_1", "user_2");
@@ -291,6 +299,12 @@ describe("reassignCompanyAdmin", () => {
       where: { id: "company_1" },
       data: { companyAdminId: "user_2" },
     });
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hery@example.mg" })
+    );
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "marie@example.mg" })
+    );
   });
 
   it("rejects a target who isn't a member of the company", async () => {

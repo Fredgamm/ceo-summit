@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
 import { sendTransactionalEmail } from "@/lib/resend";
 import CompanyPaymentRejectedEmail from "@/emails/company-payment-rejected-email";
+import CompanyAdminReassignedEmail from "@/emails/company-admin-reassigned-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -118,10 +119,14 @@ export async function reassignCompanyAdmin(
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("entreprises");
 
-  const newAdmin = await prisma.user.findUnique({ where: { id: newAdminUserId } });
+  const [newAdmin, company] = await Promise.all([
+    prisma.user.findUnique({ where: { id: newAdminUserId } }),
+    prisma.company.findUnique({ where: { id: companyId }, include: { companyAdmin: true } }),
+  ]);
   if (!newAdmin || newAdmin.companyId !== companyId) {
     return { success: false, error: "Ce membre ne fait pas partie de cette entreprise." };
   }
+  if (!company) return { success: false, error: "Entreprise introuvable." };
 
   await prisma.company.update({
     where: { id: companyId },
@@ -137,6 +142,40 @@ export async function reassignCompanyAdmin(
       metadata: { newAdminUserId },
     },
   });
+
+  /**
+   * 22 septembre 2026 (audit des emails transactionnels) — ni l'ancien ni le
+   * nouvel admin n'étaient notifiés d'un changement de droits pourtant
+   * significatif (gestion des paiements/invitations de l'entreprise).
+   */
+  try {
+    await sendTransactionalEmail({
+      to: newAdmin.email,
+      subject: `Vous êtes désormais admin de ${company.name}`,
+      react: CompanyAdminReassignedEmail({
+        memberName: newAdmin.name,
+        companyName: company.name,
+        isNewAdmin: true,
+      }),
+    });
+  } catch (err) {
+    console.error("[reassignCompanyAdmin] failed to send email to new admin", err);
+  }
+  if (company.companyAdmin && company.companyAdmin.id !== newAdminUserId) {
+    try {
+      await sendTransactionalEmail({
+        to: company.companyAdmin.email,
+        subject: `Changement d'admin — ${company.name}`,
+        react: CompanyAdminReassignedEmail({
+          memberName: company.companyAdmin.name,
+          companyName: company.name,
+          isNewAdmin: false,
+        }),
+      });
+    } catch (err) {
+      console.error("[reassignCompanyAdmin] failed to send email to previous admin", err);
+    }
+  }
 
   revalidatePath(`/admin/entreprises/${companyId}`);
   revalidatePath(`/entreprises/${companyId}`);

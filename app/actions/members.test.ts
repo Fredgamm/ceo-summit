@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -15,6 +16,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendTransactionalEmail } from "@/lib/resend";
 import {
   suspendMember,
   excludeMember,
@@ -24,40 +26,51 @@ import {
 } from "./members";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
+const MEMBER = { id: "user_1", name: "Hery Andria", email: "hery@example.mg" };
 
 describe("member admin actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue(MEMBER as never);
   });
 
   describe("status transitions", () => {
-    it("suspends a member", async () => {
+    it("suspends a member and notifies them by email", async () => {
       const result = await suspendMember("user_1");
       expect(result.success).toBe(true);
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user_1" },
         data: { status: "SUSPENDED" },
       });
+      expect(sendTransactionalEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "hery@example.mg" })
+      );
     });
 
-    it("excludes a member", async () => {
+    it("excludes a member and notifies them by email", async () => {
       const result = await excludeMember("user_1");
       expect(result.success).toBe(true);
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user_1" },
         data: { status: "CANCELLED" },
       });
+      expect(sendTransactionalEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "hery@example.mg" })
+      );
     });
 
-    it("reactivates a member", async () => {
+    it("reactivates a member and notifies them by email", async () => {
       const result = await reactivateMember("user_1");
       expect(result.success).toBe(true);
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user_1" },
         data: { status: "ACTIVE" },
       });
+      expect(sendTransactionalEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: "hery@example.mg" })
+      );
     });
   });
 

@@ -242,6 +242,7 @@ function makeContact(overrides: Partial<Record<string, unknown>> = {}) {
     status: "PENDING",
     creditsSpent: 1,
     opportunity: { title: "Recherche partenaire" },
+    initiator: { email: "hery@example.mg", name: "Hery Andria" },
     ...overrides,
   } as never;
 }
@@ -250,6 +251,7 @@ describe("acceptOpportunityContact", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
   });
 
   it("rejects an unauthenticated call", async () => {
@@ -287,6 +289,9 @@ describe("acceptOpportunityContact", () => {
       where: { id: "contact_1" },
       data: { status: "ACCEPTED", conversationId: "conv_1" },
     });
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "hery@example.mg" })
+    );
   });
 });
 

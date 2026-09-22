@@ -5,6 +5,10 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { sendTransactionalEmail } from "@/lib/resend";
+import MemberSuspendedEmail from "@/emails/member-suspended-email";
+import MemberExcludedEmail from "@/emails/member-excluded-email";
+import MemberReactivatedEmail from "@/emails/member-reactivated-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -34,10 +38,42 @@ async function setMemberStatus(
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("membres");
 
-  await prisma.user.update({ where: { id: userId }, data: { status } });
+  const member = await prisma.user.update({ where: { id: userId }, data: { status } });
   await prisma.auditLog.create({
     data: { actorId: adminId, action, targetType: "User", targetId: userId },
   });
+
+  /**
+   * 22 septembre 2026 (audit des emails transactionnels) — sans ça, un
+   * membre suspendu/exclu/réactivé ne l'apprenait qu'en essayant de se
+   * connecter, jamais notifié directement.
+   */
+  try {
+    if (status === "SUSPENDED") {
+      await sendTransactionalEmail({
+        to: member.email,
+        subject: "Votre compte CEO Summit a été suspendu",
+        react: MemberSuspendedEmail({ memberName: member.name }),
+      });
+    } else if (status === "CANCELLED") {
+      await sendTransactionalEmail({
+        to: member.email,
+        subject: "Votre compte CEO Summit a été résilié",
+        react: MemberExcludedEmail({ memberName: member.name }),
+      });
+    } else {
+      await sendTransactionalEmail({
+        to: member.email,
+        subject: "Votre compte CEO Summit a été réactivé",
+        react: MemberReactivatedEmail({
+          memberName: member.name,
+          loginUrl: `${process.env.NEXTAUTH_URL}/login`,
+        }),
+      });
+    }
+  } catch (err) {
+    console.error("[setMemberStatus] failed to send status change email", err);
+  }
 
   revalidatePath(`/admin/membres/${userId}`);
   return { success: true, data: undefined };

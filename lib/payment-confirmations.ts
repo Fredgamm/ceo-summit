@@ -4,6 +4,7 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
 import CompanyPaymentConfirmedEmail from "@/emails/company-payment-confirmed-email";
+import CompanyUpsellConfirmedEmail from "@/emails/company-upsell-confirmed-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 import CreditPurchaseConfirmedEmail from "@/emails/credit-purchase-confirmed-email";
 
@@ -44,6 +45,7 @@ export async function confirmCompanyPaymentCore(
           company: { include: { companyAdmin: true, users: { select: { id: true } } } },
         },
       },
+      upsellPlan: true,
     },
   });
   if (!payment) return { success: false, error: "Paiement introuvable." };
@@ -80,6 +82,25 @@ export async function confirmCompanyPaymentCore(
         },
       });
     }
+
+    const upsellCompanyAdmin = payment.companySubscription.company.companyAdmin;
+    if (upsellCompanyAdmin && payment.upsellPlan) {
+      try {
+        await sendTransactionalEmail({
+          to: upsellCompanyAdmin.email,
+          subject: `Supplément confirmé — ${payment.companySubscription.company.name}`,
+          react: CompanyUpsellConfirmedEmail({
+            adminName: upsellCompanyAdmin.name,
+            companyName: payment.companySubscription.company.name,
+            planName: payment.upsellPlan.name,
+            quantity: payment.upsellQuantity,
+          }),
+        });
+      } catch (err) {
+        console.error("[confirmCompanyPaymentCore] failed to send upsell confirmation email", err);
+      }
+    }
+
     return { success: true, data: { companyId: payment.companySubscription.companyId } };
   }
 

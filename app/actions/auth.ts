@@ -18,6 +18,7 @@ import { BCRYPT_ROUNDS } from "@/lib/password";
 import { tierLabel } from "@/lib/utils";
 import ActivationEmail from "@/emails/activation-email";
 import ResetPasswordEmail from "@/emails/reset-password-email";
+import PasswordChangedEmail from "@/emails/password-changed-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -234,7 +235,10 @@ export async function resetPassword(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Mot de passe invalide" };
   }
 
-  const record = await prisma.passwordResetToken.findUnique({ where: { token } });
+  const record = await prisma.passwordResetToken.findUnique({
+    where: { token },
+    include: { user: true },
+  });
   if (!record) return { success: false, error: "Lien invalide." };
   if (record.usedAt) return { success: false, error: "Ce lien a déjà été utilisé." };
   if (record.expiresAt < new Date()) {
@@ -247,6 +251,21 @@ export async function resetPassword(
     prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
     prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
   ]);
+
+  /**
+   * 22 septembre 2026 (audit des emails transactionnels) — confirmation
+   * sécurité standard, permet au titulaire légitime de détecter une prise
+   * de contrôle de compte.
+   */
+  try {
+    await sendTransactionalEmail({
+      to: record.user.email,
+      subject: "Votre mot de passe CEO Summit a été modifié",
+      react: PasswordChangedEmail({ memberName: record.user.name }),
+    });
+  } catch (err) {
+    console.error("[resetPassword] failed to send confirmation email", err);
+  }
 
   return { success: true, data: undefined };
 }

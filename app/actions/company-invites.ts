@@ -15,6 +15,7 @@ import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { BCRYPT_ROUNDS } from "@/lib/password";
 import { formatDateFr } from "@/lib/utils";
 import CompanyInviteEmail from "@/emails/company-invite-email";
+import CompanyCollaboratorWelcomeEmail from "@/emails/company-collaborator-welcome-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -234,7 +235,10 @@ export async function acceptCompanyInvite(
   password: string,
   confirmPassword: string
 ): Promise<ActionResult<{ email: string }>> {
-  const invite = await prisma.companyInvite.findUnique({ where: { token } });
+  const invite = await prisma.companyInvite.findUnique({
+    where: { token },
+    include: { company: { select: { name: true } } },
+  });
   if (!invite) return { success: false, error: "Invitation introuvable." };
   if (invite.status === "REVOKED")
     return { success: false, error: "Cette invitation a été révoquée." };
@@ -283,6 +287,28 @@ export async function acceptCompanyInvite(
       data: { status: "ACCEPTED", acceptedAt: new Date() },
     }),
   ]);
+
+  /**
+   * 22 septembre 2026 (audit des emails transactionnels) — envoyé
+   * systématiquement, contrairement à EventRegistrationEmail plus bas qui ne
+   * s'envoie que si l'abonnement est ACTIVE et lié à un évènement avec de la
+   * place : sans ça, un collaborateur dont l'entreprise est encore en
+   * attente de validation (ou dont l'offre n'est pas liée à un évènement)
+   * n'avait aucune confirmation que son compte était créé et actif.
+   */
+  try {
+    await sendTransactionalEmail({
+      to: newUser.email,
+      subject: `Bienvenue sur CEO Summit — ${invite.company.name}`,
+      react: CompanyCollaboratorWelcomeEmail({
+        memberName: newUser.name,
+        companyName: invite.company.name,
+        loginUrl: `${process.env.NEXTAUTH_URL}/login`,
+      }),
+    });
+  } catch (err) {
+    console.error("[acceptCompanyInvite] failed to send welcome email", err);
+  }
 
   /**
    * RG-14 (4 août 2026) — un collaborateur invité APRÈS la confirmation du

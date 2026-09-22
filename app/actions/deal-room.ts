@@ -11,6 +11,7 @@ import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
 import OpportunityContactRequestEmail from "@/emails/opportunity-contact-request-email";
+import OpportunityContactAcceptedEmail from "@/emails/opportunity-contact-accepted-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -157,7 +158,10 @@ export async function acceptOpportunityContact(
 
   const contact = await prisma.opportunityContact.findUnique({
     where: { id: contactId },
-    include: { opportunity: { select: { id: true, title: true } } },
+    include: {
+      opportunity: { select: { id: true, title: true } },
+      initiator: { select: { email: true, name: true } },
+    },
   });
   if (!contact || contact.receiverId !== viewer.id) {
     return { success: false, error: "Demande introuvable." };
@@ -175,6 +179,25 @@ export async function acceptOpportunityContact(
     where: { id: contactId },
     data: { status: "ACCEPTED", conversationId: conversation.id },
   });
+
+  /**
+   * 22 septembre 2026 (audit des emails transactionnels) — pendant du
+   * OpportunityContactRequestEmail : sans ça, l'initiateur n'apprenait
+   * l'acceptation qu'en revisitant la plateforme de lui-même.
+   */
+  try {
+    await sendTransactionalEmail({
+      to: contact.initiator.email,
+      subject: `Demande de contact acceptée — ${contact.opportunity.title}`,
+      react: OpportunityContactAcceptedEmail({
+        receiverName: viewer.name,
+        opportunityTitle: contact.opportunity.title,
+        conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversation.id}`,
+      }),
+    });
+  } catch (err) {
+    console.error("[acceptOpportunityContact] failed to send notification email", err);
+  }
 
   revalidatePath(`/deal-room/${contact.opportunityId}`);
   return { success: true, data: { conversationId: conversation.id } };

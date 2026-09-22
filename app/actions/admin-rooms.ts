@@ -7,7 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { roomFormSchema } from "@/lib/validations/room";
+import { formatDateFr } from "@/lib/utils";
 import MemberRoomWarningEmail from "@/emails/member-room-warning-email";
+import MemberRoomExclusionEmail from "@/emails/member-room-exclusion-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -135,15 +137,28 @@ export async function resolveRoomReport(
     }
   } else if (decision === "RESOLVED_EXCLUDED") {
     const days = durationDays && durationDays > 0 ? durationDays : 7;
+    const suspendedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     await prisma.roomSuspension.create({
       data: {
         roomId: roomMessage.roomId,
         userId: roomMessage.authorId,
         reason: "Message signalé — exclusion de la salle",
-        suspendedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
+        suspendedUntil,
         createdById: adminId,
       },
     });
+    try {
+      await sendTransactionalEmail({
+        to: roomMessage.author.email,
+        subject: `Exclusion temporaire — salle ${roomMessage.room.name}`,
+        react: MemberRoomExclusionEmail({
+          roomName: roomMessage.room.name,
+          suspendedUntilLabel: formatDateFr(suspendedUntil),
+        }),
+      });
+    } catch (err) {
+      console.error("[resolveRoomReport] failed to send exclusion email", err);
+    }
   }
 
   await prisma.roomReport.update({
