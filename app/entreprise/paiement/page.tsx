@@ -94,11 +94,14 @@ export default async function CompanyPaymentPage({
             {subscription.status === "PENDING_PAYMENT" && (
               <div className="mb-8 max-w-lg">
                 <PaymentProofForm
+                  companyId={company.id}
                   companySubscriptionId={subscription.id}
+                  planId={subscription.planId}
                   priceAr={subscription.plan.priceAr}
                   minParticipants={subscription.plan.minParticipants}
                   pricingMode={subscription.plan.pricingMode}
                   maxTeamMembers={subscription.plan.maxTeamMembers}
+                  groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
                 />
               </div>
             )}

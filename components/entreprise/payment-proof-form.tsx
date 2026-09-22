@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { PaymentMethod, PlanPricingMode } from "@prisma/client";
+import type { PaymentMethod, Plan, PlanPricingMode } from "@prisma/client";
 
-import { submitPaymentProof } from "@/app/actions/company-subscription";
+import { selectPlan, submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { formatAriary } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -51,18 +51,31 @@ const EVOLIA_METHODS: PaymentMethod[] = ["CARTE_BANCAIRE", "MOBILE_MONEY"];
  * reste la source de vérité.
  */
 export function PaymentProofForm({
+  companyId,
   companySubscriptionId,
+  planId,
   priceAr,
   minParticipants,
   pricingMode,
   maxTeamMembers,
+  groupPlans,
 }: {
+  companyId: string;
   companySubscriptionId: string;
+  /** Offre actuellement souscrite — sert à détecter un changement d'offre. */
+  planId: string;
   priceAr: number;
   minParticipants: number | null;
   pricingMode: PlanPricingMode | null;
   /** Nombre de places de l'offre — affiché, jamais saisi ici. */
   maxTeamMembers: number | null;
+  /**
+   * Offres Groupement actives du catalogue (`PER_PARTICIPANT`), effectif y
+   * compris l'offre actuellement souscrite — sert à détecter, quand
+   * l'effectif saisi atteint le seuil d'une autre offre Groupement, qu'il
+   * faut y basculer automatiquement (voir handleDeclaredParticipantsBlur).
+   */
+  groupPlans: Plan[];
 }) {
   const router = useRouter();
   const isGroupOffer = pricingMode === "PER_PARTICIPANT";
@@ -73,6 +86,7 @@ export function PaymentProofForm({
   );
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [switchingPlan, setSwitchingPlan] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
@@ -97,9 +111,43 @@ export function PaymentProofForm({
     setDeclaredParticipants(raw.replace(/[^0-9]/g, ""));
   }
 
-  function handleDeclaredParticipantsBlur() {
+  /**
+   * L'offre Groupement applicable dépend de l'effectif saisi (même logique
+   * que UpsellPurchaseForm) : si l'effectif atteint le seuil d'une autre
+   * offre Groupement du catalogue, on y bascule automatiquement plutôt que
+   * de facturer cet effectif au tarif de l'offre choisie initialement.
+   * Palier le plus élevé atteint en priorité (40 personnes prend l'offre à
+   * 30 plutôt que celle à 10, si les deux seuils sont franchis).
+   *
+   * Contrairement à UpsellPurchaseForm, l'offre n'est pas un simple état
+   * local ici : elle est déjà persistée (`CompanySubscription.planId`), donc
+   * la bascule appelle `selectPlan` (même action que PlanPicker) puis
+   * rafraîchit la page — sans effet secondaire sur une preuve déjà
+   * uploadée, celle-ci ne devient un CompanyPayment qu'à la soumission.
+   */
+  async function handleDeclaredParticipantsBlur() {
+    const parsed = declaredParticipants === "" ? 0 : parseInt(declaredParticipants, 10);
+
+    const qualifying = groupPlans
+      .filter((p) => p.minParticipants != null)
+      .sort((a, b) => (b.minParticipants ?? 0) - (a.minParticipants ?? 0))
+      .find((p) => parsed >= (p.minParticipants ?? 1));
+
+    if (qualifying && qualifying.id !== planId) {
+      setSwitchingPlan(true);
+      try {
+        const result = await selectPlan(companyId, qualifying.id);
+        if (result.success) {
+          router.refresh();
+          return;
+        }
+        setError(result.error);
+      } finally {
+        setSwitchingPlan(false);
+      }
+    }
+
     setDeclaredParticipants((prev) => {
-      const parsed = prev === "" ? 0 : parseInt(prev, 10);
       const min = minParticipants ?? 1;
       return parsed < min ? String(min) : prev;
     });
@@ -177,11 +225,13 @@ export function PaymentProofForm({
             value={declaredParticipants}
             onChange={(e) => handleDeclaredParticipantsChange(e.target.value)}
             onBlur={handleDeclaredParticipantsBlur}
+            disabled={switchingPlan}
             className={!meetsThreshold ? "border-red-500 focus-visible:ring-red-500" : undefined}
           />
           <p className="text-xs text-text-muted">
-            Cette offre se facture à la personne — indiquez combien de personnes vous engagez. Vous
-            désignerez qui exactement depuis votre espace, après paiement.
+            {switchingPlan
+              ? "Ajustement de l'offre selon l'effectif saisi…"
+              : "Cette offre se facture à la personne — indiquez combien de personnes vous engagez. Une autre offre Groupement peut se substituer automatiquement si l'effectif en atteint le seuil. Vous désignerez qui exactement depuis votre espace, après paiement."}
           </p>
         </div>
       )}
@@ -265,7 +315,7 @@ export function PaymentProofForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || !meetsThreshold || isEvoliaMethod}
+        disabled={submitting || uploading || switchingPlan || !meetsThreshold || isEvoliaMethod}
         className="justify-center"
       >
         {submitting ? "Envoi…" : "Soumettre pour validation"}
