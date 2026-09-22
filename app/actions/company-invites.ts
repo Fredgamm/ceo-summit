@@ -172,6 +172,55 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
 }
 
 /**
+ * 22 septembre 2026 — jusqu'ici, un email d'invitation perdu (spam, adresse
+ * corrigée après coup...) obligeait à révoquer puis réinviter, puisque
+ * `inviteTeammate` refuse une deuxième invitation en attente pour le même
+ * email. Régénère le token et l'expiration de l'invitation existante et
+ * renvoie le même email, sans passer par cette étape.
+ */
+export async function resendInvite(inviteId: string): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+
+  const invite = await prisma.companyInvite.findUnique({
+    where: { id: inviteId },
+    include: { company: true },
+  });
+  if (!invite) return { success: false, error: "Invitation introuvable." };
+  if (invite.company.companyAdminId !== session.user.id) {
+    return { success: false, error: "Seul l'admin de l'entreprise peut renvoyer une invitation." };
+  }
+  if (invite.status !== "PENDING") {
+    return { success: false, error: "Cette invitation n'est plus en attente." };
+  }
+
+  const token = generateSecureToken();
+  await prisma.companyInvite.update({
+    where: { id: inviteId },
+    data: { token, expiresAt: new Date(Date.now() + COMPANY_INVITE_TTL_MS) },
+  });
+
+  const inviteUrl = `${process.env.NEXTAUTH_URL}/invitation/${token}`;
+  try {
+    await sendTransactionalEmail({
+      to: invite.email,
+      subject: `${invite.company.name} vous invite à rejoindre CEO Summit`,
+      react: CompanyInviteEmail({
+        inviteeName: invite.name,
+        companyName: invite.company.name,
+        inviteUrl,
+      }),
+    });
+  } catch (err) {
+    console.error("[resendInvite] failed to send invite email", err);
+    return { success: false, error: "Échec de l'envoi de l'email. Réessayez plus tard." };
+  }
+
+  revalidatePath(`/entreprises/${invite.companyId}`);
+  return { success: true, data: undefined };
+}
+
+/**
  * Parcours revu (1er août 2026) — accepter une invitation crée le compte
  * directement (mot de passe choisi sur cette même page), sans second email
  * d'activation : l'invité a déjà prouvé posséder cette adresse en suivant le

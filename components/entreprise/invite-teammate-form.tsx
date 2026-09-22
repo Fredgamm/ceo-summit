@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { inviteTeammate, revokeInvite } from "@/app/actions/company-invites";
+import { inviteTeammate, resendInvite, revokeInvite } from "@/app/actions/company-invites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,8 @@ export function InviteTeammateForm({
   const [email, setEmail] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [resendingId, setResendingId] = React.useState<string | null>(null);
+  const [resentId, setResentId] = React.useState<string | null>(null);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +52,23 @@ export function InviteTeammateForm({
   async function handleRevoke(inviteId: string) {
     const result = await revokeInvite(inviteId);
     if (result.success) router.refresh();
+  }
+
+  async function handleResend(inviteId: string) {
+    setError(null);
+    setResentId(null);
+    setResendingId(inviteId);
+    try {
+      const result = await resendInvite(inviteId);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setResentId(inviteId);
+      router.refresh();
+    } finally {
+      setResendingId(null);
+    }
   }
 
   return (
@@ -93,6 +112,17 @@ export function InviteTeammateForm({
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="pending">En attente</Badge>
+                {resentId === invite.id && (
+                  <span className="text-xs text-emerald-700">✓ Renvoyée</span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={resendingId === invite.id}
+                  onClick={() => handleResend(invite.id)}
+                >
+                  {resendingId === invite.id ? "…" : "Renvoyer"}
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => handleRevoke(invite.id)}>
                   Révoquer
                 </Button>

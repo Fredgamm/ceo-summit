@@ -43,7 +43,7 @@ vi.mock("qrcode", () => ({
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { inviteTeammate, revokeInvite, acceptCompanyInvite } from "./company-invites";
+import { inviteTeammate, resendInvite, revokeInvite, acceptCompanyInvite } from "./company-invites";
 
 const SESSION = { user: { id: "admin_user_1" } } as never;
 
@@ -156,6 +156,61 @@ describe("revokeInvite", () => {
 
     const result = await revokeInvite("invite_1");
     expect(result.success).toBe(false);
+  });
+});
+
+describe("resendInvite", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(auth).mockResolvedValue(SESSION);
+    process.env.NEXTAUTH_URL = "https://app.ceo-summit.mg";
+  });
+
+  it("regenerates the token and re-sends the invite email as the company admin", async () => {
+    vi.mocked(prisma.companyInvite.findUnique).mockResolvedValue({
+      id: "invite_1",
+      companyId: "company_1",
+      email: "marie@example.mg",
+      name: "Marie Dupont",
+      status: "PENDING",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+    } as never);
+
+    const result = await resendInvite("invite_1");
+    expect(result.success).toBe(true);
+    expect(prisma.companyInvite.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "invite_1" },
+        data: expect.objectContaining({ token: expect.any(String) }),
+      })
+    );
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "marie@example.mg" })
+    );
+  });
+
+  it("rejects a caller who isn't the company admin", async () => {
+    vi.mocked(prisma.companyInvite.findUnique).mockResolvedValue({
+      id: "invite_1",
+      status: "PENDING",
+      company: { companyAdminId: "someone_else" },
+    } as never);
+
+    const result = await resendInvite("invite_1");
+    expect(result.success).toBe(false);
+    expect(prisma.companyInvite.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invite that isn't pending anymore", async () => {
+    vi.mocked(prisma.companyInvite.findUnique).mockResolvedValue({
+      id: "invite_1",
+      status: "ACCEPTED",
+      company: { companyAdminId: "admin_user_1" },
+    } as never);
+
+    const result = await resendInvite("invite_1");
+    expect(result.success).toBe(false);
+    expect(prisma.companyInvite.update).not.toHaveBeenCalled();
   });
 });
 
