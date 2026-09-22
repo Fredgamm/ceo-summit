@@ -554,6 +554,11 @@ model CompanyInvite {
   status      CompanyInviteStatus @default(PENDING)
   createdAt   DateTime            @default(now())
   acceptedAt  DateTime?
+  /// 22 septembre 2026 — invitation qui n'expirait jamais jusqu'ici, ce qui
+  /// laissait une invitation jamais acceptée occuper indéfiniment un siège
+  /// dans le calcul du plafond (voir inviteTeammate). Défaut posé en
+  /// application (lib/tokens.ts::COMPANY_INVITE_TTL_MS).
+  expiresAt   DateTime
 
   @@index([companyId, status])
 }
