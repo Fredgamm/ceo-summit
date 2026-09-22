@@ -67,7 +67,9 @@ export function UpsellPurchaseForm({
   // Changer d'offre change ce que "quantité" veut dire (places à l'unité vs.
   // effectif d'un lot) — on la recale sur le nouveau seuil au lieu de laisser
   // une quantité valide pour l'ancienne offre mais insuffisante pour la
-  // nouvelle.
+  // nouvelle. Choix explicite de l'admin : ne déclenche jamais l'auto-switch
+  // ci-dessous (sinon un choix manuel serait aussitôt écrasé par la quantité
+  // déjà saisie — voir handleQuantityChange).
   function handlePlanChange(nextPlanId: string) {
     setPlanId(nextPlanId);
     const nextPlan = upsellPlans.find((p) => p.id === nextPlanId);
@@ -79,10 +81,35 @@ export function UpsellPurchaseForm({
     });
   }
 
+  /**
+   * L'offre applicable dépend dynamiquement de la quantité saisie (repris de
+   * la description initiale du besoin : Executive Pass à l'unité jusqu'à ce
+   * que l'effectif atteigne le seuil d'un Groupement, qui prend alors le
+   * relais — "dégressif" seulement à partir de ce seuil). Palier le plus
+   * élevé atteint en priorité (ex. 30 personnes prend Groupement 30, pas
+   * Groupement 10, même si les deux seuils sont franchis) ; en dessous de
+   * tout seuil groupement, retombe sur une offre à l'unité.
+   */
+  function selectPlanForQuantity(qty: number): Plan | undefined {
+    const groupPlansDesc = upsellPlans
+      .filter((p) => p.pricingMode === "PER_PARTICIPANT" && p.minParticipants != null)
+      .sort((a, b) => (b.minParticipants ?? 0) - (a.minParticipants ?? 0));
+    const qualifying = groupPlansDesc.find((p) => qty >= (p.minParticipants ?? 1));
+    if (qualifying) return qualifying;
+    if (selectedPlan && selectedPlan.pricingMode !== "PER_PARTICIPANT") return selectedPlan;
+    return upsellPlans.find((p) => p.pricingMode !== "PER_PARTICIPANT");
+  }
+
   function handleQuantityChange(raw: string) {
     // Chiffres uniquement : bloque signe négatif, décimales et notation
     // scientifique dès la saisie plutôt que de les valider après coup.
-    setQuantity(raw.replace(/[^0-9]/g, ""));
+    const digitsOnly = raw.replace(/[^0-9]/g, "");
+    setQuantity(digitsOnly);
+    const qty = digitsOnly === "" ? 0 : parseInt(digitsOnly, 10);
+    if (qty > 0) {
+      const nextPlan = selectPlanForQuantity(qty);
+      if (nextPlan && nextPlan.id !== planId) setPlanId(nextPlan.id);
+    }
   }
 
   function handleQuantityBlur() {
@@ -197,6 +224,13 @@ export function UpsellPurchaseForm({
           )}
         </div>
       </div>
+
+      {upsellPlans.some((p) => p.pricingMode === "PER_PARTICIPANT") && (
+        <p className="-mt-2 text-xs text-text-muted">
+          L&apos;offre s&apos;ajuste automatiquement selon la quantité saisie — un effectif qui
+          atteint le seuil d&apos;un groupement bascule sur son tarif par personne.
+        </p>
+      )}
 
       <div className="rounded-md border border-border bg-surface p-4">
         <p className="text-sm text-text-mid">
