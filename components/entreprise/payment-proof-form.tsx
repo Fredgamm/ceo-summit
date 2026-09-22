@@ -6,6 +6,7 @@ import type { PaymentMethod, Plan, PlanPricingMode } from "@prisma/client";
 
 import { selectPlan, submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { formatAriary } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,23 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
-  { value: "VIREMENT", label: "Virement bancaire" },
-  { value: "CHEQUE", label: "Chèque" },
-  { value: "CARTE_BANCAIRE", label: "Carte bancaire" },
-  { value: "MOBILE_MONEY", label: "Mobile Money" },
-];
-
-/**
- * 3 septembre 2026 — carte bancaire et mobile money passeront par Evolia
- * (redirection, pas de preuve à uploader), mais ce pont n'est pas encore
- * construit côté Evolia (conception/11 §3, en attente de leur réponse) :
- * en attendant, ces deux méthodes restent sélectionnables mais ne mènent
- * à aucun parcours de paiement fonctionnel — seuls virement et chèque
- * (validation manuelle par preuve) sont opérationnels aujourd'hui.
- */
-const EVOLIA_METHODS: PaymentMethod[] = ["CARTE_BANCAIRE", "MOBILE_MONEY"];
 
 /**
  * 22 septembre 2026 (`conception/12`) — deux cas, et deux seulement :
@@ -103,7 +87,7 @@ export function PaymentProofForm({
     : 1;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
   const amount = computeDueAmount(plan, declaredCount);
-  const isEvoliaMethod = EVOLIA_METHODS.includes(method);
+  const isEvoliaMethod = isEvoliaPaymentMethod(method);
 
   function handleDeclaredParticipantsChange(raw: string) {
     // Chiffres uniquement : bloque signe négatif, décimales et notation
@@ -262,7 +246,7 @@ export function PaymentProofForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {METHOD_OPTIONS.map((opt) => (
+            {PAYMENT_METHOD_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>

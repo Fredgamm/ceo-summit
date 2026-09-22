@@ -17,12 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { formatAriary, formatPlanPrice } from "@/lib/utils";
-
-const METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = [
-  { value: "VIREMENT", label: "Virement bancaire" },
-  { value: "CHEQUE", label: "Chèque" },
-];
 
 /**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
@@ -60,6 +56,7 @@ export function UpsellPurchaseForm({
   const minQuantity =
     selectedPlan?.pricingMode === "PER_PARTICIPANT" ? (selectedPlan.minParticipants ?? 1) : 1;
   const isQuantityTooLow = declaredQuantity > 0 && declaredQuantity < minQuantity;
+  const isEvoliaMethod = isEvoliaPaymentMethod(method);
 
   // Changer d'offre change ce que "quantité" veut dire (places à l'unité vs.
   // effectif d'un lot) — on la recale sur le nouveau seuil au lieu de laisser
@@ -243,7 +240,7 @@ export function UpsellPurchaseForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {METHOD_OPTIONS.map((opt) => (
+            {PAYMENT_METHOD_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
@@ -252,29 +249,41 @@ export function UpsellPurchaseForm({
         </Select>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="upsell-proof">Preuve de paiement (image ou PDF) *</Label>
-        <Input
-          id="upsell-proof"
-          type="file"
-          accept="image/*,application/pdf"
-          onChange={handleFileChange}
-          disabled={uploading}
-        />
-        {uploading && <p className="text-xs text-text-muted">Envoi en cours…</p>}
-        {proof && <p className="text-xs text-emerald-700">✓ {proof.name}</p>}
-      </div>
+      {isEvoliaMethod ? (
+        <Alert variant="gold">
+          <AlertDescription>
+            Ce mode de paiement sera bientôt disponible — vous serez alors redirigé vers Evolia pour
+            le finaliser, sans preuve à fournir. En attendant, choisissez virement bancaire ou
+            chèque.
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="upsell-proof">Preuve de paiement (image ou PDF) *</Label>
+            <Input
+              id="upsell-proof"
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+            {uploading && <p className="text-xs text-text-muted">Envoi en cours…</p>}
+            {proof && <p className="text-xs text-emerald-700">✓ {proof.name}</p>}
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="upsell-comment">Commentaire (optionnel)</Label>
-        <Textarea
-          id="upsell-comment"
-          rows={2}
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          maxLength={1000}
-        />
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="upsell-comment">Commentaire (optionnel)</Label>
+            <Textarea
+              id="upsell-comment"
+              rows={2}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              maxLength={1000}
+            />
+          </div>
+        </>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -284,7 +293,13 @@ export function UpsellPurchaseForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || declaredQuantity < minQuantity || !selectedPlan}
+        disabled={
+          submitting ||
+          uploading ||
+          declaredQuantity < minQuantity ||
+          !selectedPlan ||
+          isEvoliaMethod
+        }
         className="justify-center"
       >
         {submitting ? "Envoi…" : "Acheter ces places"}
