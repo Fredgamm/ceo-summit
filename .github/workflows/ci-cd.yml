@@ -80,6 +80,45 @@ jobs:
       github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      - name: Relocate Docker data-root out of the build context
+        # 23 septembre 2026 — le data-root de Docker (`.docker-data`, voir
+        # DEPLOY.md §2) vit dans /opt/ceo-summit, le même dossier que le
+        # contexte du build (`context: .`). Le builder classique
+        # (DOCKER_BUILDKIT=0, nécessaire pour attacher le build au réseau
+        # ceo-summit-net) doit quand même parcourir .docker-data pour
+        # appliquer l'exclusion du .dockerignore, et le `docker system
+        # prune -af` qui tourne juste avant modifie ce même dossier pendant
+        # que le tar du contexte le parcourt — d'où l'échec intermittent
+        # "checking context: can't stat '.docker-data'". Correctif définitif :
+        # sortir .docker-data du contexte de build en le déplaçant vers
+        # /opt/docker-data (dossier voisin, même partition dédiée, donc même
+        # bénéfice espace disque qu'avant — voir DEPLOY.md §2). Étape
+        # idempotente : ne fait rien une fois la migration faite.
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            if [ -d /opt/ceo-summit/.docker-data ] && [ ! -e /opt/docker-data ]; then
+              echo "→ Migration data-root Docker hors du contexte de build (.docker-data -> /opt/docker-data)"
+              sudo -n true || { echo "Pas de sudo sans mot de passe pour l'utilisateur de déploiement — migration annulée." >&2; exit 1; }
+              echo "--- Conteneurs avant migration ---"
+              docker ps -a
+              sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.bak
+              sudo systemctl stop docker
+              sudo mv /opt/ceo-summit/.docker-data /opt/docker-data
+              sudo sed -i 's#/opt/ceo-summit/\.docker-data#/opt/docker-data#' /etc/docker/daemon.json
+              sudo systemctl start docker
+              timeout 30 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
+              echo "--- Conteneurs après migration (doivent tous être revenus) ---"
+              docker ps -a
+              echo "✓ Migration terminée — data-root Docker : $(docker info --format '{{.DockerRootDir}}')"
+            else
+              echo "→ Rien à migrer (déjà fait, ou .docker-data absent)."
+            fi
+
       - name: Deploy to VPS
         # 14 septembre 2026 — checkout explicite de github.ref_name plutôt
         # qu'un `git pull origin main` en dur : le VPS suit désormais

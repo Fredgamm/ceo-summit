@@ -60,17 +60,27 @@ Healthy AI, sur sa propre partition (`/`, ~45 Go). Docker stocke ses données
 donc sur le disque de Healthy AI, pas sur la partition dédiée CEO Summit.
 Après plusieurs rebuilds ça a fini par saturer `/` (images/build cache non
 nettoyés) et fait planter Healthy AI aussi bien que CEO Summit. Corrigé en
-déplaçant le `data-root` de Docker vers `/opt/ceo-summit/.docker-data`
-(sur la partition dédiée) via `/etc/docker/daemon.json` :
+déplaçant le `data-root` de Docker vers `/opt/docker-data` (sur la partition
+dédiée) via `/etc/docker/daemon.json` :
 
 ```json
-{ "data-root": "/opt/ceo-summit/.docker-data" }
+{ "data-root": "/opt/docker-data" }
 ```
 
 Penser aussi à nettoyer régulièrement (`docker image prune -af` après
 chaque déploiement) — le déplacement limite les dégâts en cas d'oubli
 (la partition dédiée déborde sans toucher à Healthy AI), mais ne remplace
 pas un nettoyage périodique.
+
+> 23 septembre 2026 — initialement placé dans `/opt/ceo-summit/.docker-data`
+> (à l'intérieur même du dépôt), ce qui en faisait malgré lui une entrée du
+> contexte de build Docker (`context: .` dans `docker-compose.prod.yml`) et
+> causait des échecs intermittents de build ("checking context: can't stat")
+> quand `docker system prune -af` modifiait ce dossier pendant que le
+> builder classique le parcourait. D'où le déplacement vers `/opt/docker-data`
+> (dossier voisin, hors du dépôt, toujours sur la partition dédiée) — voir
+> `.github/workflows/ci-cd.yml`, étape "Relocate Docker data-root out of
+> the build context", qui a effectué cette migration en production.
 
 ## 3. Pare-feu (UFW)
 
