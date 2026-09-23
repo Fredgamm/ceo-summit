@@ -101,7 +101,7 @@ const nextConfig = {
   },
 };
 
-const CRITICAL_PAGES = ["/login", "/dashboard", "/messagerie"];
+const CRITICAL_PAGES = ["/dashboard", "/messagerie"];
 const MEMBER_PAGE_PREFIXES = [
   "/dashboard",
   "/deal-room",
@@ -121,12 +121,22 @@ function matchesNavigationTo(pathname, prefixes) {
 }
 
 /**
- * E9-T01 — offline support for the 3 pages the backlog calls out by name
- * (login, dashboard, messagerie) plus a StaleWhileRevalidate layer for every
- * other member-facing page. Both sit *ahead* of `@ducanh2912/next-pwa`'s own
+ * E9-T01 — offline support for the pages the backlog calls out by name
+ * (dashboard, messagerie) plus a StaleWhileRevalidate layer for every other
+ * member-facing page. Both sit *ahead* of `@ducanh2912/next-pwa`'s own
  * defaultCache (fonts/images/JS/CSS/API), which we keep via
  * extendDefaultRuntimeCaching — we're only overriding page-navigation
  * caching, not asset caching.
+ *
+ * 23 septembre 2026 (incident cache) — /login était dans CRITICAL_PAGES et se
+ * retrouvait donc servi depuis un cache vieux de 7 jours (NetworkFirst avec
+ * timeout 4s : sur un réseau lent, la version en cache l'emportait). Une page
+ * de login n'a aucune utilité hors-ligne (on ne peut pas s'authentifier sans
+ * réseau) — la mettre en cache ne fait que risquer de servir du contenu
+ * périmé (ex: un lien qu'on vient de retirer) sans jamais apporter le
+ * bénéfice recherché. Route explicite en NetworkOnly, placée avant le
+ * defaultCache de next-pwa (qui mettrait sinon les pages en cache 24h via son
+ * propre NetworkFirst) pour garantir que /login reflète toujours le serveur.
  */
 const withPWA = withPWAInit({
   dest: "public",
@@ -143,6 +153,10 @@ const withPWA = withPWAInit({
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
     runtimeCaching: [
+      {
+        urlPattern: ({ url, request }) => request.mode === "navigate" && url.pathname === "/login",
+        handler: "NetworkOnly",
+      },
       {
         urlPattern: ({ url, request }) =>
           request.mode === "navigate" && matchesNavigationTo(url.pathname, CRITICAL_PAGES),
