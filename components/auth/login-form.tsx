@@ -166,15 +166,6 @@ export function LoginForm() {
         </div>
       )}
 
-      <div className="mt-6 border-t border-border pt-6 text-center">
-        <Link
-          href="/demande-acces"
-          className="block text-xs text-text-muted underline-offset-2 hover:underline"
-        >
-          Vous avez été invité personnellement ? Déposez une candidature
-        </Link>
-      </div>
-
       <Alert variant="gold" className="mt-5">
         <Lock />
         <AlertDescription>
