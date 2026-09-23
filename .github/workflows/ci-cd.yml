@@ -99,6 +99,16 @@ jobs:
             git fetch origin
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
+            # 23 septembre 2026 — incident déjà rencontré sur ce VPS (voir
+            # DEPLOY.md "Sur le VPS partagé actuel") : plusieurs builds
+            # consécutifs (dont des tentatives en échec, qui n'atteignent
+            # jamais le prune de fin de script) remplissent le disque et
+            # font planter l'app au démarrage. Nettoyage systématique en
+            # tout début de déploiement, avant de reconstruire quoi que ce
+            # soit, plutôt qu'en fin de script réussi seulement.
+            df -h / || true
+            docker system prune -af || true
+            df -h / || true
             # docker-compose.prod.yml build.network=ceo-summit-net (next
             # build needs a live Postgres, see the file's own header
             # comment) requires the network to exist first (created when
@@ -111,7 +121,7 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d postgres redis
             timeout 60 sh -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" $(docker compose -f docker-compose.prod.yml ps -q postgres))" = "healthy" ]; do sleep 2; done'
             docker compose -f docker-compose.prod.yml up -d --build
-            docker image prune -f
+            docker image prune -af
 
       - name: Health check
         # 14 septembre 2026 — nginx sur le VPS sert désormais un vrai domaine
