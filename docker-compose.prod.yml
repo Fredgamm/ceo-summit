@@ -47,6 +47,18 @@ services:
     restart: unless-stopped
     volumes:
       - ceo_summit_redis_data:/data
+    # 23 septembre 2026 (incident 502) — sans healthcheck, `app` (qui n'avait
+    # aucune dépendance sur `redis` du tout, voir plus bas) pouvait démarrer
+    # avant que Redis ne soit joignable, plantant en boucle sur
+    # "[ioredis] getaddrinfo ENOTFOUND redis" pendant des heures après un
+    # recreate — le conteneur restait "Up" quelques secondes à chaque fois
+    # avant de re-planter, jamais assez longtemps pour qu'un simple retry
+    # applicatif s'en remette seul.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   app:
     build:
@@ -60,6 +72,8 @@ services:
     env_file: .env
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     # migrate deploy = the non-interactive, production-safe migration
     # command (unlike `migrate dev`, which refuses to run non-interactively —
@@ -87,8 +101,10 @@ services:
     restart: unless-stopped
     env_file: .env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     command: npx tsx server/socket-server.ts
     ports:
       - "127.0.0.1:3021:3001"
