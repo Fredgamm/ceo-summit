@@ -96,6 +96,23 @@ jobs:
           script: |
             set -e
             cd /opt/ceo-summit
+            # 23 septembre 2026 — diagnostic temporaire (à retirer une fois
+            # l'incident 502 résolu) : le site reste en panne après un
+            # retour complet au dernier script de déploiement réussi (donc
+            # pas le code) et après un nettoyage disque (donc probablement
+            # pas que le disque non plus) — remonte les vrais logs/état vers
+            # un topic ntfy.sh public temporaire, aucun accès SSH/KVM
+            # disponible pour les lire autrement.
+            {
+              echo "=== df -h ==="; df -h /
+              echo "=== docker ps -a ==="; docker ps -a
+              echo "=== docker compose ps ==="; docker compose -f docker-compose.prod.yml ps
+              echo "=== logs app (tail 80) ==="; docker compose -f docker-compose.prod.yml logs app --tail 80
+              echo "=== logs nginx (tail 30) ==="; docker compose -f docker-compose.prod.yml logs nginx --tail 30
+            } > /tmp/diag-before.txt 2>&1 || true
+            curl -s -X POST --data-binary @/tmp/diag-before.txt \
+              -H "Title: CEO Summit — diag AVANT redeploy" \
+              "https://ntfy.sh/ceo-summit-diag-de7d7989eb97cfa6b6a45615" || true
             git fetch origin
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
@@ -120,7 +137,19 @@ jobs:
             export COMPOSE_DOCKER_CLI_BUILD=0
             docker compose -f docker-compose.prod.yml up -d postgres redis
             timeout 60 sh -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" $(docker compose -f docker-compose.prod.yml ps -q postgres))" = "healthy" ]; do sleep 2; done'
+            set +e
             docker compose -f docker-compose.prod.yml up -d --build
+            BUILD_EXIT=$?
+            set -e
+            {
+              echo "=== BUILD/UP EXIT CODE: $BUILD_EXIT ==="
+              echo "=== docker ps -a ==="; docker ps -a
+              echo "=== docker compose ps ==="; docker compose -f docker-compose.prod.yml ps
+              echo "=== logs app (tail 100) ==="; docker compose -f docker-compose.prod.yml logs app --tail 100
+            } > /tmp/diag-after.txt 2>&1 || true
+            curl -s -X POST --data-binary @/tmp/diag-after.txt \
+              -H "Title: CEO Summit — diag APRES redeploy" \
+              "https://ntfy.sh/ceo-summit-diag-de7d7989eb97cfa6b6a45615" || true
             docker image prune -af
 
       - name: Health check
