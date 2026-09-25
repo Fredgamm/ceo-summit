@@ -179,7 +179,12 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
   }
 
   return (
-    <div className="flex h-[calc(100dvh-140px)] flex-col rounded-lg border border-border bg-white md:h-[calc(100vh-140px)]">
+    // Audit mobile 22 sept. 2026 (conception/14 §1) — 188px = padding haut du
+    // conteneur AppShell côté mobile (pt-16, 64px, réservé pour MobileHeader)
+    // + padding bas (pb-24, 96px, réservé pour MobileBottomNav) + 28px de
+    // marge (même méthode que l'ancien 140px = 16+96+28 avant l'ajout du
+    // header mobile). Desktop (md:) inchangé, AppShell n'y réserve que p-7.
+    <div className="flex h-[calc(100dvh-188px)] flex-col rounded-lg border border-border bg-white md:h-[calc(100vh-140px)]">
       <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
         <div>
           <h2 className="text-sm font-bold text-navy">{room.name}</h2>
