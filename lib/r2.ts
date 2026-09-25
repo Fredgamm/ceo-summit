@@ -152,3 +152,38 @@ export async function getSignedDownloadUrl(
   const command = new GetObjectCommand({ Bucket: bucket, Key: key });
   return getSignedUrl(r2, command, { expiresIn: expiresInSeconds });
 }
+
+/**
+ * Audit sécurité (25 septembre 2026) — vérifie qu'une clé fournie par le
+ * client (pièce jointe Deal Room, preuve de paiement...) a bien été produite
+ * par la route d'upload pour CET utilisateur : ces routes préfixent toujours
+ * leurs clés par `<usage>/<userId>/`. Rejette aussi tout segment `.`/`..`
+ * ou vide — une clé R2 les garde littéralement, mais le repli disque
+ * (`path.join`) et les navigateurs (normalisation d'URL) les résolvent, ce
+ * qui permettrait de sortir du préfixe vérifié.
+ */
+export function isKeyUnderPrefix(key: unknown, prefix: string): boolean {
+  if (typeof key !== "string" || !key.startsWith(prefix)) return false;
+  if (key.includes("\\")) return false;
+  const rest = key.slice(prefix.length);
+  return rest.length > 0 && rest.split("/").every((s) => s !== "" && s !== "." && s !== "..");
+}
+
+/**
+ * Pendant de `isKeyUnderPrefix` pour les objets publics (`uploadObject`), dont
+ * le client ne renvoie que l'URL : accepte l'URL du repli local comme celle
+ * de R2 (les deux formes peuvent coexister en base après la bascule vers R2).
+ */
+export function isPublicObjectUrlUnderPrefix(
+  url: unknown,
+  bucket: string,
+  keyPrefix: string
+): boolean {
+  if (typeof url !== "string" || /[?#]/.test(url)) return false;
+  const bases = [localObjectUrl(bucket, "")];
+  const publicBaseUrl = process.env.R2_PUBLIC_URL;
+  if (publicBaseUrl) bases.push(`${publicBaseUrl.replace(/\/$/, "")}/`);
+  return bases.some(
+    (base) => url.startsWith(base) && isKeyUnderPrefix(url.slice(base.length), keyPrefix)
+  );
+}

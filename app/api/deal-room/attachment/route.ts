@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
+import { requireViewer } from "@/lib/require-viewer";
 import { uploadPrivateObject } from "@/lib/r2";
 import {
   OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES,
@@ -20,10 +20,13 @@ import {
  * not exposed as a permanent public link.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  // Audit sécurité (25 septembre 2026) — relit `User.status` (et la date de
+  // changement de mot de passe) en base plutôt que de se fier au seul JWT.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) {
+    return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
+  const { viewer } = viewerResult;
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -38,7 +41,7 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const key = `deal-room/${session.user.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
+  const key = `deal-room/${viewer.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
   await uploadPrivateObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,

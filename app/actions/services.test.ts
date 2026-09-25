@@ -110,4 +110,31 @@ describe("submitServiceListing", () => {
     expect(result.success).toBe(true);
     expect(prisma.serviceListing.findFirst).not.toHaveBeenCalled();
   });
+
+  /**
+   * Audit sécurité (25 septembre 2026) — `gallery` acceptait n'importe
+   * quelle URL (externe, ou image d'un autre membre).
+   */
+  it("accepts gallery images uploaded by the caller", async () => {
+    vi.mocked(prisma.serviceListing.create).mockResolvedValue({ id: "svc_1", title: "x" } as never);
+    const result = await submitServiceListing({
+      ...VALID_INPUT,
+      gallery: ["/api/dev/local-storage/ceo-summit-documents/services/user_1/abc.jpg"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    ["an external URL", "https://evil.example.com/pixel.jpg"],
+    ["a javascript: URL", "javascript:alert(1)"],
+    ["another member's image", "/api/dev/local-storage/ceo-summit-documents/services/user_2/a.jpg"],
+    [
+      "a path-traversal URL",
+      "/api/dev/local-storage/ceo-summit-documents/services/user_1/../../company-payments/user_2/r.pdf",
+    ],
+  ])("rejects %s without creating anything", async (_label, url) => {
+    const result = await submitServiceListing({ ...VALID_INPUT, gallery: [url] });
+    expect(result.success).toBe(false);
+    expect(prisma.serviceListing.create).not.toHaveBeenCalled();
+  });
 });

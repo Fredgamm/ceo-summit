@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// Backlog: "documents joints (R2, PDF 10Mo max)".
+export const OPPORTUNITY_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES = ["application/pdf"];
+export const OPPORTUNITY_ATTACHMENT_MAX_COUNT = 3;
+
 /**
  * E6-T03 — publication d'opportunité Deal Room, en 4 étapes côté formulaire.
  *
@@ -18,12 +23,12 @@ export const opportunityFormSchema = z.object({
   budget: z.string().optional().default(""), // Ariary, parsed manually — optional per backlog
   deadline: z.string().optional().default(""), // "YYYY-MM-DD", optional
   visibility: z.enum(["MEMBER", "EXECUTIVE", "CHAIRMAN"]),
-  attachments: z.array(z.string()).default([]),
+  // Propriété des clés (préfixe `deal-room/<auteur>/`) vérifiée dans
+  // app/actions/deal-room.ts — dépend de l'utilisateur courant.
+  attachments: z
+    .array(z.string().max(300))
+    .max(OPPORTUNITY_ATTACHMENT_MAX_COUNT, "3 documents maximum")
+    .default([]),
 });
 
 export type OpportunityFormInput = z.input<typeof opportunityFormSchema>;
-
-// Backlog: "documents joints (R2, PDF 10Mo max)".
-export const OPPORTUNITY_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
-export const OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES = ["application/pdf"];
-export const OPPORTUNITY_ATTACHMENT_MAX_COUNT = 3;

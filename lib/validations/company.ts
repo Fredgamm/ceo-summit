@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { optionalUrlField } from "@/lib/validations/profile";
+
 /**
  * Parcours revu (1er août 2026) — coordonnées, réseaux sociaux et logo
  * ajoutés au formulaire d'entreprise. Réseaux sociaux limités à 3 plateformes
@@ -16,13 +18,20 @@ export const companyFormSchema = z.object({
   sector: z.string().trim().min(1, "Le secteur est requis"),
   country: z.string().trim().min(1, "Le pays est requis"),
   description: z.string().trim().max(1000).optional().default(""),
-  website: z.string().trim().max(200).optional().default(""),
+  /**
+   * Audit sécurité (25 septembre 2026) — `website` et les trois réseaux
+   * sociaux étaient des chaînes libres rendues en `href` (app/entreprises/
+   * [id]/page.tsx, app/membres/[id]/page.tsx) : un `javascript:...` saisi
+   * ici s'exécutait au clic de n'importe quel visiteur. Même champ que le
+   * profil membre (normalisation "https://" + http(s) uniquement).
+   */
+  website: optionalUrlField(undefined, undefined, 200),
   logoUrl: z.string().trim().max(500).optional().default(""),
   phone: z.string().trim().max(40).optional().default(""),
   address: z.string().trim().max(300).optional().default(""),
-  linkedinUrl: z.string().trim().max(300).optional().default(""),
-  facebookUrl: z.string().trim().max(300).optional().default(""),
-  instagramUrl: z.string().trim().max(300).optional().default(""),
+  linkedinUrl: optionalUrlField(undefined, undefined, 300),
+  facebookUrl: optionalUrlField(undefined, undefined, 300),
+  instagramUrl: optionalUrlField(undefined, undefined, 300),
   additionalInfo: z.string().trim().max(1000).optional().default(""),
 });
 

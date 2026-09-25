@@ -22,7 +22,7 @@ vi.mock("@/lib/r2", () => ({
   uploadObject: vi.fn().mockResolvedValue("https://cdn.example.com/avatars/user_1/x.jpg"),
 }));
 vi.mock("@/lib/prisma", () => ({
-  prisma: { user: { update: vi.fn().mockResolvedValue({}) } },
+  prisma: { user: { update: vi.fn().mockResolvedValue({}), findUnique: vi.fn() } },
 }));
 
 import { auth } from "@/auth";
@@ -45,6 +45,10 @@ describe("POST /api/profile/avatar", () => {
     sharpChain.jpeg.mockReturnValue(sharpChain);
     sharpChain.toBuffer.mockResolvedValue(Buffer.from("resized-bytes"));
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "ACTIVE",
+    } as never);
   });
 
   it("rejects an unauthenticated request", async () => {

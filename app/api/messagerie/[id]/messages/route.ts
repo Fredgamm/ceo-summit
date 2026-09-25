@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { decryptMessages } from "@/lib/message-crypto";
+import { requireViewer } from "@/lib/require-viewer";
 
 const PAGE_SIZE = 50;
 
@@ -12,16 +12,19 @@ const PAGE_SIZE = 50;
  * server-side, before the plaintext ever reaches the client.
  */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  // Audit sécurité (25 septembre 2026) — relit `User.status` (et la date de
+  // changement de mot de passe) en base plutôt que de se fier au seul JWT.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) {
+    return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
+  const { viewer } = viewerResult;
 
   const conversation = await prisma.conversation.findUnique({ where: { id: params.id } });
   if (!conversation) {
     return NextResponse.json({ error: "Conversation introuvable." }, { status: 404 });
   }
-  if (conversation.member1Id !== session.user.id && conversation.member2Id !== session.user.id) {
+  if (conversation.member1Id !== viewer.id && conversation.member2Id !== viewer.id) {
     return NextResponse.json({ error: "Accès non autorisé." }, { status: 403 });
   }
 

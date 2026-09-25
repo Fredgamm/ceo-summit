@@ -22,6 +22,8 @@ declare module "next-auth" {
       tier: string | null;
       hasCompanyAccess: boolean;
       status: string;
+      /** Epoch ms de la connexion (auth.config.ts) — `null` pour un JWT émis avant le 25 sept. 2026. */
+      loginAt: number | null;
     } & DefaultSession["user"];
   }
 
@@ -42,5 +44,6 @@ declare module "next-auth/jwt" {
     tier: string | null;
     hasCompanyAccess: boolean;
     status: string;
+    loginAt?: number;
   }
 }

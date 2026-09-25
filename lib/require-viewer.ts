@@ -24,6 +24,9 @@ type RequireViewerResult = { success: true; viewer: Viewer } | { success: false;
  * `AdminUser.active` — ne couvre que les actions migrées vers ce helper,
  * pas la navigation de pages (middleware.ts, en edge runtime, ne peut pas
  * interroger Prisma — limite documentée, pas ce que ce correctif adresse).
+ *
+ * Audit sécurité (25 septembre 2026) — refuse aussi une session ouverte
+ * avant le dernier changement de mot de passe (voir `isViewerSessionValid`).
  */
 export async function requireViewer(): Promise<RequireViewerResult> {
   const session = await auth();
@@ -33,9 +36,32 @@ export async function requireViewer(): Promise<RequireViewerResult> {
     where: { id: session.user.id },
     include: VIEWER_TIER_INCLUDE,
   });
-  if (!viewer || viewer.status !== "ACTIVE") {
+  if (!viewer || !isViewerSessionValid(viewer, session.user.loginAt)) {
     return { success: false, error: "Non authentifié." };
   }
 
   return { success: true, viewer };
+}
+
+/**
+ * Règle partagée par `requireViewer()` et les points d'entrée qui relisent
+ * eux-mêmes l'utilisateur (ex. app/api/socket/token/route.ts) : compte
+ * `ACTIVE`, et session ouverte après le dernier changement de mot de passe.
+ *
+ * Audit sécurité (25 septembre 2026) — une réinitialisation de mot de passe
+ * (compte compromis) ne révoquait aucune session JWT déjà ouverte (24h).
+ * `loginAt` (auth.config.ts) est absent des JWT émis avant ce correctif :
+ * dans ce cas, toute date de changement de mot de passe (forcément
+ * postérieure, le champ n'existant pas avant) invalide la session.
+ */
+export function isViewerSessionValid(
+  user: { status: string; passwordChangedAt?: Date | null },
+  loginAt: number | null | undefined
+): boolean {
+  if (user.status !== "ACTIVE") return false;
+  if (user.passwordChangedAt) {
+    if (loginAt == null) return false;
+    if (user.passwordChangedAt.getTime() > loginAt) return false;
+  }
+  return true;
 }

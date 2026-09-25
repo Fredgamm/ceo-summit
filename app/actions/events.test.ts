@@ -231,6 +231,7 @@ describe("cancelEventRegistration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
     vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent());
     vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
       id: "reg_1",
@@ -247,6 +248,16 @@ describe("cancelEventRegistration", () => {
       where: { id: "reg_1" },
       data: { status: "CANCELLED" },
     });
+  });
+
+  /** Audit sécurité (25 septembre 2026) — statut relu en base, pas seulement la session. */
+  it("rejects a suspended member whose session is still open", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer({ status: "SUSPENDED" }));
+
+    const result = await cancelEventRegistration("event_1");
+
+    expect(result.success).toBe(false);
+    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
   });
 
   it("rejects when there is no registration to cancel", async () => {

@@ -8,15 +8,22 @@ import { normalizeUrl } from "@/lib/normalize-url";
  * valider, plutôt que de rejeter une saisie qui n'a juste pas de schéma
  * explicite (audit QA du 22 septembre 2026). `hostPattern`/`hostMessage`
  * restreignent en plus le domaine accepté (ex. LinkedIn uniquement).
+ *
+ * Audit sécurité (25 septembre 2026) — exporté pour les liens de la fiche
+ * entreprise (lib/validations/company.ts), qui étaient des chaînes libres
+ * rendues telles quelles en `href` (un `javascript:...` passait). Le
+ * contrôle de protocole http(s) ci-dessous est explicite (défense en
+ * profondeur) : `z.string().url()` seul accepte n'importe quel schéma.
  */
-function optionalUrlField(hostPattern?: RegExp, hostMessage?: string) {
+export function optionalUrlField(hostPattern?: RegExp, hostMessage?: string, maxLength = 500) {
   return z
     .string()
     .trim()
+    .max(maxLength, "URL trop longue")
     .transform((raw, ctx) => {
       if (raw === "") return "";
       const normalized = normalizeUrl(raw);
-      if (!z.string().url().safeParse(normalized).success) {
+      if (!z.string().url().safeParse(normalized).success || !/^https?:\/\//i.test(normalized)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "URL invalide" });
         return z.NEVER;
       }

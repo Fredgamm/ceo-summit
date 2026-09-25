@@ -10,6 +10,7 @@ import { meetsRoomAccess } from "../lib/rooms-query";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "../lib/plan-access";
 import { encryptMessageContent } from "../lib/message-crypto";
 import { getSignedDownloadUrl } from "../lib/r2";
+import { CHAT_MESSAGE_MAX_LENGTH } from "../lib/validations/message";
 import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
 
 /**
@@ -28,6 +29,30 @@ import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
 
 const RATE_LIMIT_MS = 1000;
 
+/**
+ * Audit sécurité (25 septembre 2026) — bornes des requêtes de présence :
+ * `users:presence`/`rooms:presence` acceptaient une liste d'ids de taille
+ * arbitraire (sondage massif de qui est en ligne, coût mémoire/CPU).
+ */
+const PRESENCE_MAX_IDS = 100;
+
+/**
+ * Audit sécurité (25 septembre 2026) — le token socket (5 min, émis par
+ * /api/socket/token après relecture du statut) ne suffit pas : une
+ * connexion ouverte peut durer des heures après une suspension/exclusion
+ * (`suspendMember`/`excludeMember` ne touchent que `User.status`). Relu en
+ * base à chaque `room:join`/`conversation:join` et à chaque message.
+ */
+async function isActiveUser(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { status: true } });
+  return user?.status === "ACTIVE";
+}
+
+function boundedIdList(ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.filter((id): id is string => typeof id === "string").slice(0, PRESENCE_MAX_IDS);
+}
+
 interface JoinResult {
   ok: boolean;
   error?: "not_found" | "forbidden" | "suspended";
@@ -41,7 +66,14 @@ interface MessagePayload {
 
 interface MessageResult {
   ok: boolean;
-  error?: "not_joined" | "rate_limited" | "suspended" | "empty" | "invalid_attachment";
+  error?:
+    | "not_joined"
+    | "rate_limited"
+    | "suspended"
+    | "empty"
+    | "too_long"
+    | "invalid_attachment"
+    | "forbidden";
 }
 
 function broadcastPresence(io: Server, roomId: string) {
@@ -51,6 +83,7 @@ function broadcastPresence(io: Server, roomId: string) {
 
 async function handleJoin(io: Server, socket: Socket, roomId: string): Promise<JoinResult> {
   const userId = socket.data.userId as string;
+  if (typeof roomId !== "string" || !roomId) return { ok: false, error: "not_found" };
 
   const room = await prisma.room.findUnique({ where: { id: roomId } });
   if (!room || room.status !== "ACTIVE") return { ok: false, error: "not_found" };
@@ -59,7 +92,8 @@ async function handleJoin(io: Server, socket: Socket, roomId: string): Promise<J
     where: { id: userId },
     include: VIEWER_TIER_INCLUDE,
   });
-  const tier = getViewerTierFromCompany(user?.company);
+  if (!user || user.status !== "ACTIVE") return { ok: false, error: "forbidden" };
+  const tier = getViewerTierFromCompany(user.company);
   if (!meetsRoomAccess(tier, room.minTier)) return { ok: false, error: "forbidden" };
 
   const suspension = await prisma.roomSuspension.findFirst({
@@ -81,9 +115,13 @@ async function handleMessage(
   socket: Socket,
   payload: MessagePayload
 ): Promise<MessageResult> {
-  const { roomId, content, attachmentKey } = payload;
-  if (!socket.rooms.has(roomId)) return { ok: false, error: "not_joined" };
-  if (!content?.trim() && !attachmentKey) return { ok: false, error: "empty" };
+  const { roomId, attachmentKey } = payload ?? {};
+  const content = typeof payload?.content === "string" ? payload.content : "";
+  if (typeof roomId !== "string" || !socket.rooms.has(roomId)) {
+    return { ok: false, error: "not_joined" };
+  }
+  if (!content.trim() && !attachmentKey) return { ok: false, error: "empty" };
+  if (content.length > CHAT_MESSAGE_MAX_LENGTH) return { ok: false, error: "too_long" };
   /**
    * Correctif (7 août 2026, audit) — `attachmentKey` venait tel quel du
    * payload Socket.io brut, sans aucune vérification qu'il provient bien
@@ -99,7 +137,10 @@ async function handleMessage(
    * clé d'une autre salle ou d'un tout autre usage du bucket (preuve de
    * paiement, pièce jointe Deal Room...).
    */
-  if (attachmentKey && !attachmentKey.startsWith(`salles/${roomId}/`)) {
+  if (
+    attachmentKey != null &&
+    (typeof attachmentKey !== "string" || !attachmentKey.startsWith(`salles/${roomId}/`))
+  ) {
     return { ok: false, error: "invalid_attachment" };
   }
 
@@ -108,6 +149,7 @@ async function handleMessage(
   if (now - last < RATE_LIMIT_MS) return { ok: false, error: "rate_limited" };
 
   const userId = socket.data.userId as string;
+  if (!(await isActiveUser(userId))) return { ok: false, error: "forbidden" };
   const suspension = await prisma.roomSuspension.findFirst({
     where: { roomId, userId, suspendedUntil: { gt: new Date() } },
   });
@@ -159,9 +201,17 @@ async function handleCheckinJoin(socket: Socket, eventId: string): Promise<Check
   const userId = socket.data.userId as string;
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { isPlatformAdmin: true },
+    select: { isPlatformAdmin: true, status: true },
   });
-  if (!user?.isPlatformAdmin) return { ok: false, error: "forbidden" };
+  if (!user?.isPlatformAdmin || user.status !== "ACTIVE") return { ok: false, error: "forbidden" };
+  /**
+   * Audit sécurité (25 septembre 2026) — même règle que `requireAdmin()`
+   * (lib/admin-auth.ts) : un admin désactivé (`AdminUser.active = false`)
+   * garde `isPlatformAdmin` mais ne doit plus rien recevoir.
+   */
+  const adminUser = await prisma.adminUser.findUnique({ where: { userId } });
+  if (adminUser?.active === false) return { ok: false, error: "forbidden" };
+  if (typeof eventId !== "string" || !eventId) return { ok: false, error: "forbidden" };
 
   socket.join(checkinRoom(eventId));
   return { ok: true };
@@ -195,7 +245,7 @@ interface ConversationMessagePayload {
 
 interface ConversationMessageResult {
   ok: boolean;
-  error?: "not_joined" | "rate_limited" | "empty";
+  error?: "not_joined" | "rate_limited" | "empty" | "too_long" | "forbidden";
 }
 
 function conversationRoom(conversationId: string) {
@@ -207,10 +257,12 @@ async function handleConversationJoin(
   conversationId: string
 ): Promise<ConversationJoinResult> {
   const userId = socket.data.userId as string;
+  if (typeof conversationId !== "string") return { ok: false, error: "forbidden" };
   const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
   if (!conversation || (conversation.member1Id !== userId && conversation.member2Id !== userId)) {
     return { ok: false, error: "forbidden" };
   }
+  if (!(await isActiveUser(userId))) return { ok: false, error: "forbidden" };
   socket.join(conversationRoom(conversationId));
   return { ok: true };
 }
@@ -223,12 +275,14 @@ async function handleConversationMessage(
   socket: Socket,
   payload: ConversationMessagePayload
 ): Promise<ConversationMessageResult> {
-  const { conversationId, content } = payload;
+  const { conversationId } = payload ?? {};
+  const content = typeof payload?.content === "string" ? payload.content : "";
   const roomName = conversationRoom(conversationId);
   if (!socket.rooms.has(roomName)) return { ok: false, error: "not_joined" };
 
-  const trimmed = content?.trim();
+  const trimmed = content.trim();
   if (!trimmed) return { ok: false, error: "empty" };
+  if (content.length > CHAT_MESSAGE_MAX_LENGTH) return { ok: false, error: "too_long" };
 
   const now = Date.now();
   const last = (socket.data.lastMessageAt as number | undefined) ?? 0;
@@ -241,14 +295,17 @@ async function handleConversationMessage(
   const recipientId =
     conversation.member1Id === senderId ? conversation.member2Id : conversation.member1Id;
 
+  const senderRow = await prisma.user.findUnique({
+    where: { id: senderId },
+    select: { id: true, name: true, avatarUrl: true, status: true },
+  });
+  if (senderRow?.status !== "ACTIVE") return { ok: false, error: "forbidden" };
+  const sender = { id: senderRow.id, name: senderRow.name, avatarUrl: senderRow.avatarUrl };
+
   const encrypted = await encryptMessageContent(trimmed);
-  const [message, sender] = await Promise.all([
-    prisma.message.create({ data: { conversationId, senderId, content: encrypted } }),
-    prisma.user.findUnique({
-      where: { id: senderId },
-      select: { id: true, name: true, avatarUrl: true },
-    }),
-  ]);
+  const message = await prisma.message.create({
+    data: { conversationId, senderId, content: encrypted },
+  });
   await prisma.conversation.update({
     where: { id: conversationId },
     data: { lastMessageAt: message.createdAt },
@@ -292,6 +349,40 @@ async function handleConversationRead(
     data: { readAt: new Date() },
   });
   io.to(roomName).emit("conversation:read", { conversationId, readerId: userId });
+}
+
+/**
+ * Audit sécurité (25 septembre 2026) — répondait pour n'importe quel nom de
+ * room Socket.io fourni, y compris `conversation:<id>` et `checkin:<id>`
+ * (qui est dans quelle conversation privée, quel poste de check-in est
+ * ouvert). Limité désormais aux salles thématiques ACTIVE auxquelles le
+ * demandeur a accès (mêmes règles que `handleJoin`).
+ */
+async function handleRoomsPresence(
+  io: Server,
+  socket: Socket,
+  roomIds: unknown
+): Promise<Record<string, number>> {
+  const ids = boundedIdList(roomIds);
+  if (ids.length === 0) return {};
+
+  const user = await prisma.user.findUnique({
+    where: { id: socket.data.userId as string },
+    include: VIEWER_TIER_INCLUDE,
+  });
+  if (!user || user.status !== "ACTIVE") return {};
+  const tier = getViewerTierFromCompany(user.company);
+
+  const rooms = await prisma.room.findMany({
+    where: { id: { in: ids }, status: "ACTIVE" },
+    select: { id: true, minTier: true },
+  });
+  const counts: Record<string, number> = {};
+  for (const room of rooms) {
+    if (!meetsRoomAccess(tier, room.minTier)) continue;
+    counts[room.id] = io.sockets.adapter.rooms.get(room.id)?.size ?? 0;
+  }
+  return counts;
 }
 
 export function createSocketServer() {
@@ -369,18 +460,20 @@ export function createSocketServer() {
 
     socket.on(
       "rooms:presence",
-      (roomIds: string[], callback: (counts: Record<string, number>) => void) => {
-        const counts: Record<string, number> = {};
-        for (const id of roomIds) counts[id] = io.sockets.adapter.rooms.get(id)?.size ?? 0;
-        callback(counts);
+      async (roomIds: unknown, callback: (counts: Record<string, number>) => void) => {
+        if (typeof callback !== "function") return;
+        callback(await handleRoomsPresence(io, socket, roomIds));
       }
     );
 
     socket.on(
       "users:presence",
-      (userIds: string[], callback: (online: Record<string, boolean>) => void) => {
+      (userIds: unknown, callback: (online: Record<string, boolean>) => void) => {
+        if (typeof callback !== "function") return;
         const online: Record<string, boolean> = {};
-        for (const id of userIds) online[id] = (connectedUsers.get(id)?.size ?? 0) > 0;
+        for (const id of boundedIdList(userIds)) {
+          online[id] = (connectedUsers.get(id)?.size ?? 0) > 0;
+        }
         callback(online);
       }
     );

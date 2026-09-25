@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireViewer } from "@/lib/require-viewer";
 import { profileSchema } from "@/lib/validations/profile";
 import { getReferentialLabels } from "@/lib/referentials-query";
 
@@ -36,10 +36,13 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
     return { success: false, error: "Secteur invalide." };
   }
 
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  // Audit sécurité (25 septembre 2026) — relit le statut du compte en base
+  // (un membre suspendu gardait sa session JWT, voir lib/require-viewer.ts).
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: viewer.id },
     data: {
       name,
       title,
@@ -53,7 +56,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
   });
 
   // /membres/[id] and /dashboard both read this row — keep them fresh.
-  revalidatePath(`/membres/${session.user.id}`);
+  revalidatePath(`/membres/${viewer.id}`);
   revalidatePath("/dashboard");
 
   return { success: true, data: undefined };

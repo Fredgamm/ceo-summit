@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
   withEventRegistrationLock,
@@ -166,8 +165,11 @@ export async function registerForEvent(
  * avec l'équipe CEO Summit.
  */
 export async function cancelEventRegistration(eventId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  // Audit sécurité (25 septembre 2026) — même relecture du statut en base que
+  // registerForEvent (voir lib/require-viewer.ts).
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const event = await prisma.event.findUnique({ where: { id: eventId } });
   if (!event) return { success: false, error: "Événement introuvable." };
@@ -176,7 +178,7 @@ export async function cancelEventRegistration(eventId: string): Promise<ActionRe
   }
 
   const registration = await prisma.eventRegistration.findUnique({
-    where: { eventId_userId: { eventId, userId: session.user.id } },
+    where: { eventId_userId: { eventId, userId: viewer.id } },
   });
   if (!registration)
     return { success: false, error: "Vous n'êtes pas inscrit(e) à cet évènement." };

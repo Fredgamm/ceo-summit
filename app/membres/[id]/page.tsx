@@ -6,6 +6,7 @@ import { Building2, Globe, Handshake, Briefcase, Linkedin } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
+import { safeHref } from "@/lib/normalize-url";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -46,6 +47,12 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
   if (!viewer) redirect("/login");
 
   const isSelf = viewer.id === user.id;
+  // Audit sécurité (25 septembre 2026) — garde de rendu : des valeurs
+  // antérieures à la validation http(s) stricte peuvent encore être en base
+  // (ex. `javascript:...`) ; un lien au protocole non http(s) n'est pas affiché.
+  const websiteHref = safeHref(user.websiteUrl);
+  const linkedinHref = safeHref(user.linkedinUrl);
+  const companyWebsiteHref = safeHref(user.company?.website);
   const tier = getViewerTierFromCompany(user.company);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
@@ -132,11 +139,11 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
               </div>
             )}
 
-            {(user.websiteUrl || user.linkedinUrl) && (
+            {(websiteHref || linkedinHref) && (
               <div className="flex flex-wrap gap-4">
-                {user.websiteUrl && (
+                {websiteHref && (
                   <a
-                    href={user.websiteUrl}
+                    href={websiteHref}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-mid"
@@ -144,9 +151,9 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
                     <Globe className="h-4 w-4" /> Site web
                   </a>
                 )}
-                {user.linkedinUrl && (
+                {linkedinHref && (
                   <a
-                    href={user.linkedinUrl}
+                    href={linkedinHref}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 text-sm font-medium text-navy-mid"
@@ -174,9 +181,9 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
               {user.company.description && (
                 <p className="mt-3 text-sm leading-relaxed text-text">{user.company.description}</p>
               )}
-              {user.company.website && (
+              {companyWebsiteHref && (
                 <a
-                  href={user.company.website}
+                  href={companyWebsiteHref}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-3 inline-block text-sm font-medium text-navy-mid"

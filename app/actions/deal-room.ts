@@ -7,6 +7,7 @@ import { opportunityFormSchema } from "@/lib/validations/opportunity";
 import { getOrCreateConversation } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { isKeyUnderPrefix } from "@/lib/r2";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
@@ -16,6 +17,20 @@ import OpportunityContactAcceptedEmail from "@/emails/opportunity-contact-accept
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 class ContactAlreadyHandledError extends Error {}
+
+/**
+ * Audit sécurité (25 septembre 2026) — `attachments` venait tel quel du
+ * client (`z.array(z.string())`), sans vérifier que chaque clé provient
+ * d'un upload réel de l'auteur : une clé d'un autre usage du bucket (preuve
+ * de paiement d'une autre entreprise, pièce jointe de salle...) était
+ * ensuite résolue en URL signée pour tout lecteur de l'opportunité (voir
+ * app/deal-room/[id]/page.tsx). `/api/deal-room/attachment` préfixe
+ * toujours ses clés par `deal-room/<uploaderId>/` — même modèle que
+ * `proofFileKey` (app/actions/company-subscription.ts).
+ */
+function ownsAllAttachments(attachments: string[], userId: string): boolean {
+  return attachments.every((key) => isKeyUnderPrefix(key, `deal-room/${userId}/`));
+}
 
 /** E6-T03 — publication (gratuite, statut pending_moderation → email admin). */
 export async function publishOpportunity(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -28,6 +43,9 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  if (!ownsAllAttachments(f.attachments, viewer.id)) {
+    return { success: false, error: "Pièce jointe invalide." };
+  }
 
   const opportunity = await prisma.opportunity.create({
     data: {
@@ -326,6 +344,9 @@ export async function resubmitOpportunity(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  if (!ownsAllAttachments(f.attachments, viewer.id)) {
+    return { success: false, error: "Pièce jointe invalide." };
+  }
 
   await prisma.opportunity.update({
     where: { id: opportunityId },

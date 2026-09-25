@@ -37,6 +37,7 @@ describe("GET /api/rooms/[id]/messages", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomMessage.findMany).mockResolvedValue([
