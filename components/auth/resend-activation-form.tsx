@@ -40,7 +40,8 @@ export function ResendActivationForm() {
     return (
       <Alert variant="success">
         <AlertDescription>
-          Un nouveau lien d&apos;activation a été envoyé à {email}. Il est valable 72 heures.
+          Si un compte en attente d&apos;activation existe pour {email}, un nouveau lien vient
+          d&apos;être envoyé. Il est valable 72 heures.
         </AlertDescription>
       </Alert>
     );

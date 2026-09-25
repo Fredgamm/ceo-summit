@@ -71,17 +71,24 @@ export async function activateAccount(
 
   const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
 
+  // 25 septembre 2026 (audit MVP) — consommation atomique du token : les
+  // vérifications ci-dessus (findUnique puis `usedAt`) laissaient deux
+  // requêtes concurrentes passer toutes les deux avant que l'une ne marque
+  // le token utilisé (le hash bcrypt élargit la fenêtre à ~250 ms). Le
+  // `updateMany` conditionné sur `usedAt: null` ne peut réussir qu'une fois.
   const user = await prisma.$transaction(async (tx) => {
-    const updated = await tx.user.update({
+    const now = new Date();
+    const claimed = await tx.activationToken.updateMany({
+      where: { id: record.id, usedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    });
+    if (claimed.count !== 1) return null;
+    return tx.user.update({
       where: { id: record.userId },
-      data: { passwordHash, status: "ACTIVE", emailVerifiedAt: new Date() },
+      data: { passwordHash, status: "ACTIVE", emailVerifiedAt: now },
     });
-    await tx.activationToken.update({
-      where: { id: record.id },
-      data: { usedAt: new Date() },
-    });
-    return updated;
   });
+  if (!user) return { success: false, error: "Ce lien a déjà été utilisé." };
 
   return { success: true, data: { email: user.email } };
 }
@@ -95,31 +102,32 @@ type ResendActivationResult =
   { success: true; data: undefined } | { success: false; error: string };
 
 /**
- * Unlike password reset, the spec explicitly wants "no account found" and
- * "already active" surfaced to the user here (Parcours P3) — activation
- * resend is tied to a known Evolia payment, not a cold signup form, so
- * anti-enumeration doesn't apply the same way.
+ * 25 septembre 2026 (audit MVP) — la spec (Parcours P3) voulait
+ * "aucun compte trouvé" / "déjà actif" / "trop de renvois" affichés
+ * explicitement ici, ce qui faisait de ce formulaire public (sans compte,
+ * sans rate limit) un oracle d'énumération des membres et de leur statut.
+ * Désormais, comme requestPasswordReset : rate limit par IP, puis réponse
+ * neutre identique dans tous les cas — l'email n'est réellement envoyé que
+ * pour un compte existant encore en PENDING_ACTIVATION, sous le plafond
+ * RG-P1-04.
  */
 export async function resendActivationLink(email: string): Promise<ResendActivationResult> {
+  const rateLimit = await checkRateLimit(`activation-resend:${getClientIp()}`, 5, 60 * 60);
+  if (!rateLimit.allowed) {
+    return { success: false, error: RATE_LIMITED_ERROR };
+  }
+
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Email invalide" };
   }
 
   const user = await prisma.user.findUnique({ where: { email: parsed.data.toLowerCase() } });
-
-  if (!user) {
-    return {
-      success: false,
-      error: "Aucun compte trouvé pour cet email. Contactez l'équipe CEO Summit.",
-    };
+  if (!user || user.status !== "PENDING_ACTIVATION") {
+    return { success: true, data: undefined };
   }
 
-  if (user.status !== "PENDING_ACTIVATION") {
-    return { success: false, error: "Ce compte est déjà actif. Connectez-vous directement." };
-  }
-
-  // RG-P1-04 — max 3 resends per email per 24h.
+  // RG-P1-04 — max 3 resends per email per 24h (silencieux, voir ci-dessus).
   const recentCount = await prisma.activationToken.count({
     where: {
       userId: user.id,
@@ -127,11 +135,7 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
     },
   });
   if (recentCount >= MAX_ACTIVATION_RESENDS_PER_DAY) {
-    return {
-      success: false,
-      error:
-        "Trop de demandes de renvoi pour cet email. Réessayez dans 24h ou contactez l'équipe CEO Summit.",
-    };
+    return { success: true, data: undefined };
   }
 
   const token = generateSecureToken();
@@ -155,8 +159,9 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
       }),
     });
   } catch (err) {
+    // Réponse neutre là aussi : un échec d'envoi n'est possible que pour un
+    // compte existant, le signaler le révélerait.
     console.error("[resendActivationLink] failed to send activation email", err);
-    return { success: false, error: "Échec de l'envoi de l'email. Réessayez plus tard." };
   }
 
   return { success: true, data: undefined };
@@ -189,13 +194,22 @@ export async function requestPasswordReset(email: string): Promise<ActionResult>
 
   if (user && user.status !== "SUSPENDED" && user.status !== "CANCELLED") {
     const token = generateSecureToken();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
-      },
-    });
+    // 25 septembre 2026 (audit MVP) — chaque demande laissait les liens
+    // précédents valides jusqu'à leur expiration : seul le plus récent doit
+    // pouvoir servir (un ancien email intercepté/transféré ne vaut plus rien).
+    await prisma.$transaction([
+      prisma.passwordResetToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          token,
+          expiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
+        },
+      }),
+    ]);
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/reinitialiser/${token}`;
     try {
@@ -247,10 +261,25 @@ export async function resetPassword(
 
   const passwordHash = await bcrypt.hash(parsed.data.password, BCRYPT_ROUNDS);
 
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
-    prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
-  ]);
+  // 25 septembre 2026 (audit MVP) — consommation atomique, même raison
+  // qu'activateAccount : deux requêtes concurrentes ne peuvent plus
+  // réutiliser le même lien.
+  const consumed = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const claimed = await tx.passwordResetToken.updateMany({
+      where: { id: record.id, usedAt: null, expiresAt: { gt: now } },
+      data: { usedAt: now },
+    });
+    if (claimed.count !== 1) return false;
+    // passwordChangedAt — invalide les sessions ouvertes avant ce changement
+    // (lib/require-viewer.ts::isViewerSessionValid).
+    await tx.user.update({
+      where: { id: record.userId },
+      data: { passwordHash, passwordChangedAt: now },
+    });
+    return true;
+  });
+  if (!consumed) return { success: false, error: "Ce lien a déjà été utilisé." };
 
   /**
    * 22 septembre 2026 (audit des emails transactionnels) — confirmation

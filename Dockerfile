@@ -35,6 +35,17 @@ RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
-COPY --from=builder /app ./
+# 25 septembre 2026 (audit MVP) — le runner tournait en root : toute RCE
+# dans l'app (ou une dépendance) donnait root dans le conteneur. On passe
+# sur l'utilisateur `node` (uid 1000) fourni par l'image officielle. /app
+# lui appartient entièrement : `next start` réécrit .next/ (ISR de
+# /demande-acces, cache fetch) et lib/r2.ts écrit dans .local-storage/ —
+# lequel est un bind mount (docker-compose.prod.yml) dont le dossier hôte
+# doit lui aussi appartenir à l'uid 1000, voir DEPLOY.md §6/§10.
+# DATABASE_URL (ARG/ENV du stage builder ci-dessus) n'arrive pas jusqu'ici :
+# ce stage repart de `base`, pas de `builder`, et seul /app est copié.
+COPY --from=builder --chown=node:node /app ./
+RUN mkdir -p /app/.local-storage && chown node:node /app /app/.local-storage
+USER node
 EXPOSE 3000 3001
 CMD ["npm", "run", "start"]

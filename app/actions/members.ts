@@ -91,7 +91,11 @@ export async function grantCredits(
   amount: number,
   reason: string
 ): Promise<ActionResult> {
-  const { userId: adminId } = await requireAdmin("membres");
+  // 25 septembre 2026 (audit MVP) — gardé par "membres" jusqu'ici : un
+  // MODERATEUR (qui n'a pas la section "credits", voir lib/admin-rbac.ts)
+  // pouvait créditer n'importe quel compte, soit créer de la valeur
+  // monétaire sans le rôle financier.
+  const { userId: adminId } = await requireAdmin("credits");
 
   const parsed = grantCreditsSchema.safeParse({ amount, reason });
   if (!parsed.success) {

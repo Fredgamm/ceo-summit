@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { applicationSchema, type ApplicationInput } from "@/lib/validations/application";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import ApplicationReceivedEmail from "@/emails/application-received-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -18,6 +20,18 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * confidentialité cochée) — preuve de collecte, pas juste un booléen.
  */
 export async function submitApplication(input: ApplicationInput): Promise<ActionResult> {
+  // 25 septembre 2026 (audit MVP) — formulaire public sans compte : sans
+  // limite, un script pouvait remplir la file des candidatures et faire
+  // envoyer un email de confirmation Resend à n'importe quelle adresse.
+  // Même pattern/limite que signup et mot de passe oublié.
+  const rateLimit = await checkRateLimit(`apply:${getClientIp()}`, 5, 60 * 60);
+  if (!rateLimit.allowed) {
+    return {
+      success: false,
+      error: "Trop de tentatives depuis cette adresse. Réessayez plus tard.",
+    };
+  }
+
   const parsed = applicationSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
