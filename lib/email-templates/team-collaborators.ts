@@ -1,0 +1,9 @@
+import type { EmailTemplateDefinition } from "./types";
+
+/**
+ * Catégorie « Équipe / collaborateurs » — à porter depuis les composants `emails/*.tsx`
+ * correspondants (voir C:\Users\Fredo\.claude\plans\moonlit-napping-muffin.md
+ * §9, Lot 1). Fichier volontairement isolé par catégorie : pas de conflit
+ * de fusion possible entre les agents qui portent chacune des 9 catégories.
+ */
+export const TEAM_COLLABORATORS_TEMPLATES: EmailTemplateDefinition[] = [];
