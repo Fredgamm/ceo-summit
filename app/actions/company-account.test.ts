@@ -17,10 +17,13 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/request-ip", () => ({ getClientIp: vi.fn(() => "127.0.0.1") }));
 vi.mock("@/app/actions/company", () => ({ validateSectorAndCountry: vi.fn() }));
+vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
+vi.mock("@/emails/company-admin-welcome-email", () => ({ default: vi.fn(() => null) }));
 
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { validateSectorAndCountry } from "@/app/actions/company";
+import { sendTransactionalEmail } from "@/lib/resend";
 import { createCompanyAccount } from "./company-account";
 
 const VALID_INPUT = {
@@ -41,9 +44,12 @@ describe("createCompanyAccount", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.plan.findFirst).mockResolvedValue({
       id: "plan_1",
+      name: "Pack Entreprise",
       isActive: true,
       isSelfService: true,
     } as never);
+    vi.mocked(sendTransactionalEmail).mockResolvedValue({} as never);
+    process.env.NEXTAUTH_URL = "https://app.ceo-summit.mg";
     vi.mocked(validateSectorAndCountry).mockResolvedValue(null);
     txMock.user.create.mockResolvedValue({ id: "user_1" } as never);
     txMock.company.create.mockResolvedValue({ id: "company_1" } as never);
@@ -78,6 +84,36 @@ describe("createCompanyAccount", () => {
     });
     expect(txMock.companySubscription.create).toHaveBeenCalledWith({
       data: { companyId: "company_1", planId: "plan_1", status: "PENDING_PAYMENT" },
+    });
+  });
+
+  it("emails the new company admin a welcome pointing to the payment step", async () => {
+    await createCompanyAccount(VALID_INPUT);
+
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "jp.rakoto@example.mg" })
+    );
+  });
+
+  it("still succeeds (and logs) when the welcome email fails to send", async () => {
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("smtp down"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await createCompanyAccount(VALID_INPUT);
+
+    expect(result.success).toBe(true);
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[createCompanyAccount] failed to send admin welcome email",
+      expect.any(Error)
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("only looks up self-service, non-upsell active plans", async () => {
+    await createCompanyAccount(VALID_INPUT);
+
+    expect(prisma.plan.findFirst).toHaveBeenCalledWith({
+      where: { id: "plan_1", isActive: true, isSelfService: true, isUpsell: false },
     });
   });
 

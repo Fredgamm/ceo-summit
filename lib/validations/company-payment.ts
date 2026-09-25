@@ -28,6 +28,15 @@ export const submitPaymentProofSchema = z.object({
 });
 
 /**
+ * Audit (25 septembre 2026) — `CompanyPayment.amount` est un `Int`
+ * (int4 PostgreSQL) : tout montant calculé au-delà est refusé avec un
+ * message plutôt que de laisser Prisma échouer en 500. La quantité d'un
+ * supplément est bornée pour la même raison (et par simple bon sens).
+ */
+export const MAX_PAYMENT_AMOUNT = 2_147_483_647;
+export const MAX_UPSELL_QUANTITY = 500;
+
+/**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'une offre supplément
  * (`Plan.isUpsell`) en quantité, en plus d'un abonnement déjà actif. Même
  * mécanique de preuve que `submitPaymentProofSchema`, plus la quantité —
@@ -35,7 +44,11 @@ export const submitPaymentProofSchema = z.object({
  */
 export const purchaseUpsellSeatsSchema = z.object({
   upsellPlanId: z.string().min(1),
-  quantity: z.coerce.number().int().min(1, "Indiquez au moins 1"),
+  quantity: z.coerce
+    .number()
+    .int()
+    .min(1, "Indiquez au moins 1")
+    .max(MAX_UPSELL_QUANTITY, `Au plus ${MAX_UPSELL_QUANTITY} places par achat`),
   method: z.enum(["VIREMENT", "CHEQUE", "CARTE_BANCAIRE", "MOBILE_MONEY"]),
   proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
   comment: z.string().trim().max(1000).optional().default(""),

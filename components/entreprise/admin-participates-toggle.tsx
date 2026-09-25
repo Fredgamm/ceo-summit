@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { setAdminParticipates } from "@/app/actions/company-invites";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,7 +26,12 @@ export function AdminParticipatesToggle({
     setPending(true);
     try {
       const result = await setAdminParticipates(companyId, checked);
-      if (result.success) router.refresh();
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.warning) toast.warning(result.warning);
+      router.refresh();
     } finally {
       setPending(false);
     }

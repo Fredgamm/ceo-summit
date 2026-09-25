@@ -44,21 +44,30 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
   });
   if (!company) notFound();
 
-  const latestPendingPayment = company.subscription?.payments.find((p) => p.status === "PENDING");
+  // Audit (25 septembre 2026) — tous les paiements en attente, pas seulement
+  // le plus récent : un paiement initial et un supplément (ou deux
+  // soumissions successives) pouvaient coexister, l'un restant invisible —
+  // donc impossible à confirmer ou refuser depuis ce back-office.
+  const pendingPayments = (company.subscription?.payments ?? []).filter(
+    (p) => p.status === "PENDING"
+  );
   // R2 credentials absent (dev sans compte réel) ou tout autre échec de
   // résolution ne doit pas empêcher l'admin de confirmer/refuser le
   // paiement lui-même — seul le lien "voir la preuve" est indisponible.
-  let proofUrl: string | null = null;
-  if (latestPendingPayment) {
-    try {
-      proofUrl = await getSignedDownloadUrl(
-        process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
-        latestPendingPayment.proofFileKey
-      );
-    } catch (err) {
-      console.error("[admin/entreprises] failed to resolve payment proof signed URL", err);
-    }
-  }
+  const pendingWithProof = await Promise.all(
+    pendingPayments.map(async (payment) => {
+      let proofUrl: string | null = null;
+      try {
+        proofUrl = await getSignedDownloadUrl(
+          process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+          payment.proofFileKey
+        );
+      } catch (err) {
+        console.error("[admin/entreprises] failed to resolve payment proof signed URL", err);
+      }
+      return { payment, proofUrl };
+    })
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -103,45 +112,43 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
         )}
       </div>
 
-      {latestPendingPayment && (
-        <div className="rounded-lg border border-border bg-white p-6">
+      {pendingWithProof.map(({ payment, proofUrl }) => (
+        <div key={payment.id} className="rounded-lg border border-border bg-white p-6">
           <h2 className="mb-3 text-base font-bold text-navy">
-            {latestPendingPayment.upsellQuantity != null
+            {payment.upsellQuantity != null
               ? "Supplément de participants à valider"
               : "Paiement à valider"}
           </h2>
-          {latestPendingPayment.upsellQuantity != null && latestPendingPayment.upsellPlan && (
+          {payment.upsellQuantity != null && payment.upsellPlan && (
             <p className="mb-3 text-sm text-text-mid">
-              {latestPendingPayment.upsellQuantity} × {latestPendingPayment.upsellPlan.name} —
-              n&apos;active pas l&apos;abonnement (déjà actif), ajoute{" "}
-              {latestPendingPayment.upsellQuantity} place(s) à la confirmation.
+              {payment.upsellQuantity} × {payment.upsellPlan.name} — n&apos;active pas
+              l&apos;abonnement (déjà actif), ajoute {payment.upsellQuantity} place(s) à la
+              confirmation.
             </p>
           )}
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-xs uppercase text-text-muted">Montant déclaré</dt>
-              <dd className="font-semibold text-navy">
-                {formatAriary(latestPendingPayment.amount)}
-              </dd>
+              <dd className="font-semibold text-navy">{formatAriary(payment.amount)}</dd>
             </div>
             <div>
               <dt className="text-xs uppercase text-text-muted">Mode</dt>
-              <dd>{METHOD_LABEL[latestPendingPayment.method] ?? latestPendingPayment.method}</dd>
+              <dd>{METHOD_LABEL[payment.method] ?? payment.method}</dd>
             </div>
             <div>
               <dt className="text-xs uppercase text-text-muted">Soumis le</dt>
-              <dd>{formatDateFr(latestPendingPayment.createdAt)}</dd>
+              <dd>{formatDateFr(payment.createdAt)}</dd>
             </div>
-            {latestPendingPayment.comment && (
+            {payment.comment && (
               <div className="col-span-2">
                 <dt className="text-xs uppercase text-text-muted">Commentaire</dt>
-                <dd>{latestPendingPayment.comment}</dd>
+                <dd>{payment.comment}</dd>
               </div>
             )}
           </dl>
           {proofUrl ? (
             <div className="mt-3">
-              <PaymentProofViewer url={proofUrl} fileName={latestPendingPayment.proofFileKey} />
+              <PaymentProofViewer url={proofUrl} fileName={payment.proofFileKey} />
             </div>
           ) : (
             <p className="mt-3 text-xs text-text-muted">
@@ -149,10 +156,10 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
             </p>
           )}
           <div className="mt-4">
-            <CompanyPaymentActions paymentId={latestPendingPayment.id} companyName={company.name} />
+            <CompanyPaymentActions paymentId={payment.id} companyName={company.name} />
           </div>
         </div>
-      )}
+      ))}
 
       <div className="rounded-lg border border-border bg-white p-6">
         <h2 className="mb-3 text-base font-bold text-navy">Membres ({company.users.length})</h2>

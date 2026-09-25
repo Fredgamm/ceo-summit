@@ -8,6 +8,8 @@ import { validateSectorAndCountry } from "@/app/actions/company";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { BCRYPT_ROUNDS } from "@/lib/password";
+import { sendTransactionalEmail } from "@/lib/resend";
+import CompanyAdminWelcomeEmail from "@/emails/company-admin-welcome-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -52,7 +54,9 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   }
 
   const plan = await prisma.plan.findFirst({
-    where: { id: f.planId, isActive: true, isSelfService: true },
+    // Audit (25 septembre 2026) — une offre supplément (`isUpsell`) ne se
+    // souscrit jamais seule, même règle que `selectPlan`.
+    where: { id: f.planId, isActive: true, isSelfService: true, isUpsell: false },
   });
   if (!plan) {
     return { success: false, error: "Offre invalide ou plus disponible." };
@@ -80,6 +84,27 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
       data: { companyId: company.id, planId: plan.id, status: "PENDING_PAYMENT" },
     });
   });
+
+  /**
+   * Audit (25 septembre 2026) — aucun email ne confirmait l'inscription du
+   * gestionnaire ni ne rappelait la prochaine étape (le paiement). Envoyé
+   * après la transaction ; un échec d'envoi est loggué mais ne fait jamais
+   * échouer l'inscription, déjà enregistrée à ce stade.
+   */
+  try {
+    await sendTransactionalEmail({
+      to: normalizedEmail,
+      subject: `Votre compte CEO Summit est créé — ${f.companyName}`,
+      react: CompanyAdminWelcomeEmail({
+        adminName: f.name,
+        companyName: f.companyName,
+        planName: plan.name,
+        paymentUrl: `${process.env.NEXTAUTH_URL}/entreprise/paiement`,
+      }),
+    });
+  } catch (err) {
+    console.error("[createCompanyAccount] failed to send admin welcome email", err);
+  }
 
   return { success: true, data: undefined };
 }

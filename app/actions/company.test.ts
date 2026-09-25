@@ -42,7 +42,11 @@ describe("createCompany", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(SESSION);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_1", companyId: null } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      companyId: null,
+      status: "ACTIVE",
+    } as never);
     vi.mocked(prisma.$transaction).mockImplementation(async (fn: unknown) => {
       const tx = {
         company: { create: vi.fn().mockResolvedValue({ id: "company_1" }) },
@@ -61,6 +65,7 @@ describe("createCompany", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: "user_1",
       companyId: "existing_company",
+      status: "ACTIVE",
     } as never);
 
     const result = await createCompany(VALID_INPUT);
@@ -77,16 +82,72 @@ describe("createCompany", () => {
     const result = await createCompany(VALID_INPUT);
     expect(result.success).toBe(false);
   });
+
+  it("rejects a suspended account whose session is still valid (requireViewer)", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      companyId: null,
+      status: "SUSPENDED",
+    } as never);
+    const result = await createCompany(VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("accepts a logo uploaded by the caller through /api/company/logo", async () => {
+    const result = await createCompany({
+      ...VALID_INPUT,
+      logoUrl: "/api/dev/local-storage/ceo-summit-avatars/company-logos/user_1/abc.jpg",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    "https://evil.example.com/logo.jpg",
+    "javascript:alert(1)",
+    "/api/dev/local-storage/ceo-summit-avatars/company-logos/someone_else/abc.jpg",
+    "/api/dev/local-storage/ceo-summit-avatars/company-logos/user_1/../x.jpg",
+  ])(
+    "rejects a logoUrl not produced by the logo upload route for the caller (%s)",
+    async (logoUrl) => {
+      const result = await createCompany({ ...VALID_INPUT, logoUrl });
+      expect(result).toEqual({ success: false, error: expect.stringContaining("Logo invalide") });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe("updateCompany", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      companyId: "company_1",
+      status: "ACTIVE",
+    } as never);
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       id: "company_1",
       companyAdminId: "user_1",
+      logoUrl: "https://cdn.example.com/company-logos/previous_admin/old.jpg",
     } as never);
+  });
+
+  it("keeps the logo already on file even if uploaded by a previous admin", async () => {
+    const result = await updateCompany("company_1", {
+      ...VALID_INPUT,
+      logoUrl: "https://cdn.example.com/company-logos/previous_admin/old.jpg",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a foreign logoUrl on update", async () => {
+    const result = await updateCompany("company_1", {
+      ...VALID_INPUT,
+      logoUrl: "https://evil.example.com/logo.jpg",
+    });
+    expect(result.success).toBe(false);
+    expect(prisma.company.update).not.toHaveBeenCalled();
   });
 
   it("updates when the caller is the company admin", async () => {

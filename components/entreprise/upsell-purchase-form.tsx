@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
 import { formatAriary, formatPlanPrice } from "@/lib/utils";
 
 /**
@@ -199,6 +200,7 @@ export function UpsellPurchaseForm({
             type="number"
             inputMode="numeric"
             min={minQuantity}
+            max={MAX_UPSELL_QUANTITY}
             step={1}
             value={quantity}
             onChange={(e) => handleQuantityChange(e.target.value)}

@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireViewer } from "@/lib/require-viewer";
+import { isPublicObjectUrlUnderPrefix } from "@/lib/r2";
 import { companyFormSchema } from "@/lib/validations/company";
 import { getReferentialLabels } from "@/lib/referentials-query";
 
@@ -62,6 +63,26 @@ function companyData(f: {
 }
 
 /**
+ * Audit (25 septembre 2026) — `logoUrl` était enregistré tel que soumis par
+ * le client (n'importe quelle URL, y compris un domaine tiers ou un schéma
+ * `javascript:` affiché ensuite en `<img src>`). Seule une URL produite par
+ * `/api/company/logo` pour l'appelant (`company-logos/<userId>/`) est
+ * acceptée — ou le logo déjà enregistré sur la fiche, inchangé (il peut
+ * avoir été uploadé par un gestionnaire précédent).
+ */
+function isAcceptedLogoUrl(logoUrl: string, viewerId: string, currentLogoUrl?: string | null) {
+  if (!logoUrl) return true;
+  if (currentLogoUrl && logoUrl === currentLogoUrl) return true;
+  return isPublicObjectUrlUnderPrefix(
+    logoUrl,
+    process.env.R2_BUCKET_AVATARS ?? "ceo-summit-avatars",
+    `company-logos/${viewerId}/`
+  );
+}
+
+const INVALID_LOGO_ERROR = "Logo invalide — importez-le à nouveau.";
+
+/**
  * Parcours re-revu (5 août 2026) — l'entreprise est créée AVANT le choix
  * d'une offre (ordre inversé par rapport à la version du 1er août) :
  * demander une offre avant même que l'entreprise existe arrivait trop tôt
@@ -77,11 +98,9 @@ function companyData(f: {
  * (companyId). Réassignable ensuite via app/actions/admin-companies.ts.
  */
 export async function createCompany(input: unknown): Promise<ActionResult<{ id: string }>> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
-
-  const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!viewer) return { success: false, error: "Compte introuvable." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
   if (viewer.companyId) {
     return { success: false, error: "Votre compte est déjà rattaché à une entreprise." };
   }
@@ -91,6 +110,9 @@ export async function createCompany(input: unknown): Promise<ActionResult<{ id: 
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  if (!isAcceptedLogoUrl(f.logoUrl, viewer.id)) {
+    return { success: false, error: INVALID_LOGO_ERROR };
+  }
 
   const referentialError = await validateSectorAndCountry(f.sector, f.country);
   if (referentialError) return { success: false, error: referentialError };
@@ -110,12 +132,13 @@ export async function createCompany(input: unknown): Promise<ActionResult<{ id: 
 }
 
 export async function updateCompany(companyId: string, input: unknown): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== session.user.id) {
+  if (company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut modifier sa fiche." };
   }
 
@@ -124,6 +147,9 @@ export async function updateCompany(companyId: string, input: unknown): Promise<
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  if (!isAcceptedLogoUrl(f.logoUrl, viewer.id, company.logoUrl)) {
+    return { success: false, error: INVALID_LOGO_ERROR };
+  }
 
   const referentialError = await validateSectorAndCountry(f.sector, f.country);
   if (referentialError) return { success: false, error: referentialError };

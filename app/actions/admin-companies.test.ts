@@ -61,7 +61,10 @@ const PAYMENT_BASE = {
     company: {
       name: "Rakoto Holding",
       companyAdmin: { name: "Marie Dupont", email: "marie@example.mg" },
-      users: [{ id: "user_1" }, { id: "user_2" }],
+      users: [
+        { id: "user_1", status: "ACTIVE" },
+        { id: "user_2", status: "ACTIVE" },
+      ],
     },
   },
 };
@@ -179,6 +182,117 @@ describe("confirmCompanyPayment", () => {
     );
   });
 
+  function eventPayment(
+    company: Record<string, unknown>,
+    subscription: Record<string, unknown> = {}
+  ) {
+    return {
+      ...PAYMENT_BASE,
+      companySubscription: {
+        ...PAYMENT_BASE.companySubscription,
+        declaredParticipants: null,
+        extraSeats: 0,
+        plan: {
+          id: "plan_1",
+          eventId: "event_1",
+          pricingMode: "FIXED_BUNDLE",
+          maxTeamMembers: null,
+        },
+        ...subscription,
+        company: { ...PAYMENT_BASE.companySubscription.company, ...company },
+      },
+    };
+  }
+
+  function registeredUserIds() {
+    return vi
+      .mocked(prisma.eventRegistration.upsert)
+      .mock.calls.map((c) => (c[0] as { create: { userId: string } }).create.userId);
+  }
+
+  it("does not register the company admin to the event unless they ticked « Je participe »", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      eventPayment({
+        companyAdminId: "admin_member",
+        adminParticipates: false,
+        users: [
+          { id: "admin_member", status: "ACTIVE" },
+          { id: "user_1", status: "ACTIVE" },
+        ],
+      }) as never
+    );
+
+    await confirmCompanyPayment("payment_1");
+    expect(registeredUserIds()).toEqual(["user_1"]);
+  });
+
+  it("registers the company admin when they ticked « Je participe »", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      eventPayment({
+        companyAdminId: "admin_member",
+        adminParticipates: true,
+        users: [
+          { id: "admin_member", status: "ACTIVE" },
+          { id: "user_1", status: "ACTIVE" },
+        ],
+      }) as never
+    );
+
+    await confirmCompanyPayment("payment_1");
+    expect(registeredUserIds()).toEqual(["admin_member", "user_1"]);
+  });
+
+  it("skips members whose account isn't ACTIVE", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      eventPayment({
+        users: [
+          { id: "user_1", status: "ACTIVE" },
+          { id: "user_suspended", status: "SUSPENDED" },
+          { id: "user_excluded", status: "CANCELLED" },
+        ],
+      }) as never
+    );
+
+    await confirmCompanyPayment("payment_1");
+    expect(registeredUserIds()).toEqual(["user_1"]);
+  });
+
+  it("never registers more participants than the offer's seat cap, oldest accounts first", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      eventPayment(
+        {
+          users: [
+            { id: "user_1", status: "ACTIVE" },
+            { id: "user_2", status: "ACTIVE" },
+            { id: "user_3", status: "ACTIVE" },
+          ],
+        },
+        {
+          extraSeats: 0,
+          plan: {
+            id: "plan_1",
+            eventId: "event_1",
+            pricingMode: "FIXED_BUNDLE",
+            maxTeamMembers: 2,
+          },
+        }
+      ) as never
+    );
+
+    await confirmCompanyPayment("payment_1");
+
+    expect(registeredUserIds()).toEqual(["user_1", "user_2"]);
+    expect(warnSpy).toHaveBeenCalled();
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "company_payment.confirm",
+        metadata: expect.objectContaining({ skippedForSeatCap: 1 }),
+      }),
+    });
+    warnSpy.mockRestore();
+  });
+
   it("does not touch EventRegistration for a standard (non-event) plan", async () => {
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(PAYMENT_BASE as never);
 
@@ -267,6 +381,24 @@ describe("rejectCompanyPayment", () => {
     expect(result.success).toBe(true);
     expect(prisma.companySubscription.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: "PENDING_PAYMENT" } })
+    );
+  });
+
+  it("leaves the subscription alone and sends an upsell-specific email when rejecting a supplement", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...PAYMENT_BASE,
+      upsellQuantity: 2,
+    } as never);
+
+    const result = await rejectCompanyPayment("payment_1", "Montant incorrect");
+
+    expect(result.success).toBe(true);
+    expect(prisma.companySubscription.update).not.toHaveBeenCalled();
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "marie@example.mg",
+        subject: expect.stringContaining("places supplémentaires"),
+      })
     );
   });
 

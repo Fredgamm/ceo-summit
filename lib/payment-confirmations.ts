@@ -3,6 +3,7 @@ import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
+import { seatCap } from "@/lib/company-seats";
 import CompanyPaymentConfirmedEmail from "@/emails/company-payment-confirmed-email";
 import CompanyUpsellConfirmedEmail from "@/emails/company-upsell-confirmed-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
@@ -42,7 +43,15 @@ export async function confirmCompanyPaymentCore(
       companySubscription: {
         include: {
           plan: { include: { linkedPlatformPlan: true } },
-          company: { include: { companyAdmin: true, users: { select: { id: true } } } },
+          company: {
+            include: {
+              companyAdmin: true,
+              users: {
+                select: { id: true, status: true, createdAt: true },
+                orderBy: { createdAt: "asc" },
+              },
+            },
+          },
         },
       },
       upsellPlan: true,
@@ -60,17 +69,25 @@ export async function confirmCompanyPaymentCore(
    * recalcul des crédits (retirés du produit, voir `conception/09`).
    */
   if (payment.upsellQuantity != null) {
-    const { count } = await prisma.companyPayment.updateMany({
-      where: { id: companyPaymentId, status: "PENDING" },
-      data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+    const upsellQuantity = payment.upsellQuantity;
+    // Audit (25 septembre 2026) — confirmation et incrément dans une même
+    // transaction : un échec entre les deux laissait un paiement CONFIRMED
+    // sans les places payées (et non rejouable, `status` n'étant plus PENDING).
+    const confirmed = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.companyPayment.updateMany({
+        where: { id: companyPaymentId, status: "PENDING" },
+        data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+      });
+      if (count === 0) return false;
+      await tx.companySubscription.update({
+        where: { id: payment.companySubscriptionId },
+        data: { extraSeats: { increment: upsellQuantity } },
+      });
+      return true;
     });
-    if (count === 0) {
+    if (!confirmed) {
       return { success: false, error: "Ce paiement a déjà été traité." };
     }
-    await prisma.companySubscription.update({
-      where: { id: payment.companySubscriptionId },
-      data: { extraSeats: { increment: payment.upsellQuantity } },
-    });
     if (actorId) {
       await prisma.auditLog.create({
         data: {
@@ -131,12 +148,31 @@ export async function confirmCompanyPaymentCore(
    * `withEventRegistrationLock` et borné à la capacité restante ; les
    * membres au-delà ne sont pas inscrits à l'évènement (mais gardent les
    * avantages plateforme ci-dessous, l'offre étant déjà payée).
+   *
+   * Audit (25 septembre 2026) — n'inscrit plus que les participants réels :
+   * les comptes `ACTIVE` de l'entreprise, sans le gestionnaire s'il n'a pas
+   * coché « Je participe » (`conception/12` §3.3 — il était jusqu'ici
+   * inscrit d'office, place comprise), et jamais au-delà de `seatCap()`
+   * (dans l'ordre de création des comptes, le surplus étant loggué et tracé
+   * dans l'audit pour un suivi manuel).
    */
   const plan = payment.companySubscription.plan;
+  const company = payment.companySubscription.company;
   let skippedForCapacity = 0;
+  let skippedForSeatCap = 0;
   if (plan.eventId) {
     const eventId = plan.eventId;
-    const users = payment.companySubscription.company.users;
+    const participants = company.users.filter(
+      (u) => u.status === "ACTIVE" && (company.adminParticipates || u.id !== company.companyAdminId)
+    );
+    const cap = seatCap(payment.companySubscription);
+    const users = cap != null ? participants.slice(0, cap) : participants;
+    skippedForSeatCap = participants.length - users.length;
+    if (skippedForSeatCap > 0) {
+      console.warn(
+        `[confirmCompanyPaymentCore] ${skippedForSeatCap} participant(s) of company ${payment.companySubscription.companyId} not registered to event ${eventId}: seat cap (${cap}) exceeded`
+      );
+    }
     await withEventRegistrationLock(eventId, async () => {
       const [event, existingRegs, takenSpots] = await Promise.all([
         prisma.event.findUnique({ where: { id: eventId }, select: { capacity: true } }),
@@ -207,8 +243,14 @@ export async function confirmCompanyPaymentCore(
         action: "company_payment.confirm",
         targetType: "CompanyPayment",
         targetId: companyPaymentId,
-        ...(skippedForCapacity > 0
-          ? { metadata: { skippedForEventCapacity: skippedForCapacity, eventId: plan.eventId } }
+        ...(skippedForCapacity > 0 || skippedForSeatCap > 0
+          ? {
+              metadata: {
+                eventId: plan.eventId,
+                ...(skippedForCapacity > 0 ? { skippedForEventCapacity: skippedForCapacity } : {}),
+                ...(skippedForSeatCap > 0 ? { skippedForSeatCap } : {}),
+              },
+            }
           : {}),
       },
     });
