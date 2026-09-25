@@ -2,24 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Diamond, CalendarDays, Mail, User } from "lucide-react";
+import { Diamond, CalendarDays, Mail, MessagesSquare, LogOut } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 const ITEMS = [
-  { href: "/dashboard", label: "Accueil", icon: Home },
   { href: "/evenements", label: "Événements", icon: CalendarDays },
   { href: "/deal-room", label: "Deal Room", icon: Diamond },
+  { href: "/salles", label: "Salles", icon: MessagesSquare, badgeKey: "rooms" as const },
   { href: "/messagerie", label: "Messages", icon: Mail, badgeKey: "messages" as const },
-  { href: "/profil/editer", label: "Profil", icon: User },
 ];
+
+const ITEM_CLASSNAME =
+  "relative flex min-w-14 flex-col items-center gap-0.5 px-2.5 py-1.5 text-[10px] font-medium text-text-muted";
 
 /**
  * Fixed bottom navigation — visible only on mobile (md:hidden).
  * Direct implementation of the .mobile-nav pattern added to /wireframe/style.css.
- * Replaces the desktop sidebar entirely on small screens (see AppShell).
+ *
+ * Audit mobile du 22 septembre 2026 (conception/14 §1) — Accueil et Profil
+ * sont passés dans MobileHeader (nouveau), qui complète cette barre selon le
+ * découpage header/footer attendu ; Salles et Déconnexion (absents
+ * jusqu'ici) les remplacent ici. Complète, avec MobileHeader, le repli
+ * mobile de la sidebar desktop (components/layout/member-sidebar.tsx).
  */
-export function MobileBottomNav({ badges = {} }: { badges?: Partial<Record<"messages", number>> }) {
+export function MobileBottomNav({
+  badges = {},
+}: {
+  badges?: Partial<Record<"rooms" | "messages", number>>;
+}) {
   const pathname = usePathname();
 
   return (
@@ -32,10 +44,7 @@ export function MobileBottomNav({ badges = {} }: { badges?: Partial<Record<"mess
             <Link
               key={item.href}
               href={item.href}
-              className={cn(
-                "relative flex min-w-14 flex-col items-center gap-0.5 px-2.5 py-1.5 text-[10px] font-medium text-text-muted",
-                active && "text-navy"
-              )}
+              className={cn(ITEM_CLASSNAME, active && "text-navy")}
             >
               <item.icon
                 className={cn("h-[18px] w-[18px]", active && "text-gold")}
@@ -50,6 +59,10 @@ export function MobileBottomNav({ badges = {} }: { badges?: Partial<Record<"mess
             </Link>
           );
         })}
+        <SignOutButton className={ITEM_CLASSNAME}>
+          <LogOut className="h-[18px] w-[18px]" strokeWidth={2} />
+          Déconnexion
+        </SignOutButton>
       </div>
     </nav>
   );
