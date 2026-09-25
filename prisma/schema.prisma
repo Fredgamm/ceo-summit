@@ -714,7 +714,15 @@ model Opportunity {
   description      String            @db.Text
   budget           Int? // Ariary
   deadline         DateTime?
-  visibility       Tier              @default(EXECUTIVE) // minimum tier to view
+  /// Audit mobile 22 sept. 2026 (conception/14 §3) — défaut aligné sur
+  /// l'attendu confirmé (Deal Room accessible à tous par défaut, comme
+  /// Event.minTier/Room.minTier) plutôt que sur EXECUTIVE (qui restreignait
+  /// une opportunité sans action explicite du créateur). Sans effet observé
+  /// à ce jour : le seul site de création (publishOpportunity) envoie déjà
+  /// toujours une valeur explicite depuis le formulaire (par défaut MEMBER,
+  /// "Tous les membres") — ce défaut ne protège que les futurs chemins de
+  /// code qui omettraient de le faire.
+  visibility       Tier              @default(MEMBER) // minimum tier to view
   /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `visibility` à
   /// terme, même logique de repli que `Event.minPlanId`.
   visibilityPlanId String?
