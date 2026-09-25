@@ -1,23 +1,22 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { verifyHmacSignature } from "@/lib/hmac";
 import { resendWebhookSchema } from "@/lib/validations/webhooks";
+
+import { verifySvixSignature } from "./svix";
 
 /**
  * POST /api/webhooks/resend — E8-T09 "Historique campagnes avec taux
  * d'ouverture (webhook Resend)".
  *
- * Signature scheme simplified: verified with this project's existing generic
- * `verifyHmacSignature` (same as Evolia) against `X-Resend-Signature` +
- * `RESEND_WEBHOOK_SECRET`, rather than Resend's real Svix-based composite
- * signing — there's no live Resend account in this environment to fire a
- * real webhook against anyway. Wiring an actual Resend account later means
- * swapping this one function for Svix verification, nothing else changes.
+ * Signature : vérification Svix (`svix-id`/`svix-timestamp`/`svix-signature`,
+ * secret `whsec_...` dans `RESEND_WEBHOOK_SECRET`), le schéma réellement
+ * utilisé par Resend — voir `./svix.ts`. Remplace (audit MVP, 25 septembre
+ * 2026) l'ancienne vérification HMAC hex sur `X-Resend-Signature`, qui
+ * aurait rejeté tout vrai webhook Resend.
  */
 export async function POST(req: Request) {
   const rawBody = await req.text();
-  const signature = req.headers.get("X-Resend-Signature");
   const secret = process.env.RESEND_WEBHOOK_SECRET;
 
   if (!secret) {
@@ -25,14 +24,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
   }
 
-  if (!verifyHmacSignature(rawBody, signature, secret)) {
+  const verification = verifySvixSignature(
+    rawBody,
+    {
+      id: req.headers.get("svix-id"),
+      timestamp: req.headers.get("svix-timestamp"),
+      signature: req.headers.get("svix-signature"),
+    },
+    secret
+  );
+  if (!verification.valid) {
     await prisma.webhookLog.create({
       data: {
         source: "resend",
         event: "unknown",
         payload: safeParseForLogging(rawBody),
         status: "REJECTED_INVALID_SIGNATURE",
-        error: "HMAC signature mismatch",
+        error: verification.reason,
       },
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });

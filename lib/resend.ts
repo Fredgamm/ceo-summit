@@ -16,9 +16,35 @@ import type { ReactElement } from "react";
  * inoffensive à laisser inactive) mais `openedAt`/`openCount` ne
  * progresseront plus tant qu'aucun prestataire équivalent n'est rebranché.
  */
+/**
+ * Audit MVP (25 septembre 2026) — en production, l'absence de SMTP ne fait
+ * plus replier silencieusement sur Maildev (localhost:1025, inexistant sur le
+ * serveur : les emails partaient dans le vide sans que personne ne le voie).
+ * Seul un `MAIL_DEV_MODE=true` explicite active Maildev en production ; sinon
+ * `sendTransactionalEmail` lève une `EmailNotConfiguredError`. En
+ * développement, le repli Maildev automatique est conservé.
+ */
 function isMailDevMode(): boolean {
   if (process.env.MAIL_DEV_MODE === "true") return true;
+  if (process.env.NODE_ENV === "production") return false;
   return !isSmtpConfigured();
+}
+
+/** Levée en production quand aucun SMTP n'est configuré — l'email n'est pas parti. */
+export class EmailNotConfiguredError extends Error {
+  constructor(to: string) {
+    super(`SMTP non configuré — email non envoyé à ${to}`);
+    this.name = "EmailNotConfiguredError";
+  }
+}
+
+/**
+ * Expéditeur par défaut : `EMAIL_FROM`, sinon le compte SMTP lui-même (la
+ * plupart des serveurs refusent un expéditeur différent du compte
+ * authentifié), sinon l'adresse générique.
+ */
+export function getDefaultFromAddress(): string {
+  return process.env.EMAIL_FROM || process.env.SMTP_USER || "noreply@ceo-summit.mg";
 }
 
 /** Whether real (non-placeholder) SMTP credentials are present — used by the
@@ -78,7 +104,13 @@ interface SendTransactionalEmailArgs {
  * this so we have one place to add retry/logging/bounce handling later.
  */
 export async function sendTransactionalEmail({ to, subject, react }: SendTransactionalEmailArgs) {
-  const from = process.env.EMAIL_FROM || "noreply@ceo-summit.mg";
+  const from = getDefaultFromAddress();
+
+  if (!isMailDevMode() && !isSmtpConfigured()) {
+    console.error(`[email] SMTP non configuré — email non envoyé à ${to}`, { subject });
+    throw new EmailNotConfiguredError(to);
+  }
+
   const html = await render(react);
 
   if (isMailDevMode()) {

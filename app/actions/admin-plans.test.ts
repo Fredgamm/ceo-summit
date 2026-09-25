@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/currency-conversion", () => ({
+  convertEurToAr: vi.fn(async (eur: number) => eur * 5000),
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -13,6 +16,8 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
     },
+    companySubscription: { count: vi.fn() },
+    companyPayment: { count: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -44,6 +49,8 @@ beforeEach(() => {
   vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
   vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
   vi.mocked(prisma.plan.count).mockResolvedValue(0);
+  vi.mocked(prisma.companySubscription.count).mockResolvedValue(0);
+  vi.mocked(prisma.companyPayment.count).mockResolvedValue(0);
   vi.mocked(prisma.plan.findUnique).mockResolvedValue(null);
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
     const list = ops as Promise<unknown>[];
@@ -77,6 +84,58 @@ describe("createPlan", () => {
   it("rejects a slug already used by another plan", async () => {
     vi.mocked(prisma.plan.findUnique).mockResolvedValue({ id: "other_plan" } as never);
     const result = await createPlan(VALID_PLAN_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.plan.create).not.toHaveBeenCalled();
+  });
+
+  function createdData() {
+    return (vi.mocked(prisma.plan.create).mock.calls[0]?.[0] as { data: Record<string, unknown> })
+      .data;
+  }
+
+  it("keeps the client priceAr for an offer priced directly in Ariary", async () => {
+    vi.mocked(prisma.plan.create).mockResolvedValue({ id: "plan_1" } as never);
+    await createPlan(VALID_PLAN_INPUT);
+    expect(createdData()).toMatchObject({ priceAr: 5_000_000, priceEur: null });
+  });
+
+  it("recomputes priceAr server-side from priceEur, ignoring the client priceAr", async () => {
+    vi.mocked(prisma.plan.create).mockResolvedValue({ id: "plan_1" } as never);
+    await createPlan({ ...VALID_PLAN_INPUT, priceEur: 720, priceAr: 1 });
+    expect(createdData()).toMatchObject({ priceAr: 3_600_000, priceEur: 720 });
+  });
+
+  it("treats priceEur = 0 as a euro price (0 Ar), not as a fallback to the client priceAr", async () => {
+    vi.mocked(prisma.plan.create).mockResolvedValue({ id: "plan_1" } as never);
+    await createPlan({ ...VALID_PLAN_INPUT, priceEur: 0, priceAr: 5_000_000 });
+    expect(createdData()).toMatchObject({ priceAr: 0, priceEur: 0 });
+  });
+
+  it("clears minParticipants on a fixed-bundle offer", async () => {
+    vi.mocked(prisma.plan.create).mockResolvedValue({ id: "plan_1" } as never);
+    await createPlan({ ...VALID_PLAN_INPUT, minParticipants: 10 });
+    expect(createdData()).toMatchObject({ maxTeamMembers: 20, minParticipants: null });
+  });
+
+  it("clears maxTeamMembers on a Groupement offer (its quota is the declared headcount)", async () => {
+    vi.mocked(prisma.plan.create).mockResolvedValue({ id: "plan_1" } as never);
+    await createPlan({
+      ...VALID_PLAN_INPUT,
+      pricingMode: "PER_PARTICIPANT",
+      minParticipants: 10,
+      maxTeamMembers: 20,
+    });
+    expect(createdData()).toMatchObject({ maxTeamMembers: null, minParticipants: 10 });
+  });
+
+  it("strips markdown asterisks from the offer name", async () => {
+    vi.mocked(prisma.plan.create).mockResolvedValue({ id: "plan_1" } as never);
+    await createPlan({ ...VALID_PLAN_INPUT, name: "Early Bird** (fin : 31 déc 2026)" });
+    expect(createdData()).toMatchObject({ name: "Early Bird (fin : 31 déc 2026)" });
+  });
+
+  it("rejects a name made only of asterisks", async () => {
+    const result = await createPlan({ ...VALID_PLAN_INPUT, name: "****" });
     expect(result.success).toBe(false);
     expect(prisma.plan.create).not.toHaveBeenCalled();
   });
@@ -149,6 +208,27 @@ describe("deletePlan", () => {
     vi.mocked(prisma.plan.count).mockResolvedValue(2);
     const result = await deletePlan("plan_1");
     expect(result.success).toBe(false);
+    expect(prisma.plan.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a plan a company is subscribed to, suggesting deactivation", async () => {
+    vi.mocked(prisma.companySubscription.count).mockResolvedValue(3);
+    const result = await deletePlan("plan_1");
+    expect(result).toEqual({
+      success: false,
+      error: expect.stringContaining("désactive-la"),
+    });
+    expect(prisma.companySubscription.count).toHaveBeenCalledWith({ where: { planId: "plan_1" } });
+    expect(prisma.plan.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a plan bought as a supplement", async () => {
+    vi.mocked(prisma.companyPayment.count).mockResolvedValue(1);
+    const result = await deletePlan("plan_1");
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.count).toHaveBeenCalledWith({
+      where: { upsellPlanId: "plan_1" },
+    });
     expect(prisma.plan.delete).not.toHaveBeenCalled();
   });
 });

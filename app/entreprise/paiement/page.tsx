@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getActivePlans, getPlanBySlug } from "@/lib/plans-query";
+import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
@@ -72,7 +72,7 @@ export default async function CompanyPaymentPage({
         {subscription ? (
           <>
             <h1 className="mb-1 text-xl font-bold text-navy">
-              Paiement — {subscription.plan.name}
+              Paiement — {cleanPlanName(subscription.plan.name)}
             </h1>
             <p className="mb-4 text-sm text-text-muted">
               {subscription.plan.pricingMode === "PER_PARTICIPANT"

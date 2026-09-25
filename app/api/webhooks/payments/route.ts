@@ -12,6 +12,8 @@ import {
 
 const WEBHOOK_RATE_LIMIT = 60;
 const WEBHOOK_RATE_WINDOW_SEC = 60;
+/** Âge maximum d'une requête horodatée (`X-Webhook-Timestamp`), en secondes. */
+const WEBHOOK_TIMESTAMP_TOLERANCE_SEC = 5 * 60;
 
 /**
  * POST /api/webhooks/payments — confirmation de paiement générique (7 août
@@ -53,14 +55,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
   }
 
-  if (!verifyHmacSignature(rawBody, signature, secret)) {
+  /**
+   * Audit MVP (25 septembre 2026) — anti-rejeu optionnel et rétro-compatible.
+   * Si l'expéditeur envoie `X-Webhook-Timestamp` (secondes Unix), la
+   * signature porte sur `${timestamp}.${corps brut}` et une requête de plus
+   * de 5 minutes est refusée : une confirmation interceptée ne peut plus
+   * être rejouée plus tard. Sans cet en-tête, comportement inchangé
+   * (signature du corps seul) — la documentation déjà transmise à Evolia
+   * reste valable.
+   */
+  const timestamp = req.headers.get("X-Webhook-Timestamp");
+  const verification = verifyPaymentSignature(rawBody, signature, timestamp, secret);
+  if (!verification.valid) {
     await prisma.webhookLog.create({
       data: {
         source: "payments",
         event: "unknown",
         payload: safeParseForLogging(rawBody),
         status: "REJECTED_INVALID_SIGNATURE",
-        error: "HMAC signature mismatch",
+        error: verification.reason,
       },
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
@@ -182,6 +195,29 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
       return confirmCreditPurchaseCore(payload.reference, null);
     }
   }
+}
+
+function verifyPaymentSignature(
+  rawBody: string,
+  signature: string | null,
+  timestamp: string | null,
+  secret: string
+): { valid: true } | { valid: false; reason: string } {
+  if (timestamp === null) {
+    return verifyHmacSignature(rawBody, signature, secret)
+      ? { valid: true }
+      : { valid: false, reason: "HMAC signature mismatch" };
+  }
+  const timestampSec = Number(timestamp);
+  if (!/^\d+$/.test(timestamp.trim()) || !Number.isFinite(timestampSec)) {
+    return { valid: false, reason: "Invalid X-Webhook-Timestamp" };
+  }
+  if (Math.abs(Date.now() / 1000 - timestampSec) > WEBHOOK_TIMESTAMP_TOLERANCE_SEC) {
+    return { valid: false, reason: "X-Webhook-Timestamp outside tolerance" };
+  }
+  return verifyHmacSignature(`${timestamp.trim()}.${rawBody}`, signature, secret)
+    ? { valid: true }
+    : { valid: false, reason: "HMAC signature mismatch" };
 }
 
 /**

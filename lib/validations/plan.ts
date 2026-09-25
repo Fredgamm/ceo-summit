@@ -21,7 +21,20 @@ const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 export const planFormSchema = z
   .object({
-    name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(60),
+    /**
+     * Audit MVP (25 septembre 2026) — les astérisques markdown sont retirés
+     * à l'enregistrement (app/actions/admin-plans.ts) : le minimum de
+     * 2 caractères s'applique donc au nom une fois nettoyé.
+     */
+    name: z
+      .string()
+      .trim()
+      .min(2, "Le nom doit contenir au moins 2 caractères")
+      .max(60)
+      .refine(
+        (name) => name.replace(/\*+/g, "").trim().length >= 2,
+        "Le nom doit contenir au moins 2 caractères"
+      ),
     slug: z
       .string()
       .trim()

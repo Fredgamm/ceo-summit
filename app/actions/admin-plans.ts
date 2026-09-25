@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { planFormSchema } from "@/lib/validations/plan";
 import { convertEurToAr } from "@/lib/currency-conversion";
+import { cleanPlanName } from "@/lib/plans-query";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -21,18 +22,32 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * côté serveur au taux du jour à chaque création/modification (jamais une
  * valeur envoyée par le client) ; `priceAr` reste la seule valeur lue pour
  * tout calcul de montant dû, `priceEur` n'est qu'informatif à l'affichage.
+ *
+ * Audit MVP (25 septembre 2026) :
+ * - un `priceEur` à 0 est un prix en euros comme un autre : il donne un
+ *   `priceAr` converti côté serveur (0), au lieu de retomber sur le
+ *   `priceAr` envoyé par le client sans contrôle ;
+ * - les champs sans effet dans le mode choisi sont remis à `null` (seuil
+ *   minimum en forfait fixe, nombre de places en offre groupement — le
+ *   quota d'une offre groupement est l'effectif déclaré, voir
+ *   `lib/company-seats.ts::seatCap`, qui ne lit `maxTeamMembers` qu'en
+ *   `FIXED_BUNDLE`) ;
+ * - les astérisques de mise en forme markdown saisis dans le nom sont
+ *   retirés (« Early Bird** (fin : 31 déc 2026) » en production).
  */
 async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
-  const priceAr = f.priceEur ? await convertEurToAr(f.priceEur) : f.priceAr;
+  const hasEurPrice = f.priceEur !== null && f.priceEur !== undefined;
+  const priceAr = hasEurPrice ? await convertEurToAr(f.priceEur as number) : f.priceAr;
+  const isGroup = f.pricingMode === "PER_PARTICIPANT";
   return {
-    name: f.name,
+    name: cleanPlanName(f.name),
     slug: f.slug,
     description: f.description || null,
     priceAr,
-    priceEur: f.priceEur ?? null,
+    priceEur: hasEurPrice ? f.priceEur : null,
     pricingMode: f.pricingMode,
-    maxTeamMembers: f.maxTeamMembers ?? null,
-    minParticipants: f.minParticipants ?? null,
+    maxTeamMembers: isGroup ? null : (f.maxTeamMembers ?? null),
+    minParticipants: isGroup ? (f.minParticipants ?? null) : null,
     eligibilityNote: f.eligibilityNote || null,
     isActive: f.isActive,
     isSelfService: f.isSelfService,
@@ -122,6 +137,11 @@ export async function togglePlanActive(planId: string, isActive: boolean): Promi
  * (4 août 2026, voir prisma/schema.prisma) et supprimée dans ce même
  * correctif : ce volet de la garde ne bloquait donc jamais rien en
  * pratique (toujours 0), seul `linkedPlatformPlanId` reste un vrai risque.
+ *
+ * Audit MVP (25 septembre 2026) — bloquée aussi si une entreprise est (ou a
+ * été) abonnée à l'offre, ou l'a achetée en supplément : la suppression
+ * casserait la clé étrangère (erreur brute) et effacerait l'historique
+ * financier. Même réponse : désactiver plutôt que supprimer.
  */
 export async function deletePlan(planId: string): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("plans");
@@ -131,6 +151,23 @@ export async function deletePlan(planId: string): Promise<ActionResult> {
     return {
       success: false,
       error: `Ce plan est utilisé par ${linkedOffersCount} offre(s) d'évènement — désactive-le au lieu de le supprimer.`,
+    };
+  }
+
+  const [subscriptionsCount, upsellPaymentsCount] = await Promise.all([
+    prisma.companySubscription.count({ where: { planId } }),
+    prisma.companyPayment.count({ where: { upsellPlanId: planId } }),
+  ]);
+  if (subscriptionsCount > 0 || upsellPaymentsCount > 0) {
+    const uses = [
+      subscriptionsCount > 0 ? `${subscriptionsCount} abonnement(s) d'entreprise` : null,
+      upsellPaymentsCount > 0 ? `${upsellPaymentsCount} achat(s) en supplément` : null,
+    ]
+      .filter(Boolean)
+      .join(" et ");
+    return {
+      success: false,
+      error: `Cette offre est liée à ${uses} — désactive-la au lieu de la supprimer, l'historique des paiements est conservé.`,
     };
   }
 
