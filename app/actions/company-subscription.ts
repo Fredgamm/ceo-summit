@@ -14,9 +14,25 @@ import {
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
-import AdminCompanyPaymentAlertEmail from "@/emails/admin-company-payment-alert-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+/**
+ * Migration bibliothèque d'emails éditable (25 septembre 2026) — reprend
+ * exactement le formatage de l'ancien composant `emails/admin-company-payment-alert-email.tsx`
+ * (retiré), pour que le registre reçoive un montant et une méthode déjà
+ * formatés en chaînes lisibles.
+ */
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  VIREMENT: "virement bancaire",
+  CHEQUE: "chèque",
+  CARTE_BANCAIRE: "carte bancaire",
+  MOBILE_MONEY: "mobile money",
+};
+function formatPaymentAmountAr(amount: number): string {
+  return `${new Intl.NumberFormat("fr-FR").format(amount)} Ar`;
+}
 
 /**
  * Phase 2 offres/paiement (30 juillet 2026) — choix d'une offre par l'admin
@@ -195,15 +211,12 @@ export async function submitPaymentProof(
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Paiement entreprise à valider — ${subscription.company.name}`,
-        react: AdminCompanyPaymentAlertEmail({
-          companyName: subscription.company.name,
-          amount,
-          method: f.method,
-        }),
+      const email = await resolveEmail("admin-company-payment-alert", {
+        companyName: subscription.company.name,
+        amount: formatPaymentAmountAr(amount),
+        method: PAYMENT_METHOD_LABEL[f.method] ?? f.method,
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       // Le paiement est déjà enregistré à ce stade — un échec d'envoi de
       // l'alerte admin ne doit pas faire échouer l'action (même bug de
@@ -320,15 +333,12 @@ export async function purchaseUpsellSeats(
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Supplément de participants à valider — ${subscription.company.name}`,
-        react: AdminCompanyPaymentAlertEmail({
-          companyName: subscription.company.name,
-          amount,
-          method: f.method,
-        }),
+      const email = await resolveEmail("admin-company-payment-alert", {
+        companyName: subscription.company.name,
+        amount: formatPaymentAmountAr(amount),
+        method: PAYMENT_METHOD_LABEL[f.method] ?? f.method,
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       console.error("[purchaseUpsellSeats] failed to send admin alert email", err);
     }

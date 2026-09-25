@@ -12,13 +12,11 @@ import {
   PASSWORD_RESET_TOKEN_TTL_MS,
 } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { resolveEmail } from "@/lib/email-template-resolver";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { BCRYPT_ROUNDS } from "@/lib/password";
 import { tierLabel } from "@/lib/utils";
-import ActivationEmail from "@/emails/activation-email";
-import ResetPasswordEmail from "@/emails/reset-password-email";
-import PasswordChangedEmail from "@/emails/password-changed-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -145,19 +143,16 @@ export async function resendActivationLink(email: string): Promise<ResendActivat
 
   const activationUrl = `${process.env.NEXTAUTH_URL}/activer/${token}`;
   try {
-    await sendTransactionalEmail({
-      to: user.email,
-      subject: "Votre nouveau lien d'activation CEO Summit",
-      react: ActivationEmail({
-        memberName: user.name,
-        // Correctif (7 août 2026, audit) — utilisait une copie locale de
-        // tierLabel() dupliquant lib/utils.ts, avec un texte de repli anglais
-        // ("Member") détonnant dans un email entièrement en français —
-        // désormais "Membre", cohérent avec le reste de la plateforme.
-        tier: tierLabel(undefined),
-        activationUrl,
-      }),
+    const email = await resolveEmail("activation", {
+      memberName: user.name,
+      // Correctif (7 août 2026, audit) — utilisait une copie locale de
+      // tierLabel() dupliquant lib/utils.ts, avec un texte de repli anglais
+      // ("Member") détonnant dans un email entièrement en français —
+      // désormais "Membre", cohérent avec le reste de la plateforme.
+      tier: tierLabel(undefined),
+      activationUrl,
     });
+    if (email) await sendTransactionalEmail({ to: user.email, ...email });
   } catch (err) {
     // Réponse neutre là aussi : un échec d'envoi n'est possible que pour un
     // compte existant, le signaler le révélerait.
@@ -213,11 +208,8 @@ export async function requestPasswordReset(email: string): Promise<ActionResult>
 
     const resetUrl = `${process.env.NEXTAUTH_URL}/reinitialiser/${token}`;
     try {
-      await sendTransactionalEmail({
-        to: user.email,
-        subject: "Réinitialisez votre mot de passe CEO Summit",
-        react: ResetPasswordEmail({ memberName: user.name, resetUrl }),
-      });
+      const email = await resolveEmail("reset-password", { memberName: user.name, resetUrl });
+      if (email) await sendTransactionalEmail({ to: user.email, ...email });
     } catch (err) {
       // Toujours "success" ci-dessous (anti-enumeration, voir la doc de
       // cette fonction) — un échec d'envoi ne doit donc pas non plus le
@@ -287,11 +279,8 @@ export async function resetPassword(
    * de contrôle de compte.
    */
   try {
-    await sendTransactionalEmail({
-      to: record.user.email,
-      subject: "Votre mot de passe CEO Summit a été modifié",
-      react: PasswordChangedEmail({ memberName: record.user.name }),
-    });
+    const email = await resolveEmail("password-changed", { memberName: record.user.name });
+    if (email) await sendTransactionalEmail({ to: record.user.email, ...email });
   } catch (err) {
     console.error("[resetPassword] failed to send confirmation email", err);
   }

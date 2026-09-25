@@ -5,8 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
-import ServiceListingApprovedEmail from "@/emails/service-listing-approved-email";
-import ServiceListingRefusedEmail from "@/emails/service-listing-refused-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -34,14 +33,11 @@ export async function approveServiceListing(listingId: string): Promise<ActionRe
   });
 
   try {
-    await sendTransactionalEmail({
-      to: listing.author.email,
-      subject: `Votre fiche "${listing.title}" est publiée`,
-      react: ServiceListingApprovedEmail({
-        serviceTitle: listing.title,
-        serviceUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/catalogue/services/${listingId}`,
-      }),
+    const email = await resolveEmail("service-listing-approved", {
+      serviceTitle: listing.title,
+      serviceUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/catalogue/services/${listingId}`,
     });
+    if (email) await sendTransactionalEmail({ to: listing.author.email, ...email });
   } catch (err) {
     console.error("[approveServiceListing] failed to send approval email", err);
   }
@@ -74,11 +70,8 @@ export async function rejectServiceListing(listingId: string): Promise<ActionRes
   });
 
   try {
-    await sendTransactionalEmail({
-      to: listing.author.email,
-      subject: `Votre fiche "${listing.title}" n'a pas été retenue`,
-      react: ServiceListingRefusedEmail({ serviceTitle: listing.title }),
-    });
+    const email = await resolveEmail("service-listing-refused", { serviceTitle: listing.title });
+    if (email) await sendTransactionalEmail({ to: listing.author.email, ...email });
   } catch (err) {
     console.error("[rejectServiceListing] failed to send rejection email", err);
   }

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmEventRegistrationPaymentCore } from "@/lib/payment-confirmations";
 import { sendTransactionalEmail } from "@/lib/resend";
-import EventPaymentReminderEmail from "@/emails/event-payment-reminder-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -37,15 +37,12 @@ export async function sendEventPaymentReminder(registrationId: string): Promise<
   if (!registration) return { success: false, error: "Inscription introuvable." };
 
   try {
-    await sendTransactionalEmail({
-      to: registration.user.email,
-      subject: `Paiement en attente — ${registration.event.title}`,
-      react: EventPaymentReminderEmail({
-        memberName: registration.user.name,
-        eventTitle: registration.event.title,
-        amount: registration.event.price,
-      }),
+    const email = await resolveEmail("event-payment-reminder", {
+      memberName: registration.user.name,
+      eventTitle: registration.event.title,
+      amount: `${new Intl.NumberFormat("fr-FR").format(registration.event.price)} Ar`,
     });
+    if (email) await sendTransactionalEmail({ to: registration.user.email, ...email });
   } catch (err) {
     console.error("[sendEventPaymentReminder] failed to send reminder email", err);
     return { success: false, error: "Échec de l'envoi de l'email. Réessayez plus tard." };

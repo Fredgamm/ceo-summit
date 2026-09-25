@@ -7,10 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { generateSecureToken, ACTIVATION_TOKEN_TTL_MS } from "@/lib/tokens";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { resolveEmail } from "@/lib/email-template-resolver";
 import { tierLabel } from "@/lib/utils";
-import ActivationEmail from "@/emails/activation-email";
-import ApplicationRefusedEmail from "@/emails/application-refused-email";
-import ApplicationMoreInfoEmail from "@/emails/application-more-info-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -74,15 +72,12 @@ export async function approveApplication(applicationId: string, tier: Tier): Pro
   });
 
   try {
-    await sendTransactionalEmail({
-      to: user.email,
-      subject: "Votre accès CEO Summit est prêt — activez votre compte",
-      react: ActivationEmail({
-        memberName: user.name,
-        tier: tierLabel(tier),
-        activationUrl: `${process.env.NEXTAUTH_URL}/activer/${token}`,
-      }),
+    const email = await resolveEmail("activation", {
+      memberName: user.name,
+      tier: tierLabel(tier),
+      activationUrl: `${process.env.NEXTAUTH_URL}/activer/${token}`,
     });
+    if (email) await sendTransactionalEmail({ to: user.email, ...email });
   } catch (err) {
     // La candidature est déjà approuvée et le compte déjà créé à ce stade
     // — un échec d'envoi ne doit pas faire échouer l'action.
@@ -128,11 +123,10 @@ export async function refuseApplication(
 
   // RG-07 — the internal reason is never included in this email.
   try {
-    await sendTransactionalEmail({
-      to: application.email,
-      subject: "Votre candidature au CEO Summit",
-      react: ApplicationRefusedEmail({ candidateName: application.fullName }),
+    const email = await resolveEmail("application-refused", {
+      candidateName: application.fullName,
     });
+    if (email) await sendTransactionalEmail({ to: application.email, ...email });
   } catch (err) {
     console.error("[refuseApplication] failed to send refusal email", err);
   }
@@ -174,11 +168,11 @@ export async function requestMoreInfo(
   });
 
   try {
-    await sendTransactionalEmail({
-      to: application.email,
-      subject: "Complément d'information — votre candidature CEO Summit",
-      react: ApplicationMoreInfoEmail({ candidateName: application.fullName, message }),
+    const email = await resolveEmail("application-more-info", {
+      candidateName: application.fullName,
+      message,
     });
+    if (email) await sendTransactionalEmail({ to: application.email, ...email });
   } catch (err) {
     console.error("[requestMoreInfo] failed to send email", err);
   }

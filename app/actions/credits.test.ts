@@ -17,13 +17,15 @@ vi.mock("@/lib/prisma", () => ({
     creditBalance: { upsert: vi.fn() },
     creditTransaction: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
+// Toujours nécessaire : lib/payment-confirmations.ts (confirmCreditPurchaseCore,
+// hors périmètre de cette migration) importe encore ce composant directement.
 vi.mock("@/emails/credit-purchase-confirmed-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/admin-credit-purchase-alert-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";

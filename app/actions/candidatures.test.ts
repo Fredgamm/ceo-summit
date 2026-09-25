@@ -10,13 +10,11 @@ vi.mock("@/lib/prisma", () => ({
     user: { findUnique: vi.fn(), create: vi.fn() },
     activationToken: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/activation-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/application-refused-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/application-more-info-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";

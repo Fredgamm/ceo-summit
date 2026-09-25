@@ -10,7 +10,8 @@ import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { getViewerRankFromCompany, LEGACY_TIER_RANK } from "@/lib/plan-access";
 import { confirmCreditPurchaseCore } from "@/lib/payment-confirmations";
-import AdminCreditPurchaseAlertEmail from "@/emails/admin-credit-purchase-alert-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
+import { formatAriary } from "@/lib/utils";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -62,15 +63,12 @@ export async function requestCreditPurchase(
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Achat de crédits à valider — ${viewer.name}`,
-        react: AdminCreditPurchaseAlertEmail({
-          memberName: viewer.name,
-          credits: pack.credits,
-          amount: pack.priceAr,
-        }),
+      const email = await resolveEmail("admin-credit-purchase-alert", {
+        memberName: viewer.name,
+        credits: pack.credits,
+        amount: formatAriary(pack.priceAr),
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       // L'achat est déjà enregistré à ce stade — un échec d'envoi de
       // l'alerte admin ne doit pas faire échouer la demande (même bug de

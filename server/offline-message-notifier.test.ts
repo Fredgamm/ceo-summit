@@ -4,10 +4,10 @@ vi.mock("../lib/prisma", () => ({
   prisma: {
     conversation: { findUnique: vi.fn(), update: vi.fn() },
     user: { findUnique: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 vi.mock("../lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("../emails/message-notification-email", () => ({ default: vi.fn(() => null) }));
 
 import { prisma } from "../lib/prisma";
 import { sendTransactionalEmail } from "../lib/resend";

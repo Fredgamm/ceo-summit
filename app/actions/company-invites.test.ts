@@ -24,6 +24,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
     },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
   },
 }));
@@ -37,9 +38,6 @@ vi.mock("@/lib/event-registration-lock", async (importOriginal) => {
 });
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
-vi.mock("@/emails/company-invite-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/company-collaborator-welcome-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/event-registration-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("qrcode", () => ({
   default: { toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,xxx") },
 }));

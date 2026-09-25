@@ -14,12 +14,11 @@ vi.mock("@/lib/prisma", () => ({
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/event-registration-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/event-payment-reminder-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";

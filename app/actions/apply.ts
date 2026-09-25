@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { applicationSchema, type ApplicationInput } from "@/lib/validations/application";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { resolveEmail } from "@/lib/email-template-resolver";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
-import ApplicationReceivedEmail from "@/emails/application-received-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -85,11 +85,10 @@ export async function submitApplication(input: ApplicationInput): Promise<Action
   });
 
   try {
-    await sendTransactionalEmail({
-      to: email,
-      subject: "Votre candidature au CEO Summit a bien été reçue",
-      react: ApplicationReceivedEmail({ candidateName: parsed.data.fullName }),
+    const resolved = await resolveEmail("application-received", {
+      candidateName: parsed.data.fullName,
     });
+    if (resolved) await sendTransactionalEmail({ to: email, ...resolved });
   } catch (err) {
     // La candidature est déjà enregistrée à ce stade — un échec d'envoi ne
     // doit pas faire croire au candidat que sa soumission a échoué.

@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
     creditBalance: { upsert: vi.fn() },
     creditTransaction: { create: vi.fn() },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 

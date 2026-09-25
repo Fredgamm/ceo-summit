@@ -6,8 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
 import { sendTransactionalEmail } from "@/lib/resend";
-import CompanyPaymentRejectedEmail from "@/emails/company-payment-rejected-email";
-import CompanyAdminReassignedEmail from "@/emails/company-admin-reassigned-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -92,27 +91,24 @@ export async function rejectCompanyPayment(
    * Audit (25 septembre 2026) — un refus de supplément envoyait le même
    * email que le refus du paiement initial, sans rien qui permette au
    * gestionnaire de savoir lequel des deux était concerné (son abonnement,
-   * lui, reste actif). Sujet et motif précisent désormais qu'il s'agit du
-   * supplément ; le gabarit `CompanyPaymentRejectedEmail` reste partagé.
+   * lui, reste actif). Le motif précise désormais qu'il s'agit du
+   * supplément ; une seule clé de registre partagée (`company-payment-rejected`,
+   * voir lib/email-templates/company-billing.ts — consolidation volontaire
+   * de l'audit du 25 septembre 2026).
    */
   const isUpsell = payment.upsellQuantity != null;
   const companyName = payment.companySubscription.company.name;
   const companyAdmin = payment.companySubscription.company.companyAdmin;
   if (companyAdmin) {
     try {
-      await sendTransactionalEmail({
-        to: companyAdmin.email,
-        subject: isUpsell
-          ? `Achat de places supplémentaires à corriger — ${companyName}`
-          : `Paiement à corriger — ${companyName}`,
-        react: CompanyPaymentRejectedEmail({
-          adminName: companyAdmin.name,
-          companyName,
-          reason: isUpsell
-            ? `Achat de ${payment.upsellQuantity} place(s) supplémentaire(s) — votre abonnement reste actif. Motif : ${reason.trim()}`
-            : reason.trim(),
-        }),
+      const email = await resolveEmail("company-payment-rejected", {
+        adminName: companyAdmin.name,
+        companyName,
+        reason: isUpsell
+          ? `Achat de ${payment.upsellQuantity} place(s) supplémentaire(s) — votre abonnement reste actif. Motif : ${reason.trim()}`
+          : reason.trim(),
       });
+      if (email) await sendTransactionalEmail({ to: companyAdmin.email, ...email });
     } catch (err) {
       // Même rationale que confirmCompanyPayment ci-dessus.
       console.error("[rejectCompanyPayment] failed to send rejection email", err);
@@ -168,29 +164,21 @@ export async function reassignCompanyAdmin(
    * significatif (gestion des paiements/invitations de l'entreprise).
    */
   try {
-    await sendTransactionalEmail({
-      to: newAdmin.email,
-      subject: `Vous êtes désormais admin de ${company.name}`,
-      react: CompanyAdminReassignedEmail({
-        memberName: newAdmin.name,
-        companyName: company.name,
-        isNewAdmin: true,
-      }),
+    const email = await resolveEmail("company-admin-reassigned-new-admin", {
+      memberName: newAdmin.name,
+      companyName: company.name,
     });
+    if (email) await sendTransactionalEmail({ to: newAdmin.email, ...email });
   } catch (err) {
     console.error("[reassignCompanyAdmin] failed to send email to new admin", err);
   }
   if (company.companyAdmin && company.companyAdmin.id !== newAdminUserId) {
     try {
-      await sendTransactionalEmail({
-        to: company.companyAdmin.email,
-        subject: `Changement d'admin — ${company.name}`,
-        react: CompanyAdminReassignedEmail({
-          memberName: company.companyAdmin.name,
-          companyName: company.name,
-          isNewAdmin: false,
-        }),
+      const email = await resolveEmail("company-admin-reassigned-old-admin", {
+        memberName: company.companyAdmin.name,
+        companyName: company.name,
       });
+      if (email) await sendTransactionalEmail({ to: company.companyAdmin.email, ...email });
     } catch (err) {
       console.error("[reassignCompanyAdmin] failed to send email to previous admin", err);
     }

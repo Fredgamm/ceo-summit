@@ -4,10 +4,7 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
 import { seatCap } from "@/lib/company-seats";
-import CompanyPaymentConfirmedEmail from "@/emails/company-payment-confirmed-email";
-import CompanyUpsellConfirmedEmail from "@/emails/company-upsell-confirmed-email";
-import EventRegistrationEmail from "@/emails/event-registration-email";
-import CreditPurchaseConfirmedEmail from "@/emails/credit-purchase-confirmed-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -103,16 +100,13 @@ export async function confirmCompanyPaymentCore(
     const upsellCompanyAdmin = payment.companySubscription.company.companyAdmin;
     if (upsellCompanyAdmin && payment.upsellPlan) {
       try {
-        await sendTransactionalEmail({
-          to: upsellCompanyAdmin.email,
-          subject: `Supplément confirmé — ${payment.companySubscription.company.name}`,
-          react: CompanyUpsellConfirmedEmail({
-            adminName: upsellCompanyAdmin.name,
-            companyName: payment.companySubscription.company.name,
-            planName: payment.upsellPlan.name,
-            quantity: payment.upsellQuantity,
-          }),
+        const email = await resolveEmail("company-upsell-confirmed", {
+          adminName: upsellCompanyAdmin.name,
+          companyName: payment.companySubscription.company.name,
+          planName: payment.upsellPlan.name,
+          quantity: payment.upsellQuantity,
         });
+        if (email) await sendTransactionalEmail({ to: upsellCompanyAdmin.email, ...email });
       } catch (err) {
         console.error("[confirmCompanyPaymentCore] failed to send upsell confirmation email", err);
       }
@@ -259,14 +253,11 @@ export async function confirmCompanyPaymentCore(
   const companyAdmin = payment.companySubscription.company.companyAdmin;
   if (companyAdmin) {
     try {
-      await sendTransactionalEmail({
-        to: companyAdmin.email,
-        subject: `Paiement confirmé — ${payment.companySubscription.company.name}`,
-        react: CompanyPaymentConfirmedEmail({
-          adminName: companyAdmin.name,
-          companyName: payment.companySubscription.company.name,
-        }),
+      const email = await resolveEmail("company-payment-confirmed", {
+        adminName: companyAdmin.name,
+        companyName: payment.companySubscription.company.name,
       });
+      if (email) await sendTransactionalEmail({ to: companyAdmin.email, ...email });
     } catch (err) {
       // Le paiement est déjà confirmé et l'abonnement déjà actif à ce
       // stade — un échec d'envoi ne doit pas faire échouer l'action.
@@ -318,17 +309,13 @@ export async function confirmEventRegistrationPaymentCore(
   }
 
   try {
-    await sendTransactionalEmail({
-      to: registration.user.email,
-      subject: `Paiement confirmé — ${registration.event.title}`,
-      react: EventRegistrationEmail({
-        memberName: registration.user.name,
-        eventTitle: registration.event.title,
-        eventDateLabel: formatDateFr(registration.event.date),
-        eventLocation: registration.event.isOnline ? "En ligne" : registration.event.location,
-        requiresManualValidation: false,
-      }),
+    const email = await resolveEmail("event-registration", {
+      memberName: registration.user.name,
+      eventTitle: registration.event.title,
+      eventDateLabel: formatDateFr(registration.event.date),
+      eventLocation: registration.event.isOnline ? "En ligne" : registration.event.location,
     });
+    if (email) await sendTransactionalEmail({ to: registration.user.email, ...email });
   } catch (err) {
     console.error("[confirmEventRegistrationPaymentCore] failed to send confirmation email", err);
   }
@@ -382,14 +369,11 @@ export async function confirmCreditPurchaseCore(
   }
 
   try {
-    await sendTransactionalEmail({
-      to: purchase.user.email,
-      subject: "Votre achat de crédits CEO Summit est confirmé",
-      react: CreditPurchaseConfirmedEmail({
-        memberName: purchase.user.name,
-        credits: purchase.credits,
-      }),
+    const email = await resolveEmail("credit-purchase-confirmed", {
+      memberName: purchase.user.name,
+      credits: purchase.credits,
     });
+    if (email) await sendTransactionalEmail({ to: purchase.user.email, ...email });
   } catch (err) {
     console.error("[confirmCreditPurchaseCore] failed to send confirmation email", err);
   }

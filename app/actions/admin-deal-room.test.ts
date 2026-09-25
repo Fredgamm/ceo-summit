@@ -8,13 +8,11 @@ vi.mock("@/lib/prisma", () => ({
     adminUser: { findUnique: vi.fn() },
     opportunity: { findUnique: vi.fn(), update: vi.fn() },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/opportunity-approved-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/opportunity-changes-requested-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/opportunity-refused-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";

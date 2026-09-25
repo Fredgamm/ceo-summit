@@ -4,12 +4,12 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     membershipApplication: { findFirst: vi.fn(), create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/request-ip", () => ({ getClientIp: vi.fn(() => "127.0.0.1") }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/application-received-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/lib/referentials-query", () => ({
   getReferentialLabels: vi.fn((type: string) =>
     Promise.resolve(type === "sector" ? ["Finance & Banque"] : ["Madagascar"])
