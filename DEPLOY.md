@@ -1,10 +1,19 @@
 # Déploiement — VPS OVH (Debian)
 
 > VPS : `vps-283e97d0.vps.ovh.ca` · IPv4 `167.114.96.153` · utilisateur `debian`
-> Déploiement **HTTP sur l'IP** pour l'instant (pas de domaine pointé) — voir
-> la section 8 pour migrer vers HTTPS plus tard sans tout refaire.
+> **En production sur `https://app.ceo-summit.mg`** (HTTPS, certificat géré par
+> le nginx **de l'hôte**, VPS partagé avec d'autres projets). Les sections
+> ci-dessous qui parlent de « HTTP sur l'IP », d'un conteneur `nginx` ou de
+> `http://167.114.96.153` décrivent le tout premier déploiement de test —
+> mise à jour sommaire du 25 septembre 2026 : voir section 9 pour l'état réel.
 
 ## 0. Vue d'ensemble
+
+> **État actuel (25 septembre 2026) :** plus de conteneur `nginx` —
+> `docker-compose.prod.yml` publie `app` et `socket` sur `127.0.0.1:3020` et
+> `127.0.0.1:3021`, et c'est le nginx de l'hôte (vhost
+> `/etc/nginx/conf.d/ceo-summit.conf`, TLS pour `app.ceo-summit.mg`) qui fait
+> le reverse proxy. Le paragraphe ci-dessous décrit la version initiale.
 
 Docker Compose fait tourner 5 conteneurs : `postgres`, `redis`, `app` (le
 site Next.js), `socket` (le serveur Socket.io autonome des salles/messagerie
@@ -139,16 +148,28 @@ openssl rand -base64 24
 
 Colle ces 3 valeurs dans `.env` (`NEXTAUTH_SECRET`,
 `MESSAGE_ENCRYPTION_KEY`, `POSTGRES_PASSWORD` **et** la même valeur dans
-`DATABASE_URL`). `NEXTAUTH_URL` et `NEXT_PUBLIC_SOCKET_URL` sont déjà
-pré-remplis avec `http://167.114.96.153` dans le modèle — laisse tel quel
-pour l'instant (IP seule, pas de domaine).
+`DATABASE_URL`). `NEXTAUTH_URL` et `NEXT_PUBLIC_SOCKET_URL` doivent valoir
+`https://app.ceo-summit.mg` (déjà le cas dans le modèle depuis le
+25 septembre 2026).
 
-Les identifiants SMTP/R2/Zoom/webhook paiement sont optionnels pour un premier
-déploiement de test — sans eux, les emails et uploads de fichiers
-échoueront proprement (comportement déjà documenté dans le projet pour
-l'environnement de dev), mais le reste de la plateforme fonctionne.
+Les identifiants R2/Zoom/webhook paiement sont optionnels pour un premier
+déploiement de test. **Le SMTP, lui, est indispensable en production** :
+sans lui, aucun email (activation, invitation, mot de passe oublié…) ne part
+— l'échec est journalisé (`[email] SMTP non configuré — email non envoyé à …`)
+mais l'utilisateur ne reçoit rien. Voir section 8 bis.
 
 ## 6. Construire et démarrer
+
+Les conteneurs `app`/`socket` tournent en utilisateur non-root `node`
+(uid 1000, voir `Dockerfile`) : le dossier hôte des uploads, monté dans
+`app` (`./.local-storage`, voir `docker-compose.prod.yml`), doit donc lui
+appartenir — sinon Docker le crée en root au premier `up` et tout upload
+échoue en `EACCES` :
+
+```bash
+mkdir -p .local-storage
+sudo chown -R 1000:1000 .local-storage
+```
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
@@ -181,18 +202,53 @@ approbation manuelle en base si tu préfères partir d'une base vide.
 ## 8. Vérifier
 
 ```bash
-curl -I http://167.114.96.153/login
+curl -I https://app.ceo-summit.mg/login
 ```
 
-Tu dois voir `HTTP/1.1 200` et les en-têtes de sécurité (`X-Frame-Options`,
-`Content-Security-Policy`, etc. — voir `AUDIT_SECURITE_CONFORMITE_ACCESSIBILITE.md`).
-Ouvre `http://167.114.96.153/login` dans un navigateur pour te connecter.
+Tu dois voir un statut `200` et les en-têtes de sécurité (`X-Frame-Options`,
+`Content-Security-Policy`, `Strict-Transport-Security`, etc. — voir
+`AUDIT_SECURITE_CONFORMITE_ACCESSIBILITE.md`). Ouvre
+`https://app.ceo-summit.mg/login` dans un navigateur pour te connecter.
 
-**Note HSTS** : le header `Strict-Transport-Security` est envoyé mais les
-navigateurs l'ignorent tant que la connexion n'est pas déjà en HTTPS — donc
-pas de souci à le laisser en place tant que c'est du HTTP pur.
+## 8 bis. Vérifier l'envoi d'emails en prod
 
-## 9. Passer en HTTPS plus tard (une fois un domaine pointé ici)
+En production, l'application **ne se replie plus sur Maildev** (qui n'existe
+pas sur le serveur) : sans SMTP configuré, chaque envoi échoue avec une
+erreur explicite dans les logs au lieu de disparaître en silence.
+
+1. Renseigner dans `/opt/ceo-summit/.env` les identifiants de la boîte mail
+   de ceo-summit.mg :
+   ```
+   SMTP_HOST="…"          # pas le placeholder smtp.exemple.mg
+   SMTP_PORT="465"        # 465 = TLS implicite ; 587 = STARTTLS
+   SMTP_USER="noreply@ceo-summit.mg"
+   SMTP_PASSWORD="…"
+   EMAIL_FROM="noreply@ceo-summit.mg"   # vide = SMTP_USER utilisé comme expéditeur
+   ```
+   Ne pas définir `MAIL_DEV_MODE` en production.
+2. Redémarrer l'application pour qu'elle relise `.env` :
+   ```bash
+   cd /opt/ceo-summit
+   docker compose -f docker-compose.prod.yml up -d app
+   ```
+3. Dans `/admin/parametres`, onglet **Intégrations** : le SMTP doit
+   apparaître « Connecté ».
+4. Test réel : « Mot de passe oublié » sur `/login` avec une adresse que tu
+   consultes, ou l'envoi test d'une campagne. En cas d'échec :
+   ```bash
+   docker compose -f docker-compose.prod.yml logs app | grep -i "\[email\]\|\[mail\]"
+   ```
+
+## 9. HTTPS — en place
+
+**Fait** : le site est servi en HTTPS sur `https://app.ceo-summit.mg`. Le
+certificat et la terminaison TLS sont gérés par le nginx de l'hôte (vhost
+`/etc/nginx/conf.d/ceo-summit.conf`, reverse proxy vers `127.0.0.1:3020`
+pour l'app et `127.0.0.1:3021` pour `/socket.io/`), pas par un conteneur.
+Renouvellement : `sudo certbot renew --dry-run` pour vérifier que le
+renouvellement automatique de l'hôte couvre bien ce domaine.
+
+_Procédure d'origine, conservée pour mémoire (conteneur nginx dédié) :_
 
 1. Chez ton registrar, crée un enregistrement DNS `A` pointant vers
    `167.114.96.153` (et idéalement un `AAAA` vers
@@ -220,6 +276,20 @@ pas de souci à le laisser en place tant que c'est du HTTP pur.
 cd /opt/ceo-summit
 git pull
 docker compose -f docker-compose.prod.yml up -d --build
+```
+
+**Une seule fois, avant le premier déploiement de l'image non-root (audit
+du 25 septembre 2026)** — `.local-storage` a été rempli jusqu'ici par un
+conteneur root : ses fichiers/dossiers appartiennent à root et l'utilisateur
+`node` (uid 1000) du nouveau conteneur ne pourrait plus y écrire. À lancer
+_avant_ que la CI ne déploie cette version (ou juste avant le `up -d
+--build` manuel) :
+
+```bash
+cd /opt/ceo-summit
+sudo chown -R 1000:1000 .local-storage
+# sans sudo (l'utilisateur est dans le groupe docker) :
+# docker run --rm -v "$PWD/.local-storage:/d" alpine chown -R 1000:1000 /d
 ```
 
 ## 11. Sauvegardes — Postgres + fichiers uploadés
@@ -353,8 +423,9 @@ Secret HMAC : `PAYMENT_WEBHOOK_SECRET` (voir `.env.example`).
 - **CI/CD en place** (`E0-T04`) mais nécessite la configuration manuelle
   ponctuelle de la section 12 (clé SSH + secrets GitHub) pour être actif.
 - **Pas de sauvegarde automatique** — voir section 11.
-- **Rate limiting toujours absent** (`EX-T01`, voir l'audit sécurité) — à
-  garder en tête avant une exposition publique large.
-- **Emails/uploads de fichiers inertes tant que SMTP/R2 ne sont pas
-  configurés** dans `.env` — comportement déjà documenté pour
-  l'environnement de dev, identique ici.
+- **Rate limiting** : en place sur les points sensibles (connexion,
+  webhooks — 60 requêtes/min/IP sur `/api/webhooks/payments`, etc.), adossé
+  à Redis.
+- **Emails en échec tant que le SMTP n'est pas configuré** dans `.env`
+  (erreur explicite dans les logs, voir section 8 bis) ; uploads de fichiers
+  sur disque local tant que R2 n'est pas configuré.
