@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, User, Building2 } from "lucide-react";
@@ -25,9 +26,7 @@ export function MobileHeader() {
 
   return (
     <header className="fixed inset-x-0 top-0 z-[200] flex items-center justify-between border-b border-border bg-white px-4 pt-[env(safe-area-inset-top,6px)] md:hidden">
-      <span className="text-sm font-extrabold text-navy">
-        CEO<span className="text-gold">Summit</span>
-      </span>
+      <Image src="/logo/ceo-summit-logo.png" alt="CEO Summit" width={90} height={43} priority />
       <nav className="flex items-center gap-1" aria-label="Navigation rapide">
         {ITEMS.map((item) => {
           const active = pathname.startsWith(item.href);
