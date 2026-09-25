@@ -75,7 +75,14 @@ export default async function MessagerieLayout({ children }: { children: React.R
       }}
       badges={{ messages: totalUnread || undefined }}
     >
-      <div className="flex h-[calc(100vh-140px)] overflow-hidden rounded-lg border border-border bg-white">
+      {/* Audit mobile 22 sept. 2026 (conception/14 §2) — 100dvh (dynamic
+          viewport height) s'ajuste à la barre d'adresse mobile qui
+          apparaît/disparaît au scroll, contrairement à 100vh (statique) qui
+          cassait la mise en page sur mobile ; même correctif déjà appliqué à
+          components/rooms/room-chat.tsx pour le même type d'écran (fil de
+          discussion plein écran). 100vh classique à partir de md: (desktop,
+          où dvh n'apporte rien). */}
+      <div className="flex h-[calc(100dvh-140px)] overflow-hidden rounded-lg border border-border bg-white md:h-[calc(100vh-140px)]">
         <SplitPane
           variant="list"
           className="flex w-full shrink-0 flex-col border-r border-border md:w-[300px]"
