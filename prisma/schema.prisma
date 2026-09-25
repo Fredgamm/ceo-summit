@@ -201,6 +201,11 @@ model User {
   onboardingCompletedAt DateTime?
   /// E8-T04 — internal admin note on this member, visible only in /admin/membres/[id].
   adminNote             String?   @db.Text
+  /// Audit sécurité (25 septembre 2026) — horodatage du dernier changement
+  /// de mot de passe (réinitialisation). Toute session JWT ouverte avant
+  /// cette date est refusée par `requireViewer()` (lib/require-viewer.ts),
+  /// qui compare à `session.user.loginAt` (auth.config.ts).
+  passwordChangedAt     DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

@@ -47,6 +47,51 @@ describe("checkRateLimit", () => {
     });
   });
 
+  /**
+   * 25 septembre 2026 (audit MVP) — un Redis en erreur ouvrait auparavant
+   * tout ("fail open") : faire tomber Redis désactivait l'anti-brute-force.
+   */
+  describe("when Redis errors", () => {
+    let errorSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      process.env.REDIS_URL = "redis://localhost:6379";
+      redisMock.incr.mockRejectedValue(new Error("MISCONF"));
+      errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      errorSpy.mockRestore();
+    });
+
+    it("falls back to the in-memory counter instead of allowing everything", async () => {
+      vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+      const key = `test:${Math.random()}`;
+
+      expect(await checkRateLimit(key, 2, 60)).toEqual({ allowed: true, retryAfterSec: 0 });
+      expect(await checkRateLimit(key, 2, 60)).toEqual({ allowed: true, retryAfterSec: 0 });
+      const result = await checkRateLimit(key, 2, 60);
+
+      expect(result.allowed).toBe(false);
+      expect(result.retryAfterSec).toBeGreaterThan(0);
+    });
+
+    it("logs the Redis failure at most once per interval", async () => {
+      vi.setSystemTime(new Date("2031-01-01T00:00:00Z"));
+
+      await checkRateLimit(`test:${Math.random()}`, 5, 60);
+      await checkRateLimit(`test:${Math.random()}`, 5, 60);
+      await checkRateLimit(`test:${Math.random()}`, 5, 60);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(new Date("2031-01-01T00:01:01Z"));
+      await checkRateLimit(`test:${Math.random()}`, 5, 60);
+      expect(errorSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("without REDIS_URL (in-memory fallback)", () => {
     beforeEach(() => {
       delete process.env.REDIS_URL;

@@ -44,9 +44,26 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
  * n'importe quelle valeur — seul un chemin relatif à cette origine
  * (commençant par un unique `/`, jamais `//` qui est protocol-relative) est
  * désormais accepté.
+ *
+ * 25 septembre 2026 (audit MVP) — `/\evil.example` passait ce contrôle,
+ * or les navigateurs normalisent `\` en `/` (→ `//evil.example`,
+ * protocol-relative), tout comme ils suppriment tabulations et retours à la
+ * ligne (`/\t/evil.example`). Refus désormais de tout antislash et de tout
+ * caractère de contrôle, puis contre-vérification que l'URL résolue reste
+ * bien sur l'origine courante.
  */
-function sanitizeCallbackUrl(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+const SAFE_CALLBACK_FALLBACK = "/dashboard";
+
+export function sanitizeCallbackUrl(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return SAFE_CALLBACK_FALLBACK;
+  // eslint-disable-next-line no-control-regex -- caractères de contrôle volontairement refusés
+  if (/[\\\u0000-\u001f\u007f]/.test(raw)) return SAFE_CALLBACK_FALLBACK;
+  try {
+    const base = "http://callback.invalid";
+    if (new URL(raw, base).origin !== base) return SAFE_CALLBACK_FALLBACK;
+  } catch {
+    return SAFE_CALLBACK_FALLBACK;
+  }
   return raw;
 }
 

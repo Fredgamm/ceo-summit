@@ -3,9 +3,9 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadObject } from "@/lib/r2";
+import { requireViewer } from "@/lib/require-viewer";
 import {
   AVATAR_ALLOWED_MIME_TYPES,
   AVATAR_MAX_BYTES,
@@ -24,10 +24,13 @@ import {
  * directly to R2, specifically so the resize can't be bypassed.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  // Audit sécurité (25 septembre 2026) — relit `User.status` (et la date de
+  // changement de mot de passe) en base plutôt que de se fier au seul JWT.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) {
+    return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
+  const { viewer } = viewerResult;
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -51,7 +54,7 @@ export async function POST(req: Request) {
     .jpeg({ quality: 85 })
     .toBuffer();
 
-  const key = `avatars/${session.user.id}/${randomUUID()}.jpg`;
+  const key = `avatars/${viewer.id}/${randomUUID()}.jpg`;
   const url = await uploadObject({
     bucket: process.env.R2_BUCKET_AVATARS ?? "ceo-summit-avatars",
     key,
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
     contentType: "image/jpeg",
   });
 
-  await prisma.user.update({ where: { id: session.user.id }, data: { avatarUrl: url } });
+  await prisma.user.update({ where: { id: viewer.id }, data: { avatarUrl: url } });
 
   return NextResponse.json({ data: { url } }, { status: 200 });
 }

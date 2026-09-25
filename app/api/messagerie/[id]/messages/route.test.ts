@@ -5,6 +5,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversation: { findUnique: vi.fn() },
     message: { findFirst: vi.fn(), findMany: vi.fn() },
+    user: { findUnique: vi.fn() },
   },
 }));
 vi.mock("@/lib/message-crypto", () => ({
@@ -30,6 +31,10 @@ describe("GET /api/messagerie/[id]/messages", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "ACTIVE",
+    } as never);
     vi.mocked(prisma.conversation.findUnique).mockResolvedValue({
       id: "conv_1",
       member1Id: "user_1",

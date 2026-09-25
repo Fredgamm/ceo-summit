@@ -2,11 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireViewer } from "@/lib/require-viewer";
 import { generateSecureToken, COMPANY_INVITE_TTL_MS } from "@/lib/tokens";
-import { seatCap } from "@/lib/company-seats";
+import {
+  seatCap,
+  countUsedSeats,
+  INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE,
+} from "@/lib/company-seats";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
@@ -18,7 +23,97 @@ import CompanyInviteEmail from "@/emails/company-invite-email";
 import CompanyCollaboratorWelcomeEmail from "@/emails/company-collaborator-welcome-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 
-type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+/**
+ * `warning` (audit du 25 septembre 2026) — succès partiel à signaler à
+ * l'utilisateur sans annuler l'action (ex. invitation créée mais email non
+ * parti) : jusqu'ici, ces échecs étaient seulement loggués côté serveur et
+ * le gestionnaire croyait l'email envoyé.
+ */
+type ActionResult<T = undefined> =
+  { success: true; data: T; warning?: string } | { success: false; error: string };
+
+const INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_ERROR = INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE;
+const INVITE_EMAIL_FAILED_WARNING =
+  "L'invitation est créée mais l'email n'a pas pu être envoyé — utilisez Renvoyer ou partagez le lien.";
+const EXISTING_ACCOUNT_ERROR =
+  "Un compte existe déjà avec cet email — connectez-vous puis contactez l'admin de l'entreprise pour être rattaché.";
+
+class InviteAlreadyConsumedError extends Error {}
+
+type SubscriptionForEvent = {
+  status: Parameters<typeof computeEffectiveStatus>[0];
+  plan: { id: string; eventId: string | null; event?: { date: Date } | null };
+};
+
+/** Évènement de l'offre si l'abonnement est `ACTIVE` (statut effectif, RG-12), sinon `null`. */
+function activeEventOf(subscription: SubscriptionForEvent | null | undefined) {
+  if (!subscription) return null;
+  const effectiveStatus = computeEffectiveStatus(
+    subscription.status,
+    subscription.plan.event?.date
+  );
+  if (effectiveStatus !== "ACTIVE" || !subscription.plan.eventId) return null;
+  return { eventId: subscription.plan.eventId, planId: subscription.plan.id };
+}
+
+/**
+ * Inscription d'un membre de l'entreprise à l'évènement de son offre —
+ * mécanique RG-14 d'`acceptCompanyInvite` (verrou + capacité, voir plus
+ * bas), partagée depuis le 25 septembre 2026 avec `setAdminParticipates`.
+ * `null` si l'évènement est complet (ou introuvable). `wasConfirmed` :
+ * l'inscription était déjà confirmée avant l'appel (aucun email à renvoyer).
+ */
+async function registerCompanyMemberToEvent(userId: string, eventId: string, planId: string) {
+  return withEventRegistrationLock(eventId, async () => {
+    const existingRegistration = await prisma.eventRegistration.findUnique({
+      where: { eventId_userId: { eventId, userId } },
+    });
+    const [event, takenSpots] = await Promise.all([
+      prisma.event.findUnique({ where: { id: eventId } }),
+      prisma.eventRegistration.count({
+        where: { eventId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } },
+      }),
+    ]);
+    // Une inscription annulée ne réserve plus de place : comme une
+    // nouvelle, elle doit tenir dans la capacité restante.
+    const holdsSpot = existingRegistration != null && existingRegistration.status !== "CANCELLED";
+    const hasRoom = holdsSpot || !event || takenSpots < event.capacity;
+    if (!hasRoom || !event) return null;
+
+    const registration = await prisma.eventRegistration.upsert({
+      where: { eventId_userId: { eventId, userId } },
+      update: { status: "CONFIRMED", paymentStatus: "PAID", planId },
+      create: { eventId, userId, status: "CONFIRMED", paymentStatus: "PAID", planId },
+    });
+    return {
+      registration,
+      event,
+      wasConfirmed: existingRegistration?.status === "CONFIRMED",
+    };
+  });
+}
+
+async function sendEventRegistrationEmail(
+  user: { email: string; name: string },
+  event: { title: string; date: Date; isOnline: boolean; location: string },
+  logPrefix: string
+) {
+  try {
+    await sendTransactionalEmail({
+      to: user.email,
+      subject: `Inscription confirmée — ${event.title}`,
+      react: EventRegistrationEmail({
+        memberName: user.name,
+        eventTitle: event.title,
+        eventDateLabel: formatDateFr(event.date),
+        eventLocation: event.isOnline ? "En ligne" : event.location,
+        requiresManualValidation: false,
+      }),
+    });
+  } catch (err) {
+    console.error(`[${logPrefix}] failed to send event registration email`, err);
+  }
+}
 
 /**
  * 22 septembre 2026 (`conception/12` §3.3) — case « Je participe » : bascule
@@ -27,17 +122,31 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * participant après coup, une fois le plafond atteint par ailleurs, doit
  * pouvoir le faire (c'est à lui de retirer un collaborateur si besoin,
  * pas à cette action de le faire à sa place).
+ *
+ * Audit (25 septembre 2026) — la case ne changeait que le décompte des
+ * places : un gestionnaire qui la cochait après la validation du paiement
+ * n'était jamais inscrit à l'évènement, et celui qui la décochait restait
+ * inscrit. Une fois l'abonnement `ACTIVE` et lié à un évènement, elle
+ * pilote aussi son `EventRegistration` : cocher l'inscrit (même mécanique
+ * qu'`acceptCompanyInvite`, capacité de l'évènement vérifiée — toujours pas
+ * le plafond de l'offre), décocher annule son inscription (comme
+ * `cancelEventRegistration` : statut `CANCELLED`, jamais une inscription
+ * déjà enregistrée sur place).
  */
 export async function setAdminParticipates(
   companyId: string,
   participates: boolean
 ): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
-  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    include: { subscription: { include: { plan: { include: { event: true } } } } },
+  });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== session.user.id) {
+  if (company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut modifier ce choix." };
   }
 
@@ -46,27 +155,59 @@ export async function setAdminParticipates(
     data: { adminParticipates: participates },
   });
 
+  let warning: string | undefined;
+  const activeEvent = activeEventOf(company.subscription);
+  if (activeEvent) {
+    if (participates) {
+      const outcome = await registerCompanyMemberToEvent(
+        viewer.id,
+        activeEvent.eventId,
+        activeEvent.planId
+      );
+      if (!outcome) {
+        warning =
+          "Votre choix est enregistré, mais l'évènement est complet : vous n'avez pas pu y être inscrit(e). Contactez l'équipe CEO Summit.";
+      } else if (!outcome.wasConfirmed) {
+        await sendEventRegistrationEmail(viewer, outcome.event, "setAdminParticipates");
+      }
+    } else {
+      await prisma.eventRegistration.updateMany({
+        where: {
+          eventId: activeEvent.eventId,
+          userId: viewer.id,
+          status: { not: "CANCELLED" },
+          checkedIn: false,
+        },
+        data: { status: "CANCELLED" },
+      });
+    }
+  }
+
   revalidatePath(`/entreprises/${companyId}`);
-  return { success: true, data: undefined };
+  return { success: true, data: undefined, ...(warning ? { warning } : {}) };
 }
 
 /**
  * Phase 2 offres/paiement (30 juillet 2026) — seul l'admin entreprise invite.
- * Le plafond de collaborateurs (Plan.maxTeamMembers) est appliqué dès
- * l'invitation, pas seulement au paiement (décision explicite du plan) —
- * mais seulement une fois qu'une offre est réellement choisie : avant ça, un
- * plafond n'a pas encore de sens (l'entreprise n'a pas encore de plan actif).
+ * Le plafond de collaborateurs (`seatCap`) est appliqué dès l'invitation,
+ * pas seulement à l'acceptation.
+ *
+ * Audit (25 septembre 2026) — n'est plus ouvert qu'une fois l'abonnement
+ * `ACTIVE` (collaborateurs rassemblés après paiement, BACKLOG_MVP §3), et le
+ * décompte des places passe par `countUsedSeats`, partagé avec
+ * `resendInvite`, `acceptCompanyInvite` et la page Gestion.
  */
 export async function inviteTeammate(companyId: string, input: unknown): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    include: { subscription: { include: { plan: true } } },
+    include: { subscription: { include: { plan: { include: { event: true } } } } },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== session.user.id) {
+  if (company.companyAdminId !== viewer.id) {
     return {
       success: false,
       error: "Seul l'admin de l'entreprise peut inviter des collaborateurs.",
@@ -79,27 +220,21 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   }
   const email = parsed.data.email.toLowerCase();
 
-  const applicableCap = company.subscription ? seatCap(company.subscription) : null;
+  const subscription = company.subscription;
+  const effectiveStatus = subscription
+    ? computeEffectiveStatus(subscription.status, subscription.plan.event?.date)
+    : null;
+  if (!subscription || effectiveStatus !== "ACTIVE") {
+    return { success: false, error: INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_ERROR };
+  }
+
+  const applicableCap = seatCap(subscription);
   if (applicableCap != null) {
-    const [memberCount, pendingInviteCount] = await Promise.all([
-      // 22 septembre 2026 (`conception/12` §3.3) — le gestionnaire ne
-      // consomme une place que s'il a coché « Je participe » ; ce n'est
-      // sinon qu'un compte admin, pas un participant à l'évènement.
-      prisma.user.count({
-        where: {
-          companyId,
-          ...(company.adminParticipates ? {} : { id: { not: company.companyAdminId } }),
-        },
-      }),
-      // Une invitation expirée jamais acceptée ne doit plus occuper de siège.
-      prisma.companyInvite.count({
-        where: { companyId, status: "PENDING", expiresAt: { gt: new Date() } },
-      }),
-    ]);
-    if (memberCount + pendingInviteCount >= applicableCap) {
+    const usedSeats = await countUsedSeats(company);
+    if (usedSeats >= applicableCap) {
       return {
         success: false,
-        error: `Plafond de ${applicableCap} participant(s) atteint pour l'offre actuelle. Pour ajouter d'autres participants, veuillez choisir une offre ci-dessous.`,
+        error: `Plafond de ${applicableCap} participant(s) atteint pour l'offre actuelle. Pour ajouter d'autres participants, achetez des places supplémentaires depuis cet onglet Gestion, ou contactez l'équipe CEO Summit.`,
       };
     }
   }
@@ -121,13 +256,14 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
       companyId,
       email,
       name: parsed.data.name,
-      invitedById: session.user.id,
+      invitedById: viewer.id,
       token,
       expiresAt: new Date(Date.now() + COMPANY_INVITE_TTL_MS),
     },
   });
 
   const inviteUrl = `${process.env.NEXTAUTH_URL}/invitation/${token}`;
+  let warning: string | undefined;
   try {
     await sendTransactionalEmail({
       to: email,
@@ -141,25 +277,27 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   } catch (err) {
     // L'invitation existe déjà en base à ce stade — un échec d'envoi ne doit
     // pas faire échouer l'action (même bug de classe que celui corrigé sur
-    // signup() le 1er août 2026 : une dépendance Resend synchrone et non
-    // rattrapée bloquait un flux qui n'a pas besoin d'être bloquant).
+    // signup() le 1er août 2026). Audit (25 septembre 2026) — mais il est
+    // désormais signalé : le gestionnaire croyait jusqu'ici l'email parti.
     console.error("[inviteTeammate] failed to send invite email", err);
+    warning = INVITE_EMAIL_FAILED_WARNING;
   }
 
   revalidatePath(`/entreprises/${companyId}`);
-  return { success: true, data: undefined };
+  return { success: true, data: undefined, ...(warning ? { warning } : {}) };
 }
 
 export async function revokeInvite(inviteId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const invite = await prisma.companyInvite.findUnique({
     where: { id: inviteId },
     include: { company: true },
   });
   if (!invite) return { success: false, error: "Invitation introuvable." };
-  if (invite.company.companyAdminId !== session.user.id) {
+  if (invite.company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut révoquer une invitation." };
   }
   if (invite.status !== "PENDING") {
@@ -178,21 +316,50 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
  * `inviteTeammate` refuse une deuxième invitation en attente pour le même
  * email. Régénère le token et l'expiration de l'invitation existante et
  * renvoie le même email, sans passer par cette étape.
+ *
+ * Audit (25 septembre 2026) — mêmes conditions qu'`inviteTeammate`
+ * (abonnement `ACTIVE`, plafond) : renvoyer une invitation expirée — qui ne
+ * comptait donc plus — permettait de dépasser le nombre de places. Le
+ * décompte se fait hors de cette invitation-ci, qui doit y tenir : pour une
+ * invitation encore valide (déjà comptée), cela revient à n'échouer que si
+ * l'entreprise est déjà au-delà du plafond.
  */
 export async function resendInvite(inviteId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const invite = await prisma.companyInvite.findUnique({
     where: { id: inviteId },
-    include: { company: true },
+    include: {
+      company: { include: { subscription: { include: { plan: { include: { event: true } } } } } },
+    },
   });
   if (!invite) return { success: false, error: "Invitation introuvable." };
-  if (invite.company.companyAdminId !== session.user.id) {
+  if (invite.company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut renvoyer une invitation." };
   }
   if (invite.status !== "PENDING") {
     return { success: false, error: "Cette invitation n'est plus en attente." };
+  }
+
+  const subscription = invite.company.subscription;
+  const effectiveStatus = subscription
+    ? computeEffectiveStatus(subscription.status, subscription.plan.event?.date)
+    : null;
+  if (!subscription || effectiveStatus !== "ACTIVE") {
+    return { success: false, error: INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_ERROR };
+  }
+
+  const applicableCap = seatCap(subscription);
+  if (applicableCap != null) {
+    const otherSeats = await countUsedSeats(invite.company, { excludeInviteId: invite.id });
+    if (otherSeats >= applicableCap) {
+      return {
+        success: false,
+        error: `Plafond de ${applicableCap} participant(s) atteint pour l'offre actuelle — cette invitation ne peut pas être renvoyée sans place disponible.`,
+      };
+    }
   }
 
   const token = generateSecureToken();
@@ -237,7 +404,9 @@ export async function acceptCompanyInvite(
 ): Promise<ActionResult<{ email: string }>> {
   const invite = await prisma.companyInvite.findUnique({
     where: { token },
-    include: { company: { select: { name: true } } },
+    include: {
+      company: { select: { id: true, name: true, companyAdminId: true, adminParticipates: true } },
+    },
   });
   if (!invite) return { success: false, error: "Invitation introuvable." };
   if (invite.status === "REVOKED")
@@ -263,30 +432,75 @@ export async function acceptCompanyInvite(
 
   const existingUser = await prisma.user.findUnique({ where: { email: invite.email } });
   if (existingUser) {
-    return {
-      success: false,
-      error:
-        "Un compte existe déjà avec cet email — connectez-vous puis contactez l'admin de l'entreprise pour être rattaché.",
-    };
+    return { success: false, error: EXISTING_ACCOUNT_ERROR };
+  }
+
+  const subscription = await prisma.companySubscription.findUnique({
+    where: { companyId: invite.companyId },
+    include: { plan: { include: { event: { select: { date: true } } } } },
+  });
+
+  /**
+   * Audit (25 septembre 2026) — même décompte que `inviteTeammate`
+   * (`countUsedSeats`) : l'invitation acceptée occupe déjà sa place, mais
+   * ne doit pas faire dépasser le plafond si celui-ci a baissé entre-temps
+   * (changement d'offre, gestionnaire devenu participant).
+   */
+  const applicableCap = subscription ? seatCap(subscription) : null;
+  if (applicableCap != null) {
+    const otherSeats = await countUsedSeats(
+      {
+        id: invite.companyId,
+        companyAdminId: invite.company.companyAdminId,
+        adminParticipates: invite.company.adminParticipates,
+      },
+      { excludeInviteId: invite.id }
+    );
+    if (otherSeats >= applicableCap) {
+      return {
+        success: false,
+        error:
+          "Toutes les places de l'offre de votre entreprise sont déjà attribuées — contactez l'admin de l'entreprise.",
+      };
+    }
   }
 
   const passwordHash = await bcrypt.hash(parsedPassword.data.password, BCRYPT_ROUNDS);
 
-  const [newUser] = await prisma.$transaction([
-    prisma.user.create({
-      data: {
-        name: invite.name,
-        email: invite.email,
-        companyId: invite.companyId,
-        passwordHash,
-        status: "ACTIVE",
-      },
-    }),
-    prisma.companyInvite.update({
-      where: { id: invite.id },
-      data: { status: "ACCEPTED", acceptedAt: new Date() },
-    }),
-  ]);
+  /**
+   * Audit (25 septembre 2026) — deux acceptations concurrentes du même lien
+   * (double clic, deux onglets) passaient toutes deux les vérifications
+   * ci-dessus : l'invitation n'est désormais consommée que si elle est
+   * encore `PENDING` (updateMany + count, dans la transaction), et la
+   * contrainte d'unicité sur l'email renvoie un message au lieu d'une 500.
+   */
+  let newUser: { id: string; email: string; name: string };
+  try {
+    newUser = await prisma.$transaction(async (tx) => {
+      const { count } = await tx.companyInvite.updateMany({
+        where: { id: invite.id, status: "PENDING" },
+        data: { status: "ACCEPTED", acceptedAt: new Date() },
+      });
+      if (count === 0) throw new InviteAlreadyConsumedError();
+      return tx.user.create({
+        data: {
+          name: invite.name,
+          email: invite.email,
+          companyId: invite.companyId,
+          passwordHash,
+          status: "ACTIVE",
+        },
+      });
+    });
+  } catch (err) {
+    if (err instanceof InviteAlreadyConsumedError) {
+      return { success: false, error: "Cette invitation a déjà été acceptée." };
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { success: false, error: EXISTING_ACCOUNT_ERROR };
+    }
+    throw err;
+  }
 
   /**
    * 22 septembre 2026 (audit des emails transactionnels) — envoyé
@@ -319,76 +533,27 @@ export async function acceptCompanyInvite(
    * seulement si l'abonnement est encore ACTIVE (pas EXPIRED : inscrire
    * quelqu'un à une édition déjà passée n'a pas de sens).
    *
-   * Correctif (7 août 2026, audit) — deux trous corrigés ensemble :
-   * (1) le statut lu ici était le statut brut en base, jamais rafraîchi
-   * sans qu'un admin entreprise revisite `selectPlan` — une souscription
-   * restée `ACTIVE` par oubli après la date de l'évènement (RG-12)
-   * inscrivait silencieusement le nouveau collaborateur à une édition déjà
-   * passée. Utilise désormais `computeEffectiveStatus`, comme
-   * `selectPlan`. (2) aucune vérification de capacité ni verrou n'existait
-   * ici, contrairement à `registerForEvent` — un collaborateur pouvait
-   * pousser un évènement au-delà de sa capacité. Sérialisé par
-   * `withEventRegistrationLock`, capacité vérifiée avant inscription ; si
-   * l'évènement est complet, l'invitation est tout de même acceptée
-   * (l'entreprise a payé pour ce collaborateur) mais celui-ci n'est pas
-   * inscrit à l'évènement — cas limite qui nécessitera un suivi manuel
-   * admin, préférable à un dépassement silencieux de capacité.
+   * Correctif (7 août 2026, audit) — statut effectif (`computeEffectiveStatus`,
+   * RG-12) plutôt que le statut brut en base, et inscription sérialisée par
+   * `withEventRegistrationLock` avec vérification de capacité (voir
+   * `registerCompanyMemberToEvent`) ; si l'évènement est complet,
+   * l'invitation est tout de même acceptée (l'entreprise a payé pour ce
+   * collaborateur) mais celui-ci n'est pas inscrit — cas limite qui
+   * nécessitera un suivi manuel admin, préférable à un dépassement
+   * silencieux de capacité.
    *
-   * Correctif (7 août 2026) — l'inscription était créée silencieusement :
-   * aucun email n'informait jamais le collaborateur qu'il était inscrit,
-   * ni ne lui transmettait son badge/QR (contrairement à `registerForEvent`,
-   * qui envoie systématiquement `EventRegistrationEmail`). Même envoi ici,
-   * en dehors du verrou (l'email n'a pas besoin de tenir le verrou de
-   * capacité) et sans bloquer l'acceptation de l'invitation en cas
-   * d'échec d'envoi (même principe que partout ailleurs dans ce fichier).
+   * Correctif (7 août 2026) — email de confirmation d'inscription envoyé
+   * hors du verrou, sans bloquer l'acceptation en cas d'échec d'envoi.
    */
-  const subscription = await prisma.companySubscription.findUnique({
-    where: { companyId: invite.companyId },
-    include: { plan: { include: { event: { select: { date: true } } } } },
-  });
-  const effectiveStatus = subscription
-    ? computeEffectiveStatus(subscription.status, subscription.plan.event?.date)
-    : null;
-  if (effectiveStatus === "ACTIVE" && subscription!.plan.eventId) {
-    const eventId = subscription!.plan.eventId;
-    const planId = subscription!.plan.id;
-    const outcome = await withEventRegistrationLock(eventId, async () => {
-      const existingRegistration = await prisma.eventRegistration.findUnique({
-        where: { eventId_userId: { eventId, userId: newUser.id } },
-      });
-      const [event, takenSpots] = await Promise.all([
-        prisma.event.findUnique({ where: { id: eventId } }),
-        prisma.eventRegistration.count({
-          where: { eventId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } },
-        }),
-      ]);
-      const hasRoom = existingRegistration || !event || takenSpots < event.capacity;
-      if (!hasRoom || !event) return null;
-
-      const registration = await prisma.eventRegistration.upsert({
-        where: { eventId_userId: { eventId, userId: newUser.id } },
-        update: { status: "CONFIRMED", paymentStatus: "PAID", planId },
-        create: { eventId, userId: newUser.id, status: "CONFIRMED", paymentStatus: "PAID", planId },
-      });
-      return { registration, event };
-    });
-
+  const activeEvent = activeEventOf(subscription);
+  if (activeEvent) {
+    const outcome = await registerCompanyMemberToEvent(
+      newUser.id,
+      activeEvent.eventId,
+      activeEvent.planId
+    );
     if (outcome) {
-      try {
-        await sendTransactionalEmail({
-          to: newUser.email,
-          subject: `Inscription confirmée — ${outcome.event.title}`,
-          react: EventRegistrationEmail({
-            memberName: newUser.name,
-            eventTitle: outcome.event.title,
-            eventDateLabel: formatDateFr(outcome.event.date),
-            eventLocation: outcome.event.isOnline ? "En ligne" : outcome.event.location,
-            requiresManualValidation: false,
-          }),
-        });
-      } catch (err) {
-        console.error("[acceptCompanyInvite] failed to send event registration email", err);
-      }
+      await sendEventRegistrationEmail(newUser, outcome.event, "acceptCompanyInvite");
     }
   }
 

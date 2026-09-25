@@ -9,10 +9,16 @@ import { countUnreadMessages } from "@/lib/conversations";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
-import { seatCap } from "@/lib/company-seats";
+import {
+  seatCap,
+  countUsedSeats,
+  INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE,
+} from "@/lib/company-seats";
+import { safeHref } from "@/lib/normalize-url";
 import { UPSELL_ELIGIBLE_WHERE } from "@/lib/upsell-plans";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -84,17 +90,31 @@ export default async function CompanyProfilePage({
 
   const isCompanyAdmin = company.companyAdminId === viewer.id;
   const applicableCap = company.subscription ? seatCap(company.subscription) : null;
-  // 22 septembre 2026 (`conception/12` §3.3) — le gestionnaire ne consomme
-  // une place que s'il a coché « Je participe ».
-  const usedSeats =
-    company.users.filter((u) => company.adminParticipates || u.id !== company.companyAdminId)
-      .length + company.invites.length;
+  // Audit (25 septembre 2026) — même décompte que `inviteTeammate`
+  // (`countUsedSeats`) : jusqu'ici, la page ne comptait que les comptes
+  // ACTIVE et toutes les invitations PENDING, même expirées, et affichait
+  // donc un autre total que celui qui bloquait réellement l'invitation.
+  const usedSeats = isCompanyAdmin ? await countUsedSeats(company) : 0;
   const upsellPlans = isCompanyAdmin
     ? await prisma.plan.findMany({
         where: UPSELL_ELIGIBLE_WHERE,
         orderBy: { displayOrder: "asc" },
       })
     : [];
+  // Audit (25 septembre 2026) — un seul supplément en attente à la fois
+  // (voir `purchaseUpsellSeats`) : affiché à la place du formulaire.
+  const pendingUpsellPayment =
+    isCompanyAdmin && company.subscription
+      ? await prisma.companyPayment.findFirst({
+          where: {
+            companySubscriptionId: company.subscription.id,
+            status: "PENDING",
+            upsellQuantity: { not: null },
+          },
+          select: { upsellQuantity: true },
+        })
+      : null;
+  const websiteHref = safeHref(company.website);
   // Deep-link support (?tab=gestion) so links elsewhere (e.g. the
   // dashboard's "Mon équipe" widget) can land directly on a specific tab —
   // "gestion" only honored for the company admin, who's the only one who
@@ -131,9 +151,9 @@ export default async function CompanyProfilePage({
           <p className="text-sm text-text-muted">
             {[company.sector, company.country].filter(Boolean).join(" · ")}
           </p>
-          {company.website && (
+          {websiteHref && (
             <a
-              href={company.website}
+              href={websiteHref}
               target="_blank"
               rel="noreferrer"
               className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-navy-mid"
@@ -268,28 +288,50 @@ export default async function CompanyProfilePage({
                     participates={company.adminParticipates}
                   />
                 </div>
-                <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
+                {/* Audit (25 septembre 2026) — collaborateurs rassemblés après
+                    paiement (BACKLOG_MVP §3), comme `inviteTeammate`. */}
+                {subscriptionStatus === "ACTIVE" ? (
+                  <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
+                ) : (
+                  <Alert>
+                    <AlertDescription>
+                      {INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE}
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
 
               {company.subscription &&
-                (subscriptionStatus === "ACTIVE" || subscriptionStatus === "EXPIRED") &&
-                upsellPlans.length > 0 &&
-                applicableCap != null &&
-                usedSeats >= applicableCap && (
+                subscriptionStatus === "ACTIVE" &&
+                (pendingUpsellPayment ? (
                   <div className="rounded-lg border border-border bg-white p-5">
                     <h2 className="mb-1 text-sm font-bold text-navy">
                       Ajouter des places supplémentaires
                     </h2>
-                    <p className="mb-3 text-xs text-text-muted">
-                      Vous avez atteint les {applicableCap} place(s) de votre offre. Pour ajouter
-                      d&apos;autres participants, veuillez choisir une offre ci-dessous.
+                    <p className="text-sm text-text-mid">
+                      Supplément de {pendingUpsellPayment.upsellQuantity} place(s) en attente de
+                      validation.
                     </p>
-                    <UpsellPurchaseForm
-                      companySubscriptionId={company.subscription.id}
-                      upsellPlans={upsellPlans}
-                    />
                   </div>
-                )}
+                ) : (
+                  upsellPlans.length > 0 &&
+                  applicableCap != null &&
+                  usedSeats >= applicableCap && (
+                    <div className="rounded-lg border border-border bg-white p-5">
+                      <h2 className="mb-1 text-sm font-bold text-navy">
+                        Ajouter des places supplémentaires
+                      </h2>
+                      <p className="mb-3 text-xs text-text-muted">
+                        Vous avez atteint les {applicableCap} place(s) de votre offre. Pour ajouter
+                        d&apos;autres participants, veuillez choisir une offre ci-dessous.
+                      </p>
+                      <UpsellPurchaseForm
+                        companySubscriptionId={company.subscription.id}
+                        upsellPlans={upsellPlans}
+                      />
+                    </div>
+                  )
+                ))}
             </div>
           </TabsContent>
         )}

@@ -39,15 +39,35 @@ export async function checkRateLimit(
     } catch (err) {
       // 15 septembre 2026 — un Redis en échec d'écriture (MISCONF disque
       // plein/permissions, vu en prod) faisait planter tout appelant
-      // (signup, login, etc.) avec une 500, alors qu'un simple garde-fou
-      // anti-abus ne doit jamais bloquer un usage légitime : on ouvre plutôt
-      // que de casser, même compromis que la dégradation "pas de Redis"
-      // ci-dessous.
-      console.error("[rate-limit] Redis error, failing open", err);
-      return { allowed: true, retryAfterSec: 0 };
+      // (signup, login, etc.) avec une 500. On avait alors choisi d'ouvrir
+      // ("fail open") plutôt que de casser.
+      //
+      // 25 septembre 2026 (audit MVP) — "fail open" voulait dire qu'un
+      // attaquant capable de faire tomber (ou simplement de saturer) Redis
+      // désactivait d'un coup tout l'anti-brute-force du login. On retombe
+      // désormais sur le compteur mémoire ci-dessous : garde-fou
+      // mono-instance seulement, mais jamais "tout autoriser", et toujours
+      // sans 500 pour l'usage légitime.
+      logRedisFailure(err);
     }
   }
 
+  return checkMemoryRateLimit(key, limit, windowSec);
+}
+
+// Un Redis en panne est appelé à chaque requête — sans ce throttle, un
+// `console.error` par appel noierait les logs de production.
+const REDIS_ERROR_LOG_INTERVAL_MS = 60 * 1000;
+let lastRedisErrorLoggedAt = -Infinity;
+
+function logRedisFailure(err: unknown): void {
+  const now = Date.now();
+  if (now - lastRedisErrorLoggedAt < REDIS_ERROR_LOG_INTERVAL_MS) return;
+  lastRedisErrorLoggedAt = now;
+  console.error("[rate-limit] Redis error, falling back to in-memory counter", err);
+}
+
+function checkMemoryRateLimit(key: string, limit: number, windowSec: number): RateLimitResult {
   const now = Date.now();
   const entry = memoryStore.get(key);
   if (!entry || entry.resetAt <= now) {

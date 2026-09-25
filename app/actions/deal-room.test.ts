@@ -129,6 +129,32 @@ describe("publishOpportunity", () => {
 
     expect(result.success).toBe(true);
   });
+
+  /**
+   * Audit sécurité (25 septembre 2026) — les clés de pièces jointes
+   * n'étaient jamais vérifiées ; une clé d'un autre usage du bucket (preuve
+   * de paiement, pièce d'un autre membre) était ensuite résolue en URL
+   * signée pour tout lecteur de l'opportunité.
+   */
+  it("accepts attachment keys uploaded by the author", async () => {
+    vi.mocked(prisma.opportunity.create).mockResolvedValue({ id: "opp_1", title: "x" } as never);
+    const result = await publishOpportunity({
+      ...VALID_PUBLISH_INPUT,
+      attachments: ["deal-room/user_1/abc-plan.pdf"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    ["another member's attachment", "deal-room/user_2/abc-plan.pdf"],
+    ["a payment proof", "company-payments/user_1/abc-recu.pdf"],
+    ["a room attachment", "salles/room_1/abc-doc.pdf"],
+    ["a path-traversal key", "deal-room/user_1/../../company-payments/user_2/recu.pdf"],
+  ])("rejects %s without creating anything", async (_label, key) => {
+    const result = await publishOpportunity({ ...VALID_PUBLISH_INPUT, attachments: [key] });
+    expect(result.success).toBe(false);
+    expect(prisma.opportunity.create).not.toHaveBeenCalled();
+  });
 });
 
 /**
@@ -436,6 +462,18 @@ describe("resubmitOpportunity", () => {
       makeOpportunity({ authorId: "user_1", status: "REFUSED" })
     );
     const result = await resubmitOpportunity("opp_1", { ...VALID_PUBLISH_INPUT, title: "short" });
+    expect(result.success).toBe(false);
+    expect(prisma.opportunity.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an attachment key that wasn't uploaded by the author", async () => {
+    vi.mocked(prisma.opportunity.findUnique).mockResolvedValue(
+      makeOpportunity({ authorId: "user_1", status: "REFUSED" })
+    );
+    const result = await resubmitOpportunity("opp_1", {
+      ...VALID_PUBLISH_INPUT,
+      attachments: ["company-payments/user_2/recu.pdf"],
+    });
     expect(result.success).toBe(false);
     expect(prisma.opportunity.update).not.toHaveBeenCalled();
   });

@@ -23,6 +23,7 @@ export async function confirmCompanyPayment(companyPaymentId: string): Promise<A
   if (!result.success) return result;
 
   revalidatePath("/admin/entreprises");
+  revalidatePath(`/admin/entreprises/${result.data.companyId}`);
   revalidatePath(`/entreprises/${result.data.companyId}`);
   return { success: true, data: undefined };
 }
@@ -80,20 +81,36 @@ export async function rejectCompanyPayment(
       action: "company_payment.reject",
       targetType: "CompanyPayment",
       targetId: companyPaymentId,
-      metadata: { reason: reason.trim() },
+      metadata: {
+        reason: reason.trim(),
+        ...(payment.upsellQuantity != null ? { upsellQuantity: payment.upsellQuantity } : {}),
+      },
     },
   });
 
+  /**
+   * Audit (25 septembre 2026) — un refus de supplément envoyait le même
+   * email que le refus du paiement initial, sans rien qui permette au
+   * gestionnaire de savoir lequel des deux était concerné (son abonnement,
+   * lui, reste actif). Sujet et motif précisent désormais qu'il s'agit du
+   * supplément ; le gabarit `CompanyPaymentRejectedEmail` reste partagé.
+   */
+  const isUpsell = payment.upsellQuantity != null;
+  const companyName = payment.companySubscription.company.name;
   const companyAdmin = payment.companySubscription.company.companyAdmin;
   if (companyAdmin) {
     try {
       await sendTransactionalEmail({
         to: companyAdmin.email,
-        subject: `Paiement à corriger — ${payment.companySubscription.company.name}`,
+        subject: isUpsell
+          ? `Achat de places supplémentaires à corriger — ${companyName}`
+          : `Paiement à corriger — ${companyName}`,
         react: CompanyPaymentRejectedEmail({
           adminName: companyAdmin.name,
-          companyName: payment.companySubscription.company.name,
-          reason: reason.trim(),
+          companyName,
+          reason: isUpsell
+            ? `Achat de ${payment.upsellQuantity} place(s) supplémentaire(s) — votre abonnement reste actif. Motif : ${reason.trim()}`
+            : reason.trim(),
         }),
       });
     } catch (err) {
@@ -103,6 +120,8 @@ export async function rejectCompanyPayment(
   }
 
   revalidatePath("/admin/entreprises");
+  revalidatePath(`/admin/entreprises/${payment.companySubscription.companyId}`);
+  revalidatePath(`/entreprises/${payment.companySubscription.companyId}`);
   return { success: true, data: undefined };
 }
 

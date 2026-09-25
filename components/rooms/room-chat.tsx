@@ -10,6 +10,7 @@ import { reportRoomMessage } from "@/app/actions/rooms";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CHAT_MESSAGE_MAX_LENGTH } from "@/lib/validations/message";
 import { cn, formatDateFr, initials } from "@/lib/utils";
 
 export interface RoomMessageData {
@@ -294,6 +295,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
           </Button>
           <Textarea
             value={text}
+            maxLength={CHAT_MESSAGE_MAX_LENGTH}
             onChange={(e) => {
               setText(e.target.value);
               handleTypingInput();

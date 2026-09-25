@@ -87,6 +87,20 @@ describe("member admin actions", () => {
       });
     });
 
+    it("is reserved to admins with the credits section (a MODERATEUR is refused)", async () => {
+      vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "MODERATEUR" } as never);
+
+      await expect(grantCredits("user_1", 5, "x")).rejects.toThrow();
+      expect(prisma.creditBalance.upsert).not.toHaveBeenCalled();
+    });
+
+    it("is allowed for a FINANCIER admin", async () => {
+      vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "FINANCIER" } as never);
+
+      const result = await grantCredits("user_1", 5, "x");
+      expect(result.success).toBe(true);
+    });
+
     it("rejects a non-positive amount", async () => {
       const result = await grantCredits("user_1", 0, "x");
       expect(result.success).toBe(false);

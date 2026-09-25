@@ -36,8 +36,14 @@ services:
       POSTGRES_DB: ceo_summit
     volumes:
       - ceo_summit_pg_data:/var/lib/postgresql/data
+    # 25 septembre 2026 (incident post-redémarrage VPS) — sans -d, pg_isready
+    # cible par défaut une base du même nom que l'utilisateur ("ceosummit"),
+    # qui n'existe pas (la vraie base est "ceo_summit", voir POSTGRES_DB
+    # ci-dessus) : le check échouait donc en boucle (FATAL logué toutes les
+    # 5s) sans jamais passer "healthy", sans empêcher postgres de fonctionner
+    # pour de vrai — mais faussant l'état que lit `depends_on: service_healthy`.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ceosummit}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ceosummit} -d ceo_summit"]
       interval: 5s
       timeout: 5s
       retries: 5

@@ -23,19 +23,26 @@ export type PlanWithEvent = Plan & { event: Event | null };
  * (`eventId: null`). Ce rattachement n'est plus proposé à l'admin depuis
  * l'audit du 22 septembre 2026 (`conception/12` §2.6) — seules les offres
  * héritées, désactivées, en portent encore un.
+ *
+ * Audit MVP (25 septembre 2026) — `selfServiceOnly` exclut aussi les offres
+ * supplément (`isUpsell: true`, ex. Executive Pass) : elles ne s'achètent
+ * qu'en complément d'un abonnement déjà actif, jamais comme offre principale
+ * (`conception/12`). Les offres Groupement (`PER_PARTICIPANT`) non marquées
+ * `isUpsell` restent, elles, légitimement au catalogue d'inscription.
  */
 export async function getActivePlans(opts?: {
   selfServiceOnly?: boolean;
   eventId?: string;
 }): Promise<Plan[]> {
-  return prisma.plan.findMany({
+  const plans = await prisma.plan.findMany({
     where: {
       isActive: true,
-      ...(opts?.selfServiceOnly ? { isSelfService: true } : {}),
+      ...(opts?.selfServiceOnly ? { isSelfService: true, isUpsell: false } : {}),
       eventId: opts?.eventId ?? null,
     },
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
   });
+  return plans.map((p) => ({ ...p, name: cleanPlanName(p.name) }));
 }
 
 export async function getPlanById(id: string): Promise<Plan | null> {
@@ -51,12 +58,16 @@ export async function getPlanById(id: string): Promise<Plan | null> {
  *
  * `event` inclus (UC-11, 5 août 2026) pour la preview enrichie et les
  * métadonnées Open Graph du lien partagé (app/inscription/page.tsx).
+ *
+ * Audit MVP (25 septembre 2026) — une offre supplément (`isUpsell`) n'est
+ * pas une offre principale : son slug ne pré-sélectionne rien non plus.
  */
 export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null> {
-  return prisma.plan.findFirst({
-    where: { slug, isActive: true, isSelfService: true },
+  const plan = await prisma.plan.findFirst({
+    where: { slug, isActive: true, isSelfService: true, isUpsell: false },
     include: { event: true },
   });
+  return plan ? { ...plan, name: cleanPlanName(plan.name) } : null;
 }
 
 /**
@@ -70,4 +81,18 @@ export async function getAllPlans(eventId?: string): Promise<Plan[]> {
     where: eventId ? { eventId } : undefined,
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
   });
+}
+
+/**
+ * Audit MVP (25 septembre 2026) — nom d'offre tel qu'affiché publiquement :
+ * retire les astérisques de mise en forme markdown saisis par erreur dans le
+ * nom (ex. « Early Bird** (fin : 31 déc 2026) » en production). Le nom est
+ * désormais nettoyé à l'enregistrement (app/actions/admin-plans.ts), ceci
+ * couvre les offres déjà en base.
+ */
+export function cleanPlanName(name: string): string {
+  return name
+    .replace(/\*+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }

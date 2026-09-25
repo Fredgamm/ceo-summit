@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
+import { requireViewer } from "@/lib/require-viewer";
 import { uploadPrivateObject } from "@/lib/r2";
 import {
   COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES,
@@ -16,10 +16,13 @@ import {
  * URL signée au moment de la revue (app/actions/admin-companies.ts).
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  // Audit (25 septembre 2026) — `requireViewer` relit le statut en base :
+  // un compte suspendu/exclu garde sa session JWT jusqu'à 24h.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) {
+    return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
+  const { viewer } = viewerResult;
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -34,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const key = `company-payments/${session.user.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
+  const key = `company-payments/${viewer.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
   await uploadPrivateObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,

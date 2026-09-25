@@ -13,11 +13,13 @@ const { sharpMock } = vi.hoisted(() => {
 
 vi.mock("sharp", () => ({ default: sharpMock }));
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: vi.fn() } } }));
 vi.mock("@/lib/r2", () => ({
   uploadObject: vi.fn().mockResolvedValue("https://cdn.example.com/services/x/photo.jpg"),
 }));
 
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { uploadObject } from "@/lib/r2";
 import { POST } from "./route";
 
@@ -33,6 +35,10 @@ describe("POST /api/services/gallery", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "ACTIVE",
+    } as never);
   });
 
   it("rejects an unauthenticated request", async () => {

@@ -10,6 +10,7 @@ import { getSocketClient } from "@/lib/socket-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { CHAT_MESSAGE_MAX_LENGTH } from "@/lib/validations/message";
 import { cn, formatDateFr, initials } from "@/lib/utils";
 
 export interface ThreadMessage {
@@ -222,6 +223,7 @@ export function ConversationThread({
         <div className="flex items-end gap-2">
           <Textarea
             value={text}
+            maxLength={CHAT_MESSAGE_MAX_LENGTH}
             onChange={(e) => {
               setText(e.target.value);
               handleTypingInput();

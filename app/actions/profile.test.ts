@@ -5,7 +5,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    user: { update: vi.fn().mockResolvedValue({}) },
+    user: { update: vi.fn().mockResolvedValue({}), findUnique: vi.fn() },
   },
 }));
 
@@ -36,6 +36,30 @@ describe("updateProfile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "ACTIVE",
+    } as never);
+  });
+
+  /** Audit sécurité (25 septembre 2026) — statut relu en base, pas seulement la session. */
+  it("rejects a suspended member whose session is still open", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "SUSPENDED",
+    } as never);
+
+    const result = await updateProfile(VALID_INPUT);
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a javascript: website URL", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, websiteUrl: "javascript:alert(1)" });
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("persists valid input for the current session's user", async () => {

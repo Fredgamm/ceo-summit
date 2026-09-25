@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/conversations", () => ({ getOrCreateConversation: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: vi.fn() } } }));
 
 import { auth } from "@/auth";
 import { getOrCreateConversation } from "@/lib/conversations";
+import { prisma } from "@/lib/prisma";
 import { startConversation } from "./messages";
 
 const AUTHED_SESSION = { user: { id: "user_1" } } as never;
@@ -13,6 +15,21 @@ describe("startConversation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "ACTIVE",
+    } as never);
+  });
+
+  /** Audit sécurité (25 septembre 2026) — statut relu en base, pas seulement la session. */
+  it("rejects a suspended member whose session is still open", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "SUSPENDED",
+    } as never);
+    const result = await startConversation("user_2");
+    expect(result.success).toBe(false);
+    expect(getOrCreateConversation).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated call", async () => {

@@ -19,7 +19,7 @@ export default function EvoliaIntegrationPage() {
       </p>
       <h1 className="mb-3 text-2xl font-bold text-navy">Intégration API — CEO Summit × Evolia</h1>
       <p className="mb-8 text-sm text-text-muted">
-        Version 1.4 — révisée le 22 septembre 2026. Remplace tout échange ou document antérieur
+        Version 1.5 — révisée le 25 septembre 2026. Remplace tout échange ou document antérieur
         (spécifications envoyées par email, export PDF/HTML) — c&apos;est cette page qui fait foi.
       </p>
 
@@ -64,7 +64,7 @@ export default function EvoliaIntegrationPage() {
                 "2",
                 "Evolia → CEO Summit",
                 "Confirmation de paiement",
-                "✅ Déjà en production, prêt à recevoir des appels réels",
+                "🟡 Route en ligne, signature vérifiée — à relier à vos paiements une fois l'échange 1 construit (§2)",
               ],
             ]}
           />
@@ -93,18 +93,28 @@ export default function EvoliaIntegrationPage() {
 
         <Section title="2. Échange 2 — Webhook de confirmation de paiement (Evolia → CEO Summit)">
           <p>
-            <strong className="text-navy">Déjà implémenté et fonctionnel côté CEO Summit</strong>{" "}
-            (route générique, conçue pour n&apos;importe quel prestataire de paiement externe). Il
-            ne reste qu&apos;à le brancher à un vrai paiement traité par Evolia. Ce webhook ne
-            concerne que les paiements initiés et traités par vous (§3) — un paiement par virement
-            bancaire suit un chemin entièrement séparé, validé manuellement par un administrateur
-            CEO Summit.
+            <strong className="text-navy">La route est en ligne côté CEO Summit</strong> (route
+            générique, conçue pour n&apos;importe quel prestataire de paiement externe) : elle
+            vérifie la signature, valide le corps de la requête et confirme le paiement référencé.
+            Ce webhook ne concerne que les paiements initiés et traités par vous (§3) — un paiement
+            par virement bancaire suit un chemin entièrement séparé, validé manuellement par un
+            administrateur CEO Summit.
           </p>
+
+          <Callout>
+            <strong>Reste à construire côté CEO Summit avant les premiers appels réels :</strong> la
+            création d&apos;un paiement « à encaisser par Evolia » (et donc de la{" "}
+            <code>reference</code> à vous transmettre) et le push d&apos;inscription sortant (§3).
+            Vous pouvez néanmoins tester votre calcul de signature dès aujourd&apos;hui : un appel
+            correctement signé portant une référence inconnue renvoie <code>409</code> (et non{" "}
+            <code>401</code>).
+          </Callout>
 
           <SubHeading>Requête attendue</SubHeading>
           <Json>{`POST https://app.ceo-summit.mg/api/webhooks/payments
 Content-Type: application/json
-X-Webhook-Signature: sha256=<signature hex>`}</Json>
+X-Webhook-Signature: sha256=<signature hex>
+X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</Json>
 
           <SubHeading>Corps de la requête</SubHeading>
           <Json>{`{
@@ -159,14 +169,34 @@ X-Webhook-Signature: sha256=<signature hex>`}</Json>
             </li>
           </ul>
 
+          <SubHeading>Anti-rejeu — en-tête optionnel X-Webhook-Timestamp</SubHeading>
+          <p>
+            Recommandé, mais facultatif et rétro-compatible (ajouté le 25 septembre 2026). Sans cet
+            en-tête, rien ne change. Avec (<code>X-Webhook-Timestamp: 1790000000</code>, horodatage
+            en secondes Unix, UTC), la signature porte sur la chaîne{" "}
+            <code>&lt;timestamp&gt;.&lt;corps_brut&gt;</code> —{" "}
+            <code>HMAC-SHA256(&quot;&lt;timestamp&gt;.&lt;corps_brut&gt;&quot;, secret)</code>,
+            toujours en hexadécimal dans <code>X-Webhook-Signature</code> — et toute requête dont
+            l&apos;horodatage s&apos;écarte de plus de <strong>5 minutes</strong> de l&apos;heure du
+            serveur CEO Summit est rejetée en <code>401</code>.
+          </p>
+
           <SubHeading>Réponses</SubHeading>
           <Table
             head={["Code", "Signification"]}
             rows={[
               ["200", `Paiement traité — {"data":{"received":true}}`],
-              ["401", "Signature invalide ou absente"],
+              ["400", "Corps de requête qui n'est pas du JSON valide"],
+              [
+                "401",
+                "Signature invalide ou absente (ou X-Webhook-Timestamp invalide / de plus de 5 minutes)",
+              ],
               ["409", "reference introuvable, ou paiement déjà confirmé/traité (idempotence)"],
-              ["422", "Corps de requête invalide (champ manquant/mal typé)"],
+              ["422", "JSON valide mais contenu invalide (champ manquant/mal typé)"],
+              [
+                "429",
+                "Trop de requêtes — limite de 60 requêtes par minute et par adresse IP ; réessayer après une courte attente",
+              ],
               ["500", "Erreur interne CEO Summit"],
             ]}
           />
@@ -250,7 +280,7 @@ X-Webhook-Signature: sha256=<signature hex>`}</Json>
   "event": "company.registration.pushed",
   "companyId": "cmp_8f21ab",
   "ceoSummitReference": "cmp_9f2ab3d8e1",
-  "paymentMethod": "evolia",
+  "paymentMethod": "MOBILE_MONEY",
   "amountDue": 2500000,
   "currency": "MGA",
   "company": {
@@ -300,15 +330,15 @@ X-Webhook-Signature: sha256=<signature hex>`}</Json>
             c&apos;est le prix d&apos;une offre configurée par l&apos;admin CEO Summit comme
             n&apos;importe quelle autre (ex. un pass à l&apos;unité, ou une offre groupée par lot de
             places), donc <code>amountDue</code> reflète le prix réel de l&apos;offre supplément
-            choisie, multiplié par la quantité achetée :
+            choisie, multiplié par la quantité achetée — toujours en Ariary :
           </p>
           <Json>{`{
   "event": "company.registration.pushed",
   "companyId": "cmp_8f21ab",
   "ceoSummitReference": "cmp_9f2ab3d8e1",
-  "paymentMethod": "evolia",
-  "amountDue": 950,
-  "currency": "EUR",
+  "paymentMethod": "CARTE_BANCAIRE",
+  "amountDue": 4365000,
+  "currency": "MGA",
   "company": {
     "name": "Groupe Exemple SA",
     "sector": "Fintech"
@@ -332,11 +362,11 @@ X-Webhook-Signature: sha256=<signature hex>`}</Json>
               ],
               [
                 "paymentMethod",
-                `"evolia" (à encaisser par vos soins) ou "virement" (déjà réglé côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
+                `Moyen de paiement enregistré par CEO Summit : "CARTE_BANCAIRE" ou "MOBILE_MONEY" (à encaisser par vos soins), "VIREMENT" ou "CHEQUE" (déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
               ],
               [
                 "amountDue",
-                "Montant à encaisser pour ce push précisément (pas un cumulatif). Absent sur company.participants.confirmed et sur paymentMethod: virement.",
+                'Montant à encaisser pour ce push précisément (pas un cumulatif), toujours en Ariary (currency = "MGA") : CEO Summit ne stocke les montants dus qu\'en Ariary, une offre affichée en euros étant convertie au taux du jour lors de sa configuration. Absent sur company.participants.confirmed et sur paymentMethod VIREMENT/CHEQUE.',
               ],
             ]}
           />

@@ -2,11 +2,11 @@ import { randomUUID } from "crypto";
 
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { uploadPrivateObject } from "@/lib/r2";
 import { meetsRoomAccess } from "@/lib/rooms-query";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { requireViewer } from "@/lib/require-viewer";
+import { getViewerTierFromCompany } from "@/lib/plan-access";
 import {
   ROOM_ATTACHMENT_MAX_BYTES,
   ROOM_ATTACHMENT_ALLOWED_MIME_TYPES,
@@ -23,10 +23,13 @@ import {
  * app/salles/[id]/page.tsx), matching the tier gate already enforced here.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  // Audit sécurité (25 septembre 2026) — relit `User.status` (et la date de
+  // changement de mot de passe) en base plutôt que de se fier au seul JWT.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) {
+    return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
+  const { viewer } = viewerResult;
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -44,17 +47,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Fichier trop volumineux (5 Mo max)." }, { status: 422 });
   }
 
-  const [room, viewer] = await Promise.all([
-    prisma.room.findUnique({ where: { id: roomId } }),
-    prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: VIEWER_TIER_INCLUDE,
-    }),
-  ]);
+  const room = await prisma.room.findUnique({ where: { id: roomId } });
   if (!room || room.status !== "ACTIVE") {
     return NextResponse.json({ error: "Salle introuvable." }, { status: 404 });
   }
-  if (!viewer || !meetsRoomAccess(getViewerTierFromCompany(viewer.company), room.minTier)) {
+  if (!meetsRoomAccess(getViewerTierFromCompany(viewer.company), room.minTier)) {
     return NextResponse.json({ error: "Accès non autorisé à cette salle." }, { status: 403 });
   }
 

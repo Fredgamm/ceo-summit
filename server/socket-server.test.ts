@@ -6,8 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/prisma", () => ({
   prisma: {
-    room: { findUnique: vi.fn() },
+    room: { findUnique: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn() },
+    adminUser: { findUnique: vi.fn() },
     roomSuspension: { findFirst: vi.fn() },
     roomMessage: { create: vi.fn() },
     conversation: { findUnique: vi.fn(), update: vi.fn() },
@@ -53,6 +54,10 @@ function connect(userId: string): Promise<ClientSocket> {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  // Audit sécurité (25 septembre 2026) — le statut du compte est relu en
+  // base aux joins et à chaque message : compte ACTIVE par défaut.
+  vi.mocked(prisma.user.findUnique).mockResolvedValue({ status: "ACTIVE" } as never);
+  vi.mocked(prisma.adminUser.findUnique).mockResolvedValue(null);
   delete process.env.REDIS_URL;
   server = createSocketServer();
   await new Promise<void>((resolve) => server.httpServer.listen(0, resolve));
@@ -101,6 +106,7 @@ describe("room:join", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
@@ -131,6 +137,7 @@ describe("room:join", () => {
       minTier: "CHAIRMAN_ONLY",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
@@ -146,7 +153,32 @@ describe("room:join", () => {
       status: "ACTIVE",
       minTier: "ALL_MEMBERS",
     } as never);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ company: null } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      company: null,
+    } as never);
+
+    const client = await connect("user_1");
+    const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  /**
+   * Audit sécurité (25 septembre 2026) — un compte suspendu/exclu après
+   * l'émission du token (ou dont la connexion est restée ouverte) ne doit
+   * plus pouvoir rejoindre de salle.
+   */
+  it("rejects a member whose account is no longer ACTIVE", async () => {
+    vi.mocked(prisma.room.findUnique).mockResolvedValue({
+      id: "room_1",
+      status: "ACTIVE",
+      minTier: "ALL_MEMBERS",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "SUSPENDED",
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
+    } as never);
+    vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
 
     const client = await connect("user_1");
     const result = await new Promise((resolve) => client.emit("room:join", "room_1", resolve));
@@ -160,6 +192,7 @@ describe("room:join", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue({ id: "susp_1" } as never);
@@ -178,6 +211,7 @@ describe("room:message", () => {
       minTier: "ALL_MEMBERS",
     } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
       company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
     } as never);
     vi.mocked(prisma.roomSuspension.findFirst).mockResolvedValue(null);
@@ -295,6 +329,29 @@ describe("room:message", () => {
     expect(second).toEqual({ ok: false, error: "rate_limited" });
   });
 
+  it("rejects a message once the account is suspended, even after joining", async () => {
+    const client = await connect("user_1");
+    await joinRoom(client);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ status: "SUSPENDED" } as never);
+
+    const result = await new Promise((resolve) =>
+      client.emit("room:message", { roomId: "room_1", content: "hello" }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(prisma.roomMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a message longer than the chat limit", async () => {
+    const client = await connect("user_1");
+    await joinRoom(client);
+
+    const result = await new Promise((resolve) =>
+      client.emit("room:message", { roomId: "room_1", content: "a".repeat(4001) }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "too_long" });
+    expect(prisma.roomMessage.create).not.toHaveBeenCalled();
+  });
+
   it("rejects an empty message with no attachment", async () => {
     const client = await connect("user_1");
     await joinRoom(client);
@@ -329,6 +386,21 @@ describe("conversation:join", () => {
     } as never);
 
     const client = await connect("user_3");
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:join", "conv_1", resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
+  it("rejects a participant whose account is no longer ACTIVE", async () => {
+    vi.mocked(prisma.conversation.findUnique).mockResolvedValue({
+      id: "conv_1",
+      member1Id: "user_1",
+      member2Id: "user_2",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ status: "SUSPENDED" } as never);
+
+    const client = await connect("user_1");
     const result = await new Promise((resolve) =>
       client.emit("conversation:join", "conv_1", resolve)
     );
@@ -379,6 +451,7 @@ describe("conversation:message", () => {
       id: "user_1",
       name: "Jean-Pierre",
       avatarUrl: null,
+      status: "ACTIVE",
     } as never);
 
     const received = new Promise((resolve) => recipient.once("conversation:message", resolve));
@@ -413,7 +486,11 @@ describe("conversation:message", () => {
       id: "msg_1",
       createdAt: new Date(),
     } as never);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_1", name: "JP" } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      name: "JP",
+      status: "ACTIVE",
+    } as never);
 
     await new Promise((resolve) =>
       sender.emit("conversation:message", { conversationId: "conv_1", content: "hello" }, resolve)
@@ -438,13 +515,46 @@ describe("conversation:message", () => {
       id: "msg_1",
       createdAt: new Date(),
     } as never);
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_1", name: "JP" } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      name: "JP",
+      status: "ACTIVE",
+    } as never);
 
     await new Promise((resolve) =>
       sender.emit("conversation:message", { conversationId: "conv_1", content: "hello" }, resolve)
     );
 
     expect(scheduleOfflineEmailCheck).not.toHaveBeenCalled();
+  });
+
+  it("rejects a message longer than the chat limit", async () => {
+    const client = await connect("user_1");
+    await joinConversation(client);
+    const result = await new Promise((resolve) =>
+      client.emit(
+        "conversation:message",
+        { conversationId: "conv_1", content: "a".repeat(4001) },
+        resolve
+      )
+    );
+    expect(result).toEqual({ ok: false, error: "too_long" });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a message from a sender suspended after joining", async () => {
+    const client = await connect("user_1");
+    await joinConversation(client);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      name: "JP",
+      status: "SUSPENDED",
+    } as never);
+    const result = await new Promise((resolve) =>
+      client.emit("conversation:message", { conversationId: "conv_1", content: "hi" }, resolve)
+    );
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+    expect(prisma.message.create).not.toHaveBeenCalled();
   });
 
   it("rejects an empty message", async () => {
@@ -493,6 +603,63 @@ describe("users:presence", () => {
     expect(result).toEqual({ user_1: true, user_2: false });
     void online;
   });
+
+  /** Audit sécurité (25 septembre 2026) — liste d'ids bornée. */
+  it("answers for at most 100 ids", async () => {
+    const requester = await connect("user_3");
+    const ids = Array.from({ length: 150 }, (_, i) => `user_${i}`);
+
+    const result = (await new Promise((resolve) =>
+      requester.emit("users:presence", ids, resolve)
+    )) as Record<string, boolean>;
+
+    expect(Object.keys(result)).toHaveLength(100);
+  });
+});
+
+/**
+ * Audit sécurité (25 septembre 2026) — `rooms:presence` répondait pour
+ * n'importe quel nom de room Socket.io (y compris `conversation:<id>`).
+ */
+describe("rooms:presence", () => {
+  it("only reports ACTIVE rooms the requester has access to", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      company: { subscription: { status: "ACTIVE", plan: { rank: 1 } } },
+    } as never);
+    vi.mocked(prisma.room.findMany).mockResolvedValue([
+      { id: "room_1", minTier: "ALL_MEMBERS" },
+    ] as never);
+
+    const requester = await connect("user_1");
+    const result = await new Promise((resolve) =>
+      requester.emit("rooms:presence", ["room_1", "conversation:conv_1"], resolve)
+    );
+
+    expect(result).toEqual({ room_1: 0 });
+    expect(prisma.room.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: { in: ["room_1", "conversation:conv_1"] }, status: "ACTIVE" },
+      })
+    );
+  });
+
+  it("reports nothing to a requester without platform access", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      status: "ACTIVE",
+      company: null,
+    } as never);
+    vi.mocked(prisma.room.findMany).mockResolvedValue([
+      { id: "room_1", minTier: "ALL_MEMBERS" },
+    ] as never);
+
+    const requester = await connect("user_1");
+    const result = await new Promise((resolve) =>
+      requester.emit("rooms:presence", ["room_1"], resolve)
+    );
+
+    expect(result).toEqual({});
+  });
 });
 
 /**
@@ -504,7 +671,10 @@ describe("users:presence", () => {
  */
 describe("checkin:join / checkin:scan", () => {
   it("rejects checkin:join for a non-admin", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isPlatformAdmin: false } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      isPlatformAdmin: false,
+      status: "ACTIVE",
+    } as never);
 
     const client = await connect("user_1");
     const result = await new Promise((resolve) => client.emit("checkin:join", "evt_1", resolve));
@@ -512,8 +682,25 @@ describe("checkin:join / checkin:scan", () => {
     expect(result).toEqual({ ok: false, error: "forbidden" });
   });
 
+  /** Audit sécurité (25 septembre 2026) — même règle que requireAdmin(). */
+  it("rejects checkin:join for a deactivated admin account", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      isPlatformAdmin: true,
+      status: "ACTIVE",
+    } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ active: false } as never);
+
+    const client = await connect("admin_1");
+    const result = await new Promise((resolve) => client.emit("checkin:join", "evt_1", resolve));
+
+    expect(result).toEqual({ ok: false, error: "forbidden" });
+  });
+
   it("allows checkin:join for a platform admin", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isPlatformAdmin: true } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      isPlatformAdmin: true,
+      status: "ACTIVE",
+    } as never);
 
     const client = await connect("admin_1");
     const result = await new Promise((resolve) => client.emit("checkin:join", "evt_1", resolve));
@@ -522,7 +709,10 @@ describe("checkin:join / checkin:scan", () => {
   });
 
   it("broadcasts checkin:update to every admin joined on the same event, including the sender", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isPlatformAdmin: true } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      isPlatformAdmin: true,
+      status: "ACTIVE",
+    } as never);
 
     const scanner = await connect("admin_1");
     const dashboard = await connect("admin_2");
@@ -545,7 +735,10 @@ describe("checkin:join / checkin:scan", () => {
   });
 
   it("does not broadcast a scan for an event the socket never joined", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isPlatformAdmin: true } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      isPlatformAdmin: true,
+      status: "ACTIVE",
+    } as never);
 
     const scanner = await connect("admin_1");
     const dashboard = await connect("admin_2");

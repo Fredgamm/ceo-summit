@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import sharp from "sharp";
 
-import { auth } from "@/auth";
+import { requireViewer } from "@/lib/require-viewer";
 import { uploadObject } from "@/lib/r2";
 import {
   SERVICE_GALLERY_ALLOWED_MIME_TYPES,
@@ -19,10 +19,13 @@ import {
  * banner and avatar routes.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
+  // Audit sécurité (25 septembre 2026) — relit `User.status` (et la date de
+  // changement de mot de passe) en base plutôt que de se fier au seul JWT.
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) {
+    return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
+  const { viewer } = viewerResult;
 
   const formData = await req.formData();
   const file = formData.get("file");
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
     .jpeg({ quality: 85 })
     .toBuffer();
 
-  const key = `services/${session.user.id}/${randomUUID()}.jpg`;
+  const key = `services/${viewer.id}/${randomUUID()}.jpg`;
   const url = await uploadObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,

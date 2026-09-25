@@ -20,15 +20,33 @@ vi.mock("@/lib/prisma", () => ({
 import { POST } from "./route";
 import { prisma } from "@/lib/prisma";
 
-const SECRET = "test-resend-secret";
+const KEY = Buffer.from("test-resend-secret-key-bytes");
+const SECRET = `whsec_${KEY.toString("base64")}`;
+const MSG_ID = "msg_test_1";
 
-function sign(body: string) {
-  return createHmac("sha256", SECRET).update(body, "utf8").digest("hex");
+function nowSec() {
+  return String(Math.floor(Date.now() / 1000));
 }
 
-function makeRequest(body: string, signature: string | null) {
+/** Signature Svix : base64(HMAC-SHA256(clé, `${id}.${timestamp}.${body}`)), préfixée `v1,`. */
+function sign(body: string, timestamp = nowSec(), id = MSG_ID) {
+  const sig = createHmac("sha256", KEY)
+    .update(`${id}.${timestamp}.${body}`, "utf8")
+    .digest("base64");
+  return `v1,${sig}`;
+}
+
+function makeRequest(
+  body: string,
+  signature: string | null,
+  { timestamp = nowSec(), id = MSG_ID }: { timestamp?: string; id?: string } = {}
+) {
   const headers = new Headers({ "Content-Type": "application/json" });
-  if (signature !== null) headers.set("X-Resend-Signature", signature);
+  if (signature !== null) {
+    headers.set("svix-id", id);
+    headers.set("svix-timestamp", timestamp);
+    headers.set("svix-signature", signature);
+  }
   return new Request("http://localhost/api/webhooks/resend", { method: "POST", headers, body });
 }
 
@@ -46,7 +64,7 @@ describe("POST /api/webhooks/resend", () => {
 
   it("rejects a request with an invalid signature", async () => {
     const body = JSON.stringify(openedPayload);
-    const res = await POST(makeRequest(body, "deadbeef"));
+    const res = await POST(makeRequest(body, "v1,ZGVhZGJlZWY="));
     expect(res.status).toBe(401);
     expect(prisma.webhookLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -58,6 +76,52 @@ describe("POST /api/webhooks/resend", () => {
   it("rejects a request with no signature header", async () => {
     const body = JSON.stringify(openedPayload);
     const res = await POST(makeRequest(body, null));
+    expect(res.status).toBe(401);
+  });
+
+  it("accepts a valid signature among several (secret rotation)", async () => {
+    vi.mocked(prisma.broadcastRecipient.findFirst).mockResolvedValue(null);
+    const body = JSON.stringify(openedPayload);
+    const res = await POST(makeRequest(body, `v1,ZGVhZGJlZWY= ${sign(body)}`));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a signature made with another secret", async () => {
+    const body = JSON.stringify(openedPayload);
+    const ts = nowSec();
+    const wrong = createHmac("sha256", "other-key")
+      .update(`${MSG_ID}.${ts}.${body}`)
+      .digest("base64");
+    const res = await POST(makeRequest(body, `v1,${wrong}`, { timestamp: ts }));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a replayed request whose timestamp is older than 5 minutes", async () => {
+    const body = JSON.stringify(openedPayload);
+    const old = String(Math.floor(Date.now() / 1000) - 6 * 60);
+    const res = await POST(makeRequest(body, sign(body, old), { timestamp: old }));
+    expect(res.status).toBe(401);
+    expect(prisma.webhookLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ error: "Svix timestamp outside tolerance" }),
+      })
+    );
+  });
+
+  it("rejects a signature computed for another message id", async () => {
+    const body = JSON.stringify(openedPayload);
+    const ts = nowSec();
+    const res = await POST(makeRequest(body, sign(body, ts, "msg_other"), { timestamp: ts }));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects the legacy hex X-Resend-Signature scheme", async () => {
+    const body = JSON.stringify(openedPayload);
+    const headers = new Headers({ "Content-Type": "application/json" });
+    headers.set("X-Resend-Signature", createHmac("sha256", SECRET).update(body).digest("hex"));
+    const res = await POST(
+      new Request("http://localhost/api/webhooks/resend", { method: "POST", headers, body })
+    );
     expect(res.status).toBe(401);
   });
 

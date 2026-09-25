@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: vi.fn() } } }));
 vi.mock("@/lib/r2", () => ({
   uploadPrivateObject: vi.fn().mockResolvedValue({ key: "deal-room/user_1/doc.pdf" }),
 }));
 
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { uploadPrivateObject } from "@/lib/r2";
 import { POST } from "./route";
 
@@ -24,6 +26,23 @@ describe("POST /api/deal-room/attachment", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(AUTHED_SESSION);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "ACTIVE",
+    } as never);
+  });
+
+  /** Audit sécurité (25 septembre 2026) — statut relu en base, pas seulement la session. */
+  it("rejects a suspended member whose session is still open", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      status: "SUSPENDED",
+    } as never);
+    const file = new File(["%PDF"], "doc.pdf", { type: "application/pdf" });
+
+    const res = await POST(makeRequest(file));
+    expect(res.status).toBe(401);
+    expect(uploadPrivateObject).not.toHaveBeenCalled();
   });
 
   it("rejects an unauthenticated request", async () => {

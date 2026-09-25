@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { inviteTeammate, resendInvite, revokeInvite } from "@/app/actions/company-invites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -41,6 +42,10 @@ export function InviteTeammateForm({
         setError(result.error);
         return;
       }
+      // Audit (25 septembre 2026) — invitation créée mais email non parti :
+      // signalé plutôt que passé sous silence.
+      if (result.warning) toast.warning(result.warning);
+      else toast.success("Invitation envoyée.");
       setName("");
       setEmail("");
       router.refresh();

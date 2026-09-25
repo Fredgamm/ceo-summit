@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { requireViewer } from "@/lib/require-viewer";
+import { isKeyUnderPrefix } from "@/lib/r2";
 import { sendTransactionalEmail } from "@/lib/resend";
 import {
   submitPaymentProofSchema,
   purchaseUpsellSeatsSchema,
+  MAX_PAYMENT_AMOUNT,
 } from "@/lib/validations/company-payment";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { isUpsellEligible } from "@/lib/upsell-plans";
@@ -28,15 +30,16 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * rejetée → retour à `PENDING_PAYMENT`) avant de pouvoir changer d'offre.
  */
 export async function selectPlan(companyId: string, planId: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     include: { subscription: { include: { plan: { include: { event: true } } } } },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== session.user.id) {
+  if (company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut choisir une offre." };
   }
 
@@ -67,14 +70,27 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
     };
   }
 
+  /**
+   * Audit (25 septembre 2026) — mêmes conditions que `createCompanyAccount` :
+   * une offre de sponsoring (`isSelfService: false`) ou une offre supplément
+   * (`isUpsell`, ex. Executive Pass — vendue en plus d'un abonnement, jamais
+   * seule) n'est pas une offre principale souscriptible ici.
+   */
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
-  if (!plan || !plan.isActive) {
+  if (!plan || !plan.isActive || !plan.isSelfService || plan.isUpsell) {
     return { success: false, error: "Offre invalide." };
   }
 
+  /**
+   * Audit (25 septembre 2026) — `extraSeats` remis à 0 : changer d'offre ou
+   * renouveler après expiration (RG-12, seul chemin de renouvellement —
+   * `submitPaymentProof` exige `PENDING_PAYMENT`) repart d'un abonnement
+   * neuf ; les places achetées en supplément valaient pour l'offre et
+   * l'édition précédentes, pas pour la suivante.
+   */
   await prisma.companySubscription.upsert({
     where: { companyId },
-    update: { planId, status: "PENDING_PAYMENT", declaredParticipants: null },
+    update: { planId, status: "PENDING_PAYMENT", declaredParticipants: null, extraSeats: 0 },
     create: { companyId, planId, status: "PENDING_PAYMENT" },
   });
 
@@ -88,15 +104,16 @@ export async function submitPaymentProof(
   companySubscriptionId: string,
   input: unknown
 ): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
     include: { company: true, plan: true },
   });
   if (!subscription) return { success: false, error: "Abonnement introuvable." };
-  if (subscription.company.companyAdminId !== session.user.id) {
+  if (subscription.company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut soumettre un paiement." };
   }
   if (subscription.status !== "PENDING_PAYMENT") {
@@ -123,7 +140,7 @@ export async function submitPaymentProof(
    * d'autre (preuve d'une autre entreprise, pièce jointe d'un tout autre
    * usage du bucket).
    */
-  if (!f.proofFileKey.startsWith(`company-payments/${session.user.id}/`)) {
+  if (!isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
     return { success: false, error: "Preuve de paiement invalide." };
   }
 
@@ -148,6 +165,13 @@ export async function submitPaymentProof(
     };
   }
   const amount = computeDueAmount(subscription.plan, declaredParticipants);
+  if (amount > MAX_PAYMENT_AMOUNT) {
+    return {
+      success: false,
+      error:
+        "Montant trop élevé pour un seul paiement — vérifiez l'effectif déclaré ou contactez l'équipe CEO Summit.",
+    };
+  }
 
   await prisma.$transaction([
     prisma.companyPayment.create({
@@ -157,7 +181,7 @@ export async function submitPaymentProof(
         method: f.method,
         proofFileKey: f.proofFileKey,
         comment: f.comment || null,
-        submittedById: session.user.id,
+        submittedById: viewer.id,
       },
     }),
     prisma.companySubscription.update({
@@ -205,15 +229,16 @@ export async function purchaseUpsellSeats(
   companySubscriptionId: string,
   input: unknown
 ): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Non authentifié." };
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
     include: { company: true, plan: { include: { event: { select: { date: true } } } } },
   });
   if (!subscription) return { success: false, error: "Abonnement introuvable." };
-  if (subscription.company.companyAdminId !== session.user.id) {
+  if (subscription.company.companyAdminId !== viewer.id) {
     return { success: false, error: "Seul l'admin de l'entreprise peut acheter un supplément." };
   }
 
@@ -221,10 +246,27 @@ export async function purchaseUpsellSeats(
     subscription.status,
     subscription.plan.event?.date
   );
-  if (effectiveStatus !== "ACTIVE" && effectiveStatus !== "EXPIRED") {
+  // Audit (25 septembre 2026) — plus `EXPIRED` : des places ajoutées à une
+  // édition passée ne servent à rien (et `selectPlan` les remet à 0 au
+  // renouvellement).
+  if (effectiveStatus !== "ACTIVE") {
     return {
       success: false,
       error: "Un abonnement actif est requis pour acheter des places supplémentaires.",
+    };
+  }
+
+  // Audit (25 septembre 2026) — un seul supplément en attente à la fois :
+  // deux preuves soumises en parallèle risquaient d'être validées deux fois
+  // pour un seul virement. La page Gestion affiche le supplément en attente
+  // à la place du formulaire.
+  const pendingUpsell = await prisma.companyPayment.findFirst({
+    where: { companySubscriptionId, status: "PENDING", upsellQuantity: { not: null } },
+  });
+  if (pendingUpsell) {
+    return {
+      success: false,
+      error: `Un supplément de ${pendingUpsell.upsellQuantity} place(s) est déjà en attente de validation — attendez la décision de l'équipe CEO Summit avant d'en acheter un autre.`,
     };
   }
 
@@ -234,7 +276,7 @@ export async function purchaseUpsellSeats(
   }
   const f = parsed.data;
 
-  if (!f.proofFileKey.startsWith(`company-payments/${session.user.id}/`)) {
+  if (!isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
     return { success: false, error: "Preuve de paiement invalide." };
   }
 
@@ -253,6 +295,15 @@ export async function purchaseUpsellSeats(
   }
 
   const amount = upsellPlan.priceAr * f.quantity;
+  // `CompanyPayment.amount` est un `Int` (int4 PostgreSQL) : au-delà, la
+  // création échouait en 500.
+  if (amount > MAX_PAYMENT_AMOUNT) {
+    return {
+      success: false,
+      error:
+        "Montant trop élevé pour un seul paiement — réduisez la quantité ou contactez l'équipe CEO Summit.",
+    };
+  }
 
   await prisma.companyPayment.create({
     data: {
@@ -261,7 +312,7 @@ export async function purchaseUpsellSeats(
       method: f.method,
       proofFileKey: f.proofFileKey,
       comment: f.comment || null,
-      submittedById: session.user.id,
+      submittedById: viewer.id,
       upsellPlanId: upsellPlan.id,
       upsellQuantity: f.quantity,
     },

@@ -268,4 +268,53 @@ describe("POST /api/webhooks/payments", () => {
       })
     );
   });
+
+  describe("optional X-Webhook-Timestamp (anti-replay)", () => {
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+
+    function makeTimestampedRequest(signature: string, timestamp: string) {
+      const req = makeRequest(body, signature);
+      req.headers.set("X-Webhook-Timestamp", timestamp);
+      return req;
+    }
+
+    it("accepts a fresh timestamp signed together with the body", async () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const res = await POST(makeTimestampedRequest(sign(`${ts}.${body}`), ts));
+      expect(res.status).toBe(200);
+      expect(confirmCompanyPaymentCore).toHaveBeenCalledWith("payment_1", null);
+    });
+
+    it("rejects a timestamp older than 5 minutes (replay)", async () => {
+      const ts = String(Math.floor(Date.now() / 1000) - 6 * 60);
+      const res = await POST(makeTimestampedRequest(sign(`${ts}.${body}`), ts));
+      expect(res.status).toBe(401);
+      expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+      expect(prisma.webhookLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ error: "X-Webhook-Timestamp outside tolerance" }),
+        })
+      );
+    });
+
+    it("rejects a timestamped request signed over the body alone", async () => {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const res = await POST(makeTimestampedRequest(sign(body), ts));
+      expect(res.status).toBe(401);
+    });
+
+    it("rejects a non-numeric timestamp", async () => {
+      const res = await POST(makeTimestampedRequest(sign(`abc.${body}`), "abc"));
+      expect(res.status).toBe(401);
+    });
+
+    it("keeps accepting requests without the header (backward compatible)", async () => {
+      const res = await POST(makeRequest(body, sign(body)));
+      expect(res.status).toBe(200);
+    });
+  });
 });

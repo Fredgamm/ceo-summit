@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { isPublicObjectUrlUnderPrefix } from "@/lib/r2";
 import { requireViewer } from "@/lib/require-viewer";
 import { serviceFormSchema } from "@/lib/validations/service";
 import { sendTransactionalEmail } from "@/lib/resend";
@@ -27,6 +28,21 @@ export async function submitServiceListing(input: unknown): Promise<ActionResult
     return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  /**
+   * Audit sécurité (25 septembre 2026) — `gallery` venait tel quel du
+   * client : n'importe quelle URL (externe, ou objet d'un autre membre)
+   * était publiée comme visuel. `/api/services/gallery` range toujours ses
+   * images sous `services/<uploaderId>/` dans le bucket documents — seules
+   * ces URLs-là, pour l'appelant courant, sont désormais acceptées.
+   */
+  const galleryBucket = process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents";
+  if (
+    !f.gallery.every((url) =>
+      isPublicObjectUrlUnderPrefix(url, galleryBucket, `services/${viewer.id}/`)
+    )
+  ) {
+    return { success: false, error: "Visuel invalide." };
+  }
 
   const isChairman = getViewerTierFromCompany(viewer.company) === "CHAIRMAN";
 

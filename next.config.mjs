@@ -64,11 +64,15 @@ const LOCAL_STORAGE_FRAME_CSP = CSP.replace("frame-ancestors 'none'", "frame-anc
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 25 septembre 2026 (audit MVP) — l'optimiseur d'images de Next 14.2.35
+  // (`/_next/image`) est exposé à une RCE non authentifiée
+  // (GHSA-2xp9-vwfh-vxw4), et `*.amazonaws.com` en remotePatterns en faisait
+  // en plus un proxy vers n'importe quel bucket S3. On ne l'utilise que pour
+  // des assets statiques de /public (logos) et un QR code en `data:` :
+  // `unoptimized` fait servir
+  // `next/image` en `<img src>` direct, sans jamais passer par l'optimiseur.
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "*.r2.cloudflarestorage.com" },
-      { protocol: "https", hostname: "*.amazonaws.com" },
-    ],
+    unoptimized: true,
   },
   experimental: {
     serverComponentsExternalPackages: ["@prisma/client", "bcryptjs"],

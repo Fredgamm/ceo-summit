@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -8,7 +8,7 @@ vi.mock("@/lib/prisma", () => ({
     company: { findUnique: vi.fn() },
     plan: { findUnique: vi.fn() },
     companySubscription: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    companyPayment: { create: vi.fn(), updateMany: vi.fn() },
+    companyPayment: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -16,16 +16,16 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/admin-company-payment-alert-email", () => ({ default: vi.fn(() => null) }));
 
-import { auth } from "@/auth";
+import { requireViewer } from "@/lib/require-viewer";
 import { prisma } from "@/lib/prisma";
 import { selectPlan, submitPaymentProof, purchaseUpsellSeats } from "./company-subscription";
 
-const SESSION = { user: { id: "admin_user_1" } } as never;
+const SESSION = { success: true, viewer: { id: "admin_user_1" } } as never;
 
 describe("selectPlan", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(auth).mockResolvedValue(SESSION);
+    vi.mocked(requireViewer).mockResolvedValue(SESSION);
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       id: "company_1",
       companyAdminId: "admin_user_1",
@@ -34,7 +34,33 @@ describe("selectPlan", () => {
     vi.mocked(prisma.plan.findUnique).mockResolvedValue({
       id: "plan_1",
       isActive: true,
+      isSelfService: true,
+      isUpsell: false,
     } as never);
+  });
+
+  it("resets extraSeats when switching or renewing (fresh subscription)", async () => {
+    await selectPlan("company_1", "plan_1");
+    expect(prisma.companySubscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ planId: "plan_1", extraSeats: 0 }),
+      })
+    );
+  });
+
+  it.each([
+    ["a sponsoring (non self-service) plan", { isSelfService: false, isUpsell: false }],
+    ["an upsell-only plan", { isSelfService: true, isUpsell: true }],
+  ])("rejects %s", async (_label, flags) => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({
+      id: "plan_1",
+      isActive: true,
+      ...flags,
+    } as never);
+
+    const result = await selectPlan("company_1", "plan_1");
+    expect(result).toEqual({ success: false, error: "Offre invalide." });
+    expect(prisma.companySubscription.upsert).not.toHaveBeenCalled();
   });
 
   it("upserts a PENDING_PAYMENT subscription", async () => {
@@ -137,7 +163,7 @@ describe("submitPaymentProof", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(auth).mockResolvedValue(SESSION);
+    vi.mocked(requireViewer).mockResolvedValue(SESSION);
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       id: "sub_1",
       companyId: "company_1",
@@ -284,7 +310,7 @@ describe("purchaseUpsellSeats", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(auth).mockResolvedValue(SESSION);
+    vi.mocked(requireViewer).mockResolvedValue(SESSION);
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       id: "sub_1",
       companyId: "company_1",
@@ -298,6 +324,7 @@ describe("purchaseUpsellSeats", () => {
       isUpsell: true,
       priceAr: 4_715_800,
     } as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue(null);
   });
 
   it("creates a payment for quantity × unit price without touching the subscription status", async () => {
@@ -316,7 +343,56 @@ describe("purchaseUpsellSeats", () => {
     expect(prisma.companySubscription.update).not.toHaveBeenCalled();
   });
 
-  it("rejects when the subscription isn't ACTIVE or EXPIRED", async () => {
+  it("rejects an EXPIRED subscription (past edition) — upsell is ACTIVE-only", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "EXPIRED",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: { event: null },
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("blocks a new purchase while another upsell payment is still PENDING", async () => {
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({
+      id: "payment_pending",
+      upsellQuantity: 2,
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", VALID_INPUT);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("2 place(s)");
+    expect(prisma.companyPayment.findFirst).toHaveBeenCalledWith({
+      where: { companySubscriptionId: "sub_1", status: "PENDING", upsellQuantity: { not: null } },
+    });
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a quantity above the upper bound", async () => {
+    const result = await purchaseUpsellSeats("sub_1", { ...VALID_INPUT, quantity: 501 });
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("returns a clean error instead of a 500 when the amount overflows the Int column", async () => {
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({
+      id: "plan_upsell",
+      isActive: true,
+      isUpsell: true,
+      priceAr: 10_000_000,
+    } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", { ...VALID_INPUT, quantity: 500 });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("Montant trop élevé");
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the subscription isn't ACTIVE", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       id: "sub_1",
       companyId: "company_1",

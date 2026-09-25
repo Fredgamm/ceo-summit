@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 
-import { getActivePlans, getPlanBySlug } from "@/lib/plans-query";
+import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { CompanySignupWizard } from "@/components/auth/company-signup-wizard";
 import { formatAriary } from "@/lib/utils";
@@ -25,21 +25,28 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const plan = searchParams.offre ? await getPlanBySlug(searchParams.offre) : null;
   if (!plan) return { title: "Créer mon compte" };
 
-  const title = plan.event ? `${plan.name} — ${plan.event.title}` : plan.name;
+  const name = cleanPlanName(plan.name);
+  const title = plan.event ? `${name} — ${plan.event.title}` : name;
   const description =
     plan.description ??
-    `Rejoignez CEO Summit avec l'offre ${plan.name} — ${formatAriary(plan.priceAr)}.`;
+    `Rejoignez CEO Summit avec l'offre ${name} — ${formatAriary(plan.priceAr)}.`;
 
   return { title, description };
 }
 
 export default async function InscriptionPage({ searchParams }: PageProps) {
-  const [intendedPlan, plans, sectors, countries] = await Promise.all([
+  const [rawIntendedPlan, rawPlans, sectors, countries] = await Promise.all([
     searchParams.offre ? getPlanBySlug(searchParams.offre) : null,
     getActivePlans({ selfServiceOnly: true }),
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
   ]);
+  // Audit MVP (25 septembre 2026) — affichage défensif : une offre saisie
+  // avec du markdown dans son nom (« Early Bird** … ») s'affiche proprement.
+  const plans = rawPlans.map((p) => ({ ...p, name: cleanPlanName(p.name) }));
+  const intendedPlan = rawIntendedPlan
+    ? { ...rawIntendedPlan, name: cleanPlanName(rawIntendedPlan.name) }
+    : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface p-6">

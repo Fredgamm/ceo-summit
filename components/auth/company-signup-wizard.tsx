@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { toast } from "sonner";
 import type { Plan } from "@prisma/client";
 
 import { createCompanyAccount } from "@/app/actions/company-account";
@@ -111,7 +112,17 @@ export function CompanySignupWizard({
         setError(result.error);
         return;
       }
-      await signIn("credentials", { email, password, redirect: false });
+      // Audit (25 septembre 2026) — le résultat de signIn n'était jamais
+      // vérifié : en cas d'échec, l'utilisateur atterrissait sur une page
+      // protégée qui le renvoyait vers /login sans aucune explication.
+      const signInResult = await signIn("credentials", { email, password, redirect: false });
+      if (!signInResult || signInResult.error) {
+        toast.error(
+          "Votre compte est créé, mais la connexion automatique a échoué — connectez-vous pour continuer."
+        );
+        router.push(`/login?callbackUrl=${encodeURIComponent("/entreprise/paiement")}`);
+        return;
+      }
       router.push("/entreprise/paiement");
       router.refresh();
     } finally {

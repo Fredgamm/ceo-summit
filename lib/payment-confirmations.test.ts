@@ -5,6 +5,7 @@ vi.mock("@/lib/prisma", () => ({
     companyPayment: { findUnique: vi.fn(), updateMany: vi.fn() },
     companySubscription: { update: vi.fn() },
     auditLog: { create: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -50,6 +51,26 @@ describe("confirmCompanyPaymentCore — upsell branch", () => {
     vi.clearAllMocks();
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(UPSELL_PAYMENT as never);
     vi.mocked(prisma.companyPayment.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.$transaction).mockImplementation((async (cb: (tx: unknown) => unknown) =>
+      cb(prisma)) as never);
+  });
+
+  it("confirms the payment and increments extraSeats inside one transaction", async () => {
+    await confirmCompanyPaymentCore("payment_1", "admin_1");
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.companyPayment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "payment_1", status: "PENDING" } })
+    );
+  });
+
+  it("does not leave a CONFIRMED payment without its seats when the increment fails", async () => {
+    // La transaction réelle annule tout : on vérifie ici que l'échec remonte
+    // (pas d'email « supplément confirmé » envoyé pour des places absentes).
+    vi.mocked(prisma.companySubscription.update).mockRejectedValueOnce(new Error("db down"));
+
+    await expect(confirmCompanyPaymentCore("payment_1", "admin_1")).rejects.toThrow("db down");
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
   it("increments extraSeats and emails the company admin", async () => {

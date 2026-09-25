@@ -38,6 +38,17 @@ export const authConfig = {
         token.tier = user.tier;
         token.hasCompanyAccess = user.hasCompanyAccess;
         token.status = user.status;
+        /**
+         * Audit sécurité (25 septembre 2026) — instant de la connexion,
+         * posé une seule fois (à la connexion) et conservé tel quel à
+         * chaque rafraîchissement du JWT, contrairement à `iat` que
+         * NextAuth réémet. Comparé à `User.passwordChangedAt` par
+         * `requireViewer()` (lib/require-viewer.ts) : une session ouverte
+         * avant une réinitialisation de mot de passe est refusée. Pas de
+         * lecture Prisma ici — ce callback tourne aussi en edge runtime
+         * (middleware.ts), voir le commentaire en tête de fichier.
+         */
+        token.loginAt = Date.now();
       }
       return token;
     },
@@ -48,6 +59,7 @@ export const authConfig = {
       session.user.tier = token.tier as string | null;
       session.user.hasCompanyAccess = token.hasCompanyAccess as boolean;
       session.user.status = token.status as string;
+      session.user.loginAt = typeof token.loginAt === "number" ? token.loginAt : null;
       return session;
     },
   },

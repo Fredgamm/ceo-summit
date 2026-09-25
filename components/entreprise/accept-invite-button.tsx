@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { toast } from "sonner";
 
 import { acceptCompanyInvite } from "@/app/actions/company-invites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -28,7 +29,18 @@ export function AcceptInviteButton({ token }: { token: string }) {
         setError(result.error);
         return;
       }
-      await signIn("credentials", { email: result.data.email, password, redirect: false });
+      const signInResult = await signIn("credentials", {
+        email: result.data.email,
+        password,
+        redirect: false,
+      });
+      if (!signInResult || signInResult.error) {
+        toast.error(
+          "Votre compte est créé, mais la connexion automatique a échoué — connectez-vous pour continuer."
+        );
+        router.push(`/login?callbackUrl=${encodeURIComponent("/bienvenue")}`);
+        return;
+      }
       router.push("/bienvenue");
       router.refresh();
     } finally {
