@@ -50,16 +50,23 @@ export default async function CataloguePage({
     validCountries,
   });
 
-  const [members, total] = await Promise.all([
+  const [members, total, topOffer] = await Promise.all([
     prisma.user.findMany({
       where,
       orderBy,
       skip,
       take,
-      include: { company: { select: { name: true } } },
+      include: {
+        company: { select: { name: true, subscription: { select: { plan: true } } } },
+      },
     }),
     prisma.user.count({ where }),
+    // Rapport QA du 30 sept. 2026 (§11) — met en avant la carte de l'offre
+    // la plus chère actuellement souscrite, calculé dynamiquement plutôt
+    // qu'une offre nommée en dur : reste correct si les offres changent.
+    prisma.plan.aggregate({ _max: { priceAr: true } }),
   ]);
+  const topOfferPriceAr = topOffer._max.priceAr;
 
   const totalPages = Math.max(1, Math.ceil(total / CATALOGUE_PAGE_SIZE));
   const unreadMessages = await countUnreadMessages(viewer.id);
@@ -101,6 +108,10 @@ export default async function CataloguePage({
               country={m.country}
               avatarUrl={m.avatarUrl}
               role={m.role}
+              offerName={m.company?.subscription?.plan.name ?? null}
+              isTopOffer={
+                topOfferPriceAr != null && m.company?.subscription?.plan.priceAr === topOfferPriceAr
+              }
             />
           ))}
         </div>

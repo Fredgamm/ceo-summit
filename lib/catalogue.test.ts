@@ -8,11 +8,11 @@ const REFERENTIALS = {
 };
 
 describe("buildCatalogueQuery", () => {
-  it("defaults to active members, recent-first, page 1", () => {
+  it("defaults to active members, most expensive offer first, page 1", () => {
     const query = buildCatalogueQuery({}, REFERENTIALS);
 
     expect(query.where).toEqual({ status: "ACTIVE" });
-    expect(query.orderBy).toEqual({ createdAt: "desc" });
+    expect(query.orderBy).toEqual({ company: { subscription: { plan: { priceAr: "desc" } } } });
     expect(query.skip).toBe(0);
     expect(query.take).toBe(CATALOGUE_PAGE_SIZE);
     expect(query.page).toBe(1);
@@ -68,6 +68,18 @@ describe("buildCatalogueQuery", () => {
 
   it("sorts by tier (role desc) when tri=tier", () => {
     expect(buildCatalogueQuery({ tri: "tier" }, REFERENTIALS).orderBy).toEqual({ role: "desc" });
+  });
+
+  it("sorts recent-first when tri=recent", () => {
+    expect(buildCatalogueQuery({ tri: "recent" }, REFERENTIALS).orderBy).toEqual({
+      createdAt: "desc",
+    });
+  });
+
+  it("sorts by offer (most expensive plan first) when tri=offre", () => {
+    expect(buildCatalogueQuery({ tri: "offre" }, REFERENTIALS).orderBy).toEqual({
+      company: { subscription: { plan: { priceAr: "desc" } } },
+    });
   });
 
   it("paginates: page 2 skips one page's worth of results", () => {

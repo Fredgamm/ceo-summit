@@ -57,12 +57,21 @@ export function buildCatalogueQuery(
     ];
   }
 
+  /**
+   * Rapport QA du 30 sept. 2026 — tri par défaut demandé : l'offre la plus
+   * chère (tier d'abonnement de l'entreprise) en premier, plutôt que
+   * l'activité récente. `company`/`subscription`/`plan` sont tous des
+   * relations "to-one", Prisma peut trier sur un champ imbriqué à plusieurs
+   * niveaux sans requête séparée.
+   */
   const orderBy: Prisma.UserOrderByWithRelationInput =
     params.tri === "alpha"
       ? { name: "asc" }
       : params.tri === "tier"
         ? { role: "desc" }
-        : { createdAt: "desc" };
+        : params.tri === "recent"
+          ? { createdAt: "desc" }
+          : { company: { subscription: { plan: { priceAr: "desc" } } } };
 
   return {
     where,

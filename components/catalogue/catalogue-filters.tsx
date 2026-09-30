@@ -23,7 +23,8 @@ const TIERS = [
 ];
 
 const SORTS = [
-  { value: "recent", label: "Trier : Activité récente" },
+  { value: "offre", label: "Trier : Offre (plus chère d'abord)" },
+  { value: "recent", label: "Activité récente" },
   { value: "alpha", label: "Alphabétique" },
   { value: "tier", label: "Niveau membership" },
 ];
@@ -142,7 +143,7 @@ export function CatalogueFilters({
         </Select>
 
         <Select
-          value={searchParams.get("tri") || "recent"}
+          value={searchParams.get("tri") || "offre"}
           onValueChange={(v) => updateParam("tri", v)}
         >
           <SelectTrigger className="w-[200px]">
