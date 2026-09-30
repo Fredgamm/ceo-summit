@@ -26,7 +26,8 @@ export default function CompanyPaymentRejectedEmail({
         Un correctif est nécessaire, {adminName.split(" ")[0]}.
       </Text>
       <Text style={{ fontSize: 14, lineHeight: 1.6, color: "#4A4A4A", margin: "0 0 8px" }}>
-        Le paiement soumis pour <strong>{companyName}</strong> n&apos;a pas pu être validé :
+        Le paiement soumis pour participation au CEO Summit Indian Ocean, 3rd edition n&apos;a pas
+        pu être validé :
       </Text>
       <Text
         style={{
@@ -43,7 +44,7 @@ export default function CompanyPaymentRejectedEmail({
         {reason}
       </Text>
       <a href="https://app.ceo-summit.mg/entreprise/paiement" style={emailButtonStyle}>
-        Soumettre un nouveau paiement
+        Soumettre à nouveau
       </a>
     </EmailLayout>
   );

@@ -54,9 +54,11 @@ export default async function PaymentPendingPage() {
           <NoCompanyPath />
         )}
 
-        <p className="mb-6 mt-6 text-xs text-text-muted">
-          Une question ? Contactez l&apos;équipe CEO Summit.
-        </p>
+        <div className="mb-6 mt-6 text-xs text-text-muted">
+          <p>Une question ? Contactez l&apos;équipe CEO SUMMIT INDIAN OCEAN.</p>
+          <p className="mt-2">038 09 131 14 – register@ceo-summit.mg (inscriptions)</p>
+          <p>038 01 131 14 – team@ceo-summit.mg (plateforme)</p>
+        </div>
         <SignOutButton className="mx-auto flex items-center justify-center gap-2 text-sm font-semibold text-navy-mid" />
       </div>
     </div>

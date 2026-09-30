@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
@@ -37,7 +38,7 @@ export default async function CompanyPaymentPage({
   if (!viewer) redirect("/login");
   if (!viewer.companyId) redirect("/entreprise/creer");
 
-  const [company, plans, deepLinkedPlan] = await Promise.all([
+  const [company, plans, deepLinkedPlan, liveEurToArRate] = await Promise.all([
     prisma.company.findUnique({
       where: { id: viewer.companyId },
       include: {
@@ -46,6 +47,7 @@ export default async function CompanyPaymentPage({
     }),
     getActivePlans({ selfServiceOnly: true }),
     searchParams.offre ? getPlanBySlug(searchParams.offre) : null,
+    getEurToArRate(),
   ]);
   if (!company) redirect("/entreprise/creer");
   if (company.companyAdminId !== viewer.id) redirect(`/entreprises/${company.id}`);
@@ -78,8 +80,9 @@ export default async function CompanyPaymentPage({
               {subscription.plan.pricingMode === "PER_PARTICIPANT"
                 ? `${formatAriary(subscription.plan.priceAr)} par participant, à partir de ${subscription.plan.minParticipants ?? 1}`
                 : `${formatAriary(subscription.plan.priceAr)} — ${subscription.plan.maxTeamMembers ?? "?"} participant(s) inclus`}
-              . Choisissez votre mode de paiement, uploadez une preuve (bordereau, reçu, capture) —
-              l&apos;équipe CEO Summit valide manuellement chaque paiement.
+              . Choisissez votre mode de paiement. Si &quot;Virement bancaire ou Chèque&quot;,
+              uploadez une pièce justificative (bordereau, ordre de virement, reçu, capture) —
+              l&apos;équipe CEO Summit validera ensuite votre inscription.
             </p>
 
             {subscription.status === "PENDING_REVIEW" && (
@@ -128,6 +131,7 @@ export default async function CompanyPaymentPage({
               plans={allPlans}
               currentPlanId={subscription?.planId}
               initialPlanId={initialPlanId}
+              liveEurToArRate={liveEurToArRate}
             />
           </div>
         )}

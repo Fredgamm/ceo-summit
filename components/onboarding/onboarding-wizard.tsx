@@ -149,13 +149,15 @@ export function OnboardingWizard({
 function WelcomeStep({ firstName }: { firstName: string }) {
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-bold text-navy">Bienvenue dans le cercle, {firstName}.</h1>
+      <h1 className="mb-2 text-2xl font-bold text-navy">
+        Bienvenue dans le Cercle des Décideurs, {firstName}.
+      </h1>
       <p className="mb-6 text-sm leading-relaxed text-text-muted">
         Votre accès au CEO Summit est actif. Trois piliers sont désormais à votre disposition.
       </p>
       <div className="flex flex-col gap-4">
         <Pillar
-          title="Le Cercle"
+          title="Cercle des Décideurs"
           description="L'annuaire des dirigeants membres du CEO Summit et leurs entreprises."
         />
         <Pillar

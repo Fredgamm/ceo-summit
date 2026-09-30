@@ -33,9 +33,9 @@ export default function CompanyInviteEmail({
         Bonjour {inviteeName.split(" ")[0]},
       </Text>
       <Text style={{ fontSize: 14, lineHeight: 1.6, color: "#4A4A4A", margin: "0 0 16px" }}>
-        <strong>{companyName}</strong> vous invite à rejoindre son équipe sur CEO Summit. Acceptez
-        l&apos;invitation pour créer votre compte et accéder à la plateforme — vous choisirez
-        vous-même votre mot de passe à cette étape.
+        <strong>{companyName}</strong> vous invite à rejoindre son équipe sur la plateforme de
+        networking du CEO Summit Indian Ocean. Acceptez l&apos;invitation pour créer votre compte et
+        accéder à la plateforme — vous choisirez vous-même votre mot de passe à cette étape.
       </Text>
       <a href={inviteUrl} style={emailButtonStyle}>
         Accepter l&apos;invitation
