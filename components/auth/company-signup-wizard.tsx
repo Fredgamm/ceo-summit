@@ -11,6 +11,7 @@ import { createCompanyAccount } from "@/app/actions/company-account";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -19,13 +20,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatPlanPrice } from "@/lib/utils";
+import { formatPlanPriceLive } from "@/lib/utils";
 
 interface CompanySignupWizardProps {
   plans: Plan[];
   intendedPlan?: Plan | null;
   sectors: string[];
   countries: string[];
+  /**
+   * Rapport QA du 30 sept. 2026 (§10) — cours du jour EUR→Ar, fourni par la
+   * page serveur. N'affecte jamais le montant réellement facturé.
+   */
+  liveEurToArRate: number;
 }
 
 /**
@@ -41,6 +47,7 @@ export function CompanySignupWizard({
   intendedPlan,
   sectors,
   countries,
+  liveEurToArRate,
 }: CompanySignupWizardProps) {
   const router = useRouter();
   const [planId, setPlanId] = React.useState<string | null>(intendedPlan?.id ?? null);
@@ -71,7 +78,7 @@ export function CompanySignupWizard({
               <p className="text-base font-bold text-navy">{plan.name}</p>
               {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
               <p className="mt-1 text-lg font-bold text-navy">
-                {formatPlanPrice(plan)}
+                {formatPlanPriceLive(plan, liveEurToArRate)}
                 {plan.pricingMode === "PER_PARTICIPANT"
                   ? " / participant"
                   : ` — ${plan.maxTeamMembers ?? "?"} participant(s) inclus`}
@@ -136,7 +143,8 @@ export function CompanySignupWizard({
         <Alert variant="gold">
           <AlertDescription className="flex items-center justify-between gap-3">
             <span>
-              Offre choisie : <strong>{selectedPlan.name}</strong> — {formatPlanPrice(selectedPlan)}
+              Offre choisie : <strong>{selectedPlan.name}</strong> —{" "}
+              {formatPlanPriceLive(selectedPlan, liveEurToArRate)}
             </span>
             {!intendedPlan && (
               <button
@@ -179,9 +187,8 @@ export function CompanySignupWizard({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="signup-password">Mot de passe</Label>
-          <Input
+          <PasswordInput
             id="signup-password"
-            type="password"
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -190,9 +197,8 @@ export function CompanySignupWizard({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="signup-confirm-password">Confirmer</Label>
-          <Input
+          <PasswordInput
             id="signup-confirm-password"
-            type="password"
             placeholder="••••••••"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}

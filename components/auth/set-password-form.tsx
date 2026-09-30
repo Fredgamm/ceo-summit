@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -63,9 +63,8 @@ export function SetPasswordForm({ mode, submitLabel, onSubmit, email }: SetPassw
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Nouveau mot de passe</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -78,9 +77,8 @@ export function SetPasswordForm({ mode, submitLabel, onSubmit, email }: SetPassw
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
-        <Input
+        <PasswordInput
           id="confirmPassword"
-          type="password"
           placeholder="••••••••"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}

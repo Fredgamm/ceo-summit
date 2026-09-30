@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { acceptCompanyInvite } from "@/app/actions/company-invites";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 /** Parcours revu (1er août 2026) — mot de passe choisi ici, connexion automatique juste après. */
@@ -52,9 +52,8 @@ export function AcceptInviteButton({ token }: { token: string }) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="invite-password">Choisissez votre mot de passe</Label>
-        <Input
+        <PasswordInput
           id="invite-password"
-          type="password"
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -67,9 +66,8 @@ export function AcceptInviteButton({ token }: { token: string }) {
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="invite-confirm-password">Confirmer le mot de passe</Label>
-        <Input
+        <PasswordInput
           id="invite-confirm-password"
-          type="password"
           placeholder="••••••••"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
