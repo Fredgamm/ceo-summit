@@ -21,6 +21,9 @@ export const opportunityFormSchema = z.object({
   title: z.string().trim().min(10, "Le titre doit contenir au moins 10 caractères").max(140),
   description: z.string().trim().min(20, "La description doit contenir au moins 20 caractères"),
   budget: z.string().optional().default(""), // Ariary, parsed manually — optional per backlog
+  // Rapport QA du 30 sept. 2026 — saisie optionnelle en euros, même logique
+  // que `budget` (parsé manuellement, jamais lu pour le filtre/tri).
+  budgetEur: z.string().optional().default(""),
   deadline: z.string().optional().default(""), // "YYYY-MM-DD", optional
   visibility: z.enum(["MEMBER", "EXECUTIVE", "CHAIRMAN"]),
   // Propriété des clés (préfixe `deal-room/<auteur>/`) vérifiée dans

@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Deal Room" };
 
@@ -179,6 +179,7 @@ export default async function AdminDealRoomPage({
                     )}
                     <span>· Soumis le {formatDateFr(opp.createdAt)}</span>
                     {opp.budget != null && <span>· {formatAriary(opp.budget)}</span>}
+                    {opp.budgetEur != null && <span>· {formatEuro(opp.budgetEur)}</span>}
                   </div>
                 </div>
                 <div className="flex min-w-[140px] flex-col gap-2">

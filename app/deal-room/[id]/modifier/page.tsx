@@ -65,6 +65,7 @@ export default async function EditOpportunityPage({ params }: { params: { id: st
           title: opportunity.title,
           description: opportunity.description,
           budget: opportunity.budget != null ? String(opportunity.budget) : "",
+          budgetEur: opportunity.budgetEur != null ? String(opportunity.budgetEur) : "",
           deadline: opportunity.deadline ? opportunity.deadline.toISOString().slice(0, 10) : "",
           visibility: opportunity.visibility,
           attachments: opportunity.attachments.map((key) => ({

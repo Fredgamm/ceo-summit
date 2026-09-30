@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { ContactPanel } from "@/components/deal-room/contact-panel";
 import { ReceivedContactActions } from "@/components/deal-room/received-contact-actions";
 import { WithdrawContactButton } from "@/components/deal-room/withdraw-contact-button";
-import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail opportunité" };
 
@@ -118,6 +118,7 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
       <div className="mb-6 flex flex-wrap gap-4 text-sm text-text-muted">
         <span>📍 {opportunity.country}</span>
         {opportunity.budget != null && <span>💰 Budget : {formatAriary(opportunity.budget)}</span>}
+        {opportunity.budgetEur != null && <span>💶 {formatEuro(opportunity.budgetEur)}</span>}
         {opportunity.deadline && <span>📅 Échéance : {formatDateFr(opportunity.deadline)}</span>}
         <span>
           {opportunity._count.contacts} contact{opportunity._count.contacts !== 1 ? "s" : ""} reçu

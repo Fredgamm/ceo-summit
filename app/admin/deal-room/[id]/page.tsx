@@ -11,7 +11,7 @@ import { OpportunityDecisionPanel } from "@/components/admin/deal-room/opportuni
 import { ModerationNoteForm } from "@/components/admin/deal-room/moderation-note-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Examiner une opportunité" };
 
@@ -112,6 +112,12 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
                 <div className="rounded-md bg-surface p-3">
                   <p className="mb-1 text-xs font-bold uppercase text-text-muted">Budget</p>
                   <p className="font-bold text-navy">{formatAriary(opportunity.budget)}</p>
+                </div>
+              )}
+              {opportunity.budgetEur != null && (
+                <div className="rounded-md bg-surface p-3">
+                  <p className="mb-1 text-xs font-bold uppercase text-text-muted">Budget (€)</p>
+                  <p className="font-bold text-navy">{formatEuro(opportunity.budgetEur)}</p>
                 </div>
               )}
               {opportunity.deadline && (

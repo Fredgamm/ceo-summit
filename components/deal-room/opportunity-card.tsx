@@ -3,7 +3,7 @@ import type { Tier } from "@prisma/client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
 
 const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
   MEMBER: "member",
@@ -18,6 +18,7 @@ interface OpportunityCardProps {
   type: string;
   sector: string;
   budget: number | null;
+  budgetEur: number | null;
   deadline: Date | null;
   createdAt: Date;
   author: { name: string; title: string | null; avatarUrl: string | null; role: string };
@@ -31,6 +32,7 @@ export function OpportunityCard({
   type,
   sector,
   budget,
+  budgetEur,
   deadline,
   createdAt,
   author,
@@ -52,6 +54,7 @@ export function OpportunityCard({
       <div className="flex flex-wrap gap-2 text-xs text-text-muted">
         <span>Publié le {formatDateFr(createdAt)}</span>
         {budget != null && <span>· Budget : {formatAriary(budget)}</span>}
+        {budgetEur != null && <span>· {formatEuro(budgetEur)}</span>}
         {deadline && <span>· Échéance : {formatDateFr(deadline)}</span>}
       </div>
 

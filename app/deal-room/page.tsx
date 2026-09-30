@@ -109,6 +109,7 @@ export default async function DealRoomPage({
               type={opp.type}
               sector={opp.sector}
               budget={opp.budget}
+              budgetEur={opp.budgetEur}
               deadline={opp.deadline}
               createdAt={opp.createdAt}
               author={{

@@ -361,6 +361,7 @@ export default async function DashboardPage() {
                 type={opp.type}
                 sector={opp.sector}
                 budget={opp.budget}
+                budgetEur={opp.budgetEur}
                 deadline={opp.deadline}
                 createdAt={opp.createdAt}
                 author={opp.author}

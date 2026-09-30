@@ -713,6 +713,12 @@ model Opportunity {
   country          String
   description      String            @db.Text
   budget           Int? // Ariary
+  /// Rapport QA du 30 septembre 2026 — budget optionnel saisi en euros,
+  /// même logique que Plan.priceEur/priceAr : `budget` (Ariary) reste
+  /// l'unique valeur utilisée pour le filtre/tri par budget de la liste
+  /// (lib/deal-room-query.ts), `budgetEur` n'est qu'informatif pour
+  /// l'affichage "≈ X Ar" quand l'auteur a saisi en €.
+  budgetEur        Int?
   deadline         DateTime?
   /// Audit mobile 22 sept. 2026 (conception/14 §3) — défaut aligné sur
   /// l'attendu confirmé (Deal Room accessible à tous par défaut, comme

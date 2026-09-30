@@ -22,16 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatAriary, formatDateFr } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr } from "@/lib/utils";
 
 const STEP_COUNT = 4;
-const STEP_LABELS = ["Type & catégorie", "Titre & description", "Documents & visibilité", "Aperçu"];
-
-const TIERS: { value: Tier; label: string }[] = [
-  { value: "MEMBER", label: "Tous les membres" },
-  { value: "EXECUTIVE", label: "Executive+" },
-  { value: "CHAIRMAN", label: "Chairman uniquement" },
-];
+const STEP_LABELS = ["Type & catégorie", "Titre & description", "Budget & documents", "Aperçu"];
 
 interface FormValues {
   type: string;
@@ -40,6 +34,7 @@ interface FormValues {
   title: string;
   description: string;
   budget: string;
+  budgetEur: string;
   deadline: string;
   visibility: Tier;
   attachments: { key: string; name: string }[];
@@ -52,6 +47,7 @@ const EMPTY_VALUES: FormValues = {
   title: "",
   description: "",
   budget: "",
+  budgetEur: "",
   deadline: "",
   visibility: "MEMBER",
   attachments: [],
@@ -171,6 +167,7 @@ export function PublishWizard({
         title: values.title,
         description: values.description,
         budget: values.budget,
+        budgetEur: values.budgetEur,
         deadline: values.deadline,
         visibility: values.visibility,
         attachments: values.attachments.map((a) => a.key),
@@ -310,8 +307,12 @@ export function PublishWizard({
       {step === 3 && (
         <div className="flex flex-col gap-4">
           <div className="rounded-lg border border-border bg-white p-6">
-            <h2 className="mb-4 text-base font-bold text-navy">Budget & échéance</h2>
-            <div className="grid grid-cols-2 gap-4">
+            <h2 className="mb-1.5 text-base font-bold text-navy">Budget & échéance</h2>
+            <p className="mb-4 text-xs text-text-muted">
+              Saisissez le budget dans la devise de votre choix — les deux champs sont optionnels et
+              indépendants.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="opp-budget">Budget indicatif (Ar)</Label>
                 <Input
@@ -324,6 +325,17 @@ export function PublishWizard({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
+                <Label htmlFor="opp-budget-eur">Budget indicatif (€)</Label>
+                <Input
+                  id="opp-budget-eur"
+                  type="number"
+                  min={0}
+                  placeholder="Optionnel"
+                  value={values.budgetEur}
+                  onChange={(e) => set("budgetEur", e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="opp-deadline">Date limite de réponse</Label>
                 <Input
                   id="opp-deadline"
@@ -332,27 +344,6 @@ export function PublishWizard({
                   onChange={(e) => set("deadline", e.target.value)}
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border bg-white p-6">
-            <h2 className="mb-1.5 text-base font-bold text-navy">
-              Membership minimum pour voir cette opportunité
-            </h2>
-            <p className="mb-4 text-xs text-text-muted">
-              Plus le niveau est élevé, plus les candidats sont qualifiés.
-            </p>
-            <div className="flex gap-4">
-              {TIERS.map((t) => (
-                <label key={t.value} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    checked={values.visibility === t.value}
-                    onChange={() => set("visibility", t.value)}
-                  />
-                  {t.label}
-                </label>
-              ))}
             </div>
           </div>
 
@@ -413,6 +404,7 @@ export function PublishWizard({
             <p className="mb-3 text-sm text-text-mid">{values.description || "Description…"}</p>
             <div className="flex flex-wrap gap-3 text-xs text-text-muted">
               {values.budget && <span>💰 {formatAriary(Number(values.budget))}</span>}
+              {values.budgetEur && <span>💶 {formatEuro(Number(values.budgetEur))}</span>}
               {values.deadline && <span>🏁 Délai : {formatDateFr(new Date(values.deadline))}</span>}
               <span>
                 📎 {values.attachments.length} document{values.attachments.length !== 1 ? "s" : ""}{" "}
