@@ -132,6 +132,12 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          # 30 septembre 2026 — le timeout par défaut d'appleboy/ssh-action
+          # (10 min) a déjà été atteint une fois alors que le script avait
+          # en réalité entièrement réussi (build + démarrage des conteneurs
+          # confirmés dans les logs), juste avant sa dernière ligne — le run
+          # est ressorti "failed" en CI malgré un déploiement réel réussi.
+          command_timeout: 20m
           script: |
             set -e
             cd /opt/ceo-summit
