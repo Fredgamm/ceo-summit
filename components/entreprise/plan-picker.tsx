@@ -8,7 +8,7 @@ import type { Plan } from "@prisma/client";
 import { selectPlan } from "@/app/actions/company-subscription";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { formatPlanPriceLive } from "@/lib/utils";
+import { PlanPrice } from "@/components/entreprise/plan-price";
 
 export function PlanPicker({
   companyId,
@@ -71,11 +71,13 @@ export function PlanPicker({
           >
             <p className="text-base font-bold text-navy">{plan.name}</p>
             {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
-            <p className="mt-1 text-lg font-bold text-navy">
-              {plan.pricingMode === "PER_PARTICIPANT"
-                ? `${formatPlanPriceLive(plan, liveEurToArRate)} / participant`
-                : formatPlanPriceLive(plan, liveEurToArRate)}
-            </p>
+            <div className="mt-1">
+              <PlanPrice
+                plan={plan}
+                liveEurToArRate={liveEurToArRate}
+                suffix={plan.pricingMode === "PER_PARTICIPANT" ? " / participant" : undefined}
+              />
+            </div>
             <ul className="flex flex-col gap-1 text-xs text-text-muted">
               {plan.pricingMode === "PER_PARTICIPANT" ? (
                 plan.minParticipants && <li>À partir de {plan.minParticipants} participants</li>

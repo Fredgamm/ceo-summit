@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PlanPrice } from "@/components/entreprise/plan-price";
 import { formatPlanPriceLive } from "@/lib/utils";
 
 interface CompanySignupWizardProps {
@@ -77,12 +78,17 @@ export function CompanySignupWizard({
             >
               <p className="text-base font-bold text-navy">{plan.name}</p>
               {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
-              <p className="mt-1 text-lg font-bold text-navy">
-                {formatPlanPriceLive(plan, liveEurToArRate)}
-                {plan.pricingMode === "PER_PARTICIPANT"
-                  ? " / participant"
-                  : ` — ${plan.maxTeamMembers ?? "?"} participant(s) inclus`}
-              </p>
+              <div className="mt-1">
+                <PlanPrice
+                  plan={plan}
+                  liveEurToArRate={liveEurToArRate}
+                  suffix={
+                    plan.pricingMode === "PER_PARTICIPANT"
+                      ? " / participant"
+                      : ` — ${plan.maxTeamMembers ?? "?"} participant(s) inclus`
+                  }
+                />
+              </div>
               <Button onClick={() => setPlanId(plan.id)} className="mt-2 justify-center">
                 Choisir cette offre
               </Button>
