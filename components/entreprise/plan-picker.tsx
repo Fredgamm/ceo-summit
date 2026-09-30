@@ -8,13 +8,14 @@ import type { Plan } from "@prisma/client";
 import { selectPlan } from "@/app/actions/company-subscription";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { formatPlanPrice } from "@/lib/utils";
+import { formatPlanPriceLive } from "@/lib/utils";
 
 export function PlanPicker({
   companyId,
   plans,
   currentPlanId,
   initialPlanId,
+  liveEurToArRate,
 }: {
   companyId: string;
   plans: Plan[];
@@ -25,6 +26,13 @@ export function PlanPicker({
    * automatiquement : l'utilisateur confirme toujours son choix lui-même.
    */
   initialPlanId?: string | null;
+  /**
+   * Rapport QA du 30 sept. 2026 (§10) — cours du jour EUR→Ar
+   * (`getEurToArRate()`, fourni par la page serveur) pour l'estimation
+   * "≈ X Ar" affichée à côté d'un prix en €. N'affecte jamais le montant
+   * réellement facturé (`plan.priceAr`, figé).
+   */
+  liveEurToArRate: number;
 }) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
@@ -65,8 +73,8 @@ export function PlanPicker({
             {plan.description && <p className="text-sm text-text-mid">{plan.description}</p>}
             <p className="mt-1 text-lg font-bold text-navy">
               {plan.pricingMode === "PER_PARTICIPANT"
-                ? `${formatPlanPrice(plan)} / participant`
-                : formatPlanPrice(plan)}
+                ? `${formatPlanPriceLive(plan, liveEurToArRate)} / participant`
+                : formatPlanPriceLive(plan, liveEurToArRate)}
             </p>
             <ul className="flex flex-col gap-1 text-xs text-text-muted">
               {plan.pricingMode === "PER_PARTICIPANT" ? (

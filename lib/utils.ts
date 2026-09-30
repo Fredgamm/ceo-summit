@@ -31,6 +31,28 @@ export function formatPlanPrice(plan: { priceAr: number; priceEur?: number | nul
   return formatAriary(plan.priceAr);
 }
 
+/**
+ * Rapport QA du 30 sept. 2026 (§10) — variante d'affichage de
+ * `formatPlanPrice` où l'estimation "≈ X Ar" suit le cours du jour
+ * (`lib/currency-conversion.ts::getEurToArRate`, fourni par l'appelant —
+ * un composant serveur, l'appel réseau/cache ne doit pas se faire ici) au
+ * lieu de la valeur figée `plan.priceAr`. Ne change RIEN au montant
+ * réellement dû/facturé (toujours `plan.priceAr`, lu par
+ * `lib/company-payment-amount.ts`) — seulement l'affichage informatif, pour
+ * ne jamais faire varier le montant qu'une entreprise doit effectivement
+ * payer pendant qu'un paiement est en cours.
+ */
+export function formatPlanPriceLive(
+  plan: { priceAr: number; priceEur?: number | null },
+  liveEurToArRate: number
+): string {
+  if (plan.priceEur != null) {
+    const liveAr = Math.round(plan.priceEur * liveEurToArRate);
+    return `${formatEuro(plan.priceEur)} (≈ ${formatAriary(liveAr)} au cours du jour)`;
+  }
+  return formatAriary(plan.priceAr);
+}
+
 /** Format a date the CEO Summit way: 15 août 2026 */
 export function formatDateFr(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;

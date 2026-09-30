@@ -16,6 +16,7 @@ import {
 } from "@/lib/company-seats";
 import { safeHref } from "@/lib/normalize-url";
 import { UPSELL_ELIGIBLE_WHERE } from "@/lib/upsell-plans";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -101,6 +102,7 @@ export default async function CompanyProfilePage({
         orderBy: { displayOrder: "asc" },
       })
     : [];
+  const liveEurToArRate = await getEurToArRate();
   // Audit (25 septembre 2026) — un seul supplément en attente à la fois
   // (voir `purchaseUpsellSeats`) : affiché à la place du formulaire.
   const pendingUpsellPayment =
@@ -328,6 +330,7 @@ export default async function CompanyProfilePage({
                       <UpsellPurchaseForm
                         companySubscriptionId={company.subscription.id}
                         upsellPlans={upsellPlans}
+                        liveEurToArRate={liveEurToArRate}
                       />
                     </div>
                   )

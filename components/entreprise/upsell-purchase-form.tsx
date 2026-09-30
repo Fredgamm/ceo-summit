@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
-import { formatAriary, formatPlanPrice } from "@/lib/utils";
+import { formatAriary, formatPlanPriceLive } from "@/lib/utils";
 
 /**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
@@ -30,9 +30,15 @@ import { formatAriary, formatPlanPrice } from "@/lib/utils";
 export function UpsellPurchaseForm({
   companySubscriptionId,
   upsellPlans,
+  liveEurToArRate,
 }: {
   companySubscriptionId: string;
   upsellPlans: Plan[];
+  /**
+   * Rapport QA du 30 sept. 2026 (§10) — cours du jour EUR→Ar, fourni par la
+   * page serveur. N'affecte jamais le montant réellement facturé.
+   */
+  liveEurToArRate: number;
 }) {
   const router = useRouter();
   const [planId, setPlanId] = React.useState(upsellPlans[0]?.id ?? "");
@@ -187,7 +193,7 @@ export function UpsellPurchaseForm({
             <SelectContent>
               {upsellPlans.map((plan) => (
                 <SelectItem key={plan.id} value={plan.id}>
-                  {plan.name} — {formatPlanPrice(plan)}
+                  {plan.name} — {formatPlanPriceLive(plan, liveEurToArRate)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -230,7 +236,8 @@ export function UpsellPurchaseForm({
 
       <div className="rounded-md border border-border bg-surface p-4">
         <p className="text-sm text-text-mid">
-          {declaredQuantity} × {selectedPlan ? formatPlanPrice(selectedPlan) : "—"}
+          {declaredQuantity} ×{" "}
+          {selectedPlan ? formatPlanPriceLive(selectedPlan, liveEurToArRate) : "—"}
         </p>
         <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
       </div>

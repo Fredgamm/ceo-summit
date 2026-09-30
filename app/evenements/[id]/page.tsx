@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { getActivePlans } from "@/lib/plans-query";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { parseSpeakers, speakersToText } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -56,7 +57,10 @@ export default async function EventDetailPage({ params }: { params: { id: string
    * configurées, elles remplacent l'ancien bouton simple d'inscription
    * (virement/mobile money, sans preuve) pour éviter un double mécanisme.
    */
-  const eventOffers = await getActivePlans({ selfServiceOnly: true, eventId: event.id });
+  const [eventOffers, liveEurToArRate] = await Promise.all([
+    getActivePlans({ selfServiceOnly: true, eventId: event.id }),
+    getEurToArRate(),
+  ]);
   const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
@@ -209,7 +213,11 @@ export default async function EventDetailPage({ params }: { params: { id: string
                 </p>
                 {viewer.company ? (
                   isCompanyAdmin ? (
-                    <PlanPicker companyId={viewer.company.id} plans={eventOffers} />
+                    <PlanPicker
+                      companyId={viewer.company.id}
+                      plans={eventOffers}
+                      liveEurToArRate={liveEurToArRate}
+                    />
                   ) : (
                     <p className="text-sm text-text-muted">
                       Seul l&apos;admin de votre entreprise peut choisir un pass entreprise.

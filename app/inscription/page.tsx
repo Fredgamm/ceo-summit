@@ -3,6 +3,7 @@ import Image from "next/image";
 
 import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { getReferentialLabels } from "@/lib/referentials-query";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { CompanySignupWizard } from "@/components/auth/company-signup-wizard";
 import { formatAriary } from "@/lib/utils";
 
@@ -35,11 +36,12 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 }
 
 export default async function InscriptionPage({ searchParams }: PageProps) {
-  const [rawIntendedPlan, rawPlans, sectors, countries] = await Promise.all([
+  const [rawIntendedPlan, rawPlans, sectors, countries, liveEurToArRate] = await Promise.all([
     searchParams.offre ? getPlanBySlug(searchParams.offre) : null,
     getActivePlans({ selfServiceOnly: true }),
     getReferentialLabels("sector"),
     getReferentialLabels("country"),
+    getEurToArRate(),
   ]);
   // Audit MVP (25 septembre 2026) — affichage défensif : une offre saisie
   // avec du markdown dans son nom (« Early Bird** … ») s'affiche proprement.
@@ -70,6 +72,7 @@ export default async function InscriptionPage({ searchParams }: PageProps) {
           intendedPlan={intendedPlan}
           sectors={sectors}
           countries={countries}
+          liveEurToArRate={liveEurToArRate}
         />
       </div>
     </div>
