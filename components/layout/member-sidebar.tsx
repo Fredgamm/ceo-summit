@@ -49,8 +49,9 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
     <aside className="fixed left-0 top-0 hidden h-screen w-sidebar flex-col overflow-y-auto bg-navy md:flex">
       <div className="border-b border-white/10 px-[18px] py-[18px] pb-3.5">
         <Image src="/logo/ceo-summit-logo-dark.png" alt="CEO Summit" width={140} height={67} />
-        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/60">
-          Océan Indien · Décideurs
+        <div className="mt-3 uppercase leading-tight tracking-wider">
+          <div className="text-[9px] text-white/50">Conquérir de nouveaux possibles</div>
+          <div className="text-[7px] text-white/35">The power to go beyond</div>
         </div>
       </div>
 

@@ -126,8 +126,9 @@ export function AdminSidebar({ admin, badges = {} }: AdminSidebarProps) {
     <aside className="fixed left-0 top-0 flex h-screen w-sidebar-bo flex-col overflow-y-auto bg-navy-dark">
       <div className="border-b border-white/[0.08] px-5 py-[14px]">
         <Image src="/logo/ceo-summit-logo-dark.png" alt="CEO Summit" width={150} height={72} />
-        <div className="mt-1.5 text-[10px] uppercase tracking-wider text-white/60">
-          Océan Indien · Décideurs
+        <div className="mt-3 uppercase leading-tight tracking-wider">
+          <div className="text-[9px] text-white/50">Conquérir de nouveaux possibles</div>
+          <div className="text-[7px] text-white/35">The power to go beyond</div>
         </div>
         <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-gold px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-navy">
           ⚙ Admin

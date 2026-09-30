@@ -4,6 +4,7 @@ import {
   Head,
   Hr,
   Html,
+  Img,
   Preview,
   Section,
   Text,
@@ -33,13 +34,54 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
     <Html>
       <Head />
       <Preview>{preview}</Preview>
-      <Body style={{ backgroundColor: COLORS.surface, fontFamily: "Arial, Helvetica, sans-serif", margin: 0, padding: "32px 16px" }}>
-        <Container style={{ maxWidth: 480, margin: "0 auto", backgroundColor: "#fff", borderRadius: 8, overflow: "hidden", border: `1px solid ${COLORS.border}` }}>
-          <Section style={{ backgroundColor: COLORS.navy, padding: "24px 32px" }}>
-            <Text style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#fff" }}>
-              CEO<span style={{ color: COLORS.gold }}>Summit</span>
-            </Text>
-            <Text style={{ margin: "2px 0 0", fontSize: 10, letterSpacing: 0.6, textTransform: "uppercase", color: "rgba(255,255,255,0.4)" }}>
+      <Body
+        style={{
+          backgroundColor: COLORS.surface,
+          fontFamily: "Arial, Helvetica, sans-serif",
+          margin: 0,
+          padding: "32px 16px",
+        }}
+      >
+        <Container
+          style={{
+            maxWidth: 480,
+            margin: "0 auto",
+            backgroundColor: "#fff",
+            borderRadius: 8,
+            overflow: "hidden",
+            border: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <Section
+            style={{
+              backgroundColor: COLORS.surface,
+              borderBottom: `1px solid ${COLORS.border}`,
+              padding: "20px 32px",
+            }}
+          >
+            {/* 30 septembre 2026 (rapport QA) — logo en image plutôt qu'un
+             * wordmark texte. Fond clair (pas navy) : le logo est
+             * bicolore navy/rouge sur fond transparent, illisible sur un
+             * fond navy. Hébergé dans /public plutôt que sur le CDN
+             * WordPress externe fourni par le testeur — un lien tiers
+             * n'est pas garanti stable et beaucoup de clients mail
+             * bloquent les images externes par défaut. */}
+            <Img
+              src={`${process.env.NEXTAUTH_URL ?? "https://app.ceo-summit.mg"}/logo/ceo-summit-logo.png`}
+              alt="CEO Summit Indian Ocean"
+              width="150"
+              height="72"
+              style={{ display: "block" }}
+            />
+            <Text
+              style={{
+                margin: "8px 0 0",
+                fontSize: 10,
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
+                color: COLORS.textMuted,
+              }}
+            >
               Océan Indien · Décideurs
             </Text>
           </Section>
@@ -49,8 +91,8 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
           <Hr style={{ borderColor: COLORS.border, margin: 0 }} />
           <Section style={{ padding: "20px 32px" }}>
             <Text style={{ margin: 0, fontSize: 11, color: COLORS.textMuted }}>
-              CEO Summit © 2026 — Plateforme réservée aux membres. Vous recevez cet email car
-              une action a été effectuée sur votre compte CEO Summit.
+              CEO Summit © 2026 — Plateforme réservée aux membres. Vous recevez cet email car une
+              action a été effectuée sur votre compte CEO Summit.
             </Text>
           </Section>
         </Container>
