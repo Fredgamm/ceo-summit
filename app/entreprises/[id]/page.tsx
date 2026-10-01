@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Briefcase, Globe, Handshake } from "lucide-react";
+import { Globe, Handshake } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +30,7 @@ import { InviteTeammateForm } from "@/components/entreprise/invite-teammate-form
 import { AdminParticipatesToggle } from "@/components/entreprise/admin-participates-toggle";
 import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form";
 import { CompanyForm } from "@/components/entreprise/company-form";
+import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { initials, tierLabel, formatAriary } from "@/lib/utils";
 
@@ -94,6 +95,13 @@ export default async function CompanyProfilePage({
   if (!company) notFound();
 
   const isCompanyAdmin = company.companyAdminId === viewer.id;
+  // Rapport QA 1er oct. §2.5 — le gérant voit toutes ses fiches (y compris
+  // brouillon/en attente/refusée), les autres visiteurs ne voient que les
+  // fiches déjà publiées (cohérent avec /catalogue/services).
+  const services = await prisma.serviceListing.findMany({
+    where: { companyId: company.id, ...(isCompanyAdmin ? {} : { status: "PUBLISHED" }) },
+    orderBy: { createdAt: "desc" },
+  });
   const applicableCap = company.subscription ? seatCap(company.subscription) : null;
   // Audit (25 septembre 2026) — même décompte que `inviteTeammate`
   // (`countUsedSeats`) : jusqu'ici, la page ne comptait que les comptes
@@ -224,11 +232,7 @@ export default async function CompanyProfilePage({
         </TabsContent>
 
         <TabsContent value="services">
-          <EmptyState
-            icon={Briefcase}
-            title="Bientôt disponible"
-            description="Les services proposés par cette entreprise s'afficheront ici."
-          />
+          <CompanyServicesManager services={services} isCompanyAdmin={isCompanyAdmin} />
         </TabsContent>
 
         {isCompanyAdmin && (

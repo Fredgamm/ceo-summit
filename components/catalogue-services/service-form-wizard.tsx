@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { submitServiceListing } from "@/app/actions/services";
+import { submitServiceListing, updateServiceListing } from "@/app/actions/services";
 import { SERVICE_CATEGORIES } from "@/lib/service-categories";
 import {
   SERVICE_GALLERY_ALLOWED_MIME_TYPES,
@@ -42,11 +42,30 @@ const EMPTY_VALUES: FormValues = {
   gallery: [],
 };
 
-/** E5-T03 — stepper 3 étapes : catégorie+titre, description+tarif, visuels+récap+soumettre. */
-export function ServiceFormWizard() {
+/**
+ * E5-T03 — stepper 3 étapes : catégorie+titre, description+tarif, visuels+récap+soumettre.
+ *
+ * `mode`/`initialValues`/`serviceId`/`onDone` (rapport QA du 1er oct. 2026,
+ * §2.5) — réédition d'une fiche depuis l'onglet "Services" de la fiche
+ * entreprise, sur le modèle de CompanyForm (mode="create"|"edit"). `onDone`
+ * est optionnel : sans lui, le comportement de création d'origine est
+ * inchangé (redirection vers la fiche publique) ; fourni par
+ * CompanyServicesManager pour revenir à la liste plutôt que de naviguer.
+ */
+export function ServiceFormWizard({
+  mode = "create",
+  serviceId,
+  initialValues,
+  onDone,
+}: {
+  mode?: "create" | "edit";
+  serviceId?: string;
+  initialValues?: FormValues;
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const [step, setStep] = React.useState(1);
-  const [values, setValues] = React.useState<FormValues>(EMPTY_VALUES);
+  const [values, setValues] = React.useState<FormValues>(initialValues ?? EMPTY_VALUES);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -123,12 +142,23 @@ export function ServiceFormWizard() {
     setError(null);
     setSubmitting(true);
     try {
+      if (mode === "edit") {
+        const result = await updateServiceListing(serviceId!, values);
+        if (!result.success) {
+          setError(result.error);
+          return;
+        }
+        if (onDone) onDone();
+        else router.refresh();
+        return;
+      }
       const result = await submitServiceListing(values);
       if (!result.success) {
         setError(result.error);
         return;
       }
-      router.push(`/catalogue/services/${result.data.id}`);
+      if (onDone) onDone();
+      else router.push(`/catalogue/services/${result.data.id}`);
     } finally {
       setSubmitting(false);
     }
@@ -258,8 +288,9 @@ export function ServiceFormWizard() {
 
           <Alert>
             <AlertDescription>
-              Votre fiche sera soumise à validation par l&apos;équipe CEO Summit avant publication.
-              Vous serez notifié(e) par email dès sa mise en ligne.
+              {mode === "edit"
+                ? "Votre modification sera resoumise à validation par l'équipe CEO Summit avant de redevenir visible. Vous serez notifié(e) par email dès sa mise en ligne."
+                : "Votre fiche sera soumise à validation par l'équipe CEO Summit avant publication. Vous serez notifié(e) par email dès sa mise en ligne."}
             </AlertDescription>
           </Alert>
         </div>
@@ -283,7 +314,11 @@ export function ServiceFormWizard() {
           <Button onClick={handleNext}>Étape suivante →</Button>
         ) : (
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Envoi…" : "Soumettre pour publication"}
+            {submitting
+              ? "Envoi…"
+              : mode === "edit"
+                ? "Enregistrer les modifications"
+                : "Soumettre pour publication"}
           </Button>
         )}
       </div>
