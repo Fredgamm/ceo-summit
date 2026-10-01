@@ -17,7 +17,6 @@ import {
   Settings,
   Tag,
   Building2,
-  IdCard,
   ArrowLeft,
 } from "lucide-react";
 
@@ -81,7 +80,6 @@ const SECTIONS: {
         section: "entreprises",
         badgeKey: "companies",
       },
-      { href: "/admin/adhesions", label: "Adhésions", icon: IdCard, section: "adhesions" },
       {
         href: "/admin/communications",
         label: "Communications",

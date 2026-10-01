@@ -43,7 +43,6 @@ describe("accessibleSections", () => {
       "finances",
       "plans",
       "entreprises",
-      "adhesions",
     ]);
   });
 });

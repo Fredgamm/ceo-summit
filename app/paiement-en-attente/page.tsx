@@ -54,10 +54,30 @@ export default async function PaymentPendingPage() {
           <NoCompanyPath />
         )}
 
-        <div className="mb-6 mt-6 text-xs text-text-muted">
-          <p>Une question ? Contactez l&apos;équipe CEO SUMMIT INDIAN OCEAN.</p>
-          <p className="mt-2">038 09 131 14 – register@ceo-summit.mg (inscriptions)</p>
-          <p>038 01 131 14 – team@ceo-summit.mg (plateforme)</p>
+        <div className="mb-6 mt-6 border-t border-border pt-4 text-xs text-text-muted">
+          <p className="mb-2">Une question ? Contactez l&apos;équipe CEO SUMMIT INDIAN OCEAN.</p>
+          <div className="flex flex-col gap-1">
+            <p>
+              <a href="tel:+261380913114" className="text-navy-mid hover:underline">
+                038 09 131 14
+              </a>{" "}
+              –{" "}
+              <a href="mailto:register@ceo-summit.mg" className="text-navy-mid hover:underline">
+                register@ceo-summit.mg
+              </a>{" "}
+              (inscriptions)
+            </p>
+            <p>
+              <a href="tel:+261380113114" className="text-navy-mid hover:underline">
+                038 01 131 14
+              </a>{" "}
+              –{" "}
+              <a href="mailto:team@ceo-summit.mg" className="text-navy-mid hover:underline">
+                team@ceo-summit.mg
+              </a>{" "}
+              (plateforme)
+            </p>
+          </div>
         </div>
         <SignOutButton className="mx-auto flex items-center justify-center gap-2 text-sm font-semibold text-navy-mid" />
       </div>
