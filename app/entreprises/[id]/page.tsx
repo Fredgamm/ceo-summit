@@ -17,6 +17,7 @@ import {
 import { safeHref } from "@/lib/normalize-url";
 import { UPSELL_ELIGIBLE_WHERE } from "@/lib/upsell-plans";
 import { getEurToArRate } from "@/lib/currency-conversion";
+import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -28,6 +29,7 @@ import { MemberCard } from "@/components/catalogue/member-card";
 import { InviteTeammateForm } from "@/components/entreprise/invite-teammate-form";
 import { AdminParticipatesToggle } from "@/components/entreprise/admin-participates-toggle";
 import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form";
+import { CompanyForm } from "@/components/entreprise/company-form";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { initials, tierLabel, formatAriary } from "@/lib/utils";
 
@@ -57,7 +59,9 @@ export const metadata: Metadata = { title: "Profil entreprise" };
  * E2-T05 — profil entreprise. Deal Room and Services tabs are placeholders
  * for the same reason as /membres/[id] (E2-T01): E5/E6 don't exist yet.
  */
-const TAB_VALUES = ["apercu", "membres", "deal-room", "services", "gestion"] as const;
+const TAB_VALUES = ["apercu", "membres", "deal-room", "services", "gestion", "modifier"] as const;
+/** Onglets réservés au gérant de l'entreprise — rapport QA du 1er oct. §2.2. */
+const ADMIN_ONLY_TABS: readonly string[] = ["gestion", "modifier"];
 
 export default async function CompanyProfilePage({
   params,
@@ -116,16 +120,20 @@ export default async function CompanyProfilePage({
           select: { upsellQuantity: true },
         })
       : null;
+  // Rapport QA 1er oct. §2.2 — référentiels pour l'onglet "Modifier" (CompanyForm mode="edit").
+  const [sectors, countries] = isCompanyAdmin
+    ? await Promise.all([getReferentialLabels("sector"), getReferentialLabels("country")])
+    : [[], []];
   const websiteHref = safeHref(company.website);
   // Deep-link support (?tab=gestion) so links elsewhere (e.g. the
   // dashboard's "Mon équipe" widget) can land directly on a specific tab —
-  // "gestion" only honored for the company admin, who's the only one who
-  // sees that tab at all.
+  // "gestion"/"modifier" only honored for the company admin, who's the only
+  // one who sees these tabs at all.
   const requestedTab = searchParams.tab;
   const defaultTab =
     requestedTab &&
     (TAB_VALUES as readonly string[]).includes(requestedTab) &&
-    (requestedTab !== "gestion" || isCompanyAdmin)
+    (!ADMIN_ONLY_TABS.includes(requestedTab) || isCompanyAdmin)
       ? requestedTab
       : "apercu";
   const unreadMessages = await countUnreadMessages(viewer.id);
@@ -172,7 +180,8 @@ export default async function CompanyProfilePage({
           <TabsTrigger value="membres">Membres ({company.users.length})</TabsTrigger>
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
-          {isCompanyAdmin && <TabsTrigger value="gestion">Gestion</TabsTrigger>}
+          {isCompanyAdmin && <TabsTrigger value="gestion">Gestion compte</TabsTrigger>}
+          {isCompanyAdmin && <TabsTrigger value="modifier">Modifier</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="apercu">
@@ -336,6 +345,32 @@ export default async function CompanyProfilePage({
                   )
                 ))}
             </div>
+          </TabsContent>
+        )}
+
+        {isCompanyAdmin && (
+          <TabsContent value="modifier">
+            <CompanyForm
+              mode="edit"
+              companyId={company.id}
+              initialValues={{
+                name: company.name,
+                sector: company.sector,
+                country: company.country,
+                description: company.description ?? "",
+                website: company.website ?? "",
+                logoUrl: company.logoUrl ?? "",
+                phone: company.phone ?? "",
+                address: company.address ?? "",
+                linkedinUrl: (company.socialLinks as Record<string, string> | null)?.linkedin ?? "",
+                facebookUrl: (company.socialLinks as Record<string, string> | null)?.facebook ?? "",
+                instagramUrl:
+                  (company.socialLinks as Record<string, string> | null)?.instagram ?? "",
+                additionalInfo: company.additionalInfo ?? "",
+              }}
+              sectors={sectors}
+              countries={countries}
+            />
           </TabsContent>
         )}
       </Tabs>
