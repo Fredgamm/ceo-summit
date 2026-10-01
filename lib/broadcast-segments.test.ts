@@ -55,15 +55,34 @@ describe("buildBroadcastRecipientsWhere", () => {
     });
   });
 
-  it("scopes CUSTOM to a specific Plan when planId is given (dynamic offers, not just CHAIRMAN/EXECUTIVE)", () => {
-    expect(buildBroadcastRecipientsWhere("CUSTOM", { planId: "plan_sponsor_or" })).toEqual({
+  it("scopes CUSTOM to a specific Plan when planIds is given (dynamic offers, not just CHAIRMAN/EXECUTIVE)", () => {
+    expect(buildBroadcastRecipientsWhere("CUSTOM", { planIds: ["plan_sponsor_or"] })).toEqual({
       status: "ACTIVE",
       company: {
         subscription: {
           status: { in: ["ACTIVE", "EXPIRED"] },
-          planId: "plan_sponsor_or",
+          planId: { in: ["plan_sponsor_or"] },
         },
       },
+    });
+  });
+
+  it("scopes CUSTOM to several plans at once (rapport QA 1er oct. §3.2b)", () => {
+    expect(buildBroadcastRecipientsWhere("CUSTOM", { planIds: ["plan_a", "plan_b"] })).toEqual({
+      status: "ACTIVE",
+      company: {
+        subscription: {
+          status: { in: ["ACTIVE", "EXPIRED"] },
+          planId: { in: ["plan_a", "plan_b"] },
+        },
+      },
+    });
+  });
+
+  it("ignores an empty planIds array, same as no filter", () => {
+    expect(buildBroadcastRecipientsWhere("CUSTOM", { planIds: [] })).toEqual({
+      status: "ACTIVE",
+      company: { subscription: { status: { in: ["ACTIVE", "EXPIRED"] } } },
     });
   });
 });

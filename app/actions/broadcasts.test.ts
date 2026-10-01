@@ -14,10 +14,15 @@ vi.mock("@/lib/prisma", () => ({
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
 vi.mock("@/emails/broadcast-email", () => ({ default: vi.fn(() => null) }));
+vi.mock("@/lib/r2", () => ({
+  getSignedDownloadUrl: vi.fn(),
+  isKeyUnderPrefix: vi.fn(),
+}));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { getSignedDownloadUrl, isKeyUnderPrefix } from "@/lib/r2";
 import {
   getSegmentCounts,
   getCustomSegmentCount,
@@ -73,6 +78,13 @@ describe("getCustomSegmentCount", () => {
     const result = await getCustomSegmentCount("Madagascar", "Énergie & Environnement");
     expect(result).toEqual({ success: true, data: { count: 12 } });
   });
+
+  /** Rapport QA du 1er oct. 2026 (§3.2b) — ciblage par une ou plusieurs offres. */
+  it("accepts several plan ids for the custom segment", async () => {
+    vi.mocked(prisma.user.count).mockResolvedValue(5);
+    const result = await getCustomSegmentCount(undefined, undefined, ["plan_a", "plan_b"]);
+    expect(result).toEqual({ success: true, data: { count: 5 } });
+  });
 });
 
 describe("sendTestBroadcast", () => {
@@ -82,6 +94,12 @@ describe("sendTestBroadcast", () => {
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeUser());
     vi.mocked(sendTransactionalEmail).mockResolvedValue({ id: "resend_1" } as never);
+    vi.mocked(isKeyUnderPrefix).mockImplementation(
+      (key, prefix) => typeof key === "string" && key.startsWith(prefix as string)
+    );
+    vi.mocked(getSignedDownloadUrl).mockImplementation(
+      async (_bucket, key) => `https://signed/${key}`
+    );
   });
 
   it("rejects an unauthenticated call", async () => {
@@ -105,6 +123,31 @@ describe("sendTestBroadcast", () => {
       expect.objectContaining({ to: "jp@example.com", subject: "[TEST] Sujet" })
     );
   });
+
+  /** Rapport QA du 1er oct. 2026 (§3.2a) — résolution des pièces jointes en liens signés. */
+  it("resolves attachment keys into signed links before sending", async () => {
+    const result = await sendTestBroadcast("Sujet", "Corps", [
+      { key: "broadcasts/abc/plaquette.pdf", name: "plaquette.pdf" },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(getSignedDownloadUrl).toHaveBeenCalledWith(
+      expect.any(String),
+      "broadcasts/abc/plaquette.pdf",
+      expect.any(Number)
+    );
+    expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops an attachment key that is not under the broadcasts/ prefix", async () => {
+    vi.mocked(isKeyUnderPrefix).mockReturnValue(false);
+
+    await sendTestBroadcast("Sujet", "Corps", [
+      { key: "other/abc/plaquette.pdf", name: "plaquette.pdf" },
+    ]);
+
+    expect(getSignedDownloadUrl).not.toHaveBeenCalled();
+  });
 });
 
 describe("sendBroadcast", () => {
@@ -113,6 +156,12 @@ describe("sendBroadcast", () => {
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
     vi.mocked(sendTransactionalEmail).mockResolvedValue({ id: "resend_1" } as never);
+    vi.mocked(isKeyUnderPrefix).mockImplementation(
+      (key, prefix) => typeof key === "string" && key.startsWith(prefix as string)
+    );
+    vi.mocked(getSignedDownloadUrl).mockImplementation(
+      async (_bucket, key) => `https://signed/${key}`
+    );
   });
 
   it("rejects an empty subject or body", async () => {
@@ -158,6 +207,44 @@ describe("sendBroadcast", () => {
         }),
       ]),
     });
+  });
+
+  /** Rapport QA du 1er oct. 2026 (§3.2b) — trace les offres ciblées sur le broadcast créé. */
+  it("records the targeted plan ids on a CUSTOM segment", async () => {
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      makeUser({ id: "user_1", email: "jp@example.com" }),
+    ] as never);
+    vi.mocked(prisma.broadcast.create).mockResolvedValue({ id: "broadcast_1" } as never);
+
+    await sendBroadcast("Sujet", "Corps", "CUSTOM", undefined, undefined, ["plan_a", "plan_b"]);
+
+    expect(prisma.broadcast.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ segmentPlanIds: ["plan_a", "plan_b"] }),
+      })
+    );
+  });
+
+  /** Rapport QA du 1er oct. 2026 (§3.2a) — clés valides persistées, lien signé une seule fois pour tous. */
+  it("persists only the valid attachment keys and resolves signed links once for every recipient", async () => {
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      makeUser({ id: "user_1", email: "jp@example.com" }),
+      makeUser({ id: "user_2", email: "sarah@example.com" }),
+    ] as never);
+    vi.mocked(prisma.broadcast.create).mockResolvedValue({ id: "broadcast_1" } as never);
+    vi.mocked(isKeyUnderPrefix).mockImplementation((key) => key === "broadcasts/abc/plaquette.pdf");
+
+    await sendBroadcast("Sujet", "Corps", "ALL_ACTIVE", undefined, undefined, undefined, [
+      { key: "broadcasts/abc/plaquette.pdf", name: "plaquette.pdf" },
+      { key: "other/xyz/evil.pdf", name: "evil.pdf" },
+    ]);
+
+    expect(prisma.broadcast.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ attachmentKeys: ["broadcasts/abc/plaquette.pdf"] }),
+      })
+    );
+    expect(getSignedDownloadUrl).toHaveBeenCalledTimes(1);
   });
 
   it("keeps going and records a null resendMessageId if one recipient's send fails", async () => {

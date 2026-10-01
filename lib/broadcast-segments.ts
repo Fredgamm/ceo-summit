@@ -23,12 +23,17 @@ export interface CustomSegmentParams {
   country?: string;
   sector?: string;
   /**
-   * Phase 1 offres dynamiques (30 juillet 2026) — cible une offre précise
-   * (au-delà des 2 segments CHAIRMAN/EXECUTIVE fixes ci-dessus, gardés tels
-   * quels pour compatibilité) via un vrai CUSTOM segment plutôt que
-   * d'ajouter une valeur d'enum `BroadcastSegment` par plan créé.
+   * Phase 1 offres dynamiques (30 juillet 2026) — cible une ou plusieurs
+   * offres précises via un vrai CUSTOM segment plutôt que d'ajouter une
+   * valeur d'enum `BroadcastSegment` par plan créé.
+   *
+   * Rapport QA du 1er oct. 2026 (§3.2b) — passé de `planId` (une seule
+   * offre) à `planIds` (plusieurs) : le client a demandé de pouvoir cibler
+   * plusieurs offres à la fois, pas seulement une. Les segments CHAIRMAN/
+   * EXECUTIVE sont retirés de l'UI (enum Prisma conservé pour ne pas casser
+   * l'historique des broadcasts déjà envoyés avec ces valeurs).
    */
-  planId?: string;
+  planIds?: string[];
 }
 
 /**
@@ -67,11 +72,11 @@ export function buildBroadcastRecipientsWhere(
   } else if (segment === "CUSTOM") {
     if (custom.country) where.country = custom.country;
     if (custom.sector) where.sectors = { has: custom.sector };
-    if (custom.planId) {
+    if (custom.planIds && custom.planIds.length > 0) {
       where.company = {
         subscription: {
           status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
-          planId: custom.planId,
+          planId: { in: custom.planIds },
         },
       };
     }

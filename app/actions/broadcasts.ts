@@ -11,10 +11,17 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getSignedDownloadUrl, isKeyUnderPrefix } from "@/lib/r2";
+import { BROADCAST_ATTACHMENT_LINK_TTL_SECONDS } from "@/lib/validations/broadcast";
 import { tierLabel } from "@/lib/utils";
 import BroadcastEmail from "@/emails/broadcast-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
+
+export interface BroadcastAttachmentInput {
+  key: string;
+  name: string;
+}
 
 const broadcastContentSchema = z.object({
   subject: z.string().trim().min(1, "L'objet est requis").max(200),
@@ -25,6 +32,28 @@ const broadcastSegmentSchema = z.enum(["ALL_ACTIVE", "CHAIRMAN", "EXECUTIVE", "C
 function splitName(name: string): { prenom: string; nom: string } {
   const [prenom, ...rest] = name.trim().split(" ");
   return { prenom: prenom ?? name, nom: rest.join(" ") || "—" };
+}
+
+/**
+ * Rapport QA du 1er oct. 2026 (§3.2a) — résout chaque clé R2 en lien signé
+ * longue durée (le destinataire peut ouvrir l'email plusieurs jours après
+ * l'envoi, contrairement à un usage "vu tout de suite"). Rejette toute clé
+ * qui ne vient pas de la route d'upload dédiée, même provenance que les
+ * autres uploads du projet (préfixe vérifié, pas de confiance aveugle dans
+ * ce que le client envoie).
+ */
+async function resolveAttachmentLinks(
+  attachments: BroadcastAttachmentInput[] | undefined
+): Promise<{ name: string; url: string }[]> {
+  if (!attachments || attachments.length === 0) return [];
+  const bucket = process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents";
+  const valid = attachments.filter((a) => isKeyUnderPrefix(a.key, "broadcasts/"));
+  return Promise.all(
+    valid.map(async (a) => ({
+      name: a.name,
+      url: await getSignedDownloadUrl(bucket, a.key, BROADCAST_ATTACHMENT_LINK_TTL_SECONDS),
+    }))
+  );
 }
 
 /** E8-T09 — comptes réels par segment, affichés dans le composeur avant envoi. */
@@ -47,18 +76,23 @@ export async function getSegmentCounts(): Promise<
 
 export async function getCustomSegmentCount(
   country?: string,
-  sector?: string
+  sector?: string,
+  planIds?: string[]
 ): Promise<ActionResult<{ count: number }>> {
   await requireAdmin("communications");
 
   const count = await prisma.user.count({
-    where: buildBroadcastRecipientsWhere("CUSTOM", { country, sector }),
+    where: buildBroadcastRecipientsWhere("CUSTOM", { country, sector, planIds }),
   });
   return { success: true, data: { count } };
 }
 
 /** E8-T09 — "✉ Tester" : envoie uniquement à l'admin connecté, avec ses propres variables. */
-export async function sendTestBroadcast(subject: string, body: string): Promise<ActionResult> {
+export async function sendTestBroadcast(
+  subject: string,
+  body: string,
+  attachments?: BroadcastAttachmentInput[]
+): Promise<ActionResult> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
@@ -77,11 +111,12 @@ export async function sendTestBroadcast(subject: string, body: string): Promise<
     tier: tierLabel(getViewerTierFromCompany(viewer.company)),
     entreprise: viewer.company?.name ?? "—",
   });
+  const resolvedAttachments = await resolveAttachmentLinks(attachments);
 
   await sendTransactionalEmail({
     to: viewer.email,
     subject: `[TEST] ${subject}`,
-    react: BroadcastEmail({ subject, body: renderedBody }),
+    react: BroadcastEmail({ subject, body: renderedBody, attachments: resolvedAttachments }),
   });
 
   return { success: true, data: undefined };
@@ -93,7 +128,9 @@ export async function sendBroadcast(
   body: string,
   segment: BroadcastSegment,
   country?: string,
-  sector?: string
+  sector?: string,
+  planIds?: string[],
+  attachments?: BroadcastAttachmentInput[]
 ): Promise<ActionResult<{ id: string; recipientCount: number }>> {
   const { userId: adminId } = await requireAdmin("communications");
 
@@ -109,12 +146,19 @@ export async function sendBroadcast(
   segment = parsedSegment.data;
 
   const recipients = await prisma.user.findMany({
-    where: buildBroadcastRecipientsWhere(segment, { country, sector }),
+    where: buildBroadcastRecipientsWhere(segment, { country, sector, planIds }),
     include: VIEWER_TIER_INCLUDE,
   });
   if (recipients.length === 0) {
     return { success: false, error: "Aucun destinataire ne correspond à ce segment." };
   }
+
+  // Une seule résolution pour tout le monde — même lien signé envoyé à
+  // chaque destinataire, pas la peine de le régénérer par personne.
+  const resolvedAttachments = await resolveAttachmentLinks(attachments);
+  const validAttachmentKeys = (attachments ?? [])
+    .filter((a) => isKeyUnderPrefix(a.key, "broadcasts/"))
+    .map((a) => a.key);
 
   const broadcast = await prisma.broadcast.create({
     data: {
@@ -123,6 +167,8 @@ export async function sendBroadcast(
       segment,
       segmentCountry: segment === "CUSTOM" ? country || null : null,
       segmentSector: segment === "CUSTOM" ? sector || null : null,
+      segmentPlanIds: segment === "CUSTOM" ? (planIds ?? []) : [],
+      attachmentKeys: validAttachmentKeys,
       sentById: adminId,
       recipientCount: recipients.length,
     },
@@ -142,7 +188,7 @@ export async function sendBroadcast(
         const data = await sendTransactionalEmail({
           to: recipient.email,
           subject,
-          react: BroadcastEmail({ subject, body: renderedBody }),
+          react: BroadcastEmail({ subject, body: renderedBody, attachments: resolvedAttachments }),
         });
         return { userId: recipient.id, resendMessageId: data?.id ?? null };
       } catch (err) {

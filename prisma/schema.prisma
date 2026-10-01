@@ -1032,6 +1032,14 @@ model Broadcast {
   segment        BroadcastSegment
   segmentCountry String?
   segmentSector  String?
+  /// Rapport QA du 1er oct. 2026 (§3.2b) — offre(s) ciblée(s) pour un
+  /// segment CUSTOM, trace historique de ce qui a été réellement envoyé.
+  /// Vide pour tout broadcast antérieur à cette fonctionnalité.
+  segmentPlanIds String[]       @default([])
+  /// Rapport QA du 1er oct. 2026 (§3.2a) — clés R2 privées des pièces
+  /// jointes, résolues en URL signée (BROADCAST_ATTACHMENT_LINK_TTL_SECONDS)
+  /// dans le corps de l'email à l'envoi, jamais une URL publique directe.
+  attachmentKeys String[]       @default([])
   sentById       String
   recipientCount Int
   openCount      Int              @default(0)

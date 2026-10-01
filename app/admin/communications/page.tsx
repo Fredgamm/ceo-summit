@@ -84,10 +84,17 @@ export default async function AdminCommunicationsPage({
       ? await prisma.broadcast.findMany({ orderBy: { createdAt: "desc" }, take: 50 })
       : [];
 
-  const [sectors, countries] =
+  const [sectors, countries, plans] =
     activeTab === "broadcast"
-      ? await Promise.all([getReferentialLabels("sector"), getReferentialLabels("country")])
-      : [[], []];
+      ? await Promise.all([
+          getReferentialLabels("sector"),
+          getReferentialLabels("country"),
+          prisma.plan.findMany({
+            orderBy: { displayOrder: "asc" },
+            select: { id: true, name: true },
+          }),
+        ])
+      : [[], [], []];
 
   return (
     <div className="flex flex-col gap-4">
@@ -107,7 +114,9 @@ export default async function AdminCommunicationsPage({
         ))}
       </div>
 
-      {activeTab === "broadcast" && <BroadcastComposer sectors={sectors} countries={countries} />}
+      {activeTab === "broadcast" && (
+        <BroadcastComposer sectors={sectors} countries={countries} plans={plans} />
+      )}
 
       {activeTab === "templates" && (
         <div className="flex flex-col gap-2.5">
