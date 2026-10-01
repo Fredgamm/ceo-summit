@@ -7,9 +7,10 @@ import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query"
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
+import { PlanPrice } from "@/components/entreprise/plan-price";
 import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { formatAriary, pluralize } from "@/lib/utils";
+import { pluralize } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Paiement" };
 
@@ -76,13 +77,21 @@ export default async function CompanyPaymentPage({
             <h1 className="mb-1 text-xl font-bold text-navy">
               Paiement — {cleanPlanName(subscription.plan.name)}
             </h1>
+            <div className="mb-2">
+              <PlanPrice
+                plan={subscription.plan}
+                liveEurToArRate={liveEurToArRate}
+                suffix={
+                  subscription.plan.pricingMode === "PER_PARTICIPANT"
+                    ? ` par participant, à partir de ${subscription.plan.minParticipants ?? 1}`
+                    : subscription.plan.maxTeamMembers != null
+                      ? ` — ${pluralize(subscription.plan.maxTeamMembers, "participant")} inclus`
+                      : " — ? participant inclus"
+                }
+              />
+            </div>
             <p className="mb-4 text-sm text-text-muted">
-              {subscription.plan.pricingMode === "PER_PARTICIPANT"
-                ? `${formatAriary(subscription.plan.priceAr)} par participant, à partir de ${subscription.plan.minParticipants ?? 1}`
-                : subscription.plan.maxTeamMembers != null
-                  ? `${formatAriary(subscription.plan.priceAr)} — ${pluralize(subscription.plan.maxTeamMembers, "participant")} inclus`
-                  : `${formatAriary(subscription.plan.priceAr)} — ? participant inclus`}
-              . Choisissez votre mode de paiement. Si &quot;Virement bancaire ou Chèque&quot;,
+              Choisissez votre mode de paiement. Si &quot;Virement bancaire ou Chèque&quot;,
               uploadez une pièce justificative (bordereau, ordre de virement, reçu, capture) —
               l&apos;équipe CEO Summit validera ensuite votre inscription.
             </p>
@@ -103,6 +112,7 @@ export default async function CompanyPaymentPage({
                   companySubscriptionId={subscription.id}
                   planId={subscription.planId}
                   priceAr={subscription.plan.priceAr}
+                  priceEur={subscription.plan.priceEur}
                   minParticipants={subscription.plan.minParticipants}
                   pricingMode={subscription.plan.pricingMode}
                   maxTeamMembers={subscription.plan.maxTeamMembers}

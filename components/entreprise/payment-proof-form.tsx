@@ -7,7 +7,7 @@ import type { PaymentMethod, Plan, PlanPricingMode } from "@prisma/client";
 import { selectPlan, submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
-import { formatAriary, pluralize } from "@/lib/utils";
+import { formatAriary, formatEuro, pluralize } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ export function PaymentProofForm({
   companySubscriptionId,
   planId,
   priceAr,
+  priceEur,
   minParticipants,
   pricingMode,
   maxTeamMembers,
@@ -49,6 +50,13 @@ export function PaymentProofForm({
   /** Offre actuellement souscrite — sert à détecter un changement d'offre. */
   planId: string;
   priceAr: number;
+  /**
+   * Rapport QA du 1er oct. 2026 (§1.3) — prix officiel en € de l'offre, s'il
+   * en a un. `priceAr` reste la seule valeur réellement facturée/validée
+   * (lib/company-payment-amount.ts) — `priceEur` n'est qu'informatif,
+   * affiché en principal ici comme demandé, l'Ariary passant en estimation.
+   */
+  priceEur: number | null;
   minParticipants: number | null;
   pricingMode: PlanPricingMode | null;
   /** Nombre de places de l'offre — affiché, jamais saisi ici. */
@@ -87,6 +95,7 @@ export function PaymentProofForm({
     : 1;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
   const amount = computeDueAmount(plan, declaredCount);
+  const amountEur = priceEur != null ? (isGroupOffer ? priceEur * declaredCount : priceEur) : null;
   const isEvoliaMethod = isEvoliaPaymentMethod(method);
 
   function handleDeclaredParticipantsChange(raw: string) {
@@ -233,7 +242,14 @@ export function PaymentProofForm({
               : "? participant inclus"}
           </p>
         )}
-        <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
+        {amountEur != null ? (
+          <>
+            <p className="text-lg font-bold text-navy">Montant dû : {formatEuro(amountEur)}</p>
+            <p className="text-xs text-text-muted">≈ {formatAriary(amount)}</p>
+          </>
+        ) : (
+          <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
+        )}
         {isGroupOffer && minParticipants && !meetsThreshold && (
           <p className="mt-1 text-xs text-red-600">
             Cette offre démarre à {pluralize(minParticipants, "participant")} — il en manque{" "}

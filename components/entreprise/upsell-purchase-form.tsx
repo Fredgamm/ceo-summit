@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
-import { formatAriary, formatPlanPriceLive } from "@/lib/utils";
+import { formatAriary, formatEuro, formatPlanPriceLive } from "@/lib/utils";
 
 /**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
@@ -57,6 +57,11 @@ export function UpsellPurchaseForm({
   // Number(input.value) qui laisserait passer "1e5", "-3" ou "1.5".
   const declaredQuantity = quantity === "" ? 0 : parseInt(quantity, 10);
   const amount = selectedPlan ? selectedPlan.priceAr * declaredQuantity : 0;
+  // Rapport QA du 1er oct. 2026 (§1.3) — priceAr reste le seul montant
+  // réellement facturé/validé, priceEur n'est qu'informatif (affiché en
+  // principal ici comme demandé, l'Ariary passant en estimation).
+  const amountEur =
+    selectedPlan?.priceEur != null ? selectedPlan.priceEur * declaredQuantity : null;
   // Un supplément Groupement garde son seuil minimum même acheté en plus
   // d'un abonnement déjà actif (voir meetsMinParticipants côté serveur) — la
   // quantité doit donc toujours rester proportionnée à l'offre choisie.
@@ -239,7 +244,14 @@ export function UpsellPurchaseForm({
           {declaredQuantity} ×{" "}
           {selectedPlan ? formatPlanPriceLive(selectedPlan, liveEurToArRate) : "—"}
         </p>
-        <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
+        {amountEur != null ? (
+          <>
+            <p className="text-lg font-bold text-navy">Montant dû : {formatEuro(amountEur)}</p>
+            <p className="text-xs text-text-muted">≈ {formatAriary(amount)}</p>
+          </>
+        ) : (
+          <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
