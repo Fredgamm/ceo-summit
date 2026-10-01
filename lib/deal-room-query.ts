@@ -56,6 +56,62 @@ export function allowedVisibilities(viewerTier: Tier | null | undefined): Tier[]
   return viewerTier != null ? [...LEGACY_TIER_ORDER] : [];
 }
 
+/**
+ * Rapport QA du 1er oct. 2026 (§2.4) — le tri par défaut (aucun `tri`
+ * explicite dans l'URL) n'est plus purement chronologique : priorité aux
+ * opportunités de ma propre entreprise, puis à celles d'entreprises du
+ * même secteur d'activité (`Company.sector`, pas `Opportunity.sector` —
+ * deux champs distincts), le reste suit dans l'ordre déjà choisi
+ * (`createdAt desc` par défaut). Un tri explicite (budget, échéance)
+ * reste un choix délibéré de l'utilisateur et n'est jamais réordonné.
+ */
+export function isDefaultSort(params: DealRoomSearchParams): boolean {
+  return !params.tri || !["budget_asc", "budget_desc", "deadline"].includes(params.tri);
+}
+
+/**
+ * Nombre maximum d'opportunités (déjà filtrées par `where`) rechargées en
+ * mémoire pour appliquer le tri de pertinence ci-dessus avant pagination —
+ * Prisma ne peut pas exprimer "est-ce la même entreprise que le viewer ?"
+ * dans un `orderBy` déclaratif. Large pour l'échelle réaliste de la
+ * plateforme ; au-delà, le tri de pertinence ne s'applique qu'aux
+ * `DEFAULT_SORT_SCAN_LIMIT` opportunités les plus récentes plutôt qu'à la
+ * liste entière (dégradation progressive, pas une erreur).
+ */
+export const DEFAULT_SORT_SCAN_LIMIT = 300;
+
+interface RelevanceInput {
+  authorCompanyId: string | null;
+  authorCompanySector: string | null;
+}
+
+function relevanceScore(
+  o: RelevanceInput,
+  viewerCompanyId: string | null,
+  viewerSector: string | null
+): number {
+  if (viewerCompanyId && o.authorCompanyId === viewerCompanyId) return 0;
+  if (viewerSector && o.authorCompanySector === viewerSector) return 1;
+  return 2;
+}
+
+/**
+ * Tri stable : à score égal, conserve l'ordre d'entrée (déjà `createdAt
+ * desc` au moment de l'appel) — Array.prototype.sort est stable depuis
+ * ES2019/Node 12, pas besoin de comparateur secondaire explicite.
+ */
+export function sortByCompanyRelevance<T extends RelevanceInput>(
+  opportunities: T[],
+  viewerCompanyId: string | null,
+  viewerSector: string | null
+): T[] {
+  return [...opportunities].sort(
+    (a, b) =>
+      relevanceScore(a, viewerCompanyId, viewerSector) -
+      relevanceScore(b, viewerCompanyId, viewerSector)
+  );
+}
+
 export function buildDealRoomQuery(
   params: DealRoomSearchParams,
   viewerTier: Tier | null | undefined,

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { allowedVisibilities, buildDealRoomQuery, DEAL_ROOM_PAGE_SIZE } from "./deal-room-query";
+import {
+  allowedVisibilities,
+  buildDealRoomQuery,
+  DEAL_ROOM_PAGE_SIZE,
+  isDefaultSort,
+  sortByCompanyRelevance,
+} from "./deal-room-query";
 
 const REFERENTIALS = {
   validTypes: [
@@ -88,5 +94,59 @@ describe("buildDealRoomQuery", () => {
     const query = buildDealRoomQuery({ page: "2" }, "CHAIRMAN", REFERENTIALS);
     expect(query.skip).toBe(DEAL_ROOM_PAGE_SIZE);
     expect(query.page).toBe(2);
+  });
+});
+
+/** Rapport QA du 1er oct. 2026 (§2.4) — "mes opportunités d'abord", puis même secteur. */
+describe("isDefaultSort", () => {
+  it("treats no tri, or an unknown tri, as the default", () => {
+    expect(isDefaultSort({})).toBe(true);
+    expect(isDefaultSort({ tri: "n'importe quoi" })).toBe(true);
+  });
+
+  it("treats budget/deadline sorts as explicit, not default", () => {
+    expect(isDefaultSort({ tri: "budget_asc" })).toBe(false);
+    expect(isDefaultSort({ tri: "budget_desc" })).toBe(false);
+    expect(isDefaultSort({ tri: "deadline" })).toBe(false);
+  });
+});
+
+describe("sortByCompanyRelevance", () => {
+  const other = { id: "other", authorCompanyId: "company-other", authorCompanySector: "Tourisme" };
+  const sameSector = {
+    id: "same-sector",
+    authorCompanyId: "company-2",
+    authorCompanySector: "Finance & Banque",
+  };
+  const mine = {
+    id: "mine",
+    authorCompanyId: "company-1",
+    authorCompanySector: "Finance & Banque",
+  };
+
+  it("puts the viewer's own company first, then same-sector, then the rest", () => {
+    const sorted = sortByCompanyRelevance(
+      [other, mine, sameSector],
+      "company-1",
+      "Finance & Banque"
+    );
+    expect(sorted.map((o) => o.id)).toEqual(["mine", "same-sector", "other"]);
+  });
+
+  it("is stable: equal-score items keep their input order", () => {
+    const otherA = { id: "a", authorCompanyId: "x", authorCompanySector: "Tourisme" };
+    const otherB = { id: "b", authorCompanyId: "y", authorCompanySector: "Logistique" };
+    const sorted = sortByCompanyRelevance([otherA, otherB], "company-1", "Finance & Banque");
+    expect(sorted.map((o) => o.id)).toEqual(["a", "b"]);
+  });
+
+  it("falls back to sector-only ranking when the viewer has no company", () => {
+    const sorted = sortByCompanyRelevance([other, sameSector], null, "Finance & Banque");
+    expect(sorted.map((o) => o.id)).toEqual(["same-sector", "other"]);
+  });
+
+  it("leaves order unchanged when the viewer has neither a company nor a sector", () => {
+    const sorted = sortByCompanyRelevance([other, mine, sameSector], null, null);
+    expect(sorted.map((o) => o.id)).toEqual(["other", "mine", "same-sector"]);
   });
 });

@@ -8,6 +8,9 @@ import { prisma } from "@/lib/prisma";
 import {
   buildDealRoomQuery,
   DEAL_ROOM_PAGE_SIZE,
+  DEFAULT_SORT_SCAN_LIMIT,
+  isDefaultSort,
+  sortByCompanyRelevance,
   type DealRoomSearchParams,
 } from "@/lib/deal-room-query";
 import { countUnreadMessages } from "@/lib/conversations";
@@ -49,26 +52,49 @@ export default async function DealRoomPage({
     validCountries,
   });
 
-  const [opportunities, total] = await Promise.all([
-    prisma.opportunity.findMany({
-      where,
-      orderBy,
-      skip,
-      take,
-      include: {
-        author: {
-          select: {
-            name: true,
-            title: true,
-            avatarUrl: true,
-            role: true,
-            ...VIEWER_TIER_INCLUDE,
-          },
-        },
+  const authorInclude = {
+    author: {
+      select: {
+        name: true,
+        title: true,
+        avatarUrl: true,
+        role: true,
+        companyId: true,
+        ...VIEWER_TIER_INCLUDE,
       },
-    }),
-    prisma.opportunity.count({ where }),
-  ]);
+    },
+  };
+
+  // Rapport QA 1er oct. §2.4 — tri par défaut : mes opportunités d'abord,
+  // puis celles d'entreprises du même secteur (voir sortByCompanyRelevance).
+  // Un tri explicite (budget/échéance) reste un choix de l'utilisateur,
+  // jamais réordonné.
+  const [opportunities, total] = isDefaultSort(searchParams)
+    ? await Promise.all([
+        prisma.opportunity
+          .findMany({
+            where,
+            orderBy,
+            take: DEFAULT_SORT_SCAN_LIMIT,
+            include: authorInclude,
+          })
+          .then((all) =>
+            sortByCompanyRelevance(
+              all.map((o) => ({
+                ...o,
+                authorCompanyId: o.author.companyId,
+                authorCompanySector: o.author.company?.sector ?? null,
+              })),
+              viewer.companyId,
+              viewer.company?.sector ?? null
+            ).slice(skip, skip + take)
+          ),
+        prisma.opportunity.count({ where }),
+      ])
+    : await Promise.all([
+        prisma.opportunity.findMany({ where, orderBy, skip, take, include: authorInclude }),
+        prisma.opportunity.count({ where }),
+      ]);
 
   const totalPages = Math.max(1, Math.ceil(total / DEAL_ROOM_PAGE_SIZE));
   const unreadMessages = await countUnreadMessages(viewer.id);
