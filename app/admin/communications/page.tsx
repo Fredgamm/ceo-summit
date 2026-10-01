@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { render } from "@react-email/render";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { SEGMENT_LABEL } from "@/lib/broadcast-segments";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { BroadcastComposer } from "@/components/admin/communications/broadcast-composer";
+import { TemplatePreview } from "@/components/admin/communications/template-preview";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateFr } from "@/lib/utils";
+import ActivationEmail from "@/emails/activation-email";
+import ApplicationRefusedEmail from "@/emails/application-refused-email";
+import EventRegistrationEmail from "@/emails/event-registration-email";
+import CreditPurchaseConfirmedEmail from "@/emails/credit-purchase-confirmed-email";
 
 export const metadata: Metadata = { title: "Admin — Communications" };
 
@@ -65,6 +71,36 @@ const AUTOMATED_TEMPLATES = [
   },
 ];
 
+/** §3.3 — rendu HTML de démo (props par défaut de chaque composant) pour l'aperçu en iframe. */
+async function renderTemplatePreview(file: string | null): Promise<string | null> {
+  switch (file) {
+    case "emails/activation-email.tsx":
+      return render(
+        <ActivationEmail
+          memberName="Jean-Pierre Rakoto"
+          tier="Executive"
+          activationUrl="https://app.ceo-summit.mg/activer/token"
+        />
+      );
+    case "emails/application-refused-email.tsx":
+      return render(<ApplicationRefusedEmail candidateName="Jean Dupont" />);
+    case "emails/event-registration-email.tsx":
+      return render(
+        <EventRegistrationEmail
+          memberName="Jean-Pierre Rakoto"
+          eventTitle="CEO Summit 2026 — La Réunion"
+          eventDateLabel="15–16 novembre 2026"
+          eventLocation="Saint-Denis, La Réunion"
+          requiresManualValidation={false}
+        />
+      );
+    case "emails/credit-purchase-confirmed-email.tsx":
+      return render(<CreditPurchaseConfirmedEmail memberName="Jean-Pierre Rakoto" credits={5} />);
+    default:
+      return null;
+  }
+}
+
 export default async function AdminCommunicationsPage({
   searchParams,
 }: {
@@ -96,6 +132,16 @@ export default async function AdminCommunicationsPage({
         ])
       : [[], [], []];
 
+  const templatesWithPreview =
+    activeTab === "templates"
+      ? await Promise.all(
+          AUTOMATED_TEMPLATES.map(async (t) => ({
+            ...t,
+            html: await renderTemplatePreview(t.file),
+          }))
+        )
+      : [];
+
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-bold text-navy">Communications</h1>
@@ -120,21 +166,24 @@ export default async function AdminCommunicationsPage({
 
       {activeTab === "templates" && (
         <div className="flex flex-col gap-2.5">
-          {AUTOMATED_TEMPLATES.map((t) => (
+          {templatesWithPreview.map((t) => (
             <div
               key={t.name}
-              className="flex items-center justify-between gap-4 rounded-lg border border-border bg-white p-4"
+              className="flex flex-col gap-3 rounded-lg border border-border bg-white p-4"
             >
-              <div>
-                <p className="text-sm font-bold text-navy">{t.name}</p>
-                <p className="text-xs text-text-muted">{t.trigger}</p>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-bold text-navy">{t.name}</p>
+                  <p className="text-xs text-text-muted">{t.trigger}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={t.active ? "active" : "draft"}>
+                    {t.active ? "Actif" : "Non automatisé"}
+                  </Badge>
+                  {t.file && <span className="text-xs text-text-muted">{t.file}</span>}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={t.active ? "active" : "draft"}>
-                  {t.active ? "Actif" : "Non automatisé"}
-                </Badge>
-                {t.file && <span className="text-xs text-text-muted">{t.file}</span>}
-              </div>
+              {t.html && <TemplatePreview html={t.html} />}
             </div>
           ))}
           <p className="mt-1 text-xs text-text-muted">
