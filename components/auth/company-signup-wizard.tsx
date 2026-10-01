@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlanPrice } from "@/components/entreprise/plan-price";
-import { formatPlanPriceLive } from "@/lib/utils";
+import { formatPlanPriceLive, pluralize } from "@/lib/utils";
 
 interface CompanySignupWizardProps {
   plans: Plan[];
@@ -85,7 +85,9 @@ export function CompanySignupWizard({
                   suffix={
                     plan.pricingMode === "PER_PARTICIPANT"
                       ? " / participant"
-                      : ` — ${plan.maxTeamMembers ?? "?"} participant(s) inclus`
+                      : plan.maxTeamMembers != null
+                        ? ` — ${pluralize(plan.maxTeamMembers, "participant")} inclus`
+                        : " — ? participant inclus"
                   }
                 />
               </div>

@@ -9,6 +9,7 @@ import { selectPlan } from "@/app/actions/company-subscription";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PlanPrice } from "@/components/entreprise/plan-price";
+import { pluralize } from "@/lib/utils";
 
 export function PlanPicker({
   companyId,
@@ -80,9 +81,15 @@ export function PlanPicker({
             </div>
             <ul className="flex flex-col gap-1 text-xs text-text-muted">
               {plan.pricingMode === "PER_PARTICIPANT" ? (
-                plan.minParticipants && <li>À partir de {plan.minParticipants} participants</li>
+                plan.minParticipants && (
+                  <li>À partir de {pluralize(plan.minParticipants, "participant")}</li>
+                )
               ) : (
-                <li>{plan.maxTeamMembers ?? "?"} participants inclus</li>
+                <li>
+                  {plan.maxTeamMembers != null
+                    ? `${pluralize(plan.maxTeamMembers, "participant")} inclus`
+                    : "? participant inclus"}
+                </li>
               )}
               {plan.eligibilityNote && <li>{plan.eligibilityNote}</li>}
             </ul>

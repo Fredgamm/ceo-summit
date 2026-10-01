@@ -9,6 +9,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Rapport QA du 1er octobre 2026 — "1 participants inclus" / "À partir de
+ * 1 participants" s'affichait au singulier mal accordé partout où le texte
+ * était généré par interpolation brute (Early Bird et Executive Pass sont
+ * toutes deux à 1 participant). `word` au singulier, le "s" est ajouté ici.
+ */
+export function pluralize(count: number, word: string): string {
+  return `${count} ${word}${count > 1 ? "s" : ""}`;
+}
+
 /** Format Ariary amounts consistently across the app: 1500000 -> "1 500 000 Ar" */
 export function formatAriary(amount: number): string {
   return `${new Intl.NumberFormat("fr-FR").format(amount)} Ar`;

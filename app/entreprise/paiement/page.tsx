@@ -9,7 +9,7 @@ import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { formatAriary } from "@/lib/utils";
+import { formatAriary, pluralize } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Paiement" };
 
@@ -79,7 +79,9 @@ export default async function CompanyPaymentPage({
             <p className="mb-4 text-sm text-text-muted">
               {subscription.plan.pricingMode === "PER_PARTICIPANT"
                 ? `${formatAriary(subscription.plan.priceAr)} par participant, à partir de ${subscription.plan.minParticipants ?? 1}`
-                : `${formatAriary(subscription.plan.priceAr)} — ${subscription.plan.maxTeamMembers ?? "?"} participant(s) inclus`}
+                : subscription.plan.maxTeamMembers != null
+                  ? `${formatAriary(subscription.plan.priceAr)} — ${pluralize(subscription.plan.maxTeamMembers, "participant")} inclus`
+                  : `${formatAriary(subscription.plan.priceAr)} — ? participant inclus`}
               . Choisissez votre mode de paiement. Si &quot;Virement bancaire ou Chèque&quot;,
               uploadez une pièce justificative (bordereau, ordre de virement, reçu, capture) —
               l&apos;équipe CEO Summit validera ensuite votre inscription.
