@@ -169,6 +169,21 @@ export async function promoteToAdmin(email: string, role: AdminRole): Promise<Ac
 export async function updateAdminRole(adminUserId: string, role: AdminRole): Promise<ActionResult> {
   const { userId: actingAdminId } = await requireAdmin("parametres");
 
+  const target = await prisma.adminUser.findUnique({ where: { id: adminUserId } });
+  if (!target) return { success: false, error: "Compte administrateur introuvable." };
+  if (target.userId === actingAdminId) {
+    return { success: false, error: "Vous ne pouvez pas modifier votre propre rôle." };
+  }
+  // Toujours garder au moins un super-admin actif : lui seul accède à cet écran.
+  if (target.role === "SUPER_ADMIN" && role !== "SUPER_ADMIN") {
+    const otherSuperAdmins = await prisma.adminUser.count({
+      where: { role: "SUPER_ADMIN", active: true, id: { not: adminUserId } },
+    });
+    if (otherSuperAdmins === 0) {
+      return { success: false, error: "Il doit rester au moins un super-administrateur actif." };
+    }
+  }
+
   await prisma.adminUser.update({ where: { id: adminUserId }, data: { role } });
   await prisma.auditLog.create({
     data: {

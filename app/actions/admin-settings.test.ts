@@ -7,6 +7,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: {
       findUnique: vi.fn(),
+      count: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
@@ -168,13 +169,47 @@ describe("promoteToAdmin", () => {
 });
 
 describe("updateAdminRole", () => {
+  function mockTarget(target: { userId: string; role: string } | null) {
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce(target as never);
+  }
+
   it("updates the role", async () => {
+    mockTarget({ userId: "user_2", role: "MODERATEUR" });
     const result = await updateAdminRole("admin_2", "FINANCIER");
     expect(result.success).toBe(true);
     expect(prisma.adminUser.update).toHaveBeenCalledWith({
       where: { id: "admin_2" },
       data: { role: "FINANCIER" },
     });
+  });
+
+  it("refuses to change the acting admin's own role", async () => {
+    mockTarget({ userId: "admin_1", role: "SUPER_ADMIN" });
+    const result = await updateAdminRole("admin_self", "MODERATEUR");
+    expect(result.success).toBe(false);
+    expect(prisma.adminUser.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to demote the last active super-admin", async () => {
+    mockTarget({ userId: "user_2", role: "SUPER_ADMIN" });
+    vi.mocked(prisma.adminUser.count).mockResolvedValue(0);
+    const result = await updateAdminRole("admin_2", "MODERATEUR");
+    expect(result.success).toBe(false);
+    expect(prisma.adminUser.update).not.toHaveBeenCalled();
+  });
+
+  it("allows demoting a super-admin when another active one remains", async () => {
+    mockTarget({ userId: "user_2", role: "SUPER_ADMIN" });
+    vi.mocked(prisma.adminUser.count).mockResolvedValue(1);
+    const result = await updateAdminRole("admin_2", "MODERATEUR");
+    expect(result.success).toBe(true);
+  });
+
+  it("returns an error for an unknown admin account", async () => {
+    mockTarget(null);
+    const result = await updateAdminRole("ghost", "MODERATEUR");
+    expect(result.success).toBe(false);
   });
 });
 

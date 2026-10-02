@@ -38,6 +38,21 @@ async function setMemberStatus(
 ): Promise<ActionResult> {
   const { userId: adminId } = await requireAdmin("membres");
 
+  // Les comptes administrateurs se gèrent dans /admin/parametres (rôles,
+  // activation) : sans ce garde, un modérateur pouvait suspendre un super-admin,
+  // ou se suspendre lui-même.
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isPlatformAdmin: true },
+  });
+  if (!target) return { success: false, error: "Membre introuvable." };
+  if (userId === adminId || target.isPlatformAdmin) {
+    return {
+      success: false,
+      error: "Un compte administrateur se gère depuis Paramètres, pas depuis la fiche membre.",
+    };
+  }
+
   const member = await prisma.user.update({ where: { id: userId }, data: { status } });
   await prisma.auditLog.create({
     data: { actorId: adminId, action, targetType: "User", targetId: userId },

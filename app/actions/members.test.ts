@@ -7,7 +7,7 @@ vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedVal
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    user: { update: vi.fn() },
+    user: { findUnique: vi.fn(), update: vi.fn() },
     creditBalance: { upsert: vi.fn() },
     creditTransaction: { create: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -34,6 +34,7 @@ describe("member admin actions", () => {
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
     vi.mocked(prisma.user.update).mockResolvedValue(MEMBER as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isPlatformAdmin: false } as never);
   });
 
   describe("status transitions", () => {
@@ -59,6 +60,26 @@ describe("member admin actions", () => {
       expect(sendTransactionalEmail).toHaveBeenCalledWith(
         expect.objectContaining({ to: "hery@example.mg" })
       );
+    });
+
+    it("refuses to suspend a platform admin from the member page", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ isPlatformAdmin: true } as never);
+      const result = await suspendMember("user_1");
+      expect(result.success).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("refuses to change the acting admin's own status", async () => {
+      const result = await excludeMember("admin_1");
+      expect(result.success).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it("returns an error for an unknown member instead of throwing", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+      const result = await suspendMember("ghost");
+      expect(result.success).toBe(false);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
 
     it("reactivates a member and notifies them by email", async () => {
