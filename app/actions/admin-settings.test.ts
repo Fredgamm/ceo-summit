@@ -15,11 +15,14 @@ vi.mock("@/lib/prisma", () => ({
     platformSetting: { findUnique: vi.fn(), upsert: vi.fn() },
     referential: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       aggregate: vi.fn(),
       create: vi.fn(),
       delete: vi.fn(),
     },
-    user: { findUnique: vi.fn(), update: vi.fn() },
+    company: { count: vi.fn() },
+    opportunity: { count: vi.fn() },
+    user: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -133,10 +136,55 @@ describe("createReferentialItem", () => {
 });
 
 describe("deleteReferentialItem", () => {
-  it("deletes by id", async () => {
+  const FINTECH = { id: "ref_1", type: "sector", label: "Fintech" };
+
+  beforeEach(() => {
+    vi.mocked(prisma.company.count).mockResolvedValue(0);
+    vi.mocked(prisma.opportunity.count).mockResolvedValue(0);
+    vi.mocked(prisma.user.count).mockResolvedValue(0);
+  });
+
+  it("deletes an unused sector", async () => {
+    vi.mocked(prisma.referential.findUnique).mockResolvedValue(FINTECH as never);
     const result = await deleteReferentialItem("ref_1");
     expect(result.success).toBe(true);
     expect(prisma.referential.delete).toHaveBeenCalledWith({ where: { id: "ref_1" } });
+  });
+
+  it("rejects an unknown item", async () => {
+    vi.mocked(prisma.referential.findUnique).mockResolvedValue(null);
+    const result = await deleteReferentialItem("ref_x");
+    expect(result.success).toBe(false);
+    expect(prisma.referential.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete a sector still used by a company", async () => {
+    vi.mocked(prisma.referential.findUnique).mockResolvedValue(FINTECH as never);
+    vi.mocked(prisma.company.count).mockResolvedValue(2);
+    const result = await deleteReferentialItem("ref_1");
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toContain("2 fiches");
+    expect(prisma.referential.delete).not.toHaveBeenCalled();
+  });
+
+  it("counts a member's sectors of interest as a use of the sector", async () => {
+    vi.mocked(prisma.referential.findUnique).mockResolvedValue(FINTECH as never);
+    vi.mocked(prisma.user.count).mockResolvedValue(1);
+    const result = await deleteReferentialItem("ref_1");
+    expect(result.success).toBe(false);
+    expect(prisma.user.count).toHaveBeenCalledWith({ where: { sectors: { has: "Fintech" } } });
+  });
+
+  it("checks only opportunities for an opportunity type", async () => {
+    vi.mocked(prisma.referential.findUnique).mockResolvedValue({
+      id: "ref_2",
+      type: "opportunity_type",
+      label: "Partenariat",
+    } as never);
+    vi.mocked(prisma.opportunity.count).mockResolvedValue(1);
+    const result = await deleteReferentialItem("ref_2");
+    expect(result.success).toBe(false);
+    expect(prisma.company.count).not.toHaveBeenCalled();
   });
 });
 

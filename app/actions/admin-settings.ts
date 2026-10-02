@@ -6,6 +6,7 @@ import type { AdminRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
+import { pluralize } from "@/lib/utils";
 import { setDealRoomContactCost } from "@/lib/deal-room-settings";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -120,8 +121,45 @@ export async function createReferentialItem(
   return { success: true, data: { id: item.id } };
 }
 
+/**
+ * Secteur, pays et type d'opportunité sont stockés en texte (pas de clé
+ * étrangère vers `Referential`) : supprimer une valeur encore utilisée
+ * laisserait les fiches concernées avec une valeur hors liste, refusée à leur
+ * prochaine sauvegarde. Compte donc les usages avant d'autoriser la suppression.
+ */
+async function countReferentialUsage(
+  type: (typeof REFERENTIAL_TYPES)[number],
+  label: string
+): Promise<number> {
+  if (type === "opportunity_type") {
+    return prisma.opportunity.count({ where: { type: label } });
+  }
+  const [companies, opportunities, users] = await Promise.all([
+    prisma.company.count({ where: { [type]: label } }),
+    prisma.opportunity.count({ where: { [type]: label } }),
+    type === "sector"
+      ? prisma.user.count({ where: { sectors: { has: label } } })
+      : prisma.user.count({ where: { country: label } }),
+  ]);
+  return companies + opportunities + users;
+}
+
 export async function deleteReferentialItem(id: string): Promise<ActionResult> {
   await requireAdmin("parametres");
+
+  const item = await prisma.referential.findUnique({ where: { id } });
+  if (!item) return { success: false, error: "Élément introuvable." };
+
+  const usageCount = await countReferentialUsage(
+    item.type as (typeof REFERENTIAL_TYPES)[number],
+    item.label
+  );
+  if (usageCount > 0) {
+    return {
+      success: false,
+      error: `Impossible de supprimer « ${item.label} » : encore utilisé par ${pluralize(usageCount, "fiche")}.`,
+    };
+  }
 
   await prisma.referential.delete({ where: { id } });
 
