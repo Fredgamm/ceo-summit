@@ -65,7 +65,7 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-semibold text-white">{user.name}</div>
-          <div className="text-[11.5px] text-white/50">{user.tier}</div>
+          <div className="text-[11.5px] text-white/50">Mon profil</div>
         </div>
         <span className="text-white/60">›</span>
       </Link>
