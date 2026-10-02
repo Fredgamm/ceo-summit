@@ -8,6 +8,15 @@ import { convertEurToAr } from "../lib/currency-conversion";
 const prisma = new PrismaClient();
 
 async function main() {
+  // Le seed crée des comptes aux mots de passe publics (README) et des données
+  // de démonstration : jamais sur la base de production sans accord explicite.
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_SEED !== "true") {
+    throw new Error(
+      "Seed refusé en production (comptes de démo à mot de passe connu). " +
+        "Relancer avec ALLOW_PRODUCTION_SEED=true uniquement sur une base jetable."
+    );
+  }
+
   console.log("🌱 Seeding CEO Summit database...");
 
   // ── Platform settings (Tarifs — matches bo-parametres.html defaults) ──

@@ -186,18 +186,19 @@ Le conteneur `app` lance automatiquement `prisma migrate deploy` avant de
 démarrer (voir `docker-compose.prod.yml`) — les migrations s'appliquent
 seules, pas besoin de les lancer à la main.
 
-## 7. Charger les données de démonstration (optionnel)
+## 7. Données de démonstration — jamais en production
 
-Pour avoir un compte admin (`admin@ceo-summit.mg` / `ChangeMe123!`) et des
-données de démo, comme en local :
+Le seed crée `admin@ceo-summit.mg` / `ChangeMe123!` et `demo@ceo-summit.mg` /
+`Demo1234!` (mots de passe publics, écrits dans le README) ainsi que des
+évènements, opportunités et salles fictifs. Il refuse donc de tourner quand
+`NODE_ENV=production`. Pour une base de recette jetable uniquement :
 
 ```bash
-docker compose -f docker-compose.prod.yml exec app npm run db:seed
+docker compose -f docker-compose.prod.yml exec -e ALLOW_PRODUCTION_SEED=true app npm run db:seed
 ```
 
-**Change le mot de passe admin par défaut immédiatement après**, ou
-saute carrément le seed et crée un compte réel via `/demande-acces` +
-approbation manuelle en base si tu préfères partir d'une base vide.
+En production, créer le premier compte administrateur à la main avec un mot
+de passe fort, puis les offres depuis `/admin/plans`.
 
 ## 8. Vérifier
 
