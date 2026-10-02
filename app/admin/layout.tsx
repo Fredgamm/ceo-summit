@@ -36,6 +36,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       }),
     ]);
   if (!user) redirect("/login");
+  // La session JWT garde `isPlatformAdmin` jusqu'à 24 h : on relit en base pour
+  // qu'une désactivation (AdminUser.active) ou une suspension (User.status)
+  // coupe l'accès à toutes les pages /admin immédiatement, comme requireAdmin()
+  // le fait déjà pour les actions serveur.
+  if (adminUser?.active === false || user.status !== "ACTIVE") redirect("/dashboard");
 
   return (
     <AdminShell
