@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { companyAccountSchema } from "@/lib/validations/company-account";
@@ -14,6 +15,7 @@ import CompanyAdminWelcomeEmail from "@/emails/company-admin-welcome-email";
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 const RATE_LIMITED_ERROR = "Trop de tentatives depuis cette adresse. Réessayez plus tard.";
+const EXISTING_ACCOUNT_ERROR = "Un compte existe déjà avec cet email. Connectez-vous plutôt.";
 
 /**
  * Checkout hybride Evolia (conception/07/09, 3 septembre 2026) — remplace
@@ -46,12 +48,7 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   const normalizedEmail = f.email.toLowerCase();
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existing) {
-    return {
-      success: false,
-      error: "Un compte existe déjà avec cet email. Connectez-vous plutôt.",
-    };
-  }
+  if (existing) return { success: false, error: EXISTING_ACCOUNT_ERROR };
 
   const plan = await prisma.plan.findFirst({
     // Audit (25 septembre 2026) — une offre supplément (`isUpsell`) ne se
@@ -67,23 +64,33 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
 
   const passwordHash = await bcrypt.hash(f.password, BCRYPT_ROUNDS);
 
-  await prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: { name: f.name, email: normalizedEmail, passwordHash, status: "ACTIVE" },
+  // La vérification ci-dessus ne suffit pas pour deux envois simultanés (double
+  // clic) : le second échoue sur l'unicité de l'email, à traduire en message
+  // plutôt qu'en erreur 500.
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { name: f.name, email: normalizedEmail, passwordHash, status: "ACTIVE" },
+      });
+      const company = await tx.company.create({
+        data: {
+          name: f.companyName,
+          sector: f.sector,
+          country: f.country,
+          companyAdminId: user.id,
+        },
+      });
+      await tx.user.update({ where: { id: user.id }, data: { companyId: company.id } });
+      await tx.companySubscription.create({
+        data: { companyId: company.id, planId: plan.id, status: "PENDING_PAYMENT" },
+      });
     });
-    const company = await tx.company.create({
-      data: {
-        name: f.companyName,
-        sector: f.sector,
-        country: f.country,
-        companyAdminId: user.id,
-      },
-    });
-    await tx.user.update({ where: { id: user.id }, data: { companyId: company.id } });
-    await tx.companySubscription.create({
-      data: { companyId: company.id, planId: plan.id, status: "PENDING_PAYMENT" },
-    });
-  });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { success: false, error: EXISTING_ACCOUNT_ERROR };
+    }
+    throw err;
+  }
 
   /**
    * Audit (25 septembre 2026) — aucun email ne confirmait l'inscription du

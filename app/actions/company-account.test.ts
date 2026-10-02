@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const txMock = {
   user: { create: vi.fn(), update: vi.fn() },
@@ -158,6 +159,21 @@ describe("createCompanyAccount", () => {
 
     expect(result.success).toBe(false);
     expect(txMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it("turns a concurrent duplicate signup (unique email violation) into a message, not a 500", async () => {
+    txMock.user.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "5.22.0",
+      })
+    );
+
+    const result = await createCompanyAccount(VALID_INPUT);
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/existe déjà/);
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
   it("rejects a plan that isn't active/self-service", async () => {
