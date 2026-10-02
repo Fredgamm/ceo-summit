@@ -6,7 +6,7 @@ import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { ArrowLeft, Send } from "lucide-react";
 
-import { getSocketClient } from "@/lib/socket-client";
+import { getSocketClient, onSocketReconnect } from "@/lib/socket-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +59,7 @@ export function ConversationThread({
   React.useEffect(() => {
     let cancelled = false;
     let socket: Socket | undefined;
+    let stopRejoining: (() => void) | undefined;
 
     function handleIncoming(message: ThreadMessage) {
       if (message.conversationId !== conversation.id) return;
@@ -86,12 +87,15 @@ export function ConversationThread({
         s.on("conversation:message", handleIncoming);
         s.on("conversation:typing", handleTyping);
         s.on("conversation:read", handleRead);
-        s.emit("conversation:join", conversation.id, (res: { ok: boolean }) => {
-          if (cancelled) return;
-          setJoined(res.ok);
-          if (res.ok) s.emit("conversation:read", conversation.id);
-          else toast.error("Impossible d'ouvrir cette conversation.");
-        });
+        const join = () =>
+          s.emit("conversation:join", conversation.id, (res: { ok: boolean }) => {
+            if (cancelled) return;
+            setJoined(res.ok);
+            if (res.ok) s.emit("conversation:read", conversation.id);
+            else toast.error("Impossible d'ouvrir cette conversation.");
+          });
+        join();
+        stopRejoining = onSocketReconnect(s, join);
         s.emit("users:presence", [otherUser.id], (result: Record<string, boolean>) => {
           if (!cancelled) setOnline(result[otherUser.id] ?? false);
         });
@@ -100,6 +104,7 @@ export function ConversationThread({
 
     return () => {
       cancelled = true;
+      stopRejoining?.();
       socket?.off("conversation:message", handleIncoming);
       socket?.off("conversation:typing", handleTyping);
       socket?.off("conversation:read", handleRead);

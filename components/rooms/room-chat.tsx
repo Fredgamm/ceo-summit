@@ -5,7 +5,7 @@ import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
 import { Paperclip, Send } from "lucide-react";
 
-import { getSocketClient } from "@/lib/socket-client";
+import { getSocketClient, onSocketReconnect } from "@/lib/socket-client";
 import { reportRoomMessage } from "@/app/actions/rooms";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
   React.useEffect(() => {
     let cancelled = false;
     let socket: Socket | undefined;
+    let stopRejoining: (() => void) | undefined;
 
     function handleIncoming(message: RoomMessageData) {
       if (message.roomId !== room.id) return;
@@ -78,16 +79,20 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
         s.on("room:message", handleIncoming);
         s.on("room:presence", handlePresence);
         s.on("room:typing", handleTyping);
-        s.emit("room:join", room.id, (res: { ok: boolean }) => {
-          if (cancelled) return;
-          setJoined(res.ok);
-          if (!res.ok) toast.error("Impossible de rejoindre cette salle.");
-        });
+        const join = () =>
+          s.emit("room:join", room.id, (res: { ok: boolean }) => {
+            if (cancelled) return;
+            setJoined(res.ok);
+            if (!res.ok) toast.error("Impossible de rejoindre cette salle.");
+          });
+        join();
+        stopRejoining = onSocketReconnect(s, join);
       })
       .catch(() => toast.error("Connexion temps réel indisponible."));
 
     return () => {
       cancelled = true;
+      stopRejoining?.();
       socket?.emit("room:leave", room.id);
       socket?.off("room:message", handleIncoming);
       socket?.off("room:presence", handlePresence);
