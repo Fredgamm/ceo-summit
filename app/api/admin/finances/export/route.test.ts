@@ -74,4 +74,11 @@ describe("GET /api/admin/finances/export", () => {
     expect(lines[2]).toContain("Jean-Pierre R.");
     expect(lines[3]).toContain("Sarah R.");
   });
+
+  it("exports only confirmed company payments, never rejected ones", async () => {
+    await GET();
+    expect(prisma.companyPayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { status: "CONFIRMED" } })
+    );
+  });
 });

@@ -4,7 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { toCsv } from "@/lib/csv";
 import { formatDateFr } from "@/lib/utils";
-import type { FinanceTransaction } from "@/lib/finance";
+import {
+  companyPaymentToTransaction,
+  COMPANY_PAYMENT_FINANCE_INCLUDE,
+  RECORDED_COMPANY_PAYMENT_WHERE,
+  type FinanceTransaction,
+} from "@/lib/finance";
 
 /** E8-T10 — "Export comptable CSV". */
 export async function GET() {
@@ -19,12 +24,8 @@ export async function GET() {
 
   const [companyPayments, registrations, purchases] = await Promise.all([
     prisma.companyPayment.findMany({
-      where: { status: { in: ["CONFIRMED", "REJECTED"] } },
-      include: {
-        companySubscription: {
-          include: { company: { select: { name: true } }, plan: { select: { name: true } } },
-        },
-      },
+      where: RECORDED_COMPANY_PAYMENT_WHERE,
+      include: COMPANY_PAYMENT_FINANCE_INCLUDE,
       orderBy: { createdAt: "desc" },
     }),
     prisma.eventRegistration.findMany({
@@ -43,15 +44,7 @@ export async function GET() {
   ]);
 
   const transactions: FinanceTransaction[] = [
-    ...companyPayments.map((p) => ({
-      id: p.id,
-      source: "COMPANY" as const,
-      memberName: p.companySubscription.company.name,
-      description: `Offre ${p.companySubscription.plan.name}`,
-      amount: p.amount,
-      method: p.method,
-      date: p.createdAt,
-    })),
+    ...companyPayments.map(companyPaymentToTransaction),
     ...registrations.map((r) => ({
       id: r.id,
       source: "EVENT" as const,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  companyPaymentToTransaction,
   computeMRRByPlan,
   buildExpiringWithinDays,
   mergeFinanceTransactions,
@@ -123,5 +124,38 @@ describe("mergeFinanceTransactions", () => {
   it("truncates to the given limit", () => {
     const items = Array.from({ length: 40 }, (_, i) => make(String(i), "2026-01-01"));
     expect(mergeFinanceTransactions(items, 30)).toHaveLength(30);
+  });
+});
+
+describe("companyPaymentToTransaction", () => {
+  const payment = {
+    id: "pay_1",
+    amount: 12_000_000,
+    method: "VIREMENT",
+    createdAt: new Date("2026-09-30T10:00:00Z"),
+    upsellQuantity: null,
+    upsellPlan: null,
+    companySubscription: { company: { name: "Société X" }, plan: { name: "Gold" } },
+  };
+
+  it("describes an offer payment by its plan", () => {
+    expect(companyPaymentToTransaction(payment)).toEqual({
+      id: "pay_1",
+      source: "COMPANY",
+      memberName: "Société X",
+      description: "Offre Gold",
+      amount: 12_000_000,
+      method: "VIREMENT",
+      date: payment.createdAt,
+    });
+  });
+
+  it("labels a seat upsell as such instead of as the main offer", () => {
+    const tx = companyPaymentToTransaction({
+      ...payment,
+      upsellQuantity: 3,
+      upsellPlan: { name: "Executive Pass" },
+    });
+    expect(tx.description).toBe("Supplément Executive Pass × 3");
   });
 });

@@ -10,6 +10,10 @@ import {
   computeMRRByPlan,
   buildExpiringWithinDays,
   mergeFinanceTransactions,
+  companyPaymentToTransaction,
+  COMPANY_PAYMENT_FINANCE_INCLUDE,
+  RECORDED_COMPANY_PAYMENT_WHERE,
+  SUBSCRIPTION_PRICE_PAYMENT_WHERE,
   type FinanceTransaction,
 } from "@/lib/finance";
 import { EventPaymentActions } from "@/components/admin/finance/event-payment-actions";
@@ -53,14 +57,16 @@ export default async function AdminFinancesPage({
     expiring60,
     expiring90,
   ] = await Promise.all([
+    // Un abonnement EXPIRED garde ses avantages plateforme (RG-12) mais ne
+    // génère plus de revenu récurrent : hors MRR et hors "entreprises actives".
     prisma.companySubscription.findMany({
-      where: { status: { in: ["ACTIVE", "EXPIRED"] } },
+      where: { status: "ACTIVE" },
       select: {
         planId: true,
         startDate: true,
         endDate: true,
         payments: {
-          where: { status: "CONFIRMED" },
+          where: SUBSCRIPTION_PRICE_PAYMENT_WHERE,
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { amount: true },
@@ -91,7 +97,7 @@ export default async function AdminFinancesPage({
     }),
   ]);
 
-  // Un abonnement ACTIVE/EXPIRED a toujours des dates réelles (nullable
+  // Un abonnement ACTIVE a toujours des dates réelles (nullable
   // seulement en DRAFT/PENDING_*) — filtre défensif, ne devrait jamais rien
   // retirer en pratique.
   const activeSubscriptionsWithDates = activeSubscriptions
@@ -126,12 +132,8 @@ export default async function AdminFinancesPage({
   if (activeTab === "paiements") {
     const [companyPayments, registrations, purchases] = await Promise.all([
       prisma.companyPayment.findMany({
-        where: { status: { in: ["CONFIRMED", "REJECTED"] } },
-        include: {
-          companySubscription: {
-            include: { company: { select: { name: true } }, plan: { select: { name: true } } },
-          },
-        },
+        where: RECORDED_COMPANY_PAYMENT_WHERE,
+        include: COMPANY_PAYMENT_FINANCE_INCLUDE,
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
@@ -153,15 +155,7 @@ export default async function AdminFinancesPage({
     ]);
 
     const transactions: FinanceTransaction[] = mergeFinanceTransactions([
-      ...companyPayments.map((p) => ({
-        id: p.id,
-        source: "COMPANY" as const,
-        memberName: p.companySubscription.company.name,
-        description: `Offre ${p.companySubscription.plan.name}`,
-        amount: p.amount,
-        method: p.method,
-        date: p.createdAt,
-      })),
+      ...companyPayments.map(companyPaymentToTransaction),
       ...registrations.map((r) => ({
         id: r.id,
         source: "EVENT" as const,
