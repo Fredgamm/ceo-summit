@@ -5,18 +5,13 @@ import { startConversation } from "@/app/actions/messages";
 import { EmptyState } from "@/components/ui/empty-state";
 
 /**
- * E7-T02 — "Initiation depuis profil membre / fiche Deal Room / catalogue" :
- * every entry point links here with `?new=<userId>` (optionally
- * `&opportunity=<id>`), and this page does the find-or-create + redirect so
- * none of those pages need their own conversation-creation logic.
+ * Les liens "Envoyer un message" pointent ici avec `?new=<userId>` : la page
+ * retrouve ou crée le fil (startConversation) puis redirige dessus, pour
+ * qu'aucune page d'origine n'ait sa propre logique de création.
  */
-export default async function MessageriePage({
-  searchParams,
-}: {
-  searchParams: { new?: string; opportunity?: string };
-}) {
+export default async function MessageriePage({ searchParams }: { searchParams: { new?: string } }) {
   if (searchParams.new) {
-    const result = await startConversation(searchParams.new, searchParams.opportunity);
+    const result = await startConversation(searchParams.new);
     if (result.success) redirect(`/messagerie/${result.data.id}`);
   }
 

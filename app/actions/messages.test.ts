@@ -45,10 +45,19 @@ describe("startConversation", () => {
     expect(getOrCreateConversation).not.toHaveBeenCalled();
   });
 
+  it("rejects a recipient that does not exist or is no longer active", async () => {
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ id: "user_1", status: "ACTIVE" } as never)
+      .mockResolvedValueOnce({ status: "SUSPENDED" } as never);
+    const result = await startConversation("user_2");
+    expect(result.success).toBe(false);
+    expect(getOrCreateConversation).not.toHaveBeenCalled();
+  });
+
   it("finds or creates the conversation and returns its id", async () => {
     vi.mocked(getOrCreateConversation).mockResolvedValue({ id: "conv_1" } as never);
-    const result = await startConversation("user_2", "opp_1");
+    const result = await startConversation("user_2");
     expect(result).toEqual({ success: true, data: { id: "conv_1" } });
-    expect(getOrCreateConversation).toHaveBeenCalledWith("user_1", "user_2", "opp_1");
+    expect(getOrCreateConversation).toHaveBeenCalledWith("user_1", "user_2");
   });
 });
