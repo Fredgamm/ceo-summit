@@ -27,6 +27,7 @@ function makeLookups(overrides: Partial<LocalStorageAccessLookups> = {}) {
     findPaymentsByProofKey: vi.fn(async () => []),
     findOpportunitiesByAttachment: vi.fn(async () => []),
     findRoom: vi.fn(async () => null),
+    isSentBroadcastAttachment: vi.fn(async () => false),
     ...overrides,
   } satisfies LocalStorageAccessLookups;
 }
@@ -54,6 +55,10 @@ describe("classifyLocalStorageObject", () => {
     expect(classifyLocalStorageObject(seg("salles/room_1/d.pdf"))).toEqual({
       kind: "room-attachment",
       roomId: "room_1",
+    });
+    expect(classifyLocalStorageObject(seg("broadcasts/abc-plaquette.pdf"))).toEqual({
+      kind: "broadcast",
+      key: "broadcasts/abc-plaquette.pdf",
     });
   });
 
@@ -210,6 +215,20 @@ describe("canAccessLocalStorageObject", () => {
         findRoom: vi.fn(async () => ({ status: "ARCHIVED", minTier: "ALL_MEMBERS" })),
       });
       expect(await canAccessLocalStorageObject(makeViewer(), seg(key), archived)).toBe(false);
+      expect(await canAccessLocalStorageObject(makeViewer(), seg(key), makeLookups())).toBe(false);
+    });
+  });
+
+  describe("broadcast attachments", () => {
+    const key = "broadcasts/abc-plaquette.pdf";
+
+    it("allows any member once a sent broadcast references the key", async () => {
+      const lookups = makeLookups({ isSentBroadcastAttachment: vi.fn(async () => true) });
+      expect(await canAccessLocalStorageObject(makeViewer(), seg(key), lookups)).toBe(true);
+      expect(lookups.isSentBroadcastAttachment).toHaveBeenCalledWith(key);
+    });
+
+    it("denies an uploaded file that no broadcast references", async () => {
       expect(await canAccessLocalStorageObject(makeViewer(), seg(key), makeLookups())).toBe(false);
     });
   });

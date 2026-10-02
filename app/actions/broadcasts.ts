@@ -48,10 +48,16 @@ async function resolveAttachmentLinks(
   if (!attachments || attachments.length === 0) return [];
   const bucket = process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents";
   const valid = attachments.filter((a) => isKeyUnderPrefix(a.key, "broadcasts/"));
+  // Sans R2, getSignedDownloadUrl renvoie un chemin relatif (repli local,
+  // lib/r2.ts) : inutilisable tel quel dans un client mail.
+  const appUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   return Promise.all(
     valid.map(async (a) => ({
       name: a.name,
-      url: await getSignedDownloadUrl(bucket, a.key, BROADCAST_ATTACHMENT_LINK_TTL_SECONDS),
+      url: new URL(
+        await getSignedDownloadUrl(bucket, a.key, BROADCAST_ATTACHMENT_LINK_TTL_SECONDS),
+        appUrl
+      ).toString(),
     }))
   );
 }

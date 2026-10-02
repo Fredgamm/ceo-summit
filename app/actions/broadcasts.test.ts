@@ -23,6 +23,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { getSignedDownloadUrl, isKeyUnderPrefix } from "@/lib/r2";
+import BroadcastEmail from "@/emails/broadcast-email";
 import {
   getSegmentCounts,
   getCustomSegmentCount,
@@ -137,6 +138,25 @@ describe("sendTestBroadcast", () => {
       expect.any(Number)
     );
     expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("turns the relative local-storage path into an absolute link when R2 is not configured", async () => {
+    vi.mocked(getSignedDownloadUrl).mockImplementation(
+      async (bucket, key) => `/api/dev/local-storage/${bucket}/${key}`
+    );
+    vi.stubEnv("NEXTAUTH_URL", "https://app.ceo-summit.mg");
+
+    await sendTestBroadcast("Sujet", "Corps", [
+      { key: "broadcasts/abc-plaquette.pdf", name: "plaquette.pdf" },
+    ]);
+
+    const props = vi.mocked(BroadcastEmail).mock.calls[0][0] as {
+      attachments: { url: string }[];
+    };
+    expect(props.attachments[0].url).toBe(
+      "https://app.ceo-summit.mg/api/dev/local-storage/ceo-summit-documents/broadcasts/abc-plaquette.pdf"
+    );
+    vi.unstubAllEnvs();
   });
 
   it("drops an attachment key that is not under the broadcasts/ prefix", async () => {

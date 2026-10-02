@@ -25,6 +25,9 @@ import type { Viewer } from "@/lib/require-viewer";
  *     (auteur, ou opportunité PUBLISHED visible pour le tier du viewer) ;
  *   - `salles/<roomId>/` : accès à la salle (`meetsRoomAccess`, comme
  *     app/salles/[id]/page.tsx) ;
+ *   - `broadcasts/<fichier>` : pièce jointe d'une communication envoyée —
+ *     tout membre connecté, à condition qu'un `Broadcast` référence la clé
+ *     (un upload jamais envoyé reste invisible) ;
  *   - tout autre préfixe : refusé.
  * Un admin plateforme actif (`AdminUser.active` non `false`, même règle que
  * `requireAdmin()`) est autorisé partout (revue des paiements, modération).
@@ -41,7 +44,8 @@ export type LocalStorageObject =
   | { kind: "public" }
   | { kind: "payment-proof"; key: string; uploaderId: string }
   | { kind: "deal-room"; key: string; uploaderId: string }
-  | { kind: "room-attachment"; roomId: string };
+  | { kind: "room-attachment"; roomId: string }
+  | { kind: "broadcast"; key: string };
 
 /**
  * `segments` = `[bucket, ...key]`, tels que reçus par la route. Rejette tout
@@ -60,6 +64,8 @@ export function classifyLocalStorageObject(segments: string[]): LocalStorageObje
 
   const [, prefix, owner] = segments;
   if ((PUBLIC_PREFIXES as readonly string[]).includes(prefix)) return { kind: "public" };
+  // Seul préfixe privé à plat (`broadcasts/<uuid>-<nom>`, app/api/broadcasts/attachment).
+  if (prefix === "broadcasts") return { kind: "broadcast", key: segments.slice(1).join("/") };
 
   // Les préfixes privés ont tous la forme `<usage>/<id>/<fichier>`.
   if (segments.length < 4) return { kind: "unknown" };
@@ -79,6 +85,7 @@ export interface LocalStorageAccessLookups {
     key: string
   ): Promise<{ authorId: string; status: string; visibility: string }[]>;
   findRoom(roomId: string): Promise<{ status: string; minTier: string } | null>;
+  isSentBroadcastAttachment(key: string): Promise<boolean>;
 }
 
 export const prismaLocalStorageLookups: LocalStorageAccessLookups = {
@@ -111,6 +118,10 @@ export const prismaLocalStorageLookups: LocalStorageAccessLookups = {
       where: { id: roomId },
       select: { status: true, minTier: true },
     });
+  },
+  async isSentBroadcastAttachment(key) {
+    const count = await prisma.broadcast.count({ where: { attachmentKeys: { has: key } } });
+    return count > 0;
   },
 };
 
@@ -153,5 +164,8 @@ export async function canAccessLocalStorageObject(
         room.minTier as Parameters<typeof meetsRoomAccess>[1]
       );
     }
+
+    case "broadcast":
+      return lookups.isSentBroadcastAttachment(object.key);
   }
 }
