@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { getViewerTierFromCompany } from "@/lib/plan-access";
 import { isPublicObjectUrlUnderPrefix } from "@/lib/r2";
 import { requireViewer } from "@/lib/require-viewer";
 import { serviceFormSchema } from "@/lib/validations/service";
@@ -23,6 +24,17 @@ export async function submitServiceListing(input: unknown): Promise<ActionResult
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
+  // Une fiche est publiée au nom de l'entreprise : seul son gérant peut en
+  // déposer une, et seulement une fois l'offre de l'entreprise active.
+  if (!viewer.company || viewer.company.companyAdminId !== viewer.id) {
+    return { success: false, error: "Seul le gérant de l'entreprise peut publier un service." };
+  }
+  if (getViewerTierFromCompany(viewer.company) === null) {
+    return {
+      success: false,
+      error: "Votre entreprise doit avoir une offre active pour publier un service.",
+    };
+  }
 
   const parsed = serviceFormSchema.safeParse(input);
   if (!parsed.success) {

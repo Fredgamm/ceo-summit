@@ -40,8 +40,12 @@ function makeViewer(overrides: Partial<Record<string, unknown>> = {}) {
     id: "user_1",
     name: "Jean-Pierre Rakoto",
     status: "ACTIVE",
-    companyId: null,
-    company: { subscription: { status: "ACTIVE", plan: { rank: 2 } } },
+    companyId: "company_1",
+    company: {
+      id: "company_1",
+      companyAdminId: "user_1",
+      subscription: { status: "ACTIVE", plan: { rank: 2 } },
+    },
     ...overrides,
   } as never;
 }
@@ -57,6 +61,36 @@ describe("submitServiceListing", () => {
 
   it("rejects an unauthenticated call", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
+    const result = await submitServiceListing(VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.serviceListing.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a collaborator who is not the company manager", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(
+      makeViewer({
+        company: {
+          id: "company_1",
+          companyAdminId: "user_manager",
+          subscription: { status: "ACTIVE", plan: { rank: 2 } },
+        },
+      })
+    );
+    const result = await submitServiceListing(VALID_INPUT);
+    expect(result.success).toBe(false);
+    expect(prisma.serviceListing.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a manager whose company has no active offer yet", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(
+      makeViewer({
+        company: {
+          id: "company_1",
+          companyAdminId: "user_1",
+          subscription: { status: "PENDING_PAYMENT", plan: { rank: 2 } },
+        },
+      })
+    );
     const result = await submitServiceListing(VALID_INPUT);
     expect(result.success).toBe(false);
     expect(prisma.serviceListing.create).not.toHaveBeenCalled();
