@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { meetsRoomAccess } from "@/lib/rooms-query";
 import { requireViewer } from "@/lib/require-viewer";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
-import { getSignedDownloadUrl } from "@/lib/r2";
+import { toClientRoomMessage } from "@/lib/room-messages";
 
 const PAGE_SIZE = 50;
 
@@ -49,18 +49,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     include: { author: { select: { id: true, name: true, avatarUrl: true } } },
   });
 
-  // B4 — same private-key → signed-URL resolution as the initial page load.
-  const withUrls = await Promise.all(
-    messages.map(async ({ attachmentKey, ...m }) => ({
-      ...m,
-      attachmentUrl: attachmentKey
-        ? await getSignedDownloadUrl(
-            process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
-            attachmentKey
-          )
-        : null,
-    }))
-  );
+  const withUrls = await Promise.all(messages.map(toClientRoomMessage));
 
   return NextResponse.json({ data: withUrls.reverse() }, { status: 200 });
 }
