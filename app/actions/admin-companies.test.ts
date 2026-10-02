@@ -74,6 +74,8 @@ beforeEach(() => {
   vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
   vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
+    // Forme interactive (callback) : le client transactionnel est le même mock.
+    if (typeof ops === "function") return ops(prisma);
     const list = ops as Promise<unknown>[];
     return Promise.all(list);
   });
@@ -97,6 +99,14 @@ describe("confirmCompanyPayment", () => {
         data: expect.objectContaining({ action: "company_payment.confirm" }),
       })
     );
+  });
+
+  it("confirms the payment and activates the subscription in one transaction", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(PAYMENT_BASE as never);
+
+    await confirmCompanyPayment("payment_1");
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
   });
 
   it("rejects an already-processed payment", async () => {

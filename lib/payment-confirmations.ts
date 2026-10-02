@@ -124,17 +124,24 @@ export async function confirmCompanyPaymentCore(
   const oneYearLater = new Date(now);
   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
 
-  const { count } = await prisma.companyPayment.updateMany({
-    where: { id: companyPaymentId, status: "PENDING" },
-    data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+  // Même transaction que pour un supplément : un échec entre les deux écritures
+  // laissait un paiement CONFIRMED (donc non rejouable) avec un abonnement
+  // resté en PENDING_REVIEW, c'est-à-dire une entreprise payée sans accès.
+  const confirmed = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.companyPayment.updateMany({
+      where: { id: companyPaymentId, status: "PENDING" },
+      data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+    });
+    if (count === 0) return false;
+    await tx.companySubscription.update({
+      where: { id: payment.companySubscriptionId },
+      data: { status: "ACTIVE", startDate: now, endDate: oneYearLater },
+    });
+    return true;
   });
-  if (count === 0) {
+  if (!confirmed) {
     return { success: false, error: "Ce paiement a déjà été traité." };
   }
-  await prisma.companySubscription.update({
-    where: { id: payment.companySubscriptionId },
-    data: { status: "ACTIVE", startDate: now, endDate: oneYearLater },
-  });
 
   /**
    * Phase 2quater (1er août 2026) — même effet de bord que
