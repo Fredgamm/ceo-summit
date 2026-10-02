@@ -53,7 +53,7 @@ export default async function EventRegistrationPage({ params }: { params: { id: 
     !hasAccess ||
     isPast ||
     capacity === "complet" ||
-    alreadyRegistered ||
+    (alreadyRegistered && alreadyRegistered.status !== "CANCELLED") ||
     eventOffers.length > 0
   ) {
     redirect(`/evenements/${event.id}`);

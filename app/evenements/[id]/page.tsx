@@ -57,14 +57,20 @@ export default async function EventDetailPage({ params }: { params: { id: string
    * configurées, elles remplacent l'ancien bouton simple d'inscription
    * (virement/mobile money, sans preuve) pour éviter un double mécanisme.
    */
-  const [eventOffers, liveEurToArRate] = await Promise.all([
+  const [eventOffers, liveEurToArRate, viewerRegistration] = await Promise.all([
     getActivePlans({ selfServiceOnly: true, eventId: event.id }),
     getEurToArRate(),
+    // Lu à part : `event.registrations` n'est qu'un aperçu de 12 participants.
+    prisma.eventRegistration.findUnique({
+      where: { eventId_userId: { eventId: event.id, userId: viewer.id } },
+      select: { status: true },
+    }),
   ]);
   const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
 
   const viewerTier = getViewerTierFromCompany(viewer.company);
-  const isRegistered = event.registrations.some((r) => r.user.id === viewer.id);
+  const isRegistered =
+    viewerRegistration !== null && TAKEN_STATUSES.includes(viewerRegistration.status);
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
   const isPast = event.date < new Date();

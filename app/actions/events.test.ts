@@ -203,6 +203,25 @@ describe("registerForEvent", () => {
     expect(prisma.eventRegistration.create).not.toHaveBeenCalled();
   });
 
+  it("reactivates a cancelled registration instead of rejecting it as a duplicate", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent());
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+      id: "reg_cancelled",
+      status: "CANCELLED",
+    } as never);
+    vi.mocked(prisma.eventRegistration.update).mockResolvedValue({ id: "reg_cancelled" } as never);
+
+    const result = await registerForEvent("event_1", "VIREMENT");
+
+    expect(result.success).toBe(true);
+    expect(prisma.eventRegistration.create).not.toHaveBeenCalled();
+    expect(prisma.eventRegistration.update).toHaveBeenCalledWith({
+      where: { id: "reg_cancelled" },
+      data: expect.objectContaining({ status: "PENDING_PAYMENT", paymentStatus: "PENDING" }),
+    });
+  });
+
   it("returns a friendly error when the event is full", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValue(makeEvent({ capacity: 10 }));
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeViewer());

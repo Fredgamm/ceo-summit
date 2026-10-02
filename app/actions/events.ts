@@ -79,7 +79,7 @@ export async function registerForEvent(
       error: "Votre niveau de membership ne donne pas accès à cet événement.",
     };
   }
-  if (existing) {
+  if (existing && existing.status !== "CANCELLED") {
     return { success: false, error: "Vous êtes déjà inscrit(e) à cet événement." };
   }
 
@@ -99,14 +99,21 @@ export async function registerForEvent(
         throw new EventFullError();
       }
 
+      const registrationData = {
+        status: isFree ? ("CONFIRMED" as const) : ("PENDING_PAYMENT" as const),
+        paymentStatus: isFree ? ("PAID" as const) : ("PENDING" as const),
+        paymentMethod: method,
+      };
+      // Une inscription annulée garde sa ligne (unicité eventId + userId) :
+      // se réinscrire la réactive au lieu d'en créer une seconde.
+      if (existing) {
+        return prisma.eventRegistration.update({
+          where: { id: existing.id },
+          data: registrationData,
+        });
+      }
       return prisma.eventRegistration.create({
-        data: {
-          eventId,
-          userId: viewer.id,
-          status: isFree ? "CONFIRMED" : "PENDING_PAYMENT",
-          paymentStatus: isFree ? "PAID" : "PENDING",
-          paymentMethod: method,
-        },
+        data: { eventId, userId: viewer.id, ...registrationData },
       });
     });
   } catch (err) {

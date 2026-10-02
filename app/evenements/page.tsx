@@ -40,7 +40,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
       where: buildUpcomingEventsWhere(searchParams),
       orderBy: { date: "asc" },
       include: {
-        registrations: { where: { userId: viewer.id }, select: { id: true } },
+        registrations: {
+          where: { userId: viewer.id, status: { in: TAKEN_STATUSES } },
+          select: { id: true },
+        },
         _count: { select: { registrations: { where: { status: { in: TAKEN_STATUSES } } } } },
       },
     }),
@@ -49,7 +52,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
       orderBy: { date: "desc" },
       take: 6,
       include: {
-        registrations: { where: { userId: viewer.id }, select: { id: true } },
+        registrations: {
+          where: { userId: viewer.id, status: { in: TAKEN_STATUSES } },
+          select: { id: true },
+        },
         _count: { select: { registrations: { where: { status: { in: TAKEN_STATUSES } } } } },
       },
     }),
