@@ -79,6 +79,12 @@ export default async function CompanyProfilePage({
     include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
+  // `/entreprises` reste ouvert sans offre active (middleware.ts) pour que le
+  // gérant finisse de configurer sa propre fiche ; les autres fiches, elles,
+  // sont réservées aux membres d'une entreprise ayant une offre active.
+  const hasPlatformAccess =
+    session.user.isPlatformAdmin || getViewerTierFromCompany(viewer.company) !== null;
+  if (!hasPlatformAccess && viewer.companyId !== params.id) redirect("/paiement-en-attente");
 
   const company = await prisma.company.findUnique({
     where: { id: params.id },
