@@ -190,6 +190,24 @@ describe("sendBroadcast", () => {
     expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
+  it("reports failed sends instead of counting them as delivered", async () => {
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      makeUser({ id: "user_1", email: "jp@example.com" }),
+      makeUser({ id: "user_2", email: "sarah@example.com" }),
+    ] as never);
+    vi.mocked(prisma.broadcast.create).mockResolvedValue({ id: "broadcast_1" } as never);
+    vi.mocked(sendTransactionalEmail)
+      .mockResolvedValueOnce({ id: "resend_1" } as never)
+      .mockRejectedValueOnce(new Error("SMTP refused"));
+
+    const result = await sendBroadcast("Sujet", "Corps", "ALL_ACTIVE");
+
+    expect(result).toEqual({
+      success: true,
+      data: { id: "broadcast_1", recipientCount: 2, failedCount: 1 },
+    });
+  });
+
   it("rejects a segment with no matching recipients", async () => {
     vi.mocked(prisma.user.findMany).mockResolvedValue([]);
     const result = await sendBroadcast("Sujet", "Corps", "CHAIRMAN");
@@ -206,7 +224,10 @@ describe("sendBroadcast", () => {
 
     const result = await sendBroadcast("Sujet", "Bonjour {{prénom}}", "ALL_ACTIVE");
 
-    expect(result).toEqual({ success: true, data: { id: "broadcast_1", recipientCount: 2 } });
+    expect(result).toEqual({
+      success: true,
+      data: { id: "broadcast_1", recipientCount: 2, failedCount: 0 },
+    });
     expect(prisma.broadcast.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ recipientCount: 2, segment: "ALL_ACTIVE" }),

@@ -11,6 +11,7 @@ import {
   sendTestBroadcast,
 } from "@/app/actions/broadcasts";
 import { SEGMENT_LABEL } from "@/lib/broadcast-segments";
+import { pluralize } from "@/lib/utils";
 import {
   BROADCAST_ATTACHMENT_ALLOWED_MIME_TYPES,
   BROADCAST_ATTACHMENT_MAX_COUNT,
@@ -160,9 +161,14 @@ export function BroadcastComposer({
       setError(result.error);
       return;
     }
-    setSentInfo(
-      `Message envoyé à ${result.data.recipientCount} membre${result.data.recipientCount !== 1 ? "s" : ""}.`
-    );
+    const { recipientCount, failedCount } = result.data;
+    if (failedCount > 0) {
+      setError(
+        `${failedCount} envoi${failedCount > 1 ? "s" : ""} sur ${recipientCount} en échec — vérifier la configuration email du serveur.`
+      );
+    }
+    const deliveredCount = recipientCount - failedCount;
+    setSentInfo(`Message envoyé à ${pluralize(deliveredCount, "membre")}.`);
     setSubject("");
     setBody("");
     setAttachments([]);

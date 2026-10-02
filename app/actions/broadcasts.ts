@@ -137,7 +137,7 @@ export async function sendBroadcast(
   sector?: string,
   planIds?: string[],
   attachments?: BroadcastAttachmentInput[]
-): Promise<ActionResult<{ id: string; recipientCount: number }>> {
+): Promise<ActionResult<{ id: string; recipientCount: number; failedCount: number }>> {
   const { userId: adminId } = await requireAdmin("communications");
 
   const parsedContent = broadcastContentSchema.safeParse({ subject, body });
@@ -196,10 +196,10 @@ export async function sendBroadcast(
           subject,
           react: BroadcastEmail({ subject, body: renderedBody, attachments: resolvedAttachments }),
         });
-        return { userId: recipient.id, resendMessageId: data?.id ?? null };
+        return { userId: recipient.id, resendMessageId: data?.id ?? null, delivered: true };
       } catch (err) {
         console.error("[broadcast] failed to send to", recipient.email, err);
-        return { userId: recipient.id, resendMessageId: null };
+        return { userId: recipient.id, resendMessageId: null, delivered: false };
       }
     })
   );
@@ -213,5 +213,11 @@ export async function sendBroadcast(
   });
 
   revalidatePath("/admin/communications");
-  return { success: true, data: { id: broadcast.id, recipientCount: recipients.length } };
+  // Remonté à l'admin : un échec d'envoi (SMTP absent ou refusé) était
+  // jusqu'ici avalé, et l'écran annonçait "envoyé à N membres" quand même.
+  const failedCount = sends.filter((s) => !s.delivered).length;
+  return {
+    success: true,
+    data: { id: broadcast.id, recipientCount: recipients.length, failedCount },
+  };
 }
