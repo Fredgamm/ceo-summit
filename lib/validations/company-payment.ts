@@ -10,6 +10,16 @@ export const COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES = [
 ];
 
 /**
+ * Seuls virement et chèque (preuve validée par l'admin) mènent à un paiement
+ * réel aujourd'hui ; carte et Mobile Money attendent le pont Evolia
+ * (lib/payment-methods.ts). Le formulaire les désactive, le serveur les
+ * refuse aussi pour qu'un appel direct à l'action ne les enregistre pas.
+ */
+const companyPaymentMethodSchema = z.enum(["VIREMENT", "CHEQUE"], {
+  errorMap: () => ({ message: "Seuls le virement et le chèque sont disponibles pour le moment." }),
+});
+
+/**
  * Phase 2ter (1er août 2026) — `amount` retiré : le montant est désormais
  * toujours calculé côté serveur, jamais saisi par l'utilisateur.
  *
@@ -21,7 +31,7 @@ export const COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES = [
  * (dépend du pricingMode du plan, pas connu du schéma).
  */
 export const submitPaymentProofSchema = z.object({
-  method: z.enum(["VIREMENT", "CHEQUE", "CARTE_BANCAIRE", "MOBILE_MONEY"]),
+  method: companyPaymentMethodSchema,
   proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
   comment: z.string().trim().max(1000).optional().default(""),
   declaredParticipants: z.coerce.number().int().min(1).optional(),
@@ -49,7 +59,7 @@ export const purchaseUpsellSeatsSchema = z.object({
     .int()
     .min(1, "Indiquez au moins 1")
     .max(MAX_UPSELL_QUANTITY, `Au plus ${MAX_UPSELL_QUANTITY} places par achat`),
-  method: z.enum(["VIREMENT", "CHEQUE", "CARTE_BANCAIRE", "MOBILE_MONEY"]),
+  method: companyPaymentMethodSchema,
   proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
   comment: z.string().trim().max(1000).optional().default(""),
 });

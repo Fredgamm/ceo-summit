@@ -285,6 +285,12 @@ describe("submitPaymentProof", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it("rejects card payment, not available until the Evolia bridge exists", async () => {
+    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "CARTE_BANCAIRE" });
+    expect(result.success).toBe(false);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   /**
    * Correctif (7 août 2026, audit) — `proofFileKey` n'était jamais vérifié
    * comme appartenant à l'appelant avant résolution en URL signée côté admin.
