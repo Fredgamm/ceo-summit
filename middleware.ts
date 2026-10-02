@@ -61,6 +61,8 @@ const ACCOUNT_SETUP_PREFIXES = [
   // /entreprise/creer and /entreprise/paiement silently failed for anyone
   // without company access yet, i.e. everyone still in this exact flow.
   "/api/company",
+  // Upload d'avatar depuis /profil/editer, même raison que ci-dessus.
+  "/api/profile",
 ];
 
 function isAccountSetupRoute(pathname: string) {
