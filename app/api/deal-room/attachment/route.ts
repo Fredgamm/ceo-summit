@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { requireViewer } from "@/lib/require-viewer";
 import { uploadPrivateObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES,
   OPPORTUNITY_ATTACHMENT_MAX_BYTES,
@@ -27,6 +28,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
   const { viewer } = viewerResult;
+  const rateLimited = await checkUploadRateLimit(viewer.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

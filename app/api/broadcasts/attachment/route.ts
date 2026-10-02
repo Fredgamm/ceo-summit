@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/admin-auth";
 import { uploadPrivateObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   BROADCAST_ATTACHMENT_ALLOWED_MIME_TYPES,
   BROADCAST_ATTACHMENT_MAX_BYTES,
@@ -16,11 +17,14 @@ import {
  * (voir app/actions/broadcasts.ts), jamais une URL publique directe.
  */
 export async function POST(req: Request) {
+  let adminId: string;
   try {
-    await requireAdmin("communications");
+    ({ userId: adminId } = await requireAdmin("communications"));
   } catch {
     return NextResponse.json({ error: "Accès non autorisé." }, { status: 403 });
   }
+  const rateLimited = await checkUploadRateLimit(adminId);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

@@ -7,6 +7,7 @@ import { uploadPrivateObject } from "@/lib/r2";
 import { meetsRoomAccess } from "@/lib/rooms-query";
 import { requireViewer } from "@/lib/require-viewer";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   ROOM_ATTACHMENT_MAX_BYTES,
   ROOM_ATTACHMENT_ALLOWED_MIME_TYPES,
@@ -30,6 +31,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
   const { viewer } = viewerResult;
+  const rateLimited = await checkUploadRateLimit(viewer.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

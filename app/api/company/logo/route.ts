@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { requireViewer } from "@/lib/require-viewer";
 import { uploadObject } from "@/lib/r2";
 import { AVATAR_ALLOWED_MIME_TYPES, AVATAR_MAX_BYTES } from "@/lib/validations/profile";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 
 const LOGO_SIZE_PX = 400;
 
@@ -25,6 +26,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
   const { viewer } = viewerResult;
+  const rateLimited = await checkUploadRateLimit(viewer.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");

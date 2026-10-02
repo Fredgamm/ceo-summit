@@ -5,6 +5,7 @@ import sharp from "sharp";
 
 import { requireViewer } from "@/lib/require-viewer";
 import { uploadObject } from "@/lib/r2";
+import { checkUploadRateLimit } from "@/lib/upload-rate-limit";
 import {
   SERVICE_GALLERY_ALLOWED_MIME_TYPES,
   SERVICE_GALLERY_MAX_BYTES,
@@ -26,6 +27,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: viewerResult.error }, { status: 401 });
   }
   const { viewer } = viewerResult;
+  const rateLimited = await checkUploadRateLimit(viewer.id);
+  if (rateLimited) return rateLimited;
 
   const formData = await req.formData();
   const file = formData.get("file");
