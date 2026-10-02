@@ -1,17 +1,17 @@
 name: CI/CD
 
-# E0-T04 (backlog) — jamais fait jusqu'ici, voir BACKLOG_DEV.md "Dette
-# technique connue". Deux jobs : `ci` valide chaque push/PR (lint,
-# type-check, tests, migrations sur une vraie base fraîche, build) ; `deploy`
-# ne tourne que sur push vers main, après succès de `ci`, et déploie sur le
-# VPS OVH via SSH (voir DEPLOY.md pour la mise en place initiale du VPS et
-# des secrets ci-dessous).
+# Deux jobs : `ci` valide chaque push/PR (lint, type-check, tests,
+# migrations sur une vraie base fraîche, build) ; `deploy` ne tourne que sur
+# push vers mvp-connect-simple — la branche de production — après succès de
+# `ci`, et déploie sur le VPS OVH via SSH (voir DEPLOY.md pour la mise en
+# place initiale du VPS et des secrets ci-dessous). `main` est en retard sur
+# la production : un push dessus est validé mais jamais déployé.
 
 on:
   push:
     branches: [main, mvp-connect-simple]
   pull_request:
-    branches: [main]
+    branches: [main, mvp-connect-simple]
 
 jobs:
   ci:
@@ -76,8 +76,7 @@ jobs:
   deploy:
     needs: ci
     if: >-
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/mvp-connect-simple') &&
-      github.event_name == 'push'
+      github.ref == 'refs/heads/mvp-connect-simple' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Relocate Docker data-root out of the build context
