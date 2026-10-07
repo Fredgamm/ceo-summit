@@ -15,6 +15,7 @@ import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-am
 import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
+import { getEurToArRate } from "@/lib/currency-conversion";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -189,11 +190,14 @@ export async function submitPaymentProof(
     };
   }
 
+  // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour, pour l'export en euros.
+  const eurToArRate = await getEurToArRate();
   await prisma.$transaction([
     prisma.companyPayment.create({
       data: {
         companySubscriptionId,
         amount,
+        eurToArRate,
         method: f.method,
         proofFileKey: f.proofFileKey,
         comment: f.comment || null,
@@ -322,6 +326,7 @@ export async function purchaseUpsellSeats(
     data: {
       companySubscriptionId,
       amount,
+      eurToArRate: await getEurToArRate(),
       method: f.method,
       proofFileKey: f.proofFileKey,
       comment: f.comment || null,

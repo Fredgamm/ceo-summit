@@ -8,12 +8,17 @@ vi.mock("@/lib/prisma", () => ({
     eventRegistration: { findMany: vi.fn() },
   },
 }));
+vi.mock("@/lib/currency-conversion", () => ({ getEurToArRate: vi.fn().mockResolvedValue(4800) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { GET } from "./route";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
+
+function request(query = "") {
+  return new Request(`http://localhost/api/admin/finances/export${query}`);
+}
 
 describe("GET /api/admin/finances/export", () => {
   beforeEach(() => {
@@ -24,47 +29,63 @@ describe("GET /api/admin/finances/export", () => {
       {
         id: "m1",
         amount: 1_500_000,
+        eurToArRate: 5000,
         method: "VIREMENT",
         createdAt: new Date("2026-01-15"),
+        upsellQuantity: null,
+        upsellPlan: null,
         companySubscription: {
           company: { name: "Sarah R." },
-          plan: { name: "Chairman (démo)" },
+          plan: { name: "Gold" },
         },
       },
     ] as never);
     vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
       {
         id: "r1",
+        eurToArRate: null,
         paymentMethod: "VIREMENT",
         createdAt: new Date("2026-07-15"),
         user: { name: "Jean-Pierre R." },
-        event: { title: "CEO Summit 2026", price: 1_500_000 },
+        event: { title: "CEO Summit 2026", price: 960_000 },
       },
     ] as never);
   });
 
   it("rejects a non-admin", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
-    const res = await GET();
+    const res = await GET(request());
     expect(res.status).toBe(403);
   });
 
-  it("returns a CSV with every transaction source, most recent first", async () => {
-    const res = await GET();
+  it("returns a CSV with euros first, then Ariary and the rate, most recent first", async () => {
+    const res = await GET(request());
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toContain("text/csv");
-    expect(res.headers.get("Content-Disposition")).toContain("export-comptable");
+    expect(res.headers.get("Content-Disposition")).toContain("export-comptable-ceo-summit.csv");
 
-    const body = await res.text();
-    const lines = body.split("\r\n");
-    expect(lines[0]).toBe("Membre,Source,Description,Montant (Ar),Méthode,Date");
-    // Most recent (event, 15/07) before membership (15/01)
+    const lines = (await res.text()).split("\r\n");
+    expect(lines[0]).toBe(
+      "Membre,Source,Description,Montant (€),Montant (Ar),Taux (Ar/€),Méthode,Date"
+    );
+    // Événement (15/07) au taux du jour faute de taux enregistré, avant l'offre (15/01).
     expect(lines[1]).toContain("Jean-Pierre R.");
+    expect(lines[1]).toContain("200.00,960000,4800.00 (estimé)");
     expect(lines[2]).toContain("Sarah R.");
+    expect(lines[2]).toContain("300.00,1500000,5000.00,");
+  });
+
+  it("returns the same content as a PDF with ?format=pdf", async () => {
+    const res = await GET(request("?format=pdf"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/pdf");
+    expect(res.headers.get("Content-Disposition")).toContain("export-comptable-ceo-summit.pdf");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
   });
 
   it("exports only confirmed company payments, never rejected ones", async () => {
-    await GET();
+    await GET(request());
     expect(prisma.companyPayment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { status: "CONFIRMED" } })
     );

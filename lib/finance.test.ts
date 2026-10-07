@@ -4,6 +4,7 @@ import {
   companyPaymentToTransaction,
   computeMRRByPlan,
   mergeFinanceTransactions,
+  toEuroAmount,
   type FinanceTransaction,
 } from "./finance";
 
@@ -97,6 +98,7 @@ describe("mergeFinanceTransactions", () => {
     memberName: "X",
     description: "d",
     amount: 1,
+    eurToArRate: null,
     method: "Evolia",
     date: new Date(date),
   });
@@ -120,6 +122,7 @@ describe("companyPaymentToTransaction", () => {
   const payment = {
     id: "pay_1",
     amount: 12_000_000,
+    eurToArRate: 5000,
     method: "VIREMENT",
     createdAt: new Date("2026-09-30T10:00:00Z"),
     upsellQuantity: null,
@@ -134,6 +137,7 @@ describe("companyPaymentToTransaction", () => {
       memberName: "Société X",
       description: "Offre Gold",
       amount: 12_000_000,
+      eurToArRate: 5000,
       method: "VIREMENT",
       date: payment.createdAt,
     });
@@ -146,5 +150,38 @@ describe("companyPaymentToTransaction", () => {
       upsellPlan: { name: "Executive Pass" },
     });
     expect(tx.description).toBe("Supplément Executive Pass × 3");
+  });
+});
+
+describe("toEuroAmount", () => {
+  const tx = (amount: number, eurToArRate: number | null): FinanceTransaction => ({
+    id: "t",
+    source: "COMPANY",
+    memberName: "X",
+    description: "d",
+    amount,
+    eurToArRate,
+    method: "VIREMENT",
+    date: new Date("2026-10-07"),
+  });
+
+  it("converts with the rate recorded at payment time", () => {
+    expect(toEuroAmount(tx(10_000_000, 5000), 4800)).toEqual({
+      amountEur: 2000,
+      rate: 5000,
+      rateEstimated: false,
+    });
+  });
+
+  it("falls back to today's rate, flagged as estimated, for older payments", () => {
+    expect(toEuroAmount(tx(9_700_000, null), 4850)).toEqual({
+      amountEur: 2000,
+      rate: 4850,
+      rateEstimated: true,
+    });
+  });
+
+  it("rounds to the cent", () => {
+    expect(toEuroAmount(tx(1000, 3000), 3000).amountEur).toBe(0.33);
   });
 });

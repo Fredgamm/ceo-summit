@@ -35,9 +35,33 @@ export interface FinanceTransaction {
   source: "COMPANY" | "EVENT";
   memberName: string;
   description: string;
+  /** Montant en Ariary, tel qu'enregistré. */
   amount: number;
+  /** Taux EUR→Ar au moment du paiement ; nul pour les paiements antérieurs au 7 oct. 2026. */
+  eurToArRate: number | null;
   method: string;
   date: Date;
+}
+
+export interface EuroAmount {
+  amountEur: number;
+  rate: number;
+  /** Vrai quand le taux du paiement n'a pas été enregistré et que le taux du jour le remplace. */
+  rateEstimated: boolean;
+}
+
+/**
+ * Rapport QA du 7 oct. 2026 (§4.2) — montant en euros au taux du moment du
+ * paiement. Les paiements enregistrés avant ce taux prennent le taux du jour
+ * (`fallbackRate`), signalé comme estimé.
+ */
+export function toEuroAmount(transaction: FinanceTransaction, fallbackRate: number): EuroAmount {
+  const rate = transaction.eurToArRate ?? fallbackRate;
+  return {
+    amountEur: Math.round((transaction.amount / rate) * 100) / 100,
+    rate,
+    rateEstimated: transaction.eurToArRate == null,
+  };
 }
 
 /**
@@ -60,6 +84,7 @@ export const SUBSCRIPTION_PRICE_PAYMENT_WHERE = {
 export interface CompanyPaymentForFinance {
   id: string;
   amount: number;
+  eurToArRate: number | null;
   method: string;
   createdAt: Date;
   upsellQuantity: number | null;
@@ -78,8 +103,31 @@ export function companyPaymentToTransaction(p: CompanyPaymentForFinance): Financ
     memberName: p.companySubscription.company.name,
     description,
     amount: p.amount,
+    eurToArRate: p.eurToArRate,
     method: p.method,
     date: p.createdAt,
+  };
+}
+
+export interface EventRegistrationForFinance {
+  id: string;
+  eurToArRate: number | null;
+  paymentMethod: string | null;
+  createdAt: Date;
+  user: { name: string };
+  event: { title: string; price: number };
+}
+
+export function eventRegistrationToTransaction(r: EventRegistrationForFinance): FinanceTransaction {
+  return {
+    id: r.id,
+    source: "EVENT",
+    memberName: r.user.name,
+    description: r.event.title,
+    amount: r.event.price,
+    eurToArRate: r.eurToArRate,
+    method: r.paymentMethod ?? "",
+    date: r.createdAt,
   };
 }
 

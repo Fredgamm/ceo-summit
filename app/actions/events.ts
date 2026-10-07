@@ -13,6 +13,7 @@ import { getViewerTierFromCompany } from "@/lib/plan-access";
 import { requireViewer } from "@/lib/require-viewer";
 import { getActivePlans } from "@/lib/plans-query";
 import { formatDateFr, meetsMinTier } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -88,6 +89,8 @@ export async function registerForEvent(
     return { success: false, error: "Choisissez un mode de paiement." };
   }
 
+  // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour, pour l'export en euros.
+  const eurToArRate = isFree ? null : await getEurToArRate();
   let registration: { id: string };
   try {
     registration = await withEventRegistrationLock(eventId, async () => {
@@ -102,6 +105,7 @@ export async function registerForEvent(
         status: isFree ? ("CONFIRMED" as const) : ("PENDING_PAYMENT" as const),
         paymentStatus: isFree ? ("PAID" as const) : ("PENDING" as const),
         paymentMethod: method,
+        eurToArRate,
       };
       // Une inscription annulée garde sa ligne (unicité eventId + userId) :
       // se réinscrire la réactive au lieu d'en créer une seconde.

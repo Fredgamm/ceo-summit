@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/currency-conversion", () => ({ getEurToArRate: vi.fn().mockResolvedValue(5000) }));
 vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 

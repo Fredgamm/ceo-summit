@@ -4,15 +4,25 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { toCsv } from "@/lib/csv";
 import { formatDateFr } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import {
   companyPaymentToTransaction,
+  eventRegistrationToTransaction,
   COMPANY_PAYMENT_FINANCE_INCLUDE,
   RECORDED_COMPANY_PAYMENT_WHERE,
   type FinanceTransaction,
 } from "@/lib/finance";
+import { buildFinanceExportTable } from "@/lib/finance-export";
+import { renderFinanceExportPdf } from "@/lib/pdf/finance-export-pdf";
 
-/** E8-T10 — "Export comptable CSV". */
-export async function GET() {
+const FILENAME = "export-comptable-ceo-summit";
+
+/**
+ * E8-T10 — export comptable. Rapport QA du 7 oct. 2026 (§4.2) : en CSV (par
+ * défaut) ou en PDF (`?format=pdf`), même contenu, euros d'abord au taux du
+ * moment du paiement puis le montant en Ariary.
+ */
+export async function GET(req: Request) {
   try {
     await requireAdmin("finances");
   } catch (err) {
@@ -22,7 +32,9 @@ export async function GET() {
     throw err;
   }
 
-  const [companyPayments, registrations] = await Promise.all([
+  const format = new URL(req.url).searchParams.get("format") === "pdf" ? "pdf" : "csv";
+
+  const [companyPayments, registrations, fallbackRate] = await Promise.all([
     prisma.companyPayment.findMany({
       where: RECORDED_COMPANY_PAYMENT_WHERE,
       include: COMPANY_PAYMENT_FINANCE_INCLUDE,
@@ -36,41 +48,35 @@ export async function GET() {
       },
       orderBy: { createdAt: "desc" },
     }),
+    getEurToArRate(),
   ]);
 
   const transactions: FinanceTransaction[] = [
     ...companyPayments.map(companyPaymentToTransaction),
-    ...registrations.map((r) => ({
-      id: r.id,
-      source: "EVENT" as const,
-      memberName: r.user.name,
-      description: r.event.title,
-      amount: r.event.price,
-      method: r.paymentMethod ?? "",
-      date: r.createdAt,
-    })),
+    ...registrations.map(eventRegistrationToTransaction),
   ];
+  const table = buildFinanceExportTable(transactions, fallbackRate);
 
-  transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+  if (format === "pdf") {
+    const pdf = await renderFinanceExportPdf({
+      table,
+      generatedAtLabel: formatDateFr(new Date()),
+    });
+    return new NextResponse(new Uint8Array(pdf), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${FILENAME}.pdf"`,
+      },
+    });
+  }
 
-  const rows = [
-    ["Membre", "Source", "Description", "Montant (Ar)", "Méthode", "Date"],
-    ...transactions.map((t) => [
-      t.memberName,
-      t.source,
-      t.description,
-      String(t.amount),
-      t.method,
-      formatDateFr(t.date),
-    ]),
-  ];
-
-  const csv = toCsv(rows);
+  const csv = toCsv([table.header, ...table.rows]);
   return new NextResponse(csv, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="export-comptable-ceo-summit.csv"`,
+      "Content-Disposition": `attachment; filename="${FILENAME}.csv"`,
     },
   });
 }

@@ -9,7 +9,9 @@ import { getAllPlans } from "@/lib/plans-query";
 import {
   computeMRRByPlan,
   mergeFinanceTransactions,
+  toEuroAmount,
   companyPaymentToTransaction,
+  eventRegistrationToTransaction,
   COMPANY_PAYMENT_FINANCE_INCLUDE,
   RECORDED_COMPANY_PAYMENT_WHERE,
   SUBSCRIPTION_PRICE_PAYMENT_WHERE,
@@ -20,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatAriary, formatDateFr } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
 
 export const metadata: Metadata = { title: "Admin — Finances" };
 
@@ -125,16 +128,9 @@ export default async function AdminFinancesPage({
 
     const transactions: FinanceTransaction[] = mergeFinanceTransactions([
       ...companyPayments.map(companyPaymentToTransaction),
-      ...registrations.map((r) => ({
-        id: r.id,
-        source: "EVENT" as const,
-        memberName: r.user.name,
-        description: r.event.title,
-        amount: r.event.price,
-        method: r.paymentMethod ?? "",
-        date: r.createdAt,
-      })),
+      ...registrations.map(eventRegistrationToTransaction),
     ]);
+    const fallbackRate = await getEurToArRate();
 
     tabContent =
       transactions.length === 0 ? (
@@ -146,25 +142,44 @@ export default async function AdminFinancesPage({
               <tr>
                 <th className="px-4 py-2.5 text-left">Membre</th>
                 <th className="px-4 py-2.5 text-left">Description</th>
+                <th className="px-4 py-2.5 text-left">Montant (€)</th>
                 <th className="px-4 py-2.5 text-left">Montant (Ar)</th>
                 <th className="px-4 py-2.5 text-left">Méthode</th>
                 <th className="px-4 py-2.5 text-left">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {transactions.map((t) => (
-                <tr key={`${t.source}-${t.id}`}>
-                  <td className="px-4 py-3 font-semibold text-navy">{t.memberName}</td>
-                  <td className="px-4 py-3 text-text-mid">{t.description}</td>
-                  <td className="px-4 py-3 font-bold">
-                    {new Intl.NumberFormat("fr-FR").format(t.amount)}
-                  </td>
-                  <td className="px-4 py-3 text-text-muted">{t.method}</td>
-                  <td className="px-4 py-3 text-text-muted">{formatDateFr(t.date)}</td>
-                </tr>
-              ))}
+              {transactions.map((t) => {
+                const euro = toEuroAmount(t, fallbackRate);
+                return (
+                  <tr key={`${t.source}-${t.id}`}>
+                    <td className="px-4 py-3 font-semibold text-navy">{t.memberName}</td>
+                    <td className="px-4 py-3 text-text-mid">{t.description}</td>
+                    <td
+                      className="px-4 py-3 font-bold"
+                      title={`Taux ${euro.rate.toFixed(2)} Ar/€${euro.rateEstimated ? " (estimé, taux du jour)" : " (jour du paiement)"}`}
+                    >
+                      {new Intl.NumberFormat("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }).format(euro.amountEur)}{" "}
+                      €{euro.rateEstimated && <span className="text-text-muted"> *</span>}
+                    </td>
+                    <td className="px-4 py-3 text-text-mid">
+                      {new Intl.NumberFormat("fr-FR").format(t.amount)}
+                    </td>
+                    <td className="px-4 py-3 text-text-muted">{t.method}</td>
+                    <td className="px-4 py-3 text-text-muted">{formatDateFr(t.date)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          {transactions.some((t) => t.eurToArRate == null) && (
+            <p className="border-t border-border px-4 py-2 text-xs text-text-muted">
+              * Paiement enregistré avant la conservation du taux : converti au taux du jour.
+            </p>
+          )}
         </div>
       );
   } else if (activeTab === "remboursements") {
@@ -239,9 +254,14 @@ export default async function AdminFinancesPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Finances</h1>
-        <Button asChild variant="outline" size="sm">
-          <a href="/api/admin/finances/export">↓ Export comptable</a>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline" size="sm">
+            <a href="/api/admin/finances/export">↓ Export CSV</a>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <a href="/api/admin/finances/export?format=pdf">↓ Export PDF</a>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

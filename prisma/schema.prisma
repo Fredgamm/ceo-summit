@@ -535,6 +535,9 @@ model CompanyPayment {
   upsellPlanId          String?
   upsellPlan            Plan?               @relation("UpsellPlan", fields: [upsellPlanId], references: [id])
   upsellQuantity        Int?
+  /// Rapport QA du 7 oct. 2026 (§4.2) — taux EUR→Ar au moment du paiement,
+  /// pour l'export comptable en euros. Nul pour les paiements antérieurs.
+  eurToArRate           Float?
   createdAt             DateTime            @default(now())
 
   @@index([status])
@@ -670,6 +673,8 @@ model EventRegistration {
   status        RegistrationStatus  @default(PENDING_PAYMENT)
   paymentStatus PaymentStatus       @default(PENDING)
   paymentMethod EventPaymentMethod?
+  /// Taux EUR→Ar au moment de l'inscription payante (voir CompanyPayment.eurToArRate).
+  eurToArRate   Float?
   paymentRef    String?
   /// Phase 2quater (1er août 2026) — offre d'évènement utilisée (Plan avec
   /// eventId défini). `null` = créée via l'ancien flux simple
