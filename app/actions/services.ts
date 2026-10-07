@@ -8,7 +8,7 @@ import { isPublicObjectUrlUnderPrefix } from "@/lib/r2";
 import { requireViewer } from "@/lib/require-viewer";
 import { serviceFormSchema } from "@/lib/validations/service";
 import { sendTransactionalEmail } from "@/lib/resend";
-import AdminServiceListingAlertEmail from "@/emails/admin-service-listing-alert-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -72,14 +72,11 @@ export async function submitServiceListing(input: unknown): Promise<ActionResult
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Nouvelle fiche service à modérer — ${listing.title}`,
-        react: AdminServiceListingAlertEmail({
-          authorName: viewer.name,
-          serviceTitle: listing.title,
-        }),
+      const email = await resolveEmail("admin-service-listing-alert", {
+        authorName: viewer.name,
+        serviceTitle: listing.title,
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       // La fiche est déjà créée à ce stade — un échec d'envoi de l'alerte
       // admin ne doit pas faire échouer le dépôt (même bug de classe que

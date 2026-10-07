@@ -11,6 +11,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     plan: { findFirst: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb(txMock)),
   },
 }));
@@ -19,7 +20,6 @@ vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/request-ip", () => ({ getClientIp: vi.fn(() => "127.0.0.1") }));
 vi.mock("@/app/actions/company", () => ({ validateSectorAndCountry: vi.fn() }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
-vi.mock("@/emails/company-admin-welcome-email", () => ({ default: vi.fn(() => null) }));
 
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";

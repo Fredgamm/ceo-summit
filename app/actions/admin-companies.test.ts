@@ -21,6 +21,7 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn().mockResolvedValue(0),
     },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
   },
 }));
@@ -35,8 +36,6 @@ vi.mock("@/lib/event-registration-lock", async (importOriginal) => {
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("@/emails/company-payment-confirmed-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/company-payment-rejected-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -333,11 +332,14 @@ describe("rejectCompanyPayment", () => {
     expect(result.success).toBe(true);
     expect(prisma.companySubscription.update).not.toHaveBeenCalled();
     expect(sendTransactionalEmail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: "marie@example.mg",
-        subject: expect.stringContaining("places supplémentaires"),
-      })
+      expect.objectContaining({ to: "marie@example.mg" })
     );
+    // Audit (25 septembre 2026) — consolidation en une seule clé de registre
+    // (`company-payment-rejected`) : le sujet ne distingue plus le
+    // supplément du paiement initial, seul le motif (`reason`) le fait
+    // désormais (voir lib/email-templates/company-billing.ts).
+    const [{ react }] = vi.mocked(sendTransactionalEmail).mock.calls[0];
+    expect(JSON.stringify(react)).toContain("place(s) supplémentaire(s)");
   });
 
   it("requires a non-empty reason", async () => {

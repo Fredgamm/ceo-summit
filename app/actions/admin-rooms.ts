@@ -6,10 +6,9 @@ import type { ReportStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { resolveEmail } from "@/lib/email-template-resolver";
 import { roomFormSchema } from "@/lib/validations/room";
 import { formatDateFr } from "@/lib/utils";
-import MemberRoomWarningEmail from "@/emails/member-room-warning-email";
-import MemberRoomExclusionEmail from "@/emails/member-room-exclusion-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -123,11 +122,8 @@ export async function resolveRoomReport(
     });
   } else if (decision === "RESOLVED_WARNED") {
     try {
-      await sendTransactionalEmail({
-        to: roomMessage.author.email,
-        subject: `Avertissement — salle ${roomMessage.room.name}`,
-        react: MemberRoomWarningEmail({ roomName: roomMessage.room.name }),
-      });
+      const email = await resolveEmail("member-room-warning", { roomName: roomMessage.room.name });
+      if (email) await sendTransactionalEmail({ to: roomMessage.author.email, ...email });
     } catch (err) {
       // Ne doit pas empêcher l'enregistrement de la décision de modération
       // ci-dessous.
@@ -146,14 +142,11 @@ export async function resolveRoomReport(
       },
     });
     try {
-      await sendTransactionalEmail({
-        to: roomMessage.author.email,
-        subject: `Exclusion temporaire — salle ${roomMessage.room.name}`,
-        react: MemberRoomExclusionEmail({
-          roomName: roomMessage.room.name,
-          suspendedUntilLabel: formatDateFr(suspendedUntil),
-        }),
+      const email = await resolveEmail("member-room-exclusion", {
+        roomName: roomMessage.room.name,
+        suspendedUntilLabel: formatDateFr(suspendedUntil),
       });
+      if (email) await sendTransactionalEmail({ to: roomMessage.author.email, ...email });
     } catch (err) {
       console.error("[resolveRoomReport] failed to send exclusion email", err);
     }

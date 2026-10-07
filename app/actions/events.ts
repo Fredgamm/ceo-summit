@@ -8,8 +8,7 @@ import {
   RegistrationLockBusyError,
 } from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
-import EventRegistrationEmail from "@/emails/event-registration-email";
-import AdminEventPaymentAlertEmail from "@/emails/admin-event-payment-alert-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 import { getViewerTierFromCompany } from "@/lib/plan-access";
 import { requireViewer } from "@/lib/require-viewer";
 import { getActivePlans } from "@/lib/plans-query";
@@ -124,17 +123,15 @@ export async function registerForEvent(
   }
 
   try {
-    await sendTransactionalEmail({
-      to: viewer.email,
-      subject: `Inscription confirmée — ${event.title}`,
-      react: EventRegistrationEmail({
-        memberName: viewer.name,
-        eventTitle: event.title,
-        eventDateLabel: formatDateFr(event.date),
-        eventLocation: event.isOnline ? "En ligne" : event.location,
-        requiresManualValidation: method === "VIREMENT",
-      }),
+    const registrationKey =
+      method === "VIREMENT" ? "event-registration-pending-payment" : "event-registration";
+    const resolvedEmail = await resolveEmail(registrationKey, {
+      memberName: viewer.name,
+      eventTitle: event.title,
+      eventDateLabel: formatDateFr(event.date),
+      eventLocation: event.isOnline ? "En ligne" : event.location,
     });
+    if (resolvedEmail) await sendTransactionalEmail({ to: viewer.email, ...resolvedEmail });
   } catch (err) {
     // L'inscription est déjà enregistrée à ce stade — un échec d'envoi ne
     // doit pas faire échouer l'action (même bug de classe que celui
@@ -144,16 +141,14 @@ export async function registerForEvent(
 
   if (method === "VIREMENT" && process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Virement à valider — ${event.title}`,
-        react: AdminEventPaymentAlertEmail({
-          memberName: viewer.name,
-          memberEmail: viewer.email,
-          eventTitle: event.title,
-          amount: event.price,
-        }),
+      const resolvedAdminEmail = await resolveEmail("admin-event-payment-alert", {
+        memberName: viewer.name,
+        memberEmail: viewer.email,
+        eventTitle: event.title,
+        amount: `${new Intl.NumberFormat("fr-FR").format(event.price)} Ar`,
       });
+      if (resolvedAdminEmail)
+        await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...resolvedAdminEmail });
     } catch (err) {
       console.error("[registerForEvent] failed to send admin alert email", err);
     }

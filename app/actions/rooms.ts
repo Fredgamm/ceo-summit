@@ -8,7 +8,7 @@ import { getViewerTierFromCompany } from "@/lib/plan-access";
 import { requireViewer } from "@/lib/require-viewer";
 import { meetsRoomAccess } from "@/lib/rooms-query";
 import { sendTransactionalEmail } from "@/lib/resend";
-import AdminRoomReportAlertEmail from "@/emails/admin-room-report-alert-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -85,14 +85,11 @@ export async function reportRoomMessage(roomMessageId: string): Promise<ActionRe
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Message signalé — ${message.room.name}`,
-        react: AdminRoomReportAlertEmail({
-          reporterName: viewer.name,
-          roomName: message.room.name,
-        }),
+      const email = await resolveEmail("admin-room-report-alert", {
+        reporterName: viewer.name,
+        roomName: message.room.name,
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       // Le signalement est déjà enregistré à ce stade — un échec d'envoi de
       // l'alerte admin ne doit pas faire échouer l'action (même bug de

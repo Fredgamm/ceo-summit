@@ -10,7 +10,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { BCRYPT_ROUNDS } from "@/lib/password";
 import { sendTransactionalEmail } from "@/lib/resend";
-import CompanyAdminWelcomeEmail from "@/emails/company-admin-welcome-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -99,16 +99,13 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
    * échouer l'inscription, déjà enregistrée à ce stade.
    */
   try {
-    await sendTransactionalEmail({
-      to: normalizedEmail,
-      subject: `Votre compte CEO Summit est créé — ${f.companyName}`,
-      react: CompanyAdminWelcomeEmail({
-        adminName: f.name,
-        companyName: f.companyName,
-        planName: plan.name,
-        paymentUrl: `${process.env.NEXTAUTH_URL}/entreprise/paiement`,
-      }),
+    const email = await resolveEmail("company-admin-welcome", {
+      adminName: f.name,
+      companyName: f.companyName,
+      planName: plan.name,
+      paymentUrl: `${process.env.NEXTAUTH_URL}/entreprise/paiement`,
     });
+    if (email) await sendTransactionalEmail({ to: normalizedEmail, ...email });
   } catch (err) {
     console.error("[createCompanyAccount] failed to send admin welcome email", err);
   }

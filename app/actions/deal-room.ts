@@ -10,9 +10,7 @@ import { getViewerTierFromCompany } from "@/lib/plan-access";
 import { isKeyUnderPrefix } from "@/lib/r2";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
-import AdminOpportunityAlertEmail from "@/emails/admin-opportunity-alert-email";
-import OpportunityContactRequestEmail from "@/emails/opportunity-contact-request-email";
-import OpportunityContactAcceptedEmail from "@/emails/opportunity-contact-accepted-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -66,14 +64,11 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Nouvelle opportunité à modérer — ${opportunity.title}`,
-        react: AdminOpportunityAlertEmail({
-          authorName: viewer.name,
-          opportunityTitle: opportunity.title,
-        }),
+      const email = await resolveEmail("admin-opportunity-alert", {
+        authorName: viewer.name,
+        opportunityTitle: opportunity.title,
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       // L'opportunité est déjà créée à ce stade — un échec d'envoi de
       // l'alerte admin ne doit pas faire échouer la publication (même bug
@@ -140,15 +135,12 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
   });
 
   try {
-    await sendTransactionalEmail({
-      to: opportunity.author.email,
-      subject: `Nouvelle demande de contact — ${opportunity.title}`,
-      react: OpportunityContactRequestEmail({
-        initiatorName: viewer.name,
-        opportunityTitle: opportunity.title,
-        opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
-      }),
+    const email = await resolveEmail("opportunity-contact-request", {
+      initiatorName: viewer.name,
+      opportunityTitle: opportunity.title,
+      opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
     });
+    if (email) await sendTransactionalEmail({ to: opportunity.author.email, ...email });
   } catch (err) {
     // Le contact est déjà créé à ce stade — un échec d'envoi de la
     // notification à l'auteur ne doit pas faire échouer l'action (même bug
@@ -202,15 +194,12 @@ export async function acceptOpportunityContact(
    * l'acceptation qu'en revisitant la plateforme de lui-même.
    */
   try {
-    await sendTransactionalEmail({
-      to: contact.initiator.email,
-      subject: `Demande de contact acceptée — ${contact.opportunity.title}`,
-      react: OpportunityContactAcceptedEmail({
-        receiverName: viewer.name,
-        opportunityTitle: contact.opportunity.title,
-        conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversation.id}`,
-      }),
+    const email = await resolveEmail("opportunity-contact-accepted", {
+      receiverName: viewer.name,
+      opportunityTitle: contact.opportunity.title,
+      conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversation.id}`,
     });
+    if (email) await sendTransactionalEmail({ to: contact.initiator.email, ...email });
   } catch (err) {
     console.error("[acceptOpportunityContact] failed to send notification email", err);
   }
@@ -363,11 +352,11 @@ export async function resubmitOpportunity(
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
-      await sendTransactionalEmail({
-        to: process.env.ADMIN_ALERT_EMAIL,
-        subject: `Opportunité resoumise à modérer — ${f.title}`,
-        react: AdminOpportunityAlertEmail({ authorName: viewer.name, opportunityTitle: f.title }),
+      const email = await resolveEmail("admin-opportunity-alert", {
+        authorName: viewer.name,
+        opportunityTitle: f.title,
       });
+      if (email) await sendTransactionalEmail({ to: process.env.ADMIN_ALERT_EMAIL, ...email });
     } catch (err) {
       console.error("[resubmitOpportunity] failed to send admin alert email", err);
     }

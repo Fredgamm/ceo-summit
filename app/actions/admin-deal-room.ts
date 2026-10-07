@@ -6,9 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
-import OpportunityApprovedEmail from "@/emails/opportunity-approved-email";
-import OpportunityChangesRequestedEmail from "@/emails/opportunity-changes-requested-email";
-import OpportunityRefusedEmail from "@/emails/opportunity-refused-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -51,14 +49,11 @@ export async function approveOpportunity(opportunityId: string): Promise<ActionR
   });
 
   try {
-    await sendTransactionalEmail({
-      to: opportunity.author.email,
-      subject: `Votre opportunité "${opportunity.title}" est publiée`,
-      react: OpportunityApprovedEmail({
-        opportunityTitle: opportunity.title,
-        opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
-      }),
+    const email = await resolveEmail("opportunity-approved", {
+      opportunityTitle: opportunity.title,
+      opportunityUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/deal-room/${opportunityId}`,
     });
+    if (email) await sendTransactionalEmail({ to: opportunity.author.email, ...email });
   } catch (err) {
     console.error("[approveOpportunity] failed to send approval email", err);
   }
@@ -96,11 +91,11 @@ export async function requestOpportunityChanges(
   });
 
   try {
-    await sendTransactionalEmail({
-      to: opportunity.author.email,
-      subject: `Modifications demandées — ${opportunity.title}`,
-      react: OpportunityChangesRequestedEmail({ opportunityTitle: opportunity.title, message }),
+    const email = await resolveEmail("opportunity-changes-requested", {
+      opportunityTitle: opportunity.title,
+      message,
     });
+    if (email) await sendTransactionalEmail({ to: opportunity.author.email, ...email });
   } catch (err) {
     console.error("[requestOpportunityChanges] failed to send email", err);
   }
@@ -137,11 +132,11 @@ export async function rejectOpportunity(
   });
 
   try {
-    await sendTransactionalEmail({
-      to: opportunity.author.email,
-      subject: `Votre opportunité "${opportunity.title}" n'a pas été retenue`,
-      react: OpportunityRefusedEmail({ opportunityTitle: opportunity.title, reason }),
+    const email = await resolveEmail("opportunity-refused", {
+      opportunityTitle: opportunity.title,
+      reason,
     });
+    if (email) await sendTransactionalEmail({ to: opportunity.author.email, ...email });
   } catch (err) {
     console.error("[rejectOpportunity] failed to send rejection email", err);
   }

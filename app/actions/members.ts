@@ -6,9 +6,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { sendTransactionalEmail } from "@/lib/resend";
-import MemberSuspendedEmail from "@/emails/member-suspended-email";
-import MemberExcludedEmail from "@/emails/member-excluded-email";
-import MemberReactivatedEmail from "@/emails/member-reactivated-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -59,27 +57,19 @@ async function setMemberStatus(
    * connecter, jamais notifié directement.
    */
   try {
+    const memberFirstName = member.name.split(" ")[0];
     if (status === "SUSPENDED") {
-      await sendTransactionalEmail({
-        to: member.email,
-        subject: "Votre compte CEO Summit a été suspendu",
-        react: MemberSuspendedEmail({ memberName: member.name }),
-      });
+      const email = await resolveEmail("member-suspended", { memberFirstName });
+      if (email) await sendTransactionalEmail({ to: member.email, ...email });
     } else if (status === "CANCELLED") {
-      await sendTransactionalEmail({
-        to: member.email,
-        subject: "Votre compte CEO Summit a été résilié",
-        react: MemberExcludedEmail({ memberName: member.name }),
-      });
+      const email = await resolveEmail("member-excluded", { memberFirstName });
+      if (email) await sendTransactionalEmail({ to: member.email, ...email });
     } else {
-      await sendTransactionalEmail({
-        to: member.email,
-        subject: "Votre compte CEO Summit a été réactivé",
-        react: MemberReactivatedEmail({
-          memberName: member.name,
-          loginUrl: `${process.env.NEXTAUTH_URL}/login`,
-        }),
+      const email = await resolveEmail("member-reactivated", {
+        memberFirstName,
+        loginUrl: `${process.env.NEXTAUTH_URL}/login`,
       });
+      if (email) await sendTransactionalEmail({ to: member.email, ...email });
     }
   } catch (err) {
     console.error("[setMemberStatus] failed to send status change email", err);

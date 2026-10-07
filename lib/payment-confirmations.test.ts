@@ -5,6 +5,7 @@ vi.mock("@/lib/prisma", () => ({
     companyPayment: { findUnique: vi.fn(), updateMany: vi.fn() },
     companySubscription: { update: vi.fn() },
     auditLog: { create: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
   },
 }));
@@ -14,9 +15,6 @@ vi.mock("@/lib/event-registration-lock", () => ({
 }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/company-payment-confirmed-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/company-upsell-confirmed-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/event-registration-email", () => ({ default: vi.fn(() => null) }));
 
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";

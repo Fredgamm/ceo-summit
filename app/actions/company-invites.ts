@@ -19,9 +19,7 @@ import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { BCRYPT_ROUNDS } from "@/lib/password";
 import { formatDateFr } from "@/lib/utils";
-import CompanyInviteEmail from "@/emails/company-invite-email";
-import CompanyCollaboratorWelcomeEmail from "@/emails/company-collaborator-welcome-email";
-import EventRegistrationEmail from "@/emails/event-registration-email";
+import { resolveEmail } from "@/lib/email-template-resolver";
 
 /**
  * `warning` (audit du 25 septembre 2026) — succès partiel à signaler à
@@ -99,17 +97,13 @@ async function sendEventRegistrationEmail(
   logPrefix: string
 ) {
   try {
-    await sendTransactionalEmail({
-      to: user.email,
-      subject: `Inscription confirmée — ${event.title}`,
-      react: EventRegistrationEmail({
-        memberName: user.name,
-        eventTitle: event.title,
-        eventDateLabel: formatDateFr(event.date),
-        eventLocation: event.isOnline ? "En ligne" : event.location,
-        requiresManualValidation: false,
-      }),
+    const resolvedEmail = await resolveEmail("event-registration", {
+      memberName: user.name,
+      eventTitle: event.title,
+      eventDateLabel: formatDateFr(event.date),
+      eventLocation: event.isOnline ? "En ligne" : event.location,
     });
+    if (resolvedEmail) await sendTransactionalEmail({ to: user.email, ...resolvedEmail });
   } catch (err) {
     console.error(`[${logPrefix}] failed to send event registration email`, err);
   }
@@ -264,15 +258,12 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
   const inviteUrl = `${process.env.NEXTAUTH_URL}/invitation/${token}`;
   let warning: string | undefined;
   try {
-    await sendTransactionalEmail({
-      to: email,
-      subject: `${company.name} vous invite à rejoindre CEO Summit`,
-      react: CompanyInviteEmail({
-        inviteeName: parsed.data.name,
-        companyName: company.name,
-        inviteUrl,
-      }),
+    const resolvedEmail = await resolveEmail("company-invite", {
+      inviteeFirstName: parsed.data.name.split(" ")[0],
+      companyName: company.name,
+      inviteUrl,
     });
+    if (resolvedEmail) await sendTransactionalEmail({ to: email, ...resolvedEmail });
   } catch (err) {
     // L'invitation existe déjà en base à ce stade — un échec d'envoi ne doit
     // pas faire échouer l'action (même bug de classe que celui corrigé sur
@@ -369,15 +360,12 @@ export async function resendInvite(inviteId: string): Promise<ActionResult> {
 
   const inviteUrl = `${process.env.NEXTAUTH_URL}/invitation/${token}`;
   try {
-    await sendTransactionalEmail({
-      to: invite.email,
-      subject: `${invite.company.name} vous invite à rejoindre CEO Summit`,
-      react: CompanyInviteEmail({
-        inviteeName: invite.name,
-        companyName: invite.company.name,
-        inviteUrl,
-      }),
+    const resolvedEmail = await resolveEmail("company-invite", {
+      inviteeFirstName: invite.name.split(" ")[0],
+      companyName: invite.company.name,
+      inviteUrl,
     });
+    if (resolvedEmail) await sendTransactionalEmail({ to: invite.email, ...resolvedEmail });
   } catch (err) {
     console.error("[resendInvite] failed to send invite email", err);
     return { success: false, error: "Échec de l'envoi de l'email. Réessayez plus tard." };
@@ -510,15 +498,12 @@ export async function acceptCompanyInvite(
    * n'avait aucune confirmation que son compte était créé et actif.
    */
   try {
-    await sendTransactionalEmail({
-      to: newUser.email,
-      subject: `Bienvenue sur CEO Summit — ${invite.company.name}`,
-      react: CompanyCollaboratorWelcomeEmail({
-        memberName: newUser.name,
-        companyName: invite.company.name,
-        loginUrl: `${process.env.NEXTAUTH_URL}/login`,
-      }),
+    const resolvedEmail = await resolveEmail("company-collaborator-welcome", {
+      memberFirstName: newUser.name.split(" ")[0],
+      companyName: invite.company.name,
+      loginUrl: `${process.env.NEXTAUTH_URL}/login`,
     });
+    if (resolvedEmail) await sendTransactionalEmail({ to: newUser.email, ...resolvedEmail });
   } catch (err) {
     console.error("[acceptCompanyInvite] failed to send welcome email", err);
   }

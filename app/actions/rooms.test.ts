@@ -10,11 +10,11 @@ vi.mock("@/lib/prisma", () => ({
     roomMessage: { findUnique: vi.fn() },
     roomReport: { findFirst: vi.fn(), create: vi.fn() },
     user: { findUnique: vi.fn() },
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/admin-room-report-alert-email", () => ({ default: vi.fn(() => null) }));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";

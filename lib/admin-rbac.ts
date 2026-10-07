@@ -14,6 +14,7 @@ export const ADMIN_SECTIONS = [
   "salles",
   "services",
   "communications",
+  "emails",
   "finances",
   "parametres",
   "plans",
@@ -32,6 +33,10 @@ const SECTION_ACCESS: Record<AdminRole, "*" | AdminSection[]> = {
     "salles",
     "services",
     "communications",
+    // Bibliothèque d'emails (25 septembre 2026) — même famille que
+    // "communications" (textes destinés aux membres), pas la config
+    // financière ; MODERATEUR gère déjà les broadcasts.
+    "emails",
   ],
   // Tarification/paiement — même famille que "finances", pas
   // "parametres" (référentiels, comptes admin) qui reste réservé SUPER_ADMIN.

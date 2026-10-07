@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { sendTransactionalEmail } from "../lib/resend";
-import MessageNotificationEmail from "../emails/message-notification-email";
+import { resolveEmail } from "../lib/email-template-resolver";
 
 export const OFFLINE_EMAIL_DELAY_MS = 60_000;
 const ANTI_SPAM_WINDOW_MS = 60 * 60 * 1000;
@@ -41,15 +41,12 @@ export async function sendOfflineEmailIfNeeded(
   if (!recipient || !sender) return;
 
   try {
-    await sendTransactionalEmail({
-      to: recipient.email,
-      subject: `Nouveau message de ${sender.name}`,
-      react: MessageNotificationEmail({
-        senderName: sender.name,
-        preview,
-        conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversationId}`,
-      }),
+    const email = await resolveEmail("message-notification", {
+      senderName: sender.name,
+      messagePreview: preview,
+      conversationUrl: `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/messagerie/${conversationId}`,
     });
+    if (email) await sendTransactionalEmail({ to: recipient.email, ...email });
   } catch (err) {
     // Ne marque pas lastEmailNotifiedAt ci-dessous si l'envoi échoue, pour
     // qu'un prochain message hors-ligne retente plutôt que de rester

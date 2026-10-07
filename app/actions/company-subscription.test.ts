@@ -10,11 +10,11 @@ vi.mock("@/lib/prisma", () => ({
     companySubscription: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     companyPayment: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
     $transaction: vi.fn(),
+    emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/emails/admin-company-payment-alert-email", () => ({ default: vi.fn(() => null) }));
 
 import { requireViewer } from "@/lib/require-viewer";
 import { prisma } from "@/lib/prisma";

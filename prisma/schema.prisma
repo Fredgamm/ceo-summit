@@ -1063,3 +1063,43 @@ model BroadcastRecipient {
   @@unique([broadcastId, userId])
   @@index([resendMessageId])
 }
+
+// ═══════════════════════════════════════════════
+// BIBLIOTHÈQUE D'EMAILS TRANSACTIONNELS (audit MVP, 25 septembre 2026)
+// ═══════════════════════════════════════════════
+
+/// Catégories métier des 36 emails transactionnels — pilote le regroupement
+/// dans /admin/emails. Ne couvre pas Broadcast ci-dessus (déjà éditable
+/// depuis /admin/communications, pas de doublon d'UI).
+enum EmailTemplateCategory {
+  ACCOUNT_APPLICATION
+  COMPANY_BILLING
+  TEAM_COLLABORATORS
+  EVENT
+  DEAL_ROOM
+  ROOM_MODERATION
+  SERVICES
+  MESSAGING
+  ADMIN_ALERT
+}
+
+/// Une ligne = un ÉCART par rapport au registre déclaré en code
+/// (lib/email-templates/*.ts) — jamais le contenu "normal". Tant qu'aucune
+/// ligne n'existe pour une clé, resolveEmail() (lib/email-template-resolver.ts)
+/// sert intégralement le contenu par défaut du registre : un email non
+/// personnalisé reste pixel-identique à avant cette fonctionnalité.
+model EmailTemplateOverride {
+  key         String                @id // clé du registre, ex. "company-payment-confirmed"
+  category    EmailTemplateCategory
+  /// `null` = contenu non personnalisé (seul `isActive` diffère éventuellement).
+  subject     String?
+  /// `EmailBlock[]` sérialisé (lib/email-blocks.ts) — jamais du HTML brut,
+  /// toujours rendu par emails/dynamic-email.tsx via des composants de confiance.
+  blocks      Json?
+  isActive    Boolean               @default(true)
+  updatedById String
+  updatedAt   DateTime              @updatedAt
+  createdAt   DateTime              @default(now())
+
+  @@index([category])
+}
