@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RoomAdminActions } from "@/components/admin/room-admin-actions";
 import { RoomReportDialog } from "@/components/admin/room-report-dialog";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Admin — Salles" };
 
@@ -51,9 +52,7 @@ export default async function AdminRoomsPage() {
             {rooms.length} salles · {pendingReports.length} signalement(s) en attente
           </p>
         </div>
-        <Button asChild>
-          <Link href="/admin/salles/nouveau">+ Créer une salle</Link>
-        </Button>
+        <AddButton href="/admin/salles/nouveau">Créer une salle</AddButton>
       </div>
 
       <div>

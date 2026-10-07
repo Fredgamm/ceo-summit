@@ -21,6 +21,7 @@ import { DealRoomFilters } from "@/components/deal-room/deal-room-filters";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Deal Room" };
 
@@ -109,9 +110,7 @@ export default async function DealRoomPage({
     >
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Deal Room</h1>
-        <Button asChild>
-          <Link href="/deal-room/publier">+ Publier une opportunité</Link>
-        </Button>
+        <AddButton href="/deal-room/publier">Publier une opportunité</AddButton>
       </div>
 
       <DealRoomFilters types={validTypes} sectors={validSectors} countries={validCountries} />

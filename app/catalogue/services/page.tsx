@@ -18,6 +18,7 @@ import { ServiceFilters } from "@/components/catalogue-services/service-filters"
 import { ServiceCard } from "@/components/catalogue-services/service-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Catalogue de services" };
 
@@ -67,9 +68,7 @@ export default async function ServicesCataloguePage({
     >
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Catalogue de services</h1>
-        <Button asChild>
-          <Link href="/catalogue/services/publier">+ Déposer une fiche</Link>
-        </Button>
+        <AddButton href="/catalogue/services/publier">Déposer une fiche</AddButton>
       </div>
 
       <ServiceFilters countries={validCountries} />

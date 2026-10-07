@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Briefcase } from "lucide-react";
 import { formatDateFr } from "@/lib/utils";
+import { AddButton } from "@/components/ui/add-button";
 
 const STATUS_BADGE: Record<ServiceStatus, "draft" | "pending" | "active" | "refused"> = {
   DRAFT: "draft",
@@ -95,7 +96,7 @@ export function CompanyServicesManager({
     <div className="flex flex-col gap-4">
       {isCompanyAdmin && (
         <div className="flex justify-end">
-          <Button onClick={() => setView("create")}>+ Ajouter un service</Button>
+          <AddButton onClick={() => setView("create")}>Ajouter un service</AddButton>
         </div>
       )}
 

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatDateFr, initials } from "@/lib/utils";
 import { offerBadgeLabel } from "@/lib/offer-badge";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Accueil" };
 
@@ -286,9 +287,9 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <Button asChild className="mt-1 w-full">
-            <Link href="/deal-room/publier">+ Publier une opportunité</Link>
-          </Button>
+          <AddButton href="/deal-room/publier" className="mt-1 w-full">
+            Publier une opportunité
+          </AddButton>
         </div>
       }
     >

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
-import { Building2, Globe, Handshake, Linkedin, Mail, Phone, Plus } from "lucide-react";
+import { Building2, Globe, Handshake, Linkedin, Mail, Phone } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateFr, initials } from "@/lib/utils";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Profil membre" };
 
@@ -274,11 +275,7 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
           <div className="flex flex-col gap-3">
             {isSelf && (
               <div className="flex justify-end">
-                <Button asChild size="sm">
-                  <Link href="/deal-room/publier">
-                    <Plus className="h-4 w-4" /> Publier une opportunité
-                  </Link>
-                </Button>
+                <AddButton href="/deal-room/publier">Publier une opportunité</AddButton>
               </div>
             )}
             {opportunities.length === 0 ? (

@@ -6,9 +6,9 @@ import type { RegistrationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateFr } from "@/lib/utils";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Admin — Événements" };
 
@@ -47,9 +47,7 @@ export default async function AdminEventsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-end">
-        <Button asChild>
-          <Link href="/admin/evenements/nouveau">+ Nouvel événement</Link>
-        </Button>
+        <AddButton href="/admin/evenements/nouveau">Nouvel événement</AddButton>
       </div>
 
       {events.length === 0 ? (

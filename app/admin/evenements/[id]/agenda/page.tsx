@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { EventSessionActions } from "@/components/admin/events/event-session-actions";
 import { formatDateFr } from "@/lib/utils";
+import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Admin — Agenda de l'évènement" };
 
@@ -61,9 +62,9 @@ export default async function EventAgendaPage({ params }: { params: { id: string
           </Link>
           <h1 className="text-xl font-bold text-navy">Agenda multi-salles</h1>
         </div>
-        <Button asChild>
-          <Link href={`/admin/evenements/${event.id}/agenda/nouveau`}>+ Ajouter une session</Link>
-        </Button>
+        <AddButton href={`/admin/evenements/${event.id}/agenda/nouveau`}>
+          Ajouter une session
+        </AddButton>
       </div>
 
       {sessions.length === 0 ? (
