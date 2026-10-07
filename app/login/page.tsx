@@ -57,7 +57,16 @@ export default function LoginPage() {
       </div>
 
       {/* Right form panel */}
-      <div className="flex flex-1 items-center justify-center bg-white p-8 md:p-10">
+      <div className="flex flex-1 flex-col items-center justify-center bg-white p-8 md:p-10">
+        {/* Rapport QA du 7 oct. 2026 (§5.1) — le panneau de marque (et son logo) est masqué sur mobile. */}
+        <Image
+          src="/logo/ceo-summit-logo.png"
+          alt="CEO Summit"
+          width={160}
+          height={76}
+          className="mb-8 md:hidden"
+          priority
+        />
         <Suspense>
           <LoginForm />
         </Suspense>
