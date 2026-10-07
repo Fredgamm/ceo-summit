@@ -13,9 +13,11 @@ import { z } from "zod";
  *   retirés du produit le 3 septembre (`conception/09` §4) ;
  * - `rank` — l'accès est identique pour tout membre payé depuis le
  *   3 septembre, ce champ ne compare plus rien (dérivé de `displayOrder`) ;
- * - `eventId`/`linkedPlatformPlanId` — plus de distinction offre
- *   plateforme / offre d'évènement pour ce MVP ; aucune offre active ne les
- *   renseignait.
+ * - `linkedPlatformPlanId` — plus de distinction offre plateforme / offre
+ *   d'évènement pour ce MVP.
+ *
+ * `eventId` est de nouveau proposé depuis le 8 octobre 2026 (intégration
+ * Evolia, module 18 §4.9) : l'offre donne accès à l'événement de l'édition.
  */
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -71,6 +73,16 @@ export const planFormSchema = z
     /** Achetable en quantité comme supplément d'un abonnement déjà actif (ex. Executive Pass). */
     isUpsell: z.coerce.boolean().default(false),
     displayOrder: z.coerce.number().int().default(0),
+    /**
+     * Intégration Evolia (8 oct. 2026, module 18 §4.9) — événement auquel
+     * l'offre donne accès (« CEO Summit 2026 »). Vide = offre sans événement.
+     */
+    eventId: z
+      .string()
+      .trim()
+      .optional()
+      .nullable()
+      .transform((v) => v || null),
   })
   .superRefine((data, ctx) => {
     if (data.pricingMode === "FIXED_BUNDLE" && !data.maxTeamMembers) {

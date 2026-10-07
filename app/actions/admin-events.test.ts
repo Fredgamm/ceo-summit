@@ -27,6 +27,7 @@ const VALID_INPUT = {
   isOnline: false,
   zoomMeetingId: "",
   date: "2026-10-14T19:30",
+  endDate: "2026-10-14T23:00",
   capacity: 20,
   price: 300000,
   imageUrl: "",

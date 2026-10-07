@@ -26,6 +26,12 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
     ? await QRCode.toDataURL(shareUrl, { width: 180, margin: 1 })
     : null;
 
+  const events = await prisma.event.findMany({
+    where: { status: { not: "CANCELLED" } },
+    orderBy: { date: "desc" },
+    select: { id: true, title: true },
+  });
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -36,6 +42,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
       </div>
       <PlanForm
         mode="edit"
+        events={events}
         planId={plan.id}
         initialValues={{
           name: plan.name,
@@ -51,6 +58,7 @@ export default async function EditPlanPage({ params }: { params: { id: string } 
           isSelfService: plan.isSelfService,
           isUpsell: plan.isUpsell,
           displayOrder: plan.displayOrder,
+          eventId: plan.eventId ?? "",
         }}
       />
     </div>

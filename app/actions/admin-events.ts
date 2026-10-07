@@ -34,6 +34,7 @@ function toEventData(
       isOnline: f.isOnline,
       zoomMeetingId: f.zoomMeetingId || null,
       date: new Date(f.date),
+      endDate: new Date(f.endDate),
       capacity: f.capacity,
       price: f.price,
       imageUrl: f.imageUrl || null,

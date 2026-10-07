@@ -38,7 +38,10 @@ export async function getActivePlans(opts?: {
     where: {
       isActive: true,
       ...(opts?.selfServiceOnly ? { isSelfService: true, isUpsell: false } : {}),
-      eventId: opts?.eventId ?? null,
+      // Intégration Evolia (8 oct. 2026) — les offres rattachées à un
+      // événement restent au catalogue d'inscription ; on ne filtre par
+      // événement que si on le demande.
+      ...(opts?.eventId ? { eventId: opts.eventId } : {}),
     },
     orderBy: [{ displayOrder: "asc" }, { rank: "asc" }],
   });

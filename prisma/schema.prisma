@@ -468,14 +468,14 @@ enum CompanySubscriptionStatus {
 /// tentative de paiement (CompanyPayment) en miroir volontaire du pattern
 /// déjà en place EventRegistration.status/.paymentStatus.
 model CompanySubscription {
-  id                   String                    @id @default(cuid())
-  companyId            String                    @unique
-  company              Company                   @relation(fields: [companyId], references: [id])
-  planId               String
-  plan                 Plan                      @relation(fields: [planId], references: [id])
-  status               CompanySubscriptionStatus @default(DRAFT)
-  startDate            DateTime?
-  endDate              DateTime?
+  id                      String                    @id @default(cuid())
+  companyId               String                    @unique
+  company                 Company                   @relation(fields: [companyId], references: [id])
+  planId                  String
+  plan                    Plan                      @relation(fields: [planId], references: [id])
+  status                  CompanySubscriptionStatus @default(DRAFT)
+  startDate               DateTime?
+  endDate                 DateTime?
   /// 4 août 2026 (RG-04/RG-11) — nombre de participants déclaré par
   /// l'entreprise pour une offre `PER_PARTICIPANT`, source de vérité du
   /// montant dû (pas le headcount réel — voir lib/company-payment-amount.ts).
@@ -483,21 +483,23 @@ model CompanySubscription {
   /// changement d'offre ou une nouvelle soumission. `null` avant
   /// soumission, ou toujours pour une offre `FIXED_BUNDLE` (le nombre de
   /// sièges vient de `Plan.includedSeats`, pas d'ici).
-  declaredParticipants Int?
+  declaredParticipants    Int?
   /// 22 septembre 2026 (`conception/12` §3.2, §5) — places achetées en
   /// supplément de l'offre principale, via une ou plusieurs offres
   /// `isUpsell` (ex. 3 Executive Pass = +3). Incrémenté uniquement à la
   /// confirmation admin d'un paiement de supplément — jamais décrémenté
   /// (un supplément payé n'est pas repris). Places totales = quota de
   /// l'offre + ce champ.
-  extraSeats           Int                       @default(0)
+  extraSeats              Int                       @default(0)
   /// Module 20 (offres partenaires) — nombre de membres propre à cette
   /// entreprise, fixé par l'admin à l'invitation ; à défaut, celui de l'offre.
-  memberLimit          Int?
+  memberLimit             Int?
   /// Module 20 — services apportés en échange d'une offre partenaire (admin seulement).
-  counterpart          String?                   @db.Text
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
+  counterpart             String?                   @db.Text
+  /// Module 18 §4.9 — dernière validation de la liste des participants par le gérant.
+  participantsValidatedAt DateTime?
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
 
   payments CompanyPayment[]
 
@@ -624,6 +626,8 @@ model Event {
   isOnline      Boolean     @default(false)
   zoomMeetingId String?
   date          DateTime
+  /// Intégration Evolia (8 oct. 2026) — fin de l'événement, transmise avec le début.
+  endDate       DateTime?
   capacity      Int
   minTier       Tier        @default(MEMBER)
   /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `minTier` à
@@ -1145,4 +1149,31 @@ model EmailTemplateOverride {
   createdAt   DateTime              @default(now())
 
   @@index([category])
+}
+
+enum EvoliaPushStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// Intégration Evolia (conception/11, échange 1) — chaque envoi vers Evolia
+/// (inscription à payer, virement validé, liste des participants), avec le
+/// corps exact envoyé et la réponse : l'admin voit les échecs et relance.
+model EvoliaPush {
+  id         String           @id @default(cuid())
+  companyId  String
+  event      String // "company.registration.pushed" | "company.participants.confirmed"
+  reference  String? // ceoSummitReference (CompanyPayment.id) quand il y a un paiement
+  payload    Json
+  status     EvoliaPushStatus @default(PENDING)
+  attempts   Int              @default(0)
+  httpStatus Int?
+  lastError  String?          @db.Text
+  sentAt     DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@index([status, createdAt])
+  @@index([companyId])
 }

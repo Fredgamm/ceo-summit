@@ -33,6 +33,7 @@ export interface PlanFormValues {
   isSelfService: boolean;
   isUpsell: boolean;
   displayOrder: number;
+  eventId: string;
 }
 
 const EMPTY_VALUES: PlanFormValues = {
@@ -49,6 +50,7 @@ const EMPTY_VALUES: PlanFormValues = {
   isSelfService: true,
   isUpsell: false,
   displayOrder: 0,
+  eventId: "",
 };
 
 function slugify(name: string): string {
@@ -64,17 +66,22 @@ interface PlanFormProps {
   mode: "create" | "edit";
   planId?: string;
   initialValues?: Partial<PlanFormValues>;
+  /** Événements auxquels une offre peut donner accès. */
+  events: { id: string; title: string }[];
 }
+
+const NO_EVENT = "__none__";
 
 /**
  * Formulaire d'offre, simplifié après l'audit du 22 septembre 2026
  * (`conception/12`) : une offre = une identité, une tarification, un nombre
- * de places. Les champs retirés (crédits Deal Room, rang d'accès, sièges
- * inclus, rattachement à un évènement, paliers dégressifs) ne
+ * de places, et l'événement auquel elle donne accès (réintroduit le
+ * 8 octobre 2026). Les champs retirés (crédits Deal Room, rang d'accès,
+ * sièges inclus, paliers dégressifs) ne
  * correspondaient plus à aucune règle de gestion active — voir
  * lib/validations/plan.ts pour le détail de ce qui reste en base.
  */
-export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
+export function PlanForm({ mode, planId, initialValues, events }: PlanFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<PlanFormValues>({ ...EMPTY_VALUES, ...initialValues });
   const [error, setError] = React.useState<string | null>(null);
@@ -256,6 +263,30 @@ export function PlanForm({ mode, planId, initialValues }: PlanFormProps) {
         <p className="mt-2 text-xs font-bold uppercase tracking-wide text-text-muted">
           Publication
         </p>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="plan-event">Événement donnant accès</Label>
+          <Select
+            value={values.eventId || NO_EVENT}
+            onValueChange={(v) => set("eventId", v === NO_EVENT ? "" : v)}
+          >
+            <SelectTrigger id="plan-event">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_EVENT}>Aucun événement</SelectItem>
+              {events.map((ev) => (
+                <SelectItem key={ev.id} value={ev.id}>
+                  {ev.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-text-muted">
+            Les participants désignés par le gérant seront inscrits à cet événement. Ses dates sont
+            transmises à Evolia avec chaque inscription.
+          </p>
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="plan-eligibility">Conditions d&apos;éligibilité</Label>

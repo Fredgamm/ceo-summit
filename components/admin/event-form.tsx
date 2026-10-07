@@ -38,6 +38,7 @@ export interface EventFormValues {
   isOnline: boolean;
   zoomMeetingId: string;
   date: string; // datetime-local string, e.g. "2026-10-14T19:30"
+  endDate: string;
   capacity: string;
   price: string;
   imageUrl: string;
@@ -52,6 +53,7 @@ const EMPTY_VALUES: EventFormValues = {
   isOnline: false,
   zoomMeetingId: "",
   date: "",
+  endDate: "",
   capacity: "50",
   price: "0",
   imageUrl: "",
@@ -204,16 +206,33 @@ export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: Eve
             <CardTitle>Date & lieu</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ev-date">Date et heure *</Label>
-              <Input
-                id="ev-date"
-                type="datetime-local"
-                value={values.date}
-                onChange={(e) => set("date", e.target.value)}
-                required
-              />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ev-date">Début (date et heure) *</Label>
+                <Input
+                  id="ev-date"
+                  type="datetime-local"
+                  value={values.date}
+                  onChange={(e) => set("date", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ev-end-date">Fin (date et heure) *</Label>
+                <Input
+                  id="ev-end-date"
+                  type="datetime-local"
+                  value={values.endDate}
+                  min={values.date || undefined}
+                  onChange={(e) => set("endDate", e.target.value)}
+                  required
+                />
+              </div>
             </div>
+            <p className="-mt-2 text-xs text-text-muted">
+              Heure de Madagascar. Le début et la fin sont transmis à Evolia avec chaque
+              inscription.
+            </p>
 
             <label className="flex items-center gap-2 text-sm">
               <Checkbox

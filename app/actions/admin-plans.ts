@@ -53,6 +53,7 @@ async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     isSelfService: f.isSelfService,
     isUpsell: f.isUpsell,
     displayOrder: f.displayOrder,
+    eventId: f.eventId,
     /**
      * 22 septembre 2026 (`conception/12` §2.5) — `rank` ne compare plus
      * aucun accès depuis que tout membre payé a les mêmes droits : la
@@ -77,6 +78,11 @@ export async function createPlan(input: unknown): Promise<ActionResult<{ id: str
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
   }
 
+  if (parsed.data.eventId) {
+    const event = await prisma.event.findUnique({ where: { id: parsed.data.eventId } });
+    if (!event) return { success: false, error: "Événement introuvable." };
+  }
+
   const plan = await prisma.plan.create({ data: await toPlanData(parsed.data) });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.create", targetType: "Plan", targetId: plan.id },
@@ -97,6 +103,11 @@ export async function updatePlan(planId: string, input: unknown): Promise<Action
   const existingSlug = await prisma.plan.findUnique({ where: { slug: parsed.data.slug } });
   if (existingSlug && existingSlug.id !== planId) {
     return { success: false, error: "Ce slug est déjà utilisé par une autre offre." };
+  }
+
+  if (parsed.data.eventId) {
+    const event = await prisma.event.findUnique({ where: { id: parsed.data.eventId } });
+    if (!event) return { success: false, error: "Événement introuvable." };
   }
 
   await prisma.plan.update({ where: { id: planId }, data: await toPlanData(parsed.data) });

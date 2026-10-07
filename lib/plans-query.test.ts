@@ -26,13 +26,22 @@ describe("getActivePlans", () => {
       isActive: true,
       isSelfService: true,
       isUpsell: false,
-      eventId: null,
     });
   });
 
   it("keeps every active plan (supplements and sponsoring included) for admin views", async () => {
     await getActivePlans();
-    expect(whereOf(prisma.plan.findMany)).toEqual({ isActive: true, eventId: null });
+    expect(whereOf(prisma.plan.findMany)).toEqual({ isActive: true });
+  });
+
+  it("keeps offers linked to an event in the catalogue, and filters by event only on request", async () => {
+    await getActivePlans({ selfServiceOnly: true, eventId: "evt_1" });
+    expect(whereOf(prisma.plan.findMany)).toEqual({
+      isActive: true,
+      isSelfService: true,
+      isUpsell: false,
+      eventId: "evt_1",
+    });
   });
 });
 
