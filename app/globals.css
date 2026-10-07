@@ -5,8 +5,8 @@
 @layer base {
   :root {
     /* shadcn semantic tokens — mapped onto CEO Summit navy/gold identity */
-    --background: 60 20% 97%;        /* #F7F7F5 surface */
-    --foreground: 0 0% 10%;          /* #1A1A1A text */
+    --background: 60 20% 97%; /* #F7F7F5 surface */
+    --foreground: 0 0% 10%; /* #1A1A1A text */
 
     --card: 0 0% 100%;
     --card-foreground: 0 0% 10%;
@@ -25,7 +25,7 @@
     --muted: 60 9% 94%;
     --muted-foreground: 0 0% 54%;
 
-    --accent: 42 55% 92%;            /* gold-pale */
+    --accent: 42 55% 92%; /* gold-pale */
     --accent-foreground: 227 55% 24%;
 
     --destructive: 0 72% 51%;
@@ -49,6 +49,23 @@
 }
 
 /* ── Scrollbar (matches wireframe) ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full;
+}
+
+/*
+ * Rapport QA du 7 oct. 2026 (§1) — Edge et Internet Explorer ajoutent leur
+ * propre icône « afficher le mot de passe » à côté de celle de
+ * PasswordInput : on ne garde que la nôtre.
+ */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
