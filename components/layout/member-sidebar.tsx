@@ -31,7 +31,7 @@ const NAV_ITEMS = [
 ];
 
 const BOTTOM_ITEMS = [
-  { href: "/profil/editer", label: "Mon Profil", icon: User },
+  { href: "/profil", label: "Mon Profil", icon: User },
   { href: "/entreprise", label: "Mon Entreprise", icon: Building2 },
 ];
 
@@ -70,7 +70,7 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
       </div>
 
       <Link
-        href="/profil/editer"
+        href="/profil"
         className="flex items-center gap-2.5 border-b border-white/[0.08] px-4 py-3.5 transition-colors hover:bg-white/5"
       >
         <Avatar className="h-10 w-10">

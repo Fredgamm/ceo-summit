@@ -57,6 +57,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
 
   // /membres/[id] and /dashboard both read this row — keep them fresh.
   revalidatePath(`/membres/${viewer.id}`);
+  revalidatePath("/profil");
   revalidatePath("/dashboard");
 
   return { success: true, data: undefined };

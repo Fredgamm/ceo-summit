@@ -44,7 +44,7 @@ export default async function EditProfilePage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-bold text-navy">Éditer mon profil</h1>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/membres/${user.id}`}>Aperçu public</Link>
+          <Link href="/profil">Voir mon profil</Link>
         </Button>
       </div>
 

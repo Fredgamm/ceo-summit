@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/dashboard", label: "Accueil", icon: Home },
-  { href: "/profil/editer", label: "Profil", icon: User },
+  { href: "/profil", label: "Profil", icon: User },
   { href: "/entreprise", label: "Mon Entreprise", icon: Building2 },
 ];
 
