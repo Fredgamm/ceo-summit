@@ -28,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
 
   const rows = [
-    ["Nom", "Email", "Tier", "Statut", "Paiement", "Mode de paiement", "Inscrit le", "Check-in"],
+    ["Nom", "Email", "Tier", "Statut", "Paiement", "Mode de paiement", "Inscrit le"],
     ...registrations.map((r) => [
       r.user.name,
       r.user.email,
@@ -37,7 +37,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       r.paymentStatus,
       r.paymentMethod ?? "",
       formatDateFr(r.createdAt),
-      r.checkedIn ? "Oui" : "Non",
     ]),
   ];
 

@@ -613,7 +613,6 @@ describe("setAdminParticipates", () => {
         eventId: "event_1",
         userId: "admin_user_1",
         status: { not: "CANCELLED" },
-        checkedIn: false,
       },
       data: { status: "CANCELLED" },
     });

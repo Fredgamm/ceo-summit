@@ -89,7 +89,7 @@ export async function registerForEvent(
     return { success: false, error: "Choisissez un mode de paiement." };
   }
 
-  let registration: { id: string; badgeQrCode: string };
+  let registration: { id: string };
   try {
     registration = await withEventRegistrationLock(eventId, async () => {
       const takenSpots = await prisma.eventRegistration.count({
@@ -191,12 +191,6 @@ export async function cancelEventRegistration(eventId: string): Promise<ActionRe
     return { success: false, error: "Vous n'êtes pas inscrit(e) à cet évènement." };
   if (registration.status === "CANCELLED") {
     return { success: false, error: "Cette inscription est déjà annulée." };
-  }
-  if (registration.checkedIn) {
-    return {
-      success: false,
-      error: "Impossible d'annuler une inscription déjà enregistrée sur place.",
-    };
   }
 
   await prisma.eventRegistration.update({

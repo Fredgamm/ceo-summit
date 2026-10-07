@@ -179,60 +179,6 @@ async function handleMessage(
   return { ok: true };
 }
 
-/**
- * Contrôle d'accès multi-points (7 août 2026, demande client 3ème édition)
- * — "suivi en temps réel : entrée et nombre de présence". Le check-in
- * lui-même reste une Server Action classique (`checkInRegistration`, déjà
- * la seule source de vérité écrite en base) ; ce canal ne fait que
- * rediffuser l'évènement aux autres postes/tableaux de bord ouverts sur le
- * même évènement, purement pour l'affichage live — jamais consulté pour
- * une décision d'autorisation.
- */
-interface CheckinJoinResult {
-  ok: boolean;
-  error?: "forbidden";
-}
-
-function checkinRoom(eventId: string) {
-  return `checkin:${eventId}`;
-}
-
-async function handleCheckinJoin(socket: Socket, eventId: string): Promise<CheckinJoinResult> {
-  const userId = socket.data.userId as string;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isPlatformAdmin: true, status: true },
-  });
-  if (!user?.isPlatformAdmin || user.status !== "ACTIVE") return { ok: false, error: "forbidden" };
-  /**
-   * Audit sécurité (25 septembre 2026) — même règle que `requireAdmin()`
-   * (lib/admin-auth.ts) : un admin désactivé (`AdminUser.active = false`)
-   * garde `isPlatformAdmin` mais ne doit plus rien recevoir.
-   */
-  const adminUser = await prisma.adminUser.findUnique({ where: { userId } });
-  if (adminUser?.active === false) return { ok: false, error: "forbidden" };
-  if (typeof eventId !== "string" || !eventId) return { ok: false, error: "forbidden" };
-
-  socket.join(checkinRoom(eventId));
-  return { ok: true };
-}
-
-interface CheckinScanPayload {
-  eventId: string;
-  checkpointId: string | null;
-  checkpointName: string | null;
-}
-
-function handleCheckinScan(io: Server, socket: Socket, payload: CheckinScanPayload) {
-  const room = checkinRoom(payload.eventId);
-  if (!socket.rooms.has(room)) return; // pas rejoint (pas admin, ou jamais appelé checkin:join)
-  io.to(room).emit("checkin:update", {
-    checkpointId: payload.checkpointId,
-    checkpointName: payload.checkpointName,
-    at: Date.now(),
-  });
-}
-
 interface ConversationJoinResult {
   ok: boolean;
   error?: "forbidden";
@@ -353,9 +299,8 @@ async function handleConversationRead(
 
 /**
  * Audit sécurité (25 septembre 2026) — répondait pour n'importe quel nom de
- * room Socket.io fourni, y compris `conversation:<id>` et `checkin:<id>`
- * (qui est dans quelle conversation privée, quel poste de check-in est
- * ouvert). Limité désormais aux salles thématiques ACTIVE auxquelles le
+ * room Socket.io fourni, y compris `conversation:<id>` (qui est dans
+ * quelle conversation privée). Limité désormais aux salles thématiques ACTIVE auxquelles le
  * demandeur a accès (mêmes règles que `handleJoin`).
  */
 async function handleRoomsPresence(
@@ -428,17 +373,6 @@ export function createSocketServer() {
 
     socket.on("room:join", async (roomId: string, callback?: (res: JoinResult) => void) => {
       callback?.(await handleJoin(io, socket, roomId));
-    });
-
-    socket.on(
-      "checkin:join",
-      async (eventId: string, callback?: (res: CheckinJoinResult) => void) => {
-        callback?.(await handleCheckinJoin(socket, eventId));
-      }
-    );
-
-    socket.on("checkin:scan", (payload: CheckinScanPayload) => {
-      handleCheckinScan(io, socket, payload);
     });
 
     socket.on("room:leave", (roomId: string) => {

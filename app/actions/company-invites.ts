@@ -176,7 +176,6 @@ export async function setAdminParticipates(
           eventId: activeEvent.eventId,
           userId: viewer.id,
           status: { not: "CANCELLED" },
-          checkedIn: false,
         },
         data: { status: "CANCELLED" },
       });

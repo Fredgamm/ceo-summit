@@ -255,7 +255,6 @@ describe("cancelEventRegistration", () => {
     vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
       id: "reg_1",
       status: "CONFIRMED",
-      checkedIn: false,
     } as never);
   });
 
@@ -292,23 +291,10 @@ describe("cancelEventRegistration", () => {
     vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
       id: "reg_1",
       status: "CANCELLED",
-      checkedIn: false,
     } as never);
 
     const result = await cancelEventRegistration("event_1");
     expect(result.success).toBe(false);
-  });
-
-  it("rejects cancelling once checked in on-site", async () => {
-    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
-      id: "reg_1",
-      status: "CONFIRMED",
-      checkedIn: true,
-    } as never);
-
-    const result = await cancelEventRegistration("event_1");
-    expect(result.success).toBe(false);
-    expect(prisma.eventRegistration.update).not.toHaveBeenCalled();
   });
 
   it("rejects cancelling a past event", async () => {
