@@ -11,8 +11,6 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
-    creditPackPrice: { upsert: vi.fn() },
-    platformSetting: { findUnique: vi.fn(), upsert: vi.fn() },
     referential: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
@@ -31,8 +29,6 @@ vi.mock("@/lib/prisma", () => ({
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  saveCreditPackPrices,
-  updateDealRoomContactCost,
   createReferentialItem,
   deleteReferentialItem,
   promoteToAdmin,
@@ -51,60 +47,6 @@ beforeEach(() => {
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
     const list = ops as Promise<unknown>[];
     return Promise.all(list);
-  });
-});
-
-// saveMembershipTariffs retiré (Phase 1 offres dynamiques, 30 juillet 2026)
-// — voir app/actions/admin-plans.test.ts pour la couverture équivalente sur
-// le CRUD Plan qui l'a remplacé.
-
-describe("saveCreditPackPrices", () => {
-  it("upserts each pack", async () => {
-    const result = await saveCreditPackPrices([
-      { credits: 1, priceAr: "50000" },
-      { credits: 5, priceAr: "200000" },
-    ]);
-    expect(result.success).toBe(true);
-    expect(prisma.creditPackPrice.upsert).toHaveBeenCalledTimes(2);
-  });
-
-  it("rejects an invalid pack price", async () => {
-    const result = await saveCreditPackPrices([{ credits: 1, priceAr: "-5" }]);
-    expect(result.success).toBe(false);
-    expect(prisma.creditPackPrice.upsert).not.toHaveBeenCalled();
-  });
-});
-
-describe("updateDealRoomContactCost", () => {
-  it("stores the new cost and logs an audit entry", async () => {
-    const result = await updateDealRoomContactCost(0);
-
-    expect(result.success).toBe(true);
-    expect(prisma.platformSetting.upsert).toHaveBeenCalledWith({
-      where: { key: "deal_room_contact_cost" },
-      update: { value: "0" },
-      create: { key: "deal_room_contact_cost", value: "0" },
-    });
-    expect(prisma.auditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: "settings.update_deal_room_contact_cost",
-          metadata: { cost: 0 },
-        }),
-      })
-    );
-  });
-
-  it("rejects a negative cost", async () => {
-    const result = await updateDealRoomContactCost(-1);
-    expect(result.success).toBe(false);
-    expect(prisma.platformSetting.upsert).not.toHaveBeenCalled();
-  });
-
-  it("rejects a non-integer cost", async () => {
-    const result = await updateDealRoomContactCost(1.5);
-    expect(result.success).toBe(false);
-    expect(prisma.platformSetting.upsert).not.toHaveBeenCalled();
   });
 });
 

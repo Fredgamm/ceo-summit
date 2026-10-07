@@ -25,17 +25,6 @@ async function main() {
       { key: "membership_price_member", value: "200000" },
       { key: "membership_price_executive", value: "600000" },
       { key: "membership_price_chairman", value: "1500000" },
-      { key: "credits_included_member", value: "0" },
-      { key: "credits_included_executive", value: "10" },
-    ],
-    skipDuplicates: true,
-  });
-
-  await prisma.creditPackPrice.createMany({
-    data: [
-      { credits: 1, priceAr: 25000 },
-      { credits: 5, priceAr: 100000 },
-      { credits: 10, priceAr: 150000 },
     ],
     skipDuplicates: true,
   });
@@ -139,8 +128,6 @@ async function main() {
       name: "Chairman (démo)",
       slug: "demo-chairman",
       priceAr: 1500000,
-      includedCredits: 0,
-      hasUnlimitedCredits: true,
       rank: 3,
       isActive: true,
       isSelfService: false,
@@ -171,12 +158,6 @@ async function main() {
       startDate: new Date("2026-01-15"),
       endDate: new Date("2027-01-15"),
     },
-  });
-
-  await prisma.creditBalance.upsert({
-    where: { userId: demoMember.id },
-    update: {},
-    create: { userId: demoMember.id, included: 999999, purchased: 0, used: 0 },
   });
 
   // ── Events (E3-T01/T02/T03 demo data — no admin CRUD yet to create these) ──

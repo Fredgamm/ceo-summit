@@ -17,7 +17,6 @@ import {
   type FinanceTransaction,
 } from "@/lib/finance";
 import { EventPaymentActions } from "@/components/admin/finance/event-payment-actions";
-import { CreditPurchaseActions } from "@/components/admin/credit-purchase-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -52,7 +51,6 @@ export default async function AdminFinancesPage({
     plans,
     monthPayments,
     monthRegistrations,
-    monthPurchases,
     expiring30,
     expiring60,
     expiring90,
@@ -81,10 +79,6 @@ export default async function AdminFinancesPage({
     prisma.eventRegistration.findMany({
       where: { paymentStatus: "PAID", createdAt: { gte: startOfMonth } },
       include: { event: { select: { price: true } } },
-    }),
-    prisma.creditPurchase.aggregate({
-      where: { status: "CONFIRMED", createdAt: { gte: startOfMonth } },
-      _sum: { priceAr: true },
     }),
     prisma.companySubscription.count({
       where: { status: "ACTIVE", endDate: buildExpiringWithinDays(30, now) },
@@ -125,12 +119,11 @@ export default async function AdminFinancesPage({
 
   const eventRevenueThisMonth = monthRegistrations.reduce((sum, r) => sum + r.event.price, 0);
   const companyRevenueThisMonth = monthPayments._sum.amount ?? 0;
-  const creditRevenueThisMonth = monthPurchases._sum.priceAr ?? 0;
 
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "paiements") {
-    const [companyPayments, registrations, purchases] = await Promise.all([
+    const [companyPayments, registrations] = await Promise.all([
       prisma.companyPayment.findMany({
         where: RECORDED_COMPANY_PAYMENT_WHERE,
         include: COMPANY_PAYMENT_FINANCE_INCLUDE,
@@ -146,12 +139,6 @@ export default async function AdminFinancesPage({
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
-      prisma.creditPurchase.findMany({
-        where: { status: "CONFIRMED" },
-        include: { user: { select: { name: true } } },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      }),
     ]);
 
     const transactions: FinanceTransaction[] = mergeFinanceTransactions([
@@ -164,15 +151,6 @@ export default async function AdminFinancesPage({
         amount: r.event.price,
         method: r.paymentMethod ?? "",
         date: r.createdAt,
-      })),
-      ...purchases.map((p) => ({
-        id: p.id,
-        source: "CREDITS" as const,
-        memberName: p.user.name,
-        description: `Pack ${p.credits} crédits`,
-        amount: p.priceAr,
-        method: p.paymentMethod,
-        date: p.createdAt,
       })),
     ]);
 
@@ -231,24 +209,17 @@ export default async function AdminFinancesPage({
         </div>
       );
   } else if (activeTab === "en-attente") {
-    const [pendingRegistrations, pendingPurchases] = await Promise.all([
-      prisma.eventRegistration.findMany({
-        where: { paymentStatus: "PENDING" },
-        include: {
-          user: { select: { name: true, email: true } },
-          event: { select: { title: true, price: true } },
-        },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.creditPurchase.findMany({
-        where: { status: "PENDING" },
-        include: { user: { select: { name: true, email: true } } },
-        orderBy: { createdAt: "asc" },
-      }),
-    ]);
+    const pendingRegistrations = await prisma.eventRegistration.findMany({
+      where: { paymentStatus: "PENDING" },
+      include: {
+        user: { select: { name: true, email: true } },
+        event: { select: { title: true, price: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
 
     tabContent =
-      pendingRegistrations.length === 0 && pendingPurchases.length === 0 ? (
+      pendingRegistrations.length === 0 ? (
         <EmptyState title="Aucun paiement en attente" />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border bg-white">
@@ -276,19 +247,6 @@ export default async function AdminFinancesPage({
                   </td>
                 </tr>
               ))}
-              {pendingPurchases.map((p) => (
-                <tr key={`purchase-${p.id}`}>
-                  <td className="px-4 py-3 font-semibold text-navy">{p.user.name}</td>
-                  <td className="px-4 py-3 text-text-mid">Pack {p.credits} crédits</td>
-                  <td className="px-4 py-3 font-bold">
-                    {new Intl.NumberFormat("fr-FR").format(p.priceAr)}
-                  </td>
-                  <td className="px-4 py-3 text-text-muted">{formatDateFr(p.createdAt)}</td>
-                  <td className="px-4 py-3">
-                    <CreditPurchaseActions purchaseId={p.id} />
-                  </td>
-                </tr>
-              ))}
             </tbody>
           </table>
         </div>
@@ -304,7 +262,7 @@ export default async function AdminFinancesPage({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border border-gold bg-gold-pale p-4">
           <p className="text-2xl font-bold text-navy">{formatAriary(mrr)}</p>
           <p className="text-xs text-text-muted">
@@ -326,10 +284,6 @@ export default async function AdminFinancesPage({
         <div className="rounded-lg border border-border bg-white p-4">
           <p className="text-2xl font-bold text-blue-600">{formatAriary(eventRevenueThisMonth)}</p>
           <p className="text-xs text-text-muted">Revenus événements ce mois</p>
-        </div>
-        <div className="rounded-lg border border-border bg-white p-4">
-          <p className="text-2xl font-bold text-navy">{formatAriary(creditRevenueThisMonth)}</p>
-          <p className="text-xs text-text-muted">Revenus crédits ce mois</p>
         </div>
       </div>
 

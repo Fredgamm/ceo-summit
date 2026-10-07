@@ -7,7 +7,6 @@ import { seatCap } from "@/lib/company-seats";
 import CompanyPaymentConfirmedEmail from "@/emails/company-payment-confirmed-email";
 import CompanyUpsellConfirmedEmail from "@/emails/company-upsell-confirmed-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
-import CreditPurchaseConfirmedEmail from "@/emails/credit-purchase-confirmed-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -42,7 +41,7 @@ export async function confirmCompanyPaymentCore(
     include: {
       companySubscription: {
         include: {
-          plan: { include: { linkedPlatformPlan: true } },
+          plan: true,
           company: {
             include: {
               companyAdmin: true,
@@ -219,30 +218,6 @@ export async function confirmCompanyPaymentCore(
     });
   }
 
-  /**
-   * RG-09 (4 août 2026) — les avantages plateforme (crédits Deal Room)
-   * viennent de l'offre plateforme liée (`linkedPlatformPlan`), jamais de
-   * l'offre d'évènement elle-même ; repli sur l'offre payée directement si
-   * aucun lien n'est renseigné.
-   */
-  const benefitPlan = plan.linkedPlatformPlan ?? plan;
-  const includedCredits = benefitPlan.hasUnlimitedCredits ? 999999 : benefitPlan.includedCredits;
-  await Promise.all(
-    payment.companySubscription.company.users.map((u) =>
-      prisma.creditBalance.upsert({
-        where: { userId: u.id },
-        update: { included: includedCredits, used: 0, resetAt: oneYearLater },
-        create: {
-          userId: u.id,
-          included: includedCredits,
-          purchased: 0,
-          used: 0,
-          resetAt: oneYearLater,
-        },
-      })
-    )
-  );
-
   if (actorId) {
     await prisma.auditLog.create({
       data: {
@@ -338,67 +313,6 @@ export async function confirmEventRegistrationPaymentCore(
     });
   } catch (err) {
     console.error("[confirmEventRegistrationPaymentCore] failed to send confirmation email", err);
-  }
-
-  return { success: true, data: undefined };
-}
-
-export async function confirmCreditPurchaseCore(
-  purchaseId: string,
-  actorId: string | null
-): Promise<ActionResult> {
-  const purchase = await prisma.creditPurchase.findUnique({
-    where: { id: purchaseId },
-    include: { user: true },
-  });
-  if (!purchase) return { success: false, error: "Achat introuvable." };
-
-  const { count } = await prisma.creditPurchase.updateMany({
-    where: { id: purchaseId, status: "PENDING" },
-    data: { status: "CONFIRMED", confirmedById: actorId, confirmedAt: new Date() },
-  });
-  if (count === 0) {
-    return { success: false, error: "Cet achat a déjà été traité." };
-  }
-
-  await prisma.$transaction([
-    prisma.creditBalance.upsert({
-      where: { userId: purchase.userId },
-      update: { purchased: { increment: purchase.credits } },
-      create: { userId: purchase.userId, included: 0, purchased: purchase.credits, used: 0 },
-    }),
-    prisma.creditTransaction.create({
-      data: {
-        userId: purchase.userId,
-        amount: purchase.credits,
-        type: "PURCHASE",
-        reason: `Achat pack ${purchase.credits} crédits`,
-      },
-    }),
-  ]);
-
-  if (actorId) {
-    await prisma.auditLog.create({
-      data: {
-        actorId,
-        action: "credit_purchase.confirm",
-        targetType: "CreditPurchase",
-        targetId: purchaseId,
-      },
-    });
-  }
-
-  try {
-    await sendTransactionalEmail({
-      to: purchase.user.email,
-      subject: "Votre achat de crédits CEO Summit est confirmé",
-      react: CreditPurchaseConfirmedEmail({
-        memberName: purchase.user.name,
-        credits: purchase.credits,
-      }),
-    });
-  } catch (err) {
-    console.error("[confirmCreditPurchaseCore] failed to send confirmation email", err);
   }
 
   return { success: true, data: undefined };

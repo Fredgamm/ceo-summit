@@ -14,7 +14,6 @@ export const ADMIN_SECTIONS = [
   "deal-room",
   "salles",
   "services",
-  "credits",
   "communications",
   "finances",
   "parametres",
@@ -36,9 +35,9 @@ const SECTION_ACCESS: Record<AdminRole, "*" | AdminSection[]> = {
     "services",
     "communications",
   ],
-  // Tarification/paiement — même famille que "credits"/"finances", pas
+  // Tarification/paiement — même famille que "finances", pas
   // "parametres" (référentiels, comptes admin) qui reste réservé SUPER_ADMIN.
-  FINANCIER: ["dashboard", "credits", "finances", "plans", "entreprises"],
+  FINANCIER: ["dashboard", "finances", "plans", "entreprises"],
 };
 
 export function canAccessSection(role: AdminRole, section: AdminSection): boolean {

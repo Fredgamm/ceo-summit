@@ -7,86 +7,11 @@ import type { AdminRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { pluralize } from "@/lib/utils";
-import { setDealRoomContactCost } from "@/lib/deal-room-settings";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 const REFERENTIAL_TYPES = ["sector", "country", "opportunity_type"] as const;
 const referentialLabelSchema = z.string().trim().min(1, "Le libellé est requis").max(100);
-
-function parsePositiveInt(value: string): number | null {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
-}
-
-// `saveMembershipTariffs` retiré (Phase 1 offres dynamiques, 30 juillet
-// 2026) — les tarifs/crédits inclus par offre se gèrent depuis
-// app/actions/admin-plans.ts maintenant, plus par les 3 tiers fixes.
-
-/** E8-T11 — "Tarifs packs crédits Deal Room". */
-export async function saveCreditPackPrices(
-  packs: { credits: number; priceAr: string }[]
-): Promise<ActionResult> {
-  const { userId: adminId } = await requireAdmin("parametres");
-
-  for (const pack of packs) {
-    if (parsePositiveInt(pack.priceAr) === null) {
-      return { success: false, error: `Tarif du pack ${pack.credits} crédits invalide.` };
-    }
-  }
-
-  await Promise.all(
-    packs.map((pack) =>
-      prisma.creditPackPrice.upsert({
-        where: { credits: pack.credits },
-        update: { priceAr: parsePositiveInt(pack.priceAr)! },
-        create: { credits: pack.credits, priceAr: parsePositiveInt(pack.priceAr)! },
-      })
-    )
-  );
-
-  await prisma.auditLog.create({
-    data: {
-      actorId: adminId,
-      action: "settings.update_credit_packs",
-      targetType: "CreditPackPrice",
-      targetId: "all",
-    },
-  });
-
-  revalidatePath("/admin/parametres");
-  revalidatePath("/credits/acheter");
-  return { success: true, data: undefined };
-}
-
-/**
- * Coût en crédits du "Prendre contact" Deal Room, configurable (7 août
- * 2026, demande admin) — jusqu'ici une constante fixe. 0 = gratuit pour
- * tout le monde (Chairman reste de toute façon toujours gratuit).
- */
-export async function updateDealRoomContactCost(cost: number): Promise<ActionResult> {
-  const { userId: adminId } = await requireAdmin("parametres");
-
-  if (!Number.isFinite(cost) || cost < 0 || cost > 1000 || !Number.isInteger(cost)) {
-    return { success: false, error: "Coût invalide (nombre entier entre 0 et 1000)." };
-  }
-
-  await setDealRoomContactCost(cost);
-
-  await prisma.auditLog.create({
-    data: {
-      actorId: adminId,
-      action: "settings.update_deal_room_contact_cost",
-      targetType: "PlatformSetting",
-      targetId: "deal_room_contact_cost",
-      metadata: { cost },
-    },
-  });
-
-  revalidatePath("/admin/parametres");
-  revalidatePath("/deal-room");
-  return { success: true, data: undefined };
-}
 
 /**
  * E8-T11 — "Référentiels : secteurs, pays, types opportunité (CRUD)".

@@ -55,7 +55,7 @@ export interface CompanyForTier {
  * de l'offre plateforme liée à l'abonnement entreprise (ou de l'offre
  * elle-même si aucun lien plateforme n'est renseigné). `EXPIRED` compte
  * encore : seul l'accès à l'édition d'évènement expire (RG-12), les
- * avantages plateforme (crédits, Deal Room, salles) persistent tant que le
+ * avantages plateforme (Deal Room, salles) persistent tant que le
  * statut n'est pas `SUSPENDED`/`CANCELLED`/`DRAFT`/`PENDING_*`.
  */
 export function getViewerTierFromCompany(company: CompanyForTier | null | undefined): Tier | null {

@@ -10,17 +10,15 @@ describe("canAccessSection", () => {
 
   it("keeps FINANCIER away from candidatures/membres/parametres", () => {
     expect(canAccessSection("FINANCIER", "finances")).toBe(true);
-    expect(canAccessSection("FINANCIER", "credits")).toBe(true);
     expect(canAccessSection("FINANCIER", "parametres")).toBe(false);
     expect(canAccessSection("FINANCIER", "candidatures")).toBe(false);
     expect(canAccessSection("FINANCIER", "membres")).toBe(false);
   });
 
-  it("keeps MODERATEUR away from finances/credits/parametres", () => {
+  it("keeps MODERATEUR away from finances/parametres", () => {
     expect(canAccessSection("MODERATEUR", "candidatures")).toBe(true);
     expect(canAccessSection("MODERATEUR", "salles")).toBe(true);
     expect(canAccessSection("MODERATEUR", "finances")).toBe(false);
-    expect(canAccessSection("MODERATEUR", "credits")).toBe(false);
     expect(canAccessSection("MODERATEUR", "parametres")).toBe(false);
   });
 
@@ -39,7 +37,6 @@ describe("accessibleSections", () => {
   it("returns only the financier's sections for FINANCIER", () => {
     expect(accessibleSections("FINANCIER")).toEqual([
       "dashboard",
-      "credits",
       "finances",
       "plans",
       "entreprises",

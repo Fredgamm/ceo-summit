@@ -10,7 +10,7 @@ type RequireViewerResult = { success: true; viewer: Viewer } | { success: false;
 
 /**
  * Boilerplate "session → fetch viewer → check auth" copiée telle quelle
- * dans ~6 fichiers d'actions (credits.ts, deal-room.ts, services.ts,
+ * dans ~6 fichiers d'actions (deal-room.ts, services.ts,
  * broadcasts.ts, events.ts) — regroupée ici, sur le modèle de
  * `requireAdmin()` (lib/admin-auth.ts) côté admin.
  *

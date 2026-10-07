@@ -17,7 +17,6 @@ vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/emails/company-payment-confirmed-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/emails/company-upsell-confirmed-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/emails/event-registration-email", () => ({ default: vi.fn(() => null) }));
-vi.mock("@/emails/credit-purchase-confirmed-email", () => ({ default: vi.fn(() => null) }));
 
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";

@@ -112,7 +112,6 @@ const MEMBER_PAGE_PREFIXES = [
   "/evenements",
   "/catalogue",
   "/salles",
-  "/credits",
   "/entreprise",
   "/entreprises",
   "/membres",

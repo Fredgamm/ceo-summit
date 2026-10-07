@@ -15,7 +15,6 @@ import { formatDateFr } from "@/lib/utils";
 import ActivationEmail from "@/emails/activation-email";
 import ApplicationRefusedEmail from "@/emails/application-refused-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
-import CreditPurchaseConfirmedEmail from "@/emails/credit-purchase-confirmed-email";
 
 export const metadata: Metadata = { title: "Admin — Communications" };
 
@@ -58,12 +57,6 @@ const AUTOMATED_TEMPLATES = [
     active: false,
   },
   {
-    name: "Reçu achat crédits",
-    trigger: "Envoyé après validation admin d'un achat de crédits",
-    file: "emails/credit-purchase-confirmed-email.tsx",
-    active: true,
-  },
-  {
     name: "Renouvellement abonnement",
     trigger: "Relance prévue 30 jours avant expiration",
     file: null,
@@ -94,8 +87,6 @@ async function renderTemplatePreview(file: string | null): Promise<string | null
           requiresManualValidation={false}
         />
       );
-    case "emails/credit-purchase-confirmed-email.tsx":
-      return render(<CreditPurchaseConfirmedEmail memberName="Jean-Pierre Rakoto" credits={5} />);
     default:
       return null;
   }

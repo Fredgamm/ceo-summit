@@ -18,9 +18,6 @@ interface MemberActionsPanelProps {
  * 4 août 2026 (CEO Summit devenu intégralement B2B) — "Changer le tier"
  * retiré : le tier vient du rang de l'offre plateforme de l'entreprise,
  * plus un attribut personnel modifiable ici (voir app/actions/members.ts).
- * "Attribuer des crédits" retiré (sept. 2026) — le système de crédits Deal
- * Room n'est plus consommé nulle part (voir lib/deal-room-settings.ts),
- * attribuer un solde qui ne sert plus à rien n'a plus de sens.
  */
 export function MemberActionsPanel({ userId, status }: MemberActionsPanelProps) {
   const router = useRouter();

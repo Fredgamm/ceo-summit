@@ -40,7 +40,7 @@ export function buildExpiringWithinDays(days: number, now: Date): { gt: Date; lt
 
 export interface FinanceTransaction {
   id: string;
-  source: "COMPANY" | "EVENT" | "CREDITS";
+  source: "COMPANY" | "EVENT";
   memberName: string;
   description: string;
   amount: number;

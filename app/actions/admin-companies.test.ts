@@ -20,7 +20,6 @@ vi.mock("@/lib/prisma", () => ({
       findMany: vi.fn().mockResolvedValue([]),
       count: vi.fn().mockResolvedValue(0),
     },
-    creditBalance: { upsert: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -308,77 +307,6 @@ describe("confirmCompanyPayment", () => {
 
     await confirmCompanyPayment("payment_1");
     expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
-  });
-
-  it("grants credits to every current member from the linked platform plan, not the event offer itself", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
-      ...PAYMENT_BASE,
-      companySubscription: {
-        ...PAYMENT_BASE.companySubscription,
-        plan: {
-          id: "plan_event_1",
-          eventId: "event_1",
-          includedCredits: 0,
-          hasUnlimitedCredits: false,
-          linkedPlatformPlan: { includedCredits: 15, hasUnlimitedCredits: false },
-        },
-      },
-    } as never);
-
-    await confirmCompanyPayment("payment_1");
-
-    expect(prisma.creditBalance.upsert).toHaveBeenCalledTimes(2);
-    expect(prisma.creditBalance.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { userId: "user_1" },
-        update: expect.objectContaining({ included: 15 }),
-        create: expect.objectContaining({ userId: "user_1", included: 15 }),
-      })
-    );
-  });
-
-  it("falls back to the plan's own credits when no platform plan is linked", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
-      ...PAYMENT_BASE,
-      companySubscription: {
-        ...PAYMENT_BASE.companySubscription,
-        plan: {
-          id: "plan_1",
-          eventId: null,
-          includedCredits: 5,
-          hasUnlimitedCredits: false,
-          linkedPlatformPlan: null,
-        },
-      },
-    } as never);
-
-    await confirmCompanyPayment("payment_1");
-
-    expect(prisma.creditBalance.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: expect.objectContaining({ included: 5 }) })
-    );
-  });
-
-  it("grants a very high credit balance for an unlimited-credits plan", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
-      ...PAYMENT_BASE,
-      companySubscription: {
-        ...PAYMENT_BASE.companySubscription,
-        plan: {
-          id: "plan_1",
-          eventId: null,
-          includedCredits: 0,
-          hasUnlimitedCredits: true,
-          linkedPlatformPlan: null,
-        },
-      },
-    } as never);
-
-    await confirmCompanyPayment("payment_1");
-
-    expect(prisma.creditBalance.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: expect.objectContaining({ included: 999999 }) })
-    );
   });
 });
 

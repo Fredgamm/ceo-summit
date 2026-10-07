@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<string, string> = {
   EXPIRED: "Expiré",
 };
 
-/** E8-T04 — détail membre (5 onglets, wireframe bo-membre-detail.html réduit au périmètre backlog). */
+/** E8-T04 — détail membre (4 onglets, wireframe bo-membre-detail.html réduit au périmètre backlog). */
 export default async function AdminMemberDetailPage({ params }: { params: { id: string } }) {
   try {
     await requireAdmin("membres");
@@ -51,8 +51,6 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
   const member = await prisma.user.findUnique({
     where: { id: params.id },
     include: {
-      creditBalance: true,
-      creditTransactions: { orderBy: { createdAt: "desc" }, take: 10 },
       eventRegistrations: {
         orderBy: { createdAt: "desc" },
         include: { event: { select: { title: true, price: true } } },
@@ -63,9 +61,6 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
   if (!member) notFound();
 
   const tier = getViewerTierFromCompany(member.company);
-  const available = member.creditBalance
-    ? member.creditBalance.included + member.creditBalance.purchased - member.creditBalance.used
-    : 0;
 
   const activity = buildActivityFeed(
     member.eventRegistrations.map((r) => ({
@@ -105,7 +100,6 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
           <TabsList>
             <TabsTrigger value="profil">Profil</TabsTrigger>
             <TabsTrigger value="activite">Activité</TabsTrigger>
-            <TabsTrigger value="credits">Crédits</TabsTrigger>
             <TabsTrigger value="paiements">Paiements</TabsTrigger>
             <TabsTrigger value="notes">Notes admin</TabsTrigger>
           </TabsList>
@@ -137,41 +131,6 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
                 ))}
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="credits">
-            <div className="rounded-lg border border-border bg-white p-6">
-              <p className="mb-4 text-2xl font-bold text-navy">
-                {tier === "CHAIRMAN" ? "∞" : available}
-                <span className="ml-1 text-sm font-normal text-text-muted">
-                  crédits disponibles
-                </span>
-              </p>
-              {member.creditTransactions.length === 0 ? (
-                <p className="text-sm text-text-muted">Aucune transaction.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {member.creditTransactions.map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between text-sm">
-                      <div>
-                        <p>{tx.reason ?? tx.type}</p>
-                        <p className="text-xs text-text-muted">{formatDateFr(tx.createdAt)}</p>
-                      </div>
-                      <span
-                        className={
-                          tx.amount >= 0
-                            ? "font-semibold text-emerald-700"
-                            : "font-semibold text-red-700"
-                        }
-                      >
-                        {tx.amount >= 0 ? "+" : ""}
-                        {tx.amount}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </TabsContent>
 
           <TabsContent value="paiements">

@@ -23,7 +23,6 @@ vi.mock("@/lib/payment-confirmations", () => ({
   confirmEventRegistrationPaymentCore: vi
     .fn()
     .mockResolvedValue({ success: true, data: undefined }),
-  confirmCreditPurchaseCore: vi.fn().mockResolvedValue({ success: true, data: undefined }),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -34,7 +33,6 @@ import { POST } from "./route";
 import { prisma } from "@/lib/prisma";
 import {
   confirmCompanyPaymentCore,
-  confirmCreditPurchaseCore,
   confirmEventRegistrationPaymentCore,
 } from "@/lib/payment-confirmations";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -67,7 +65,6 @@ describe("POST /api/webhooks/payments", () => {
       success: true,
       data: undefined,
     });
-    vi.mocked(confirmCreditPurchaseCore).mockResolvedValue({ success: true, data: undefined });
   });
 
   it("rejects a request with an invalid signature", async () => {
@@ -135,7 +132,7 @@ describe("POST /api/webhooks/payments", () => {
     expect(confirmEventRegistrationPaymentCore).toHaveBeenCalledWith("reg_1", null);
   });
 
-  it("dispatches a confirmed credit_purchase to confirmCreditPurchaseCore with actorId null", async () => {
+  it("rejects the retired credit_purchase type as an invalid payload", async () => {
     const body = JSON.stringify({
       event: "payment.confirmed",
       type: "credit_purchase",
@@ -143,8 +140,7 @@ describe("POST /api/webhooks/payments", () => {
     });
     const res = await POST(makeRequest(body, sign(body)));
 
-    expect(res.status).toBe(200);
-    expect(confirmCreditPurchaseCore).toHaveBeenCalledWith("cp_1", null);
+    expect(res.status).toBe(422);
   });
 
   it("returns 409 and logs the failure when the referenced record was already processed", async () => {
@@ -200,7 +196,7 @@ describe("POST /api/webhooks/payments", () => {
     expect(res.status).toBe(409);
   });
 
-  it("accepts payment.failed for company_payment/credit_purchase without a dedicated status (no enum value exists)", async () => {
+  it("accepts payment.failed for company_payment without a dedicated status (no enum value exists)", async () => {
     const body = JSON.stringify({
       event: "payment.failed",
       type: "company_payment",

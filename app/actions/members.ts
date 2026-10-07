@@ -12,15 +12,10 @@ import MemberReactivatedEmail from "@/emails/member-reactivated-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
-const grantCreditsSchema = z.object({
-  amount: z.number().int().positive().max(1_000_000),
-  reason: z.string().trim().max(500).optional().default(""),
-});
 const noteSchema = z.string().trim().max(5000);
 
 /**
- * E8-T04 — gestion membres : suspendre/exclure/réactiver, attribuer des
- * crédits, note interne. All actions revalidate the member's own detail page
+ * E8-T04 — gestion membres : suspendre/exclure/réactiver, note interne. All actions revalidate the member's own detail page
  * since that's the only place they're called from today.
  *
  * 4 août 2026 (CEO Summit devenu intégralement B2B) — `changeMemberTier` a
@@ -100,47 +95,6 @@ export const excludeMember = (userId: string) =>
   setMemberStatus(userId, "CANCELLED", "member.exclude");
 export const reactivateMember = (userId: string) =>
   setMemberStatus(userId, "ACTIVE", "member.reactivate");
-
-export async function grantCredits(
-  userId: string,
-  amount: number,
-  reason: string
-): Promise<ActionResult> {
-  // 25 septembre 2026 (audit MVP) — gardé par "membres" jusqu'ici : un
-  // MODERATEUR (qui n'a pas la section "credits", voir lib/admin-rbac.ts)
-  // pouvait créditer n'importe quel compte, soit créer de la valeur
-  // monétaire sans le rôle financier.
-  const { userId: adminId } = await requireAdmin("credits");
-
-  const parsed = grantCreditsSchema.safeParse({ amount, reason });
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? "Champs invalides" };
-  }
-  ({ amount, reason } = parsed.data);
-
-  await prisma.creditBalance.upsert({
-    where: { userId },
-    update: { purchased: { increment: amount } },
-    create: { userId, included: 0, purchased: amount, used: 0 },
-  });
-
-  await prisma.creditTransaction.create({
-    data: { userId, amount, type: "ADMIN_GRANT", reason: reason || undefined },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      actorId: adminId,
-      action: "member.grant_credits",
-      targetType: "User",
-      targetId: userId,
-      metadata: { amount, reason },
-    },
-  });
-
-  revalidatePath(`/admin/membres/${userId}`);
-  return { success: true, data: undefined };
-}
 
 export async function saveMemberNote(userId: string, note: string): Promise<ActionResult> {
   await requireAdmin("membres");

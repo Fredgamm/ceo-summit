@@ -13,12 +13,8 @@ interface ContactPanelProps {
 }
 
 /**
- * E6-T02 — "Prendre contact" avec modal de confirmation.
- *
- * Décision d'architecture (sept. 2026, conception/09) — le coût en crédits
- * et le bypass Chairman ont disparu avec le système de crédits Deal Room
- * (retiré du chemin actif) : prendre contact est gratuit et illimité pour
- * tout membre.
+ * E6-T02 — "Prendre contact" avec modal de confirmation. Gratuit et
+ * illimité pour tout membre.
  */
 export function ContactPanel({ opportunityId, authorName }: ContactPanelProps) {
   const router = useRouter();

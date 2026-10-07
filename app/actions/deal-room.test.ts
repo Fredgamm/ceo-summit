@@ -157,12 +157,7 @@ describe("publishOpportunity", () => {
   });
 });
 
-/**
- * Décision d'architecture (sept. 2026, conception/09) — le système de
- * crédits Deal Room est retiré du chemin actif : prendre contact est
- * désormais gratuit et illimité pour tout membre dont l'entreprise a une
- * offre active/validée, quel que soit son tier.
- */
+/** Prendre contact est gratuit et illimité pour tout membre dont l'entreprise a une offre active/validée. */
 describe("contactOpportunityAuthor", () => {
   beforeEach(() => {
     vi.clearAllMocks();

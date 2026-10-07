@@ -89,12 +89,8 @@ export async function publishOpportunity(input: unknown): Promise<ActionResult<{
 /**
  * E6-T02/E6-T04 — "Prendre contact".
  *
- * Décision d'architecture (sept. 2026, conception/09) — le système de
- * crédits Deal Room est retiré du chemin actif (pas supprimé : le schéma et
- * `lib/credit-deduction-lock.ts`/`lib/deal-room-settings.ts` restent
- * intacts pour une réintégration future). Prendre contact est désormais
- * gratuit et illimité pour tout membre dont l'entreprise a une offre
- * active/validée — plus de verrou, plus de vérification de solde.
+ * Prendre contact est gratuit et illimité pour tout membre dont l'entreprise
+ * a une offre active/validée (conception/09).
  */
 export async function contactOpportunityAuthor(opportunityId: string): Promise<ActionResult> {
   const viewerResult = await requireViewer();
@@ -119,7 +115,7 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
    * explicitement "défense en profondeur — une URL directe ne doit pas
    * contourner le gate de tier") et à la requête de liste. Un membre
    * MEMBER en connaissant l'id pouvait donc contacter l'auteur d'une
-   * opportunité réservée EXECUTIVE/CHAIRMAN et dépenser un crédit pour ça.
+   * opportunité réservée EXECUTIVE/CHAIRMAN.
    */
   const viewerTier = getViewerTierFromCompany(viewer.company);
   if (!allowedVisibilities(viewerTier).includes(opportunity.visibility)) {
@@ -138,6 +134,7 @@ export async function contactOpportunityAuthor(opportunityId: string): Promise<A
       opportunityId,
       initiatorId: viewer.id,
       receiverId: opportunity.authorId,
+      // Colonne héritée des crédits Deal Room (défaut 1 en base) : un contact ne coûte rien.
       creditsSpent: 0,
     },
   });
@@ -233,11 +230,6 @@ export async function acceptOpportunityContact(
  * obsolète. Le passage à `DECLINED` est désormais conditionné sur
  * `status: "PENDING"` — un second appel concurrent trouve 0 ligne mise à
  * jour et lève `ContactAlreadyHandledError`.
- *
- * Décision d'architecture (sept. 2026, conception/09) — le remboursement de
- * crédit qui vivait ici a disparu avec le système de crédits Deal Room
- * (retiré du chemin actif, pas supprimé) : prendre contact ne coûte plus
- * rien à rembourser.
  */
 async function declineContact(contact: { id: string }): Promise<void> {
   const { count } = await prisma.opportunityContact.updateMany({

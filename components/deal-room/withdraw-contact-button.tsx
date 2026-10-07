@@ -8,10 +8,7 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Sprint de correction (5 août 2026, EX-T01) — permet à l'initiateur d'une
- * demande de contact restée sans réponse de la retirer lui-même. Ne
- * rembourse plus rien depuis le retrait du système de crédits Deal Room
- * (voir app/actions/deal-room.ts::declineContact) — prendre contact est
- * gratuit, il n'y a donc rien à rembourser.
+ * demande de contact restée sans réponse de la retirer lui-même.
  */
 export function WithdrawContactButton({ contactId }: { contactId: string }) {
   const router = useRouter();

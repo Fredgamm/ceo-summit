@@ -27,13 +27,13 @@ export type ResendWebhookPayload = z.infer<typeof resendWebhookSchema>;
  * un seul contrat minimal, à adapter uniquement dans la route elle-même
  * (mapping des champs propres au prestataire réel vers cette forme) le
  * jour où un prestataire est branché. Ne remplace jamais la validation
- * manuelle admin (`confirmCompanyPayment`/`confirmEventPayment`/
- * `confirmCreditPurchase`, tous encore accessibles) — ce webhook n'est
+ * manuelle admin (`confirmCompanyPayment`/`confirmEventPayment`, tous deux
+ * encore accessibles) — ce webhook n'est
  * qu'un chemin de confirmation automatique en plus, pour les prestataires
  * qui l'offrent.
  *
  * `reference` = l'id de notre propre enregistrement (CompanyPayment /
- * EventRegistration / CreditPurchase selon `type`), que le prestataire doit
+ * EventRegistration selon `type`), que le prestataire doit
  * nous renvoyer tel quel — à transmettre lors de l'initiation du paiement
  * chez lui (mécanisme d'initiation lui-même hors périmètre : aujourd'hui
  * aucun paiement n'est initié via une API externe, l'utilisateur paie hors
@@ -41,7 +41,7 @@ export type ResendWebhookPayload = z.infer<typeof resendWebhookSchema>;
  */
 export const paymentWebhookSchema = z.object({
   event: z.enum(["payment.confirmed", "payment.failed"]),
-  type: z.enum(["company_payment", "event_registration", "credit_purchase"]),
+  type: z.enum(["company_payment", "event_registration"]),
   reference: z.string().min(1),
   amount: z.number().positive().optional(),
 });

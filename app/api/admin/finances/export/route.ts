@@ -22,7 +22,7 @@ export async function GET() {
     throw err;
   }
 
-  const [companyPayments, registrations, purchases] = await Promise.all([
+  const [companyPayments, registrations] = await Promise.all([
     prisma.companyPayment.findMany({
       where: RECORDED_COMPANY_PAYMENT_WHERE,
       include: COMPANY_PAYMENT_FINANCE_INCLUDE,
@@ -34,11 +34,6 @@ export async function GET() {
         user: { select: { name: true } },
         event: { select: { title: true, price: true } },
       },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.creditPurchase.findMany({
-      where: { status: "CONFIRMED" },
-      include: { user: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
     }),
   ]);
@@ -53,15 +48,6 @@ export async function GET() {
       amount: r.event.price,
       method: r.paymentMethod ?? "",
       date: r.createdAt,
-    })),
-    ...purchases.map((p) => ({
-      id: p.id,
-      source: "CREDITS" as const,
-      memberName: p.user.name,
-      description: `Pack ${p.credits} crédits`,
-      amount: p.priceAr,
-      method: p.paymentMethod,
-      date: p.createdAt,
     })),
   ];
 

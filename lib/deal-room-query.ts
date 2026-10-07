@@ -6,19 +6,6 @@ import { LEGACY_TIER_ORDER } from "@/lib/plan-access";
 
 export const DEAL_ROOM_PAGE_SIZE = 12;
 
-/**
- * Coût en crédits Deal Room d'une prise de contact (bypass total pour
- * Chairman, voir app/actions/deal-room.ts). Correctif (7 août 2026, audit)
- * — cette valeur était répétée en dur dans 8+ endroits (l'action elle-même
- * ×3, plus la copie de 4 composants UI) sans source unique.
- *
- * Valeur de repli uniquement — le coût réel appliqué est configurable par
- * l'admin (`/admin/parametres` → Tarifs & Règles, 7 août 2026) et lu via
- * `lib/deal-room-settings.ts::getDealRoomContactCost()`. Cette constante ne
- * sert que tant qu'aucun admin n'a encore défini de valeur en base.
- */
-export const DEAL_ROOM_CONTACT_COST_DEFAULT = 1;
-
 export interface DealRoomReferentials {
   validTypes: readonly string[];
   validSectors: readonly string[];

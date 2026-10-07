@@ -69,7 +69,7 @@ export default async function AdminMembresPage({
       orderBy: { createdAt: "desc" },
       skip,
       take,
-      include: { company: { select: { name: true } }, creditBalance: true },
+      include: { company: { select: { name: true } } },
     }),
     prisma.user.count({ where }),
   ]);
@@ -95,7 +95,6 @@ export default async function AdminMembresPage({
                 <th className="px-4 py-2.5 text-left">Tier</th>
                 <th className="px-4 py-2.5 text-left">Pays</th>
                 <th className="px-4 py-2.5 text-left">Membre depuis</th>
-                <th className="px-4 py-2.5 text-left">Crédits</th>
                 <th className="px-4 py-2.5 text-left">Statut</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -125,15 +124,6 @@ export default async function AdminMembresPage({
                   </td>
                   <td className="px-4 py-3 text-text-mid">{member.country ?? "—"}</td>
                   <td className="px-4 py-3 text-text-muted">{formatDateFr(member.createdAt)}</td>
-                  <td className="px-4 py-3 text-text-mid">
-                    {member.role === "CHAIRMAN"
-                      ? "∞"
-                      : member.creditBalance
-                        ? member.creditBalance.included +
-                          member.creditBalance.purchased -
-                          member.creditBalance.used
-                        : 0}
-                  </td>
                   <td className="px-4 py-3">
                     <Badge variant={STATUS_BADGE[member.status]}>
                       {STATUS_LABEL[member.status]}

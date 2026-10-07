@@ -47,8 +47,7 @@ export default async function AdminParametresPage({
         <div className="rounded-lg border border-border bg-white p-5">
           <h3 className="text-sm font-bold text-navy">Offres & tarifs d&apos;adhésion</h3>
           <p className="mb-4 mt-1 text-xs text-text-muted">
-            Les prix, crédits inclus et rang d&apos;accès de chaque offre se gèrent désormais depuis
-            un catalogue dédié, créable librement — plus limité aux 3 tiers fixes d&apos;origine.
+            Le prix et le nombre de places de chaque offre se gèrent depuis le catalogue des offres.
           </p>
           <Button asChild>
             <Link href="/admin/plans">Gérer les offres →</Link>

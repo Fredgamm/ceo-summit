@@ -6,7 +6,6 @@ vi.mock("@/lib/prisma", () => ({
     adminUser: { findUnique: vi.fn() },
     companyPayment: { findMany: vi.fn() },
     eventRegistration: { findMany: vi.fn() },
-    creditPurchase: { findMany: vi.fn() },
   },
 }));
 
@@ -42,16 +41,6 @@ describe("GET /api/admin/finances/export", () => {
         event: { title: "CEO Summit 2026", price: 1_500_000 },
       },
     ] as never);
-    vi.mocked(prisma.creditPurchase.findMany).mockResolvedValue([
-      {
-        id: "c1",
-        credits: 5,
-        priceAr: 100_000,
-        paymentMethod: "MOBILE_MONEY",
-        createdAt: new Date("2026-07-20"),
-        user: { name: "Rabe A." },
-      },
-    ] as never);
   });
 
   it("rejects a non-admin", async () => {
@@ -69,10 +58,9 @@ describe("GET /api/admin/finances/export", () => {
     const body = await res.text();
     const lines = body.split("\r\n");
     expect(lines[0]).toBe("Membre,Source,Description,Montant (Ar),Méthode,Date");
-    // Most recent (credits, 20/07) before event (15/07) before membership (15/01)
-    expect(lines[1]).toContain("Rabe A.");
-    expect(lines[2]).toContain("Jean-Pierre R.");
-    expect(lines[3]).toContain("Sarah R.");
+    // Most recent (event, 15/07) before membership (15/01)
+    expect(lines[1]).toContain("Jean-Pierre R.");
+    expect(lines[2]).toContain("Sarah R.");
   });
 
   it("exports only confirmed company payments, never rejected ones", async () => {

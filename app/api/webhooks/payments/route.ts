@@ -6,7 +6,6 @@ import { paymentWebhookSchema, type PaymentWebhookPayload } from "@/lib/validati
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   confirmCompanyPaymentCore,
-  confirmCreditPurchaseCore,
   confirmEventRegistrationPaymentCore,
 } from "@/lib/payment-confirmations";
 
@@ -141,11 +140,11 @@ export async function POST(req: Request) {
 
 /**
  * `payment.failed` n'a un statut dédié que côté `EventRegistration`
- * (`PaymentStatus.FAILED`) — `CompanyPayment`/`CreditPurchase` n'ont que
+ * (`PaymentStatus.FAILED`) — `CompanyPayment` n'a que
  * PENDING/CONFIRMED/REJECTED (pas de valeur "échoué" distincte). Plutôt que
- * d'étendre ces enums pour ce cas encore hypothétique (aucun prestataire
- * branché), on se contente de laisser l'échec dans `WebhookLog` pour ces
- * deux types — l'admin garde la main via le refus manuel existant.
+ * d'étendre cet enum pour ce cas encore hypothétique (aucun prestataire
+ * branché), on se contente de laisser l'échec dans `WebhookLog` pour ce
+ * type — l'admin garde la main via le refus manuel existant.
  */
 type DispatchResult = { success: true; warning?: string } | { success: false; error: string };
 
@@ -190,9 +189,6 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
     }
     case "event_registration": {
       return confirmEventRegistrationPaymentCore(payload.reference, null);
-    }
-    case "credit_purchase": {
-      return confirmCreditPurchaseCore(payload.reference, null);
     }
   }
 }
