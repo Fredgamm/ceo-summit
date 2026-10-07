@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
+import { AccessGrantedRefresh } from "@/components/entreprise/access-granted-refresh";
 import { Button } from "@/components/ui/button";
 import { formatAriary } from "@/lib/utils";
 
@@ -95,7 +96,7 @@ interface CompanyPathViewer {
 /** Statuts qui donnent déjà accès à la plateforme (RG-12) — si on atterrit
  * quand même ici avec l'un de ces statuts, ce n'est pas l'entreprise qui
  * bloque : c'est la session (JWT) de ce navigateur qui date d'avant la
- * validation et n'a jamais été rafraîchie. */
+ * validation : AccessGrantedRefresh la met à jour sans reconnexion. */
 const ALREADY_GRANTED_STATUSES = ["ACTIVE", "EXPIRED"];
 
 function CompanyPath({ viewer }: { viewer: CompanyPathViewer }) {
@@ -108,18 +109,9 @@ function CompanyPath({ viewer }: { viewer: CompanyPathViewer }) {
 
   if (subscriptionStatus && ALREADY_GRANTED_STATUSES.includes(subscriptionStatus)) {
     return (
-      <>
-        <p className="mb-6 text-sm leading-relaxed text-text-mid">
-          Bonne nouvelle : votre accès a été validé entretemps ! Votre session actuelle date
-          d&apos;avant cette validation — reconnectez-vous pour en profiter.
-        </p>
-        <SignOutButton className="mb-4 flex w-full items-center justify-center gap-2 rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white shadow-card hover:bg-navy-mid">
-          Me reconnecter
-        </SignOutButton>
-        <div className="mb-2 text-left">
-          <OnboardingStatusList items={statusItems} />
-        </div>
-      </>
+      <div className="mb-2">
+        <AccessGrantedRefresh />
+      </div>
     );
   }
 

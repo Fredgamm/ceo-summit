@@ -154,8 +154,34 @@ export async function authorizeCredentials(rawCredentials: unknown, request?: Re
   };
 }
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    /**
+     * L'accès entreprise et le statut du compte sont figés dans le JWT à la
+     * connexion. Une mise à jour de session (`unstable_update()`, trigger
+     * "update") les relit en base : c'est ce qui ouvre l'accès dès la
+     * validation du paiement, sans reconnexion. Les données envoyées avec la
+     * mise à jour sont ignorées, un client ne peut donc pas s'attribuer
+     * l'accès lui-même. Ce callback ne tourne que côté Node (le middleware
+     * edge utilise authConfig seul).
+     */
+    async jwt(params) {
+      const token = await authConfig.callbacks.jwt(params);
+      if (params.trigger === "update" && typeof token.id === "string") {
+        const user = await prisma.user.findUnique({
+          where: { id: token.id },
+          include: VIEWER_TIER_INCLUDE,
+        });
+        if (user) {
+          token.hasCompanyAccess = getViewerTierFromCompany(user.company) !== null;
+          token.status = user.status;
+        }
+      }
+      return token;
+    },
+  },
   // Déploiement auto-hébergé derrière Nginx (pas Vercel, qui définit ça
   // automatiquement) — sans ça, NextAuth v5 rejette toute requête en mode
   // production (`next start`) avec une erreur "UntrustedHost", même quand
