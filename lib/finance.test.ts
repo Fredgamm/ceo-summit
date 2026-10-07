@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   companyPaymentToTransaction,
   computeMRRByPlan,
-  buildExpiringWithinDays,
   mergeFinanceTransactions,
   type FinanceTransaction,
 } from "./finance";
@@ -88,16 +87,6 @@ describe("computeMRRByPlan", () => {
       },
     ]);
     expect(result.get("unknown")).toBe(20_000);
-  });
-});
-
-describe("buildExpiringWithinDays", () => {
-  it("builds a range from now to now+days", () => {
-    const now = new Date("2026-07-29T00:00:00.000Z");
-    expect(buildExpiringWithinDays(30, now)).toEqual({
-      gt: now,
-      lte: new Date("2026-08-28T00:00:00.000Z"),
-    });
   });
 });
 

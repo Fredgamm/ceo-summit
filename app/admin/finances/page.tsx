@@ -8,7 +8,6 @@ import { computeMRR } from "@/lib/admin-dashboard";
 import { getAllPlans } from "@/lib/plans-query";
 import {
   computeMRRByPlan,
-  buildExpiringWithinDays,
   mergeFinanceTransactions,
   companyPaymentToTransaction,
   COMPANY_PAYMENT_FINANCE_INCLUDE,
@@ -46,15 +45,7 @@ export default async function AdminFinancesPage({
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [
-    activeSubscriptions,
-    plans,
-    monthPayments,
-    monthRegistrations,
-    expiring30,
-    expiring60,
-    expiring90,
-  ] = await Promise.all([
+  const [activeSubscriptions, plans, monthPayments, monthRegistrations] = await Promise.all([
     // Un abonnement EXPIRED garde ses avantages plateforme (RG-12) mais ne
     // génère plus de revenu récurrent : hors MRR et hors "entreprises actives".
     prisma.companySubscription.findMany({
@@ -79,15 +70,6 @@ export default async function AdminFinancesPage({
     prisma.eventRegistration.findMany({
       where: { paymentStatus: "PAID", createdAt: { gte: startOfMonth } },
       include: { event: { select: { price: true } } },
-    }),
-    prisma.companySubscription.count({
-      where: { status: "ACTIVE", endDate: buildExpiringWithinDays(30, now) },
-    }),
-    prisma.companySubscription.count({
-      where: { status: "ACTIVE", endDate: buildExpiringWithinDays(60, now) },
-    }),
-    prisma.companySubscription.count({
-      where: { status: "ACTIVE", endDate: buildExpiringWithinDays(90, now) },
     }),
   ]);
 
@@ -287,7 +269,7 @@ export default async function AdminFinancesPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4">
         <div className="rounded-lg border border-border bg-white p-5">
           <h2 className="mb-3 text-sm font-bold text-navy">Revenus entreprise par offre (MRR)</h2>
           <div className="flex flex-col gap-3">
@@ -313,24 +295,6 @@ export default async function AdminFinancesPage({
                 </div>
               );
             })}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-white p-5">
-          <h2 className="mb-3 text-sm font-bold text-navy">Abonnements expirant bientôt</h2>
-          <div className="mb-3 flex flex-col gap-2">
-            <div className="flex items-center justify-between rounded-md bg-red-50 p-2.5 text-sm">
-              <span>Expirant dans 30 jours</span>
-              <strong className="text-red-600">{expiring30} entreprise(s)</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-md bg-amber-50 p-2.5 text-sm">
-              <span>Expirant dans 60 jours</span>
-              <strong className="text-amber-700">{expiring60} entreprise(s)</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-md bg-emerald-50 p-2.5 text-sm">
-              <span>Expirant dans 90 jours</span>
-              <strong className="text-emerald-700">{expiring90} entreprise(s)</strong>
-            </div>
           </div>
         </div>
       </div>

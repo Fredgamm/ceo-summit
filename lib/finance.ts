@@ -30,14 +30,6 @@ export function computeMRRByPlan(
   return new Map([...byPlan.entries()].map(([planId, ss]) => [planId, computeMRR(ss)]));
 }
 
-/**
- * "Abonnements expirant dans 30/60/90j" — cumulative from now (endDate within
- * the next N days), matching the wireframe's increasing counts (7/14/22).
- */
-export function buildExpiringWithinDays(days: number, now: Date): { gt: Date; lte: Date } {
-  return { gt: now, lte: new Date(now.getTime() + days * 24 * 60 * 60 * 1000) };
-}
-
 export interface FinanceTransaction {
   id: string;
   source: "COMPANY" | "EVENT";
