@@ -13,7 +13,12 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn("flex items-center overflow-x-auto border-b-2 border-border", className)}
+    className={cn(
+      // Rapport QA du 7 oct. 2026 (§3.6) — les onglets passent à la ligne au lieu
+      // d'élargir la page sur mobile.
+      "flex flex-wrap items-center border-b-2 border-border",
+      className
+    )}
     {...props}
   />
 ));
@@ -26,7 +31,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "-mb-0.5 shrink-0 whitespace-nowrap border-b-2 border-transparent px-5 py-2.5 text-sm font-semibold text-muted-foreground transition-colors data-[state=active]:border-navy data-[state=active]:text-navy",
+      "-mb-0.5 shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm sm:px-5 font-semibold text-muted-foreground transition-colors data-[state=active]:border-navy data-[state=active]:text-navy",
       className
     )}
     {...props}

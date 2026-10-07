@@ -31,7 +31,12 @@ export function AppShell({ user, badges, rightPanel, children }: AppShellProps) 
 
       <main
         id="main-content"
-        className={cn("min-h-screen flex-1 md:ml-sidebar", rightPanel && "md:mr-right-panel")}
+        className={cn(
+          // min-w-0 : sans lui, un contenu large (barre d'onglets…) élargit toute
+          // la page sur mobile au lieu de rester dans l'écran (QA 7 oct., §5.3).
+          "min-h-screen min-w-0 flex-1 md:ml-sidebar",
+          rightPanel && "md:mr-right-panel"
+        )}
       >
         <div className="p-4 pb-24 pt-16 md:p-7 md:pb-7 md:pt-7">{children}</div>
       </main>
