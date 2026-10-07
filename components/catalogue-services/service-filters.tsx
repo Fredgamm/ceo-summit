@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 const ALL = "__all__";
 
@@ -46,19 +47,15 @@ export function ServiceFilters({ countries }: { countries: string[] }) {
         </SelectContent>
       </Select>
 
-      <Select value={searchParams.get("pays") || ALL} onValueChange={(v) => updateParam("pays", v)}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Toutes zones" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Toutes zones</SelectItem>
-          {countries.map((c) => (
-            <SelectItem key={c} value={c}>
-              {c}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <ReferentialSelect
+        options={countries}
+        value={searchParams.get("pays") || ALL}
+        onValueChange={(v) => updateParam("pays", v)}
+        placeholder="Toutes zones"
+        searchTitle="Rechercher un pays"
+        allOption={{ value: ALL, label: "Toutes zones" }}
+        className="w-[150px]"
+      />
     </div>
   );
 }

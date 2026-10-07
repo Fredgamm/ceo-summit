@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ReferentialSearchButton } from "@/components/referentials/referential-search-button";
+import { visibleReferentialOptions } from "@/lib/referential-options";
 
 const STEP_COUNT = 4;
 
@@ -246,7 +248,7 @@ function SectorsStep({
         Deal Room et le Catalogue.
       </p>
       <div className="grid grid-cols-2 gap-3">
-        {available.map((sector) => (
+        {visibleReferentialOptions(available, selected).map((sector) => (
           <label
             key={sector}
             className="flex items-center gap-2 rounded-md border border-border p-2.5 text-sm"
@@ -258,6 +260,15 @@ function SectorsStep({
             {sector}
           </label>
         ))}
+        <ReferentialSearchButton
+          options={available}
+          title="Rechercher un secteur"
+          selected={selected}
+          onPick={(sector) => {
+            if (!selected.includes(sector)) onToggle(sector);
+          }}
+          className="flex items-center justify-center rounded-md border border-dashed border-border p-2.5 text-sm font-semibold text-navy-mid hover:border-navy-light"
+        />
       </div>
     </div>
   );

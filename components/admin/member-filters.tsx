@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 const ALL = "__all__";
 
@@ -59,36 +60,25 @@ export function MemberFilters({ sectors, countries }: { sectors: string[]; count
         onChange={(e) => setQ(e.target.value)}
       />
 
-      <Select value={searchParams.get("pays") || ALL} onValueChange={(v) => updateParam("pays", v)}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Pays" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous pays</SelectItem>
-          {countries.map((c) => (
-            <SelectItem key={c} value={c}>
-              {c}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <ReferentialSelect
+        options={countries}
+        value={searchParams.get("pays") || ALL}
+        onValueChange={(v) => updateParam("pays", v)}
+        placeholder="Pays"
+        searchTitle="Rechercher un pays"
+        allOption={{ value: ALL, label: "Tous pays" }}
+        className="w-[150px]"
+      />
 
-      <Select
+      <ReferentialSelect
+        options={sectors}
         value={searchParams.get("secteur") || ALL}
         onValueChange={(v) => updateParam("secteur", v)}
-      >
-        <SelectTrigger className="w-[170px]">
-          <SelectValue placeholder="Secteur" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous secteurs</SelectItem>
-          {sectors.map((s) => (
-            <SelectItem key={s} value={s}>
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder="Secteur"
+        searchTitle="Rechercher un secteur"
+        allOption={{ value: ALL, label: "Tous secteurs" }}
+        className="w-[170px]"
+      />
 
       <Select
         value={searchParams.get("statut") || ALL}

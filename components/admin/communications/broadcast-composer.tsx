@@ -21,13 +21,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 const ALL = "__all__";
 
@@ -256,32 +250,22 @@ export function BroadcastComposer({
 
           {segment === "CUSTOM" && (
             <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
-              <Select value={country || ALL} onValueChange={(v) => setCountry(v === ALL ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tous pays" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tous pays</SelectItem>
-                  {countries.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={sector || ALL} onValueChange={(v) => setSector(v === ALL ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tous secteurs" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Tous secteurs</SelectItem>
-                  {sectors.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ReferentialSelect
+                options={countries}
+                value={country || ALL}
+                onValueChange={(v) => setCountry(v === ALL ? "" : v)}
+                placeholder="Tous pays"
+                searchTitle="Rechercher un pays"
+                allOption={{ value: ALL, label: "Tous pays" }}
+              />
+              <ReferentialSelect
+                options={sectors}
+                value={sector || ALL}
+                onValueChange={(v) => setSector(v === ALL ? "" : v)}
+                placeholder="Tous secteurs"
+                searchTitle="Rechercher un secteur"
+                allOption={{ value: ALL, label: "Tous secteurs" }}
+              />
 
               {plans.length > 0 && (
                 <div className="flex flex-col gap-1.5 rounded-md border border-border p-2.5">

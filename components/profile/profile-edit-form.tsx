@@ -13,14 +13,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { initials } from "@/lib/utils";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
+import { ReferentialSearchButton } from "@/components/referentials/referential-search-button";
+import { visibleReferentialOptions } from "@/lib/referential-options";
 
 interface ProfileEditFormProps {
   userId: string;
@@ -204,18 +200,13 @@ export function ProfileEditForm({
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="edit-country">Pays</Label>
-            <Select value={country} onValueChange={setCountry}>
-              <SelectTrigger id="edit-country">
-                <SelectValue placeholder="Sélectionner…" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableCountries.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ReferentialSelect
+              id="edit-country"
+              options={availableCountries}
+              value={country}
+              onValueChange={setCountry}
+              searchTitle="Rechercher un pays"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -257,7 +248,7 @@ export function ProfileEditForm({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3">
-            {availableSectors.map((sector) => (
+            {visibleReferentialOptions(availableSectors, sectors).map((sector) => (
               <label
                 key={sector}
                 className="flex items-center gap-2 rounded-md border border-border p-2.5 text-sm"
@@ -269,6 +260,15 @@ export function ProfileEditForm({
                 {sector}
               </label>
             ))}
+            <ReferentialSearchButton
+              options={availableSectors}
+              title="Rechercher un secteur"
+              selected={sectors}
+              onPick={(sector) => {
+                if (!sectors.includes(sector)) toggleSector(sector);
+              }}
+              className="flex items-center justify-center rounded-md border border-dashed border-border p-2.5 text-sm font-semibold text-navy-mid hover:border-navy-light"
+            />
           </div>
         </CardContent>
       </Card>

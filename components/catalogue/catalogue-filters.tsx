@@ -13,6 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
+import { ReferentialSearchButton } from "@/components/referentials/referential-search-button";
+import { visibleReferentialOptions } from "@/lib/referential-options";
 
 const ALL = "__all__";
 
@@ -83,7 +86,7 @@ export function CatalogueFilters({
         >
           Tous
         </button>
-        {sectors.map((sector) => (
+        {visibleReferentialOptions(sectors, [activeSector]).map((sector) => (
           <button
             key={sector}
             type="button"
@@ -98,25 +101,25 @@ export function CatalogueFilters({
             {sector}
           </button>
         ))}
+        <ReferentialSearchButton
+          options={sectors}
+          title="Rechercher un secteur"
+          selected={activeSector ? [activeSector] : []}
+          onPick={(sector) => updateParam("secteur", sector)}
+          className="rounded-full border border-dashed border-border bg-white px-3 py-1 text-xs font-medium text-navy-mid transition-colors hover:border-navy-light"
+        />
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Select
+        <ReferentialSelect
+          options={countries}
           value={searchParams.get("pays") || ALL}
           onValueChange={(v) => updateParam("pays", v === ALL ? "" : v)}
-        >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Tous pays" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Tous pays</SelectItem>
-            {countries.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder="Tous pays"
+          searchTitle="Rechercher un pays"
+          allOption={{ value: ALL, label: "Tous pays" }}
+          className="w-[160px]"
+        />
 
         <Select
           value={searchParams.get("tri") || "offre"}

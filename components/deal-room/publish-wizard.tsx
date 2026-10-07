@@ -15,14 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { formatAriary, formatEuro, formatDateFr } from "@/lib/utils";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 const STEP_COUNT = 4;
 const STEP_LABELS = ["Type & catégorie", "Titre & description", "Budget & documents", "Aperçu"];
@@ -243,33 +237,23 @@ export function PublishWizard({
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label>Secteur *</Label>
-                <Select value={values.sector} onValueChange={(v) => set("sector", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sectors.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ReferentialSelect
+                  options={sectors}
+                  value={values.sector}
+                  onValueChange={(v) => set("sector", v)}
+                  placeholder="Sélectionner…"
+                  searchTitle="Rechercher un secteur"
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Zone géographique *</Label>
-                <Select value={values.country} onValueChange={(v) => set("country", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {countries.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ReferentialSelect
+                  options={countries}
+                  value={values.country}
+                  onValueChange={(v) => set("country", v)}
+                  placeholder="Sélectionner…"
+                  searchTitle="Rechercher un pays"
+                />
               </div>
             </div>
           </div>

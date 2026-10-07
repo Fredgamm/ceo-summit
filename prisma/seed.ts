@@ -1,4 +1,6 @@
 import { PrismaClient, Role, Tier, MembershipStatus } from "@prisma/client";
+
+import { COUNTRY_CATALOG, SECTOR_CATALOG } from "../lib/referential-catalog";
 import bcrypt from "bcryptjs";
 
 import { encryptMessageContent } from "../lib/message-crypto";
@@ -30,36 +32,10 @@ async function main() {
   });
 
   // ── Référentiels ──
-  // 5 août 2026 (E8-T11) — alignés mot pour mot sur lib/sectors.ts et
-  // lib/countries.ts (secteur/pays membre-facing en lisent désormais les
-  // référentiels au lieu des tableaux statiques, voir lib/referentials-
-  // query.ts) : un seed avec un vocabulaire différent désynchroniserait
-  // silencieusement les filtres et les données déjà en base
-  // (Company.sector, Opportunity.sector...), qui utilisent ce vocabulaire.
-  // `opportunityTypes` aligné sur les libellés historiquement affichés
-  // (anciennement `OPPORTUNITY_TYPE_LABEL`, l'enum `OpportunityType` a été
-  // retiré au profit de ce référentiel, voir Opportunity.type).
-  const sectors = [
-    "Énergie & Environnement",
-    "Finance & Banque",
-    "Technologie & Digital",
-    "Agroalimentaire & Agriculture",
-    "Logistique & Transport",
-    "Immobilier & BTP",
-    "Santé & Pharmaceutique",
-    "Tourisme & Hôtellerie",
-    "Industrie & Manufacturing",
-    "Autre",
-  ];
-  const countries = [
-    "Madagascar",
-    "Île Maurice",
-    "La Réunion",
-    "Comores",
-    "Mayotte",
-    "Seychelles",
-    "Autre",
-  ];
+  // Catalogues complets (rapport QA du 1er oct. 2026, §4), source commune
+  // avec la migration 20261007120000_referential_catalog.
+  const sectors = [...SECTOR_CATALOG];
+  const countries = [...COUNTRY_CATALOG];
   const opportunityTypes = [
     "Partenariat",
     "Investissement",
@@ -584,7 +560,7 @@ async function main() {
       name: "Salle Privée Chairman",
       description:
         "Espace confidentiel réservé aux membres Chairman — dossiers stratégiques et co-investissements.",
-      sector: "Autre",
+      sector: "Finance & Banque",
       minTier: "CHAIRMAN_ONLY",
       status: "ACTIVE",
     },

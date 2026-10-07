@@ -13,15 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PlanPrice } from "@/components/entreprise/plan-price";
 import { formatPlanPriceLive, pluralize } from "@/lib/utils";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 interface CompanySignupWizardProps {
   plans: Plan[];
@@ -235,33 +229,23 @@ export function CompanySignupWizard({
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <Label>Secteur</Label>
-          <Select value={sector} onValueChange={setSector}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner…" />
-            </SelectTrigger>
-            <SelectContent>
-              {sectors.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ReferentialSelect
+            options={sectors}
+            value={sector}
+            onValueChange={setSector}
+            placeholder="Sélectionner…"
+            searchTitle="Rechercher un secteur"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Pays</Label>
-          <Select value={country} onValueChange={setCountry}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner…" />
-            </SelectTrigger>
-            <SelectContent>
-              {countries.map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <ReferentialSelect
+            options={countries}
+            value={country}
+            onValueChange={setCountry}
+            placeholder="Sélectionner…"
+            searchTitle="Rechercher un pays"
+          />
         </div>
       </div>
       <p className="-mt-2 text-xs text-text-muted">

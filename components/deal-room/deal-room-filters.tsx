@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 const ALL = "__all__";
 
@@ -83,39 +84,25 @@ export function DealRoomFilters({ types, sectors, countries }: DealRoomFiltersPr
           </SelectContent>
         </Select>
 
-        <Select
+        <ReferentialSelect
+          options={sectors}
           value={searchParams.get("sector") || ALL}
           onValueChange={(v) => updateParam("sector", v)}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Tous les secteurs" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Tous les secteurs</SelectItem>
-            {sectors.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder="Tous les secteurs"
+          searchTitle="Rechercher un secteur"
+          allOption={{ value: ALL, label: "Tous les secteurs" }}
+          className="w-[180px]"
+        />
 
-        <Select
+        <ReferentialSelect
+          options={countries}
           value={searchParams.get("pays") || ALL}
           onValueChange={(v) => updateParam("pays", v)}
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Toutes zones" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Toutes zones</SelectItem>
-            {countries.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder="Toutes zones"
+          searchTitle="Rechercher un pays"
+          allOption={{ value: ALL, label: "Toutes zones" }}
+          className="w-[150px]"
+        />
 
         <Select
           value={searchParams.get("budget") || ALL}

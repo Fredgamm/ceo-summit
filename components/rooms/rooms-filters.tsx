@@ -2,13 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { ReferentialSelect } from "@/components/referentials/referential-select";
 
 const ALL = "__all__";
 
@@ -27,22 +21,15 @@ export function RoomsFilters({ sectors }: { sectors: string[] }) {
 
   return (
     <div className="mb-4 flex flex-wrap gap-3">
-      <Select
+      <ReferentialSelect
+        options={sectors}
         value={searchParams.get("secteur") || ALL}
         onValueChange={(v) => updateParam("secteur", v)}
-      >
-        <SelectTrigger className="w-[200px]">
-          <SelectValue placeholder="Tous les secteurs" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous les secteurs</SelectItem>
-          {sectors.map((s) => (
-            <SelectItem key={s} value={s}>
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder="Tous les secteurs"
+        searchTitle="Rechercher un secteur"
+        allOption={{ value: ALL, label: "Tous les secteurs" }}
+        className="w-[200px]"
+      />
     </div>
   );
 }
