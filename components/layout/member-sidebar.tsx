@@ -8,6 +8,7 @@ import {
   Diamond,
   CalendarDays,
   LayoutGrid,
+  Briefcase,
   MessagesSquare,
   Mail,
   User,
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/deal-room", label: "Deal Room", icon: Diamond, badgeKey: "opportunities" as const },
   { href: "/evenements", label: "Événements", icon: CalendarDays },
   { href: "/catalogue", label: "Liste des membres", icon: LayoutGrid },
+  { href: "/catalogue/services", label: "Services", icon: Briefcase },
   { href: "/salles", label: "Salles", icon: MessagesSquare, badgeKey: "rooms" as const },
   { href: "/messagerie", label: "Messagerie", icon: Mail, badgeKey: "messages" as const },
 ];
@@ -32,6 +34,17 @@ const BOTTOM_ITEMS = [
   { href: "/profil/editer", label: "Mon Profil", icon: User },
   { href: "/entreprise", label: "Mon Entreprise", icon: Building2 },
 ];
+
+/**
+ * L'entrée active est celle dont le chemin correspond le plus précisément :
+ * `/catalogue/services` est sous `/catalogue`, sans que « Liste des membres »
+ * doive s'allumer en même temps que « Services ».
+ */
+function findActiveNavHref(pathname: string): string | undefined {
+  return NAV_ITEMS.map((item) => item.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+}
 
 interface MemberSidebarProps {
   user: { name: string; avatarUrl?: string | null; isAdmin?: boolean };
@@ -44,6 +57,7 @@ interface MemberSidebarProps {
  */
 export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
   const pathname = usePathname();
+  const activeNavHref = findActiveNavHref(pathname);
 
   return (
     <aside className="fixed left-0 top-0 hidden h-screen w-sidebar flex-col overflow-y-auto bg-navy md:flex">
@@ -72,7 +86,7 @@ export function MemberSidebar({ user, badges = {} }: MemberSidebarProps) {
 
       <nav className="flex-1 py-2.5" aria-label="Navigation principale">
         {NAV_ITEMS.map((item) => {
-          const active = pathname.startsWith(item.href);
+          const active = item.href === activeNavHref;
           const badge = item.badgeKey ? badges[item.badgeKey] : undefined;
           return (
             <Link
