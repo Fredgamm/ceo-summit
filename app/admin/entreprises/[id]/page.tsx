@@ -10,6 +10,8 @@ import { CompanyPaymentActions } from "@/components/admin/entreprises/company-pa
 import { PaymentProofViewer } from "@/components/admin/entreprises/payment-proof-viewer";
 import { ReassignAdminForm } from "@/components/admin/entreprises/reassign-admin-form";
 import { formatAriary, formatDateFr } from "@/lib/utils";
+import { isPartnerOffer } from "@/lib/partner-offers";
+import { PartnerSettingsForm } from "@/components/admin/partners/partner-settings-form";
 
 export const metadata: Metadata = { title: "Admin — Entreprise" };
 
@@ -108,6 +110,20 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
             <Badge variant={company.subscription.status === "ACTIVE" ? "active" : "pending"}>
               {company.subscription.status}
             </Badge>
+            {isPartnerOffer(company.subscription.plan) && (
+              <div className="mt-4 border-t border-border pt-4">
+                <h3 className="mb-3 text-sm font-bold text-navy">Partenariat</h3>
+                <PartnerSettingsForm
+                  companyId={company.id}
+                  memberLimit={
+                    company.subscription.memberLimit ??
+                    company.subscription.plan.maxTeamMembers ??
+                    2
+                  }
+                  counterpart={company.subscription.counterpart ?? ""}
+                />
+              </div>
+            )}
           </>
         )}
       </div>

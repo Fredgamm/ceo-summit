@@ -13,11 +13,15 @@ export function seatCap(subscription: {
   plan: Pick<Plan, "pricingMode" | "maxTeamMembers">;
   declaredParticipants: number | null;
   extraSeats: number;
+  /** Module 20 — nombre de membres fixé par l'admin pour cette entreprise (offres partenaires). */
+  memberLimit?: number | null;
 }): number | null {
   const base =
-    subscription.plan.pricingMode === "PER_PARTICIPANT"
-      ? subscription.declaredParticipants
-      : subscription.plan.maxTeamMembers;
+    subscription.memberLimit != null
+      ? subscription.memberLimit
+      : subscription.plan.pricingMode === "PER_PARTICIPANT"
+        ? subscription.declaredParticipants
+        : subscription.plan.maxTeamMembers;
   return base == null ? null : base + subscription.extraSeats;
 }
 

@@ -405,6 +405,7 @@ model Plan {
   companySubscriptions          CompanySubscription[]
   eventRegistrations            EventRegistration[]
   upsellPayments                CompanyPayment[]      @relation("UpsellPlan")
+  partnerInvites                PartnerInvite[]
 
   @@index([isActive, displayOrder])
   @@index([eventId])
@@ -412,28 +413,28 @@ model Plan {
 }
 
 model Company {
-  id             String   @id @default(cuid())
-  name           String
-  sector         String
-  country        String
-  description    String?  @db.Text
-  logoUrl        String?
-  website        String?
+  id                String   @id @default(cuid())
+  name              String
+  sector            String
+  country           String
+  description       String?  @db.Text
+  logoUrl           String?
+  website           String?
   /// Coordonnées (parcours revu, 1er août 2026).
-  phone          String?
-  address        String?
+  phone             String?
+  address           String?
   /// Réseaux sociaux — clé libre (ex: "linkedin", "facebook") -> URL, plutôt
   /// que des colonnes par plateforme : le formulaire ne fixe pas une liste
   /// fermée de réseaux.
-  socialLinks    Json?
-  additionalInfo String?  @db.Text
+  socialLinks       Json?
+  additionalInfo    String?  @db.Text
   /// 22 septembre 2026 (`conception/12` §3.3) — case « Je participe » : le
   /// gestionnaire qui inscrit l'entreprise et paie n'assiste pas forcément
   /// lui-même à l'évènement (souvent une secrétaire). `false` par défaut —
   /// il ne consomme une place que s'il coche explicitement cette case
   /// depuis la composition de la liste des participants.
-  adminParticipates Boolean @default(false)
-  createdAt      DateTime @default(now())
+  adminParticipates Boolean  @default(false)
+  createdAt         DateTime @default(now())
 
   /// Phase 2 offres/paiement (30 juillet 2026) — le créateur de la fiche
   /// entreprise devient admin entreprise par défaut (rôle fonctionnel,
@@ -446,6 +447,7 @@ model Company {
   serviceListings ServiceListing[]
   subscription    CompanySubscription?
   invites         CompanyInvite[]
+  partnerInvite   PartnerInvite?
 
   @@index([sector])
   @@index([country])
@@ -489,6 +491,11 @@ model CompanySubscription {
   /// (un supplément payé n'est pas repris). Places totales = quota de
   /// l'offre + ce champ.
   extraSeats           Int                       @default(0)
+  /// Module 20 (offres partenaires) — nombre de membres propre à cette
+  /// entreprise, fixé par l'admin à l'invitation ; à défaut, celui de l'offre.
+  memberLimit          Int?
+  /// Module 20 — services apportés en échange d'une offre partenaire (admin seulement).
+  counterpart          String?                   @db.Text
   createdAt            DateTime                  @default(now())
   updatedAt            DateTime                  @updatedAt
 
@@ -541,6 +548,37 @@ model CompanyPayment {
   createdAt             DateTime            @default(now())
 
   @@index([status])
+}
+
+enum PartnerInviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+/// Module 20 (offres partenaires) — invitation d'un gérant par l'admin sur une
+/// offre partenaire (montant 0, non proposée à l'inscription). Le gérant crée
+/// son compte et son entreprise depuis le lien ; l'abonnement est alors actif
+/// sans paiement.
+model PartnerInvite {
+  id          String              @id @default(cuid())
+  name        String
+  email       String
+  planId      String
+  plan        Plan                @relation(fields: [planId], references: [id])
+  memberLimit Int?
+  counterpart String?             @db.Text
+  token       String              @unique
+  status      PartnerInviteStatus @default(PENDING)
+  expiresAt   DateTime
+  invitedById String
+  companyId   String?             @unique
+  company     Company?            @relation(fields: [companyId], references: [id])
+  createdAt   DateTime            @default(now())
+  acceptedAt  DateTime?
+
+  @@index([status])
+  @@index([email])
 }
 
 enum CompanyInviteStatus {
@@ -1040,11 +1078,11 @@ model Broadcast {
   /// Rapport QA du 1er oct. 2026 (§3.2b) — offre(s) ciblée(s) pour un
   /// segment CUSTOM, trace historique de ce qui a été réellement envoyé.
   /// Vide pour tout broadcast antérieur à cette fonctionnalité.
-  segmentPlanIds String[]       @default([])
+  segmentPlanIds String[]         @default([])
   /// Rapport QA du 1er oct. 2026 (§3.2a) — clés R2 privées des pièces
   /// jointes, résolues en URL signée (BROADCAST_ATTACHMENT_LINK_TTL_SECONDS)
   /// dans le corps de l'email à l'envoi, jamais une URL publique directe.
-  attachmentKeys String[]       @default([])
+  attachmentKeys String[]         @default([])
   sentById       String
   recipientCount Int
   openCount      Int              @default(0)

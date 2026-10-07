@@ -3,6 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import { countUsedSeats, seatCap } from "./company-seats";
 
 describe("seatCap", () => {
+  it("uses the member limit set for the company before the plan's own count", () => {
+    expect(
+      seatCap({
+        plan: { pricingMode: "FIXED_BUNDLE", maxTeamMembers: 2 },
+        declaredParticipants: null,
+        extraSeats: 1,
+        memberLimit: 3,
+      })
+    ).toBe(4);
+  });
+
   it("returns the plan's seat count plus purchased extra seats for a fixed bundle", () => {
     expect(
       seatCap({

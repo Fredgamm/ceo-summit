@@ -8,6 +8,48 @@ import type { EmailTemplateDefinition } from "./types";
  */
 export const TEAM_COLLABORATORS_TEMPLATES: EmailTemplateDefinition[] = [
   {
+    key: "partner-invite",
+    category: "TEAM_COLLABORATORS",
+    label: "Invitation partenaire",
+    description:
+      "Envoyé au gérant d'un partenaire (institutionnel, média…) invité par l'admin, pour qu'il crée son compte et son entreprise, sans paiement.",
+    triggerHint: "app/actions/admin-partners.ts::invitePartner (aussi resendPartnerInvite)",
+    variables: [
+      { key: "inviteeFirstName", label: "Prénom du gérant", example: "Hery" },
+      {
+        key: "offerName",
+        label: "Nom de l'offre partenaire",
+        example: "Partenaire Institutionnel",
+      },
+      { key: "memberLimit", label: "Nombre de membres", example: "2" },
+      {
+        key: "inviteUrl",
+        label: "Lien d'inscription",
+        example: "https://app.ceo-summit.mg/partenaire/token",
+      },
+    ],
+    defaultSubject: "Votre accès partenaire CEO Summit",
+    defaultBlocks: [
+      { id: "greeting", type: "heading", text: "Bonjour {{inviteeFirstName}}," },
+      {
+        id: "intro",
+        type: "paragraph",
+        text: "L'équipe CEO Summit vous invite à rejoindre la plateforme au titre de l'offre **{{offerName}}**. Créez votre compte et votre entreprise : votre accès est ouvert immédiatement, sans paiement.",
+      },
+      { id: "cta", type: "button", label: "Créer mon compte", url: "{{inviteUrl}}" },
+      {
+        id: "team",
+        type: "paragraph",
+        text: "Votre espace compte {{memberLimit}} membre(s) : vous pourrez ensuite inviter vos collaborateurs depuis la fiche de votre entreprise.",
+      },
+      {
+        id: "validity",
+        type: "paragraph",
+        text: "Ce lien est valable 7 jours. Passé ce délai, demandez à l'équipe CEO Summit de vous en renvoyer un.",
+      },
+    ],
+  },
+  {
     key: "company-invite",
     category: "TEAM_COLLABORATORS",
     label: "Invitation collaborateur",

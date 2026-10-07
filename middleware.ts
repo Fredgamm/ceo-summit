@@ -33,7 +33,7 @@ const PUBLIC_ROUTES = [
   "/",
   "/~offline",
 ];
-const PUBLIC_PREFIXES = ["/reinitialiser/", "/invitation/"];
+const PUBLIC_PREFIXES = ["/reinitialiser/", "/invitation/", "/partenaire/"];
 
 function isPublicRoute(pathname: string) {
   if (PUBLIC_ROUTES.includes(pathname)) return true;
