@@ -172,30 +172,16 @@ export default async function AdminCommunicationsPage({
                   <th className="px-4 py-2.5 text-left">Objet</th>
                   <th className="px-4 py-2.5 text-left">Envoyé à</th>
                   <th className="px-4 py-2.5 text-left">Destinataires</th>
-                  <th className="px-4 py-2.5 text-left">Taux d&apos;ouverture</th>
                   <th className="px-4 py-2.5 text-left">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {history.map((b) => {
-                  const openRate =
-                    b.recipientCount > 0 ? Math.round((b.openCount / b.recipientCount) * 100) : 0;
                   return (
                     <tr key={b.id}>
                       <td className="px-4 py-3 font-semibold text-navy">{b.subject}</td>
                       <td className="px-4 py-3 text-text-muted">{SEGMENT_LABEL[b.segment]}</td>
                       <td className="px-4 py-3 font-semibold">{b.recipientCount}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-surface-2">
-                            <div
-                              className="h-full bg-emerald-500"
-                              style={{ width: `${openRate}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-semibold">{openRate}%</span>
-                        </div>
-                      </td>
                       <td className="px-4 py-3 text-text-muted">{formatDateFr(b.createdAt)}</td>
                     </tr>
                   );

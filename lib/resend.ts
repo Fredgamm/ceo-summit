@@ -7,14 +7,8 @@ import type { ReactElement } from "react";
  * direct sur la boîte mail existante de ceo-summit.mg, plutôt que d'ouvrir un
  * nouveau compte chez un prestataire tiers. Le fichier garde son nom
  * (`lib/resend.ts`, 30+ imports ailleurs dans le projet) pour ne pas propager
- * un renommage sans rapport avec ce changement.
- *
- * Conséquence assumée : le suivi "taux d'ouverture" des campagnes (E8-T09,
- * `app/api/webhooks/resend/route.ts`) reposait sur le tracking automatique de
- * Resend — plus aucun évènement n'arrivera sur ce webhook une fois basculé
- * en SMTP pur. La route reste en place (fonctionnalité déjà construite,
- * inoffensive à laisser inactive) mais `openedAt`/`openCount` ne
- * progresseront plus tant qu'aucun prestataire équivalent n'est rebranché.
+ * un renommage sans rapport avec ce changement. Le SMTP pur ne remonte
+ * aucun évènement d'ouverture : pas de taux d'ouverture des campagnes.
  */
 /**
  * Audit MVP (25 septembre 2026) — en production, l'absence de SMTP ne fait

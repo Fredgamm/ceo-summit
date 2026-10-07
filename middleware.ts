@@ -131,7 +131,7 @@ export const config = {
      *   above: a logged-out browser could never register the service worker
      *   if this middleware redirected the SW file itself to /login.
      * - API routes that manage their own auth:
-     *   - api/webhooks must stay public for payments/Zoom/Resend
+     *   - api/webhooks must stay public for payments/Zoom
      *   - api/auth is NextAuth's own surface (csrf, signin, callback/credentials,
      *     session, signout...) — it must be reachable *without* a session, since
      *     that's exactly how a session gets created. Blocking it here made login
