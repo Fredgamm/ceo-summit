@@ -4,7 +4,7 @@ import { AdminSidebar } from "@/components/layout/admin-sidebar";
 
 interface AdminShellProps {
   admin: { name: string; email: string; role: AdminRole };
-  badges?: { candidatures?: number; opportunities?: number; companies?: number };
+  badges?: { opportunities?: number; companies?: number };
   breadcrumb?: string;
   title: string;
   actions?: React.ReactNode;

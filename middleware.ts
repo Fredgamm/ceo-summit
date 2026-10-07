@@ -26,7 +26,6 @@ const { auth } = NextAuth(authConfig);
 const PUBLIC_ROUTES = [
   "/login",
   "/mot-de-passe-oublie",
-  "/demande-acces",
   "/inscription",
   "/cgu",
   "/confidentialite",
@@ -34,7 +33,7 @@ const PUBLIC_ROUTES = [
   "/",
   "/~offline",
 ];
-const PUBLIC_PREFIXES = ["/activer/", "/reinitialiser/", "/invitation/"];
+const PUBLIC_PREFIXES = ["/reinitialiser/", "/invitation/"];
 
 function isPublicRoute(pathname: string) {
   if (PUBLIC_ROUTES.includes(pathname)) return true;
@@ -96,8 +95,7 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 
-  // Member space requires an active account (webhook-created accounts start
-  // as PENDING_ACTIVATION and must go through /activer/[token] first).
+  // Member space requires an active account.
   if (!isAdminRoute && !isPublic && session.user.status !== "ACTIVE") {
     return NextResponse.redirect(new URL("/login", req.nextUrl.origin));
   }

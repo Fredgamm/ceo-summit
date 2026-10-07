@@ -4,9 +4,8 @@ import Link from "next/link";
 export const metadata: Metadata = { title: "Politique de confidentialité" };
 
 /**
- * B1 (audit RGPD du 29 juillet 2026) — page créée pour que le lien de
- * consentement sur /demande-acces ne soit pas mort. Structure réelle,
- * contenu à finaliser avec un conseil juridique avant mise en production —
+ * Brouillon — contenu à finaliser avec un conseil juridique avant mise en
+ * production (audit 17, §1.2) —
  * voir AUDIT_SECURITE_CONFORMITE_ACCESSIBILITE.md §3 (RGPD) pour le détail
  * des traitements réels (candidature, messagerie chiffrée, paiement Evolia,
  * sous-traitants Resend/R2/Zoom).
@@ -14,7 +13,7 @@ export const metadata: Metadata = { title: "Politique de confidentialité" };
 export default function PrivacyPolicyPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
-      <Link href="/demande-acces" className="mb-6 inline-block text-sm text-text-muted">
+      <Link href="/" className="mb-6 inline-block text-sm text-text-muted">
         ← Retour
       </Link>
 

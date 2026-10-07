@@ -12,8 +12,6 @@ import { TemplatePreview } from "@/components/admin/communications/template-prev
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDateFr } from "@/lib/utils";
-import ActivationEmail from "@/emails/activation-email";
-import ApplicationRefusedEmail from "@/emails/application-refused-email";
 import EventRegistrationEmail from "@/emails/event-registration-email";
 
 export const metadata: Metadata = { title: "Admin — Communications" };
@@ -32,18 +30,6 @@ const TABS = [
  * React Email versionnés dans emails/*.tsx, pas du contenu en base.
  */
 const AUTOMATED_TEMPLATES = [
-  {
-    name: "Email de bienvenue (activation)",
-    trigger: "Envoyé après confirmation de paiement Evolia",
-    file: "emails/activation-email.tsx",
-    active: true,
-  },
-  {
-    name: "Email de refus candidature",
-    trigger: "Envoyé après refus d'une demande d'accès",
-    file: "emails/application-refused-email.tsx",
-    active: true,
-  },
   {
     name: "Confirmation inscription événement",
     trigger: "Envoyé après inscription et paiement confirmé",
@@ -67,16 +53,6 @@ const AUTOMATED_TEMPLATES = [
 /** §3.3 — rendu HTML de démo (props par défaut de chaque composant) pour l'aperçu en iframe. */
 async function renderTemplatePreview(file: string | null): Promise<string | null> {
   switch (file) {
-    case "emails/activation-email.tsx":
-      return render(
-        <ActivationEmail
-          memberName="Jean-Pierre Rakoto"
-          tier="Executive"
-          activationUrl="https://app.ceo-summit.mg/activer/token"
-        />
-      );
-    case "emails/application-refused-email.tsx":
-      return render(<ApplicationRefusedEmail candidateName="Jean Dupont" />);
     case "emails/event-registration-email.tsx":
       return render(
         <EventRegistrationEmail

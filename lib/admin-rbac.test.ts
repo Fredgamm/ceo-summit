@@ -8,15 +8,14 @@ describe("canAccessSection", () => {
     expect(canAccessSection("SUPER_ADMIN", "finances")).toBe(true);
   });
 
-  it("keeps FINANCIER away from candidatures/membres/parametres", () => {
+  it("keeps FINANCIER away from membres/parametres", () => {
     expect(canAccessSection("FINANCIER", "finances")).toBe(true);
     expect(canAccessSection("FINANCIER", "parametres")).toBe(false);
-    expect(canAccessSection("FINANCIER", "candidatures")).toBe(false);
     expect(canAccessSection("FINANCIER", "membres")).toBe(false);
   });
 
   it("keeps MODERATEUR away from finances/parametres", () => {
-    expect(canAccessSection("MODERATEUR", "candidatures")).toBe(true);
+    expect(canAccessSection("MODERATEUR", "membres")).toBe(true);
     expect(canAccessSection("MODERATEUR", "salles")).toBe(true);
     expect(canAccessSection("MODERATEUR", "finances")).toBe(false);
     expect(canAccessSection("MODERATEUR", "parametres")).toBe(false);

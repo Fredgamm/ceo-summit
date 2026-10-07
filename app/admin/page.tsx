@@ -5,17 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { buildActivityFeed, buildMonthlyRevenueSeries, computeMRR } from "@/lib/admin-dashboard";
 import { buildBroadcastRecipientsWhere } from "@/lib/broadcast-segments";
 import { RevenueChart } from "@/components/admin/revenue-chart";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatAriary, formatDateFr, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Tableau de bord" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 /**
  * E8-T02 — dashboard admin. Every number here is computed from real rows
@@ -32,7 +25,6 @@ export default async function AdminDashboardPage() {
     activeSubscriptions,
     allCompanyPaymentsForRevenue,
     paidEventRegistrations,
-    pendingApplications,
     pendingEventPayments,
     pendingReports,
     upcomingEvents,
@@ -66,11 +58,6 @@ export default async function AdminDashboardPage() {
     prisma.eventRegistration.findMany({
       where: { paymentStatus: "PAID" },
       select: { createdAt: true, event: { select: { price: true } } },
-    }),
-    prisma.membershipApplication.findMany({
-      where: { status: "PENDING" },
-      orderBy: { createdAt: "asc" },
-      take: 5,
     }),
     prisma.eventRegistration.count({ where: { paymentStatus: "PENDING" } }),
     prisma.roomReport.count({ where: { status: "PENDING" } }),
@@ -145,10 +132,6 @@ export default async function AdminDashboardPage() {
   );
 
   const alerts = [
-    pendingApplications.length > 0 && {
-      label: `${pendingApplications.length} candidature${pendingApplications.length > 1 ? "s" : ""} en attente`,
-      href: "/admin/candidatures",
-    },
     pendingEventPayments > 0 && {
       label: `${pendingEventPayments} paiement${pendingEventPayments > 1 ? "s" : ""} événement en attente`,
       href: "/admin/evenements",
@@ -177,7 +160,7 @@ export default async function AdminDashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
             <p className="text-2xl font-bold text-navy">{activeUsersCount}</p>
@@ -194,18 +177,6 @@ export default async function AdminDashboardPage() {
             <p className="mt-2 text-xs text-text-muted">
               Abonnement entreprise actif, réparti sur la durée du terme
             </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-navy">{pendingApplications.length}</p>
-            <p className="text-sm text-text-muted">Candidatures en attente</p>
-            <Link
-              href="/admin/candidatures"
-              className="mt-2 block text-xs font-semibold text-navy-mid"
-            >
-              Voir les candidatures →
-            </Link>
           </CardContent>
         </Card>
         <Card>
@@ -257,36 +228,6 @@ export default async function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle>Candidatures en attente</CardTitle>
-          <Link href="/admin/candidatures" className="text-xs font-semibold text-navy-mid">
-            Voir toutes →
-          </Link>
-        </CardHeader>
-        <CardContent>
-          {pendingApplications.length === 0 ? (
-            <p className="text-sm text-text-muted">Aucune candidature en attente.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {pendingApplications.map((application) => (
-                <div key={application.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <p className="font-semibold text-navy">{application.fullName}</p>
-                    <p className="text-xs text-text-muted">
-                      {application.title} · {application.companyName}
-                    </p>
-                  </div>
-                  <Badge variant={TIER_BADGE[application.requestedTier]}>
-                    {tierLabel(application.requestedTier)}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">

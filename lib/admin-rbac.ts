@@ -8,7 +8,6 @@ import type { AdminRole } from "@prisma/client";
  */
 export const ADMIN_SECTIONS = [
   "dashboard",
-  "candidatures",
   "membres",
   "evenements",
   "deal-room",
@@ -27,7 +26,6 @@ const SECTION_ACCESS: Record<AdminRole, "*" | AdminSection[]> = {
   SUPER_ADMIN: "*",
   MODERATEUR: [
     "dashboard",
-    "candidatures",
     "membres",
     "evenements",
     "deal-room",

@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ signIn: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: vi.fn(), useSearchParams: vi.fn() }));
-vi.mock("@/components/auth/resend-activation-form", () => ({ ResendActivationForm: () => null }));
 
 import { sanitizeCallbackUrl } from "./login-form";
 

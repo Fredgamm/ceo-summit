@@ -3,15 +3,11 @@ import Link from "next/link";
 
 export const metadata: Metadata = { title: "Conditions d'utilisation" };
 
-/**
- * B1 (audit RGPD du 29 juillet 2026) — même statut que /confidentialite :
- * page créée pour éviter un lien mort depuis /demande-acces, contenu à
- * finaliser avec un conseil juridique.
- */
+/** Brouillon — contenu à finaliser avec un conseil juridique (audit 17, §1.2). */
 export default function TermsOfUsePage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
-      <Link href="/demande-acces" className="mb-6 inline-block text-sm text-text-muted">
+      <Link href="/" className="mb-6 inline-block text-sm text-text-muted">
         ← Retour
       </Link>
 

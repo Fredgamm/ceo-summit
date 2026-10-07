@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ResendActivationForm } from "@/components/auth/resend-activation-form";
 
 const loginSchema = z.object({
   email: z.string().min(1, "L'email est requis").email("Adresse email invalide"),
@@ -29,8 +28,7 @@ const loginSchema = z.object({
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   ACCOUNT_SUSPENDED: "Votre compte est suspendu. Contactez l'équipe CEO Summit.",
   ACCOUNT_EXPIRED: "Votre adhésion a expiré. Contactez l'équipe CEO Summit pour la renouveler.",
-  ACCOUNT_PENDING_ACTIVATION:
-    "Ce compte n'a pas encore été activé. Demandez un nouveau lien d'activation ci-dessous.",
+  ACCOUNT_PENDING_ACTIVATION: "Ce compte n'a pas encore été activé. Contactez l'équipe CEO Summit.",
   RATE_LIMITED: "Trop de tentatives de connexion. Réessayez dans quelques minutes.",
 };
 
@@ -176,12 +174,6 @@ export function LoginForm() {
           {loading ? "Connexion…" : "Se connecter"}
         </Button>
       </form>
-
-      {formError === "ACCOUNT_PENDING_ACTIVATION" && (
-        <div className="mt-4 border-t border-border pt-4">
-          <ResendActivationForm />
-        </div>
-      )}
 
       <Alert variant="gold" className="mt-5">
         <Lock />

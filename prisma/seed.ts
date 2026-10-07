@@ -689,44 +689,6 @@ async function main() {
     },
   });
 
-  // ── Membership applications (E8-T02 dashboard demo data) ──
-  await prisma.membershipApplication.upsert({
-    where: { id: "app_sonia_bouchard" },
-    update: {},
-    create: {
-      id: "app_sonia_bouchard",
-      fullName: "Sonia Bouchard",
-      email: "sonia.bouchard@totalenergies-oi.mg",
-      companyName: "TotalEnergies OI",
-      title: "Directrice Générale",
-      sector: "Énergie & Environnement",
-      country: "Madagascar",
-      motivation:
-        "Souhaite rejoindre le cercle pour développer des partenariats régionaux dans l'énergie.",
-      requestedTier: Tier.EXECUTIVE,
-      status: "PENDING",
-      consentedAt: new Date(),
-    },
-  });
-
-  await prisma.membershipApplication.upsert({
-    where: { id: "app_ali_hassan" },
-    update: {},
-    create: {
-      id: "app_ali_hassan",
-      fullName: "Ali Hassan Moufida",
-      email: "ali.hassan@comores-invest.km",
-      companyName: "Comores Invest",
-      title: "CEO",
-      sector: "Finance & Banque",
-      country: "Comores",
-      motivation: "Recommandé par un membre actuel pour son expertise en investissement régional.",
-      requestedTier: Tier.CHAIRMAN,
-      status: "PENDING",
-      consentedAt: new Date(),
-    },
-  });
-
   console.log("✅ Seed complete.");
   console.log("   Admin:  admin@ceo-summit.mg / ChangeMe123!");
   console.log("   Member: demo@ceo-summit.mg / Demo1234!");

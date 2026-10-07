@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import type { AdminRole } from "@prisma/client";
 import {
   Home,
-  ClipboardList,
   Users,
   CalendarDays,
   Diamond,
@@ -30,7 +29,7 @@ const SECTIONS: {
     label: string;
     icon: typeof Home;
     section: AdminSection;
-    badgeKey?: "candidatures" | "opportunities" | "companies";
+    badgeKey?: "opportunities" | "companies";
   }[];
 }[] = [
   {
@@ -39,16 +38,7 @@ const SECTIONS: {
   },
   {
     title: "Membres",
-    items: [
-      {
-        href: "/admin/candidatures",
-        label: "Candidatures",
-        icon: ClipboardList,
-        section: "candidatures",
-        badgeKey: "candidatures",
-      },
-      { href: "/admin/membres", label: "Membres", icon: Users, section: "membres" },
-    ],
+    items: [{ href: "/admin/membres", label: "Membres", icon: Users, section: "membres" }],
   },
   {
     title: "Contenu",
@@ -100,7 +90,7 @@ const SECTIONS: {
 
 interface AdminSidebarProps {
   admin: { name: string; email: string; role: AdminRole };
-  badges?: Partial<Record<"candidatures" | "opportunities" | "companies", number>>;
+  badges?: Partial<Record<"opportunities" | "companies", number>>;
 }
 
 /**
