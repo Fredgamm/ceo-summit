@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User, Building2 } from "lucide-react";
+import { Home, LayoutGrid, User, Building2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/dashboard", label: "Accueil", icon: Home },
+  { href: "/catalogue", label: "Membres", icon: LayoutGrid },
   { href: "/profil", label: "Profil", icon: User },
   { href: "/entreprise", label: "Mon Entreprise", icon: Building2 },
 ];
