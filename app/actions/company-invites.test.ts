@@ -45,25 +45,11 @@ vi.mock("qrcode", () => ({
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
-import {
-  inviteTeammate,
-  resendInvite,
-  revokeInvite,
-  acceptCompanyInvite,
-  setAdminParticipates,
-} from "./company-invites";
+import { inviteTeammate, resendInvite, revokeInvite, acceptCompanyInvite } from "./company-invites";
 
 const VIEWER = { id: "admin_user_1", name: "Jean Rakoto", email: "jean@example.mg" };
 const FUTURE = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 const PAST = new Date(Date.now() - 24 * 60 * 60 * 1000);
-const EVENT = {
-  id: "event_1",
-  title: "CEO Summit 2026",
-  date: new Date("2099-11-15T09:00:00Z"),
-  isOnline: false,
-  location: "Saint-Denis",
-  capacity: 300,
-};
 
 function activeSubscription(overrides: Record<string, unknown> = {}) {
   return {
@@ -428,71 +414,12 @@ describe("acceptCompanyInvite", () => {
     );
   });
 
-  it("registers the new collaborator to the linked event when the subscription is ACTIVE (RG-14)", async () => {
+  it("no longer registers the collaborator to the event: the manager's validated list does (module 18 §4.9)", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       status: "ACTIVE",
       declaredParticipants: null,
       extraSeats: 0,
       plan: { id: "plan_1", eventId: "event_1", maxTeamMembers: null },
-    } as never);
-    vi.mocked(prisma.event.findUnique).mockResolvedValue(EVENT as never);
-    vi.mocked(prisma.eventRegistration.upsert).mockResolvedValue({} as never);
-
-    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
-
-    expect(prisma.eventRegistration.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { eventId_userId: { eventId: "event_1", userId: "user_new" } },
-        create: expect.objectContaining({
-          eventId: "event_1",
-          userId: "user_new",
-          planId: "plan_1",
-        }),
-      })
-    );
-    expect(sendTransactionalEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: expect.stringContaining("CEO Summit 2026") })
-    );
-  });
-
-  it("does not attempt to email a badge when the event is full (no registration created)", async () => {
-    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
-      status: "ACTIVE",
-      declaredParticipants: null,
-      extraSeats: 0,
-      plan: { id: "plan_1", eventId: "event_1", maxTeamMembers: null },
-    } as never);
-    vi.mocked(prisma.event.findUnique).mockResolvedValue({ ...EVENT, capacity: 10 } as never);
-    vi.mocked(prisma.eventRegistration.count).mockResolvedValue(10);
-
-    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
-
-    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
-    expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
-    expect(sendTransactionalEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: expect.stringContaining("Bienvenue") })
-    );
-  });
-
-  it("does not register to the event when the subscription has EXPIRED (past edition)", async () => {
-    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
-      status: "EXPIRED",
-      declaredParticipants: null,
-      extraSeats: 0,
-      plan: { id: "plan_1", eventId: "event_1", maxTeamMembers: null },
-    } as never);
-
-    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
-
-    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
-  });
-
-  it("does not register to any event for a platform-only plan (no eventId)", async () => {
-    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
-      status: "ACTIVE",
-      declaredParticipants: null,
-      extraSeats: 0,
-      plan: { id: "plan_1", eventId: null, maxTeamMembers: null },
     } as never);
 
     await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
@@ -521,108 +448,5 @@ describe("acceptCompanyInvite", () => {
     const result = await acceptCompanyInvite("token_1", PASSWORD, "Different1");
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
-  });
-});
-
-describe("setAdminParticipates", () => {
-  const EVENT_SUBSCRIPTION = activeSubscription({
-    plan: {
-      id: "plan_1",
-      eventId: "event_1",
-      event: EVENT,
-      pricingMode: "FIXED_BUNDLE",
-      maxTeamMembers: 3,
-    },
-  });
-
-  it("only flips the flag while the subscription isn't ACTIVE", async () => {
-    vi.mocked(prisma.company.findUnique).mockResolvedValue(
-      company({ subscription: { ...EVENT_SUBSCRIPTION, status: "PENDING_REVIEW" } }) as never
-    );
-
-    const result = await setAdminParticipates("company_1", true);
-    expect(result.success).toBe(true);
-    expect(prisma.company.update).toHaveBeenCalledWith({
-      where: { id: "company_1" },
-      data: { adminParticipates: true },
-    });
-    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
-    expect(prisma.eventRegistration.updateMany).not.toHaveBeenCalled();
-  });
-
-  it("registers the admin to the event when checking the box on an ACTIVE subscription", async () => {
-    vi.mocked(prisma.company.findUnique).mockResolvedValue(
-      company({ subscription: EVENT_SUBSCRIPTION }) as never
-    );
-    vi.mocked(prisma.event.findUnique).mockResolvedValue(EVENT as never);
-    vi.mocked(prisma.eventRegistration.upsert).mockResolvedValue({} as never);
-
-    const result = await setAdminParticipates("company_1", true);
-    expect(result).toEqual({ success: true, data: undefined });
-    expect(prisma.eventRegistration.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { eventId_userId: { eventId: "event_1", userId: "admin_user_1" } },
-        create: expect.objectContaining({ status: "CONFIRMED", planId: "plan_1" }),
-      })
-    );
-    expect(sendTransactionalEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "jean@example.mg" })
-    );
-  });
-
-  it("is never blocked by the offer's seat cap (product choice), only by event capacity", async () => {
-    vi.mocked(prisma.company.findUnique).mockResolvedValue(
-      company({ subscription: EVENT_SUBSCRIPTION }) as never
-    );
-    vi.mocked(prisma.user.count).mockResolvedValue(3);
-    vi.mocked(prisma.event.findUnique).mockResolvedValue(EVENT as never);
-
-    const result = await setAdminParticipates("company_1", true);
-    expect(result.success).toBe(true);
-    expect(prisma.eventRegistration.upsert).toHaveBeenCalled();
-  });
-
-  it("keeps the choice but warns when the event is full", async () => {
-    vi.mocked(prisma.company.findUnique).mockResolvedValue(
-      company({ subscription: EVENT_SUBSCRIPTION }) as never
-    );
-    vi.mocked(prisma.event.findUnique).mockResolvedValue({ ...EVENT, capacity: 5 } as never);
-    vi.mocked(prisma.eventRegistration.count).mockResolvedValue(5);
-
-    const result = await setAdminParticipates("company_1", true);
-    expect(result).toEqual({
-      success: true,
-      data: undefined,
-      warning: expect.stringContaining("complet"),
-    });
-    expect(prisma.company.update).toHaveBeenCalled();
-    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
-  });
-
-  it("cancels the admin's registration when unchecking the box", async () => {
-    vi.mocked(prisma.company.findUnique).mockResolvedValue(
-      company({ adminParticipates: true, subscription: EVENT_SUBSCRIPTION }) as never
-    );
-
-    const result = await setAdminParticipates("company_1", false);
-    expect(result.success).toBe(true);
-    expect(prisma.eventRegistration.updateMany).toHaveBeenCalledWith({
-      where: {
-        eventId: "event_1",
-        userId: "admin_user_1",
-        status: { not: "CANCELLED" },
-      },
-      data: { status: "CANCELLED" },
-    });
-  });
-
-  it("rejects a caller who isn't the company admin", async () => {
-    vi.mocked(prisma.company.findUnique).mockResolvedValue(
-      company({ companyAdminId: "someone_else" }) as never
-    );
-
-    const result = await setAdminParticipates("company_1", true);
-    expect(result.success).toBe(false);
-    expect(prisma.company.update).not.toHaveBeenCalled();
   });
 });

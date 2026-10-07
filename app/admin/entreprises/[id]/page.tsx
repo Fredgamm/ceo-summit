@@ -12,6 +12,8 @@ import { ReassignAdminForm } from "@/components/admin/entreprises/reassign-admin
 import { formatAriary, formatDateFr } from "@/lib/utils";
 import { isPartnerOffer } from "@/lib/partner-offers";
 import { PartnerSettingsForm } from "@/components/admin/partners/partner-settings-form";
+import { EvoliaPushResendButton } from "@/components/admin/entreprises/evolia-push-resend-button";
+import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 
 export const metadata: Metadata = { title: "Admin — Entreprise" };
 
@@ -21,6 +23,18 @@ const METHOD_LABEL: Record<string, string> = {
   CARTE_BANCAIRE: "Carte bancaire",
   MOBILE_MONEY: "Mobile Money",
 };
+
+const EVOLIA_EVENT_LABEL: Record<string, string> = {
+  "company.registration.pushed": "Inscription / paiement",
+  "company.participants.confirmed": "Liste des participants",
+};
+
+const EVOLIA_STATUS: Record<string, { label: string; variant: "pending" | "active" | "refused" }> =
+  {
+    PENDING: { label: "En cours", variant: "pending" },
+    SENT: { label: "Reçu", variant: "active" },
+    FAILED: { label: "Échec", variant: "refused" },
+  };
 
 /** Phase 2 offres/paiement (30 juillet 2026) — détail entreprise + revue paiement. */
 export default async function AdminCompanyDetailPage({ params }: { params: { id: string } }) {
@@ -46,6 +60,12 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
   });
   if (!company) notFound();
 
+  const evoliaPushes = await prisma.evoliaPush.findMany({
+    where: { companyId: company.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
   // Audit (25 septembre 2026) — tous les paiements en attente, pas seulement
   // le plus récent : un paiement initial et un supplément (ou deux
   // soumissions successives) pouvaient coexister, l'un restant invisible —
@@ -59,6 +79,8 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
   const pendingWithProof = await Promise.all(
     pendingPayments.map(async (payment) => {
       let proofUrl: string | null = null;
+      // Carte / Mobile Money : pas de preuve, Evolia confirme par webhook.
+      if (isEvoliaPaymentMethod(payment.method)) return { payment, proofUrl };
       try {
         proofUrl = await getSignedDownloadUrl(
           process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
@@ -162,7 +184,13 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
               </div>
             )}
           </dl>
-          {proofUrl ? (
+          {isEvoliaPaymentMethod(payment.method) ? (
+            <p className="mt-3 text-xs text-text-muted">
+              Paiement en cours chez Evolia : il sera confirmé automatiquement à réception de leur
+              notification. Ne le confirmez à la main que si Evolia vous a confirmé
+              l&apos;encaissement par un autre canal.
+            </p>
+          ) : proofUrl ? (
             <div className="mt-3">
               <PaymentProofViewer url={proofUrl} fileName={payment.proofFileKey} />
             </div>
@@ -176,6 +204,35 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
           </div>
         </div>
       ))}
+
+      {evoliaPushes.length > 0 && (
+        <div className="rounded-lg border border-border bg-white p-6">
+          <h2 className="mb-3 text-base font-bold text-navy">Envois à Evolia</h2>
+          <ul className="flex flex-col divide-y divide-border text-sm">
+            {evoliaPushes.map((push) => {
+              const status = EVOLIA_STATUS[push.status];
+              return (
+                <li key={push.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-navy">
+                      {EVOLIA_EVENT_LABEL[push.event] ?? push.event}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      {formatDateFr(push.createdAt)} · {push.attempts} tentative(s)
+                      {push.httpStatus != null && ` · HTTP ${push.httpStatus}`}
+                    </p>
+                    {push.status === "FAILED" && push.lastError && (
+                      <p className="mt-1 break-words text-xs text-red-700">{push.lastError}</p>
+                    )}
+                  </div>
+                  <Badge variant={status.variant}>{status.label}</Badge>
+                  {push.status !== "SENT" && <EvoliaPushResendButton pushId={push.id} />}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       <div className="rounded-lg border border-border bg-white p-6">
         <h2 className="mb-3 text-base font-bold text-navy">Membres ({company.users.length})</h2>

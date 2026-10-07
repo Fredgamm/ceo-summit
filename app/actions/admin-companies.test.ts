@@ -36,11 +36,16 @@ vi.mock("@/lib/event-registration-lock", async (importOriginal) => {
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/evolia", () => ({
+  pushRegistrationToEvolia: vi.fn().mockResolvedValue(undefined),
+  pushParticipantsToEvolia: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { sendTransactionalEmail } from "@/lib/resend";
+import { pushRegistrationToEvolia } from "@/lib/evolia";
 import {
   confirmCompanyPayment,
   rejectCompanyPayment,
@@ -170,7 +175,7 @@ describe("confirmCompanyPayment", () => {
     expect(result.success).toBe(true);
   });
 
-  it("registers every current company member to the linked event when the plan is event-scoped", async () => {
+  it("no longer registers members to the linked event: the manager's validated list does (module 18 §4.9)", async () => {
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
       ...PAYMENT_BASE,
       companySubscription: {
@@ -179,126 +184,32 @@ describe("confirmCompanyPayment", () => {
       },
     } as never);
 
-    await confirmCompanyPayment("payment_1");
+    const result = await confirmCompanyPayment("payment_1");
 
-    expect(prisma.eventRegistration.upsert).toHaveBeenCalledTimes(2);
-    expect(prisma.eventRegistration.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { eventId_userId: { eventId: "event_1", userId: "user_1" } },
-        create: expect.objectContaining({ eventId: "event_1", userId: "user_1", planId: "plan_1" }),
-      })
-    );
+    expect(result.success).toBe(true);
+    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
   });
 
-  function eventPayment(
-    company: Record<string, unknown>,
-    subscription: Record<string, unknown> = {}
-  ) {
-    return {
+  it("pushes a bank transfer to Evolia for information once confirmed", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
       ...PAYMENT_BASE,
-      companySubscription: {
-        ...PAYMENT_BASE.companySubscription,
-        declaredParticipants: null,
-        extraSeats: 0,
-        plan: {
-          id: "plan_1",
-          eventId: "event_1",
-          pricingMode: "FIXED_BUNDLE",
-          maxTeamMembers: null,
-        },
-        ...subscription,
-        company: { ...PAYMENT_BASE.companySubscription.company, ...company },
-      },
-    };
-  }
-
-  function registeredUserIds() {
-    return vi
-      .mocked(prisma.eventRegistration.upsert)
-      .mock.calls.map((c) => (c[0] as { create: { userId: string } }).create.userId);
-  }
-
-  it("does not register the company admin to the event unless they ticked « Je participe »", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
-      eventPayment({
-        companyAdminId: "admin_member",
-        adminParticipates: false,
-        users: [
-          { id: "admin_member", status: "ACTIVE" },
-          { id: "user_1", status: "ACTIVE" },
-        ],
-      }) as never
-    );
+      method: "VIREMENT",
+    } as never);
 
     await confirmCompanyPayment("payment_1");
-    expect(registeredUserIds()).toEqual(["user_1"]);
+
+    expect(pushRegistrationToEvolia).toHaveBeenCalledWith("payment_1");
   });
 
-  it("registers the company admin when they ticked « Je participe »", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
-      eventPayment({
-        companyAdminId: "admin_member",
-        adminParticipates: true,
-        users: [
-          { id: "admin_member", status: "ACTIVE" },
-          { id: "user_1", status: "ACTIVE" },
-        ],
-      }) as never
-    );
-
-    await confirmCompanyPayment("payment_1");
-    expect(registeredUserIds()).toEqual(["admin_member", "user_1"]);
-  });
-
-  it("skips members whose account isn't ACTIVE", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
-      eventPayment({
-        users: [
-          { id: "user_1", status: "ACTIVE" },
-          { id: "user_suspended", status: "SUSPENDED" },
-          { id: "user_excluded", status: "CANCELLED" },
-        ],
-      }) as never
-    );
-
-    await confirmCompanyPayment("payment_1");
-    expect(registeredUserIds()).toEqual(["user_1"]);
-  });
-
-  it("never registers more participants than the offer's seat cap, oldest accounts first", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
-      eventPayment(
-        {
-          users: [
-            { id: "user_1", status: "ACTIVE" },
-            { id: "user_2", status: "ACTIVE" },
-            { id: "user_3", status: "ACTIVE" },
-          ],
-        },
-        {
-          extraSeats: 0,
-          plan: {
-            id: "plan_1",
-            eventId: "event_1",
-            pricingMode: "FIXED_BUNDLE",
-            maxTeamMembers: 2,
-          },
-        }
-      ) as never
-    );
+  it("does not push again a card payment, already sent to Evolia when it started", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...PAYMENT_BASE,
+      method: "CARTE_BANCAIRE",
+    } as never);
 
     await confirmCompanyPayment("payment_1");
 
-    expect(registeredUserIds()).toEqual(["user_1", "user_2"]);
-    expect(warnSpy).toHaveBeenCalled();
-    expect(prisma.auditLog.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        action: "company_payment.confirm",
-        metadata: expect.objectContaining({ skippedForSeatCap: 1 }),
-      }),
-    });
-    warnSpy.mockRestore();
+    expect(pushRegistrationToEvolia).not.toHaveBeenCalled();
   });
 
   it("does not touch EventRegistration for a standard (non-event) plan", async () => {

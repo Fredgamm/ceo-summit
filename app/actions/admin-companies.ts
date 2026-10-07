@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
+import { deliverEvoliaPush } from "@/lib/evolia";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { resolveEmail } from "@/lib/email-template-resolver";
 
@@ -186,5 +187,36 @@ export async function reassignCompanyAdmin(
 
   revalidatePath(`/admin/entreprises/${companyId}`);
   revalidatePath(`/entreprises/${companyId}`);
+  return { success: true, data: undefined };
+}
+
+/**
+ * Intégration Evolia (8 oct. 2026) — renvoie un envoi journalisé, tel quel,
+ * après un échec (Evolia indisponible, secret pas encore configuré…).
+ */
+export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
+  const { userId: adminId } = await requireAdmin("entreprises");
+
+  const push = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
+  if (!push) return { success: false, error: "Envoi introuvable." };
+
+  const delivered = await deliverEvoliaPush(pushId);
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: "evolia_push.resend",
+      targetType: "EvoliaPush",
+      targetId: pushId,
+      metadata: { delivered },
+    },
+  });
+  revalidatePath(`/admin/entreprises/${push.companyId}`);
+  if (!delivered) {
+    const updated = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
+    return {
+      success: false,
+      error: `Evolia n'a pas accepté l'envoi : ${updated?.lastError ?? "erreur inconnue"}`,
+    };
+  }
   return { success: true, data: undefined };
 }

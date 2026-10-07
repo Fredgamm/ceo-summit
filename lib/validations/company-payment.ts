@@ -10,14 +10,33 @@ export const COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES = [
 ];
 
 /**
- * Seuls virement et chèque (preuve validée par l'admin) mènent à un paiement
- * réel aujourd'hui ; carte et Mobile Money attendent le pont Evolia
- * (lib/payment-methods.ts). Le formulaire les désactive, le serveur les
- * refuse aussi pour qu'un appel direct à l'action ne les enregistre pas.
+ * Virement et chèque : preuve validée par l'admin. Carte et Mobile Money :
+ * encaissés par Evolia (lib/evolia.ts), qui confirme par webhook.
  */
-const companyPaymentMethodSchema = z.enum(["VIREMENT", "CHEQUE"], {
-  errorMap: () => ({ message: "Seuls le virement et le chèque sont disponibles pour le moment." }),
-});
+const companyPaymentMethodSchema = z.enum(
+  ["VIREMENT", "CHEQUE", "CARTE_BANCAIRE", "MOBILE_MONEY"],
+  {
+    errorMap: () => ({ message: "Mode de paiement invalide." }),
+  }
+);
+
+/**
+ * Intégration Evolia (8 oct. 2026) — carte et Mobile Money sont encaissés par
+ * Evolia, sans preuve ; virement et chèque gardent leur preuve obligatoire.
+ */
+function requireProofForManualMethods(
+  data: { method: string; proofFileKey: string },
+  ctx: z.RefinementCtx
+) {
+  const manual = data.method === "VIREMENT" || data.method === "CHEQUE";
+  if (manual && !data.proofFileKey) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["proofFileKey"],
+      message: "La preuve de paiement est requise",
+    });
+  }
+}
 
 /**
  * Phase 2ter (1er août 2026) — `amount` retiré : le montant est désormais
@@ -30,12 +49,14 @@ const companyPaymentMethodSchema = z.enum(["VIREMENT", "CHEQUE"], {
  * elle-même). Validé conditionnellement dans submitPaymentProof, pas ici
  * (dépend du pricingMode du plan, pas connu du schéma).
  */
-export const submitPaymentProofSchema = z.object({
-  method: companyPaymentMethodSchema,
-  proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
-  comment: z.string().trim().max(1000).optional().default(""),
-  declaredParticipants: z.coerce.number().int().min(1).optional(),
-});
+export const submitPaymentProofSchema = z
+  .object({
+    method: companyPaymentMethodSchema,
+    proofFileKey: z.string().optional().default(""),
+    comment: z.string().trim().max(1000).optional().default(""),
+    declaredParticipants: z.coerce.number().int().min(1).optional(),
+  })
+  .superRefine(requireProofForManualMethods);
 
 /**
  * Audit (25 septembre 2026) — `CompanyPayment.amount` est un `Int`
@@ -52,14 +73,16 @@ export const MAX_UPSELL_QUANTITY = 500;
  * mécanique de preuve que `submitPaymentProofSchema`, plus la quantité —
  * le montant (`unitPriceAr × quantity`) reste calculé côté serveur.
  */
-export const purchaseUpsellSeatsSchema = z.object({
-  upsellPlanId: z.string().min(1),
-  quantity: z.coerce
-    .number()
-    .int()
-    .min(1, "Indiquez au moins 1")
-    .max(MAX_UPSELL_QUANTITY, `Au plus ${MAX_UPSELL_QUANTITY} places par achat`),
-  method: companyPaymentMethodSchema,
-  proofFileKey: z.string().min(1, "La preuve de paiement est requise"),
-  comment: z.string().trim().max(1000).optional().default(""),
-});
+export const purchaseUpsellSeatsSchema = z
+  .object({
+    upsellPlanId: z.string().min(1),
+    quantity: z.coerce
+      .number()
+      .int()
+      .min(1, "Indiquez au moins 1")
+      .max(MAX_UPSELL_QUANTITY, `Au plus ${MAX_UPSELL_QUANTITY} places par achat`),
+    method: companyPaymentMethodSchema,
+    proofFileKey: z.string().optional().default(""),
+    comment: z.string().trim().max(1000).optional().default(""),
+  })
+  .superRefine(requireProofForManualMethods);

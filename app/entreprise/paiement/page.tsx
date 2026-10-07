@@ -10,6 +10,7 @@ import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { PlanPrice } from "@/components/entreprise/plan-price";
 import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { evoliaPaymentUrl } from "@/lib/evolia";
 import { pluralize } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Paiement" };
@@ -43,7 +44,21 @@ export default async function CompanyPaymentPage({
     prisma.company.findUnique({
       where: { id: viewer.companyId },
       include: {
-        subscription: { include: { plan: true } },
+        subscription: {
+          include: {
+            plan: true,
+            // Paiement carte / Mobile Money lancé chez Evolia, pas encore confirmé.
+            payments: {
+              where: {
+                status: "PENDING",
+                upsellQuantity: null,
+                method: { in: ["CARTE_BANCAIRE", "MOBILE_MONEY"] },
+              },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        },
       },
     }),
     getActivePlans({ selfServiceOnly: true }),
@@ -55,6 +70,7 @@ export default async function CompanyPaymentPage({
   if (company.subscription?.status === "ACTIVE") redirect(`/entreprises/${company.id}`);
 
   const subscription = company.subscription;
+  const pendingEvoliaPayment = subscription?.payments[0] ?? null;
 
   // Une offre d'évènement (Phase 2quater) n'apparaît pas dans la liste
   // standard (getActivePlans filtre eventId: null par défaut) — on
@@ -96,14 +112,29 @@ export default async function CompanyPaymentPage({
               l&apos;équipe CEO Summit validera ensuite votre inscription.
             </p>
 
-            {subscription.status === "PENDING_REVIEW" && (
-              <Alert className="mb-4">
-                <AlertDescription>
-                  Votre paiement est en cours de validation par l&apos;équipe CEO Summit —
-                  l&apos;accès de votre équipe s&apos;activera dès confirmation.
-                </AlertDescription>
-              </Alert>
-            )}
+            {subscription.status === "PENDING_REVIEW" &&
+              (pendingEvoliaPayment ? (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    Votre paiement par carte ou Mobile Money est en cours chez Evolia : l&apos;accès
+                    de votre équipe s&apos;activera dès qu&apos;Evolia nous l&apos;aura confirmé.
+                    Paiement interrompu ?{" "}
+                    <a
+                      href={evoliaPaymentUrl(pendingEvoliaPayment.id)}
+                      className="font-semibold text-navy underline"
+                    >
+                      Reprendre le paiement
+                    </a>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    Votre paiement est en cours de validation par l&apos;équipe CEO Summit —
+                    l&apos;accès de votre équipe s&apos;activera dès confirmation.
+                  </AlertDescription>
+                </Alert>
+              ))}
 
             {subscription.status === "PENDING_PAYMENT" && (
               <div className="mb-8 max-w-lg">

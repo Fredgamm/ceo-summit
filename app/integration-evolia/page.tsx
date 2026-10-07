@@ -19,7 +19,7 @@ export default function EvoliaIntegrationPage() {
       </p>
       <h1 className="mb-3 text-2xl font-bold text-navy">Intégration API — CEO Summit × Evolia</h1>
       <p className="mb-8 text-sm text-text-muted">
-        Version 1.5 — révisée le 25 septembre 2026. Remplace tout échange ou document antérieur
+        Version 1.6 — révisée le 8 octobre 2026. Remplace tout échange ou document antérieur
         (spécifications envoyées par email, export PDF/HTML) — c&apos;est cette page qui fait foi.
       </p>
 
@@ -31,16 +31,16 @@ export default function EvoliaIntegrationPage() {
               à interroger ni à récupérer chez nous.
             </strong>{" "}
             Deux appels <strong className="text-navy">HTTPS</strong> (jamais de HTTP en clair — voir
-            la note sécurité ci-dessous), chacun dans un sens, pas de redirection, pas d&apos;URL de
-            retour à gérer :
+            la note sécurité ci-dessous), chacun dans un sens. Pour un paiement par carte bancaire
+            ou Mobile Money, le gestionnaire est en outre redirigé vers votre page de paiement,{" "}
+            <code>https://event.aiolia.us/ceosummit/payment/{"{ceoSummitReference}"}</code> (voir
+            §3) :
           </p>
           <ol className="list-decimal pl-5">
             <li>
               Un utilisateur choisit une offre payante sur CEO Summit →{" "}
               <strong className="text-navy">CEO Summit vous pousse l&apos;inscription</strong> (
-              <code>POST</code> vers votre endpoint — son URL et votre méthode
-              d&apos;authentification préférée sont la seule chose qui nous manque pour commencer,
-              voir §3).
+              <code>POST</code> vers votre endpoint, signé en HMAC-SHA256 — voir §3).
             </li>
             <li>Vous encaissez ce paiement de votre côté, par le moyen de votre choix.</li>
             <li>
@@ -58,13 +58,13 @@ export default function EvoliaIntegrationPage() {
                 "1",
                 "CEO Summit → Evolia",
                 "Push d'inscription (entreprise + offre + participants)",
-                "⏳ En attente de votre endpoint (§3)",
+                "Endpoint et secret reçus le 8 octobre 2026 — voir §3",
               ],
               [
                 "2",
                 "Evolia → CEO Summit",
                 "Confirmation de paiement",
-                "🟡 Route en ligne, signature vérifiée — à relier à vos paiements une fois l'échange 1 construit (§2)",
+                "✅ Route en ligne, signature vérifiée — reliée aux paiements carte / Mobile Money lancés par l'échange 1 (§2)",
               ],
             ]}
           />
@@ -75,9 +75,9 @@ export default function EvoliaIntegrationPage() {
             données d&apos;entreprises et de participants en jeu. En plus du chiffrement du
             transport, l&apos;échange 2 (notre webhook, §2) exige une{" "}
             <strong>signature HMAC-SHA256</strong> sur chaque requête pour garantir que l&apos;appel
-            vient bien de vous — voir le détail en §2. Nous demandons la réciproque pour
-            l&apos;échange 1 (§3, point 1) : dites-nous comment vous voulez qu&apos;on
-            s&apos;authentifie auprès de votre endpoint.
+            vient bien de vous — voir le détail en §2. Réciproquement, chaque appel de
+            l&apos;échange 1 (§3) est signé en HMAC-SHA256 avec le secret que vous nous avez fourni
+            (<code>WEBHOOK_SECRET</code>) — voir §3, « Endpoint et authentification ».
           </Callout>
 
           <Callout>
@@ -102,12 +102,10 @@ export default function EvoliaIntegrationPage() {
           </p>
 
           <Callout>
-            <strong>Reste à construire côté CEO Summit avant les premiers appels réels :</strong> la
-            création d&apos;un paiement « à encaisser par Evolia » (et donc de la{" "}
-            <code>reference</code> à vous transmettre) et le push d&apos;inscription sortant (§3).
-            Vous pouvez néanmoins tester votre calcul de signature dès aujourd&apos;hui : un appel
-            correctement signé portant une référence inconnue renvoie <code>409</code> (et non{" "}
-            <code>401</code>).
+            <strong>Références réelles :</strong> chaque paiement carte / Mobile Money lancé sur CEO
+            Summit crée la <code>reference</code> (<code>ceoSummitReference</code> du push, §3) que
+            ce webhook attend. Pour tester votre calcul de signature : un appel correctement signé
+            portant une référence inconnue renvoie <code>409</code> (et non <code>401</code>).
           </Callout>
 
           <SubHeading>Requête attendue</SubHeading>
@@ -211,15 +209,50 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
 
         <Section title="3. Échange 1 — Push d'inscription (CEO Summit → Evolia)">
           <p>
-            <strong className="text-navy">
-              Ce qui manque pour clore l&apos;intégration — le seul appel que CEO Summit a besoin de
-              faire.
-            </strong>{" "}
-            CEO Summit inscrit l&apos;utilisateur qui a choisi une offre sur sa propre interface,
-            puis pousse ces informations vers vous en un seul appel. Vous encaissez ensuite le
-            paiement par le moyen de votre choix et confirmez via le webhook de l&apos;échange 2 une
-            fois le paiement reçu.
+            CEO Summit inscrit l&apos;entreprise qui a choisi une offre sur sa propre interface,
+            puis pousse ces informations vers vous en un seul appel. Pour un paiement par{" "}
+            <strong className="text-navy">carte bancaire ou Mobile Money</strong>, le gestionnaire
+            est ensuite <strong className="text-navy">redirigé vers votre page de paiement</strong>{" "}
+            :
           </p>
+          <Json>{`https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}`}</Json>
+          <p>
+            Vous encaissez le paiement et confirmez via le webhook de l&apos;échange 2 (§2) une fois
+            le paiement reçu. Tant que cette confirmation n&apos;est pas arrivée, l&apos;espace CEO
+            Summit du gestionnaire lui propose un lien « Reprendre le paiement » vers la même page
+            (paiement interrompu, onglet fermé…) : la page doit donc rester utilisable pour une même{" "}
+            <code>ceoSummitReference</code> tant qu&apos;elle n&apos;a pas été payée.
+          </p>
+
+          <SubHeading>Endpoint et authentification</SubHeading>
+          <ul className="list-disc pl-5">
+            <li>
+              <strong>URL :</strong>{" "}
+              <code>POST https://event.aiolia.us/integration/ceosummit/registrations</code>
+            </li>
+            <li>
+              <strong>Corps :</strong> JSON (<code>Content-Type: application/json</code>), un des
+              payloads ci-dessous.
+            </li>
+            <li>
+              <strong>Signature :</strong> en-tête{" "}
+              <code>X-Webhook-Signature: sha256=&lt;hex&gt;</code>, où <code>&lt;hex&gt;</code> est
+              le HMAC-SHA256 du <strong>corps brut</strong> de la requête avec votre{" "}
+              <code>WEBHOOK_SECRET</code> — même schéma que notre propre webhook (§2). Comparez en
+              temps constant.
+            </li>
+            <li>
+              <strong>Réponse attendue :</strong> tout code <code>2xx</code> vaut réception. Tout
+              autre code (ou absence de réponse sous 10 secondes) est journalisé en échec côté CEO
+              Summit et peut être renvoyé à l&apos;identique par un administrateur ; un même payload
+              peut donc vous parvenir plus d&apos;une fois.
+            </li>
+            <li>
+              <strong>Paiement carte / Mobile Money :</strong> si l&apos;appel échoue, CEO Summit ne
+              redirige pas le gestionnaire (rien ne pourrait être encaissé) : le paiement est annulé
+              de notre côté et il lui est proposé de réessayer ou de régler par virement.
+            </li>
+          </ul>
 
           <SubHeading>Déclencheurs</SubHeading>
           <p>Cet appel est envoyé à trois moments distincts, avec le même format :</p>
@@ -234,16 +267,22 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             </li>
             <li>
               <strong className="text-navy">Validation de la liste des participants</strong> — plus
-              tard, parfois plusieurs jours après le paiement, le gestionnaire compose depuis son
-              espace la liste réelle des personnes qui assisteront à l&apos;évènement.{" "}
+              tard, parfois plusieurs jours après le paiement, à sa prochaine connexion, le
+              gestionnaire coche depuis son espace, parmi les comptes de son entreprise, les
+              personnes qui assisteront à l&apos;évènement (lui-même compris s&apos;il y assiste),
+              dans la limite des places de son offre, puis valide la liste.{" "}
               <strong>C&apos;est ce déclencheur, pas le premier, qui fait foi</strong> pour générer
-              les accès et badges/QR.
+              les accès et badges/QR — chaque validation envoie un nouvel appel avec la liste à
+              jour.
             </li>
             <li>
               <strong className="text-navy">Ajout de participants au-delà du quota inclus</strong> —
               si l&apos;offre payée inclut un nombre limité de participants et que le gestionnaire
               veut en ajouter davantage, la plateforme lui propose un supplément payant. Une fois ce
-              paiement additionnel validé, un nouveau push part avec la liste mise à jour.
+              paiement additionnel validé (via Evolia ou virement), un{" "}
+              <code>company.participants.confirmed</code> repart avec la capacité totale mise à jour
+              si la liste avait déjà été validée, puis à chaque nouvelle validation de la liste par
+              le gestionnaire.
             </li>
           </ol>
           <p>
@@ -285,12 +324,21 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
   "currency": "MGA",
   "company": {
     "name": "Groupe Exemple SA",
-    "sector": "Fintech"
+    "sector": "Fintech",
+    "country": "Madagascar"
   },
   "offer": {
     "name": "Executive corporate pass",
     "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026",
     "includedParticipants": 10
+  },
+  "eventDetails": {
+    "id": "evt_ceo2026",
+    "title": "CEO Summit 2026",
+    "startsAt": "2026-11-15T08:30:00+03:00",
+    "endsAt": "2026-11-15T18:00:00+03:00",
+    "timezone": "Indian/Antananarivo",
+    "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
     { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true }
@@ -305,15 +353,23 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
           <Json>{`{
   "event": "company.participants.confirmed",
   "companyId": "cmp_8f21ab",
-  "ceoSummitReference": "cmp_9f2ab3d8e1",
   "company": {
     "name": "Groupe Exemple SA",
-    "sector": "Fintech"
+    "sector": "Fintech",
+    "country": "Madagascar"
   },
   "offer": {
     "name": "Executive corporate pass",
     "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026",
     "includedParticipants": 10
+  },
+  "eventDetails": {
+    "id": "evt_ceo2026",
+    "title": "CEO Summit 2026",
+    "startsAt": "2026-11-15T08:30:00+03:00",
+    "endsAt": "2026-11-15T18:00:00+03:00",
+    "timezone": "Indian/Antananarivo",
+    "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
     { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true },
@@ -330,7 +386,10 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             c&apos;est le prix d&apos;une offre configurée par l&apos;admin CEO Summit comme
             n&apos;importe quelle autre (ex. un pass à l&apos;unité, ou une offre groupée par lot de
             places), donc <code>amountDue</code> reflète le prix réel de l&apos;offre supplément
-            choisie, multiplié par la quantité achetée — toujours en Ariary :
+            choisie, multiplié par la quantité achetée — toujours en Ariary.{" "}
+            <code>participants</code> y reprend la liste confirmée à cet instant ; la personne
+            ajoutée y entrera quand le gestionnaire validera de nouveau sa liste, une fois la place
+            payée :
           </p>
           <Json>{`{
   "event": "company.registration.pushed",
@@ -341,15 +400,25 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
   "currency": "MGA",
   "company": {
     "name": "Groupe Exemple SA",
-    "sector": "Fintech"
+    "sector": "Fintech",
+    "country": "Madagascar"
   },
   "offer": {
     "name": "Supplément — 1 participant additionnel",
     "description": "Ajout d'un participant au-delà du quota inclus dans l'offre initiale",
     "includedParticipants": 1
   },
+  "eventDetails": {
+    "id": "evt_ceo2026",
+    "title": "CEO Summit 2026",
+    "startsAt": "2026-11-15T08:30:00+03:00",
+    "endsAt": "2026-11-15T18:00:00+03:00",
+    "timezone": "Indian/Antananarivo",
+    "location": "Carlton Anosy, Antananarivo"
+  },
   "participants": [
-    { "fullName": "Mialy Rasoanaivo", "email": "mialy@exemple.mg", "isInitiator": false }
+    { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true },
+    { "fullName": "Hery Andria", "email": "hery@exemple.mg", "isInitiator": false }
   ]
 }`}</Json>
 
@@ -363,6 +432,10 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               [
                 "paymentMethod",
                 `Moyen de paiement enregistré par CEO Summit : "CARTE_BANCAIRE" ou "MOBILE_MONEY" (à encaisser par vos soins), "VIREMENT" ou "CHEQUE" (déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
+              ],
+              [
+                "eventDetails",
+                'Événement auquel l\'offre donne accès : startsAt et endsAt (début et fin, date et heure) en ISO 8601 avec le décalage de Madagascar (+03:00), timezone toujours "Indian/Antananarivo", location ("En ligne" pour un événement en ligne). null si l\'offre ne donne accès à aucun événement.',
               ],
               [
                 "amountDue",
@@ -418,11 +491,12 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             <strong>Qui apparaît dans participants sur company.participants.confirmed.</strong> Le
             gestionnaire qui a inscrit l&apos;entreprise (<code>isInitiator: true</code>)
             n&apos;apparaît dans cette liste{" "}
-            <strong>que s&apos;il a lui-même déclaré participer à l&apos;évènement</strong> depuis
-            son espace CEO Summit — sinon il reste un compte administratif pur, jamais un
-            participant. Un gestionnaire peut inviter 5 collaborateurs sans jamais se déclarer
-            participant lui-même, auquel cas <code>participants</code> n&apos;en contiendra que 5,
-            sans <code>isInitiator: true</code>. Tous les participants sont poussés sous le même{" "}
+            <strong>que s&apos;il s&apos;est lui-même coché comme participant</strong> en validant
+            la liste depuis son espace CEO Summit — sinon il reste un compte administratif pur,
+            jamais un participant, même après validation de la liste par ses soins. Un gestionnaire
+            peut inviter 5 collaborateurs sans jamais se déclarer participant lui-même, auquel cas{" "}
+            <code>participants</code> n&apos;en contiendra que 5, sans{" "}
+            <code>isInitiator: true</code>. Tous les participants sont poussés sous le même{" "}
             <code>companyId</code>/nom d&apos;entreprise à chaque appel, quel que soit le moment où
             ils ont été ajoutés.
           </Callout>
@@ -430,8 +504,16 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
           <SubHeading>Ce dont nous avons besoin de votre part</SubHeading>
           <ol className="list-decimal pl-5">
             <li>
-              <strong className="text-navy">URL et méthode de votre endpoint</strong>, et
-              authentification attendue de notre part.
+              <s>URL et méthode de votre endpoint, et authentification attendue de notre part</s> —{" "}
+              <strong className="text-navy">reçus le 8 octobre 2026</strong> (voir « Endpoint et
+              authentification »).
+              <ul className="list-disc pl-5">
+                <li>
+                  <strong className="text-navy">Reste à confirmer :</strong> vos confirmations de
+                  paiement (§2) sont-elles signées avec le même <code>WEBHOOK_SECRET</code>, ou avec
+                  un secret distinct ?
+                </li>
+              </ul>
             </li>
             <li>
               Confirmation que <code>ceoSummitReference</code> soit bien porté tel quel jusqu&apos;à

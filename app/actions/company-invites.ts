@@ -16,9 +16,7 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammateSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
-import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { BCRYPT_ROUNDS } from "@/lib/password";
-import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
 
 /**
@@ -37,148 +35,6 @@ const EXISTING_ACCOUNT_ERROR =
   "Un compte existe déjà avec cet email — connectez-vous puis contactez l'admin de l'entreprise pour être rattaché.";
 
 class InviteAlreadyConsumedError extends Error {}
-
-type SubscriptionForEvent = {
-  status: Parameters<typeof computeEffectiveStatus>[0];
-  plan: { id: string; eventId: string | null; event?: { date: Date } | null };
-};
-
-/** Évènement de l'offre si l'abonnement est `ACTIVE` (statut effectif, RG-12), sinon `null`. */
-function activeEventOf(subscription: SubscriptionForEvent | null | undefined) {
-  if (!subscription) return null;
-  const effectiveStatus = computeEffectiveStatus(
-    subscription.status,
-    subscription.plan.event?.date
-  );
-  if (effectiveStatus !== "ACTIVE" || !subscription.plan.eventId) return null;
-  return { eventId: subscription.plan.eventId, planId: subscription.plan.id };
-}
-
-/**
- * Inscription d'un membre de l'entreprise à l'évènement de son offre —
- * mécanique RG-14 d'`acceptCompanyInvite` (verrou + capacité, voir plus
- * bas), partagée depuis le 25 septembre 2026 avec `setAdminParticipates`.
- * `null` si l'évènement est complet (ou introuvable). `wasConfirmed` :
- * l'inscription était déjà confirmée avant l'appel (aucun email à renvoyer).
- */
-async function registerCompanyMemberToEvent(userId: string, eventId: string, planId: string) {
-  return withEventRegistrationLock(eventId, async () => {
-    const existingRegistration = await prisma.eventRegistration.findUnique({
-      where: { eventId_userId: { eventId, userId } },
-    });
-    const [event, takenSpots] = await Promise.all([
-      prisma.event.findUnique({ where: { id: eventId } }),
-      prisma.eventRegistration.count({
-        where: { eventId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } },
-      }),
-    ]);
-    // Une inscription annulée ne réserve plus de place : comme une
-    // nouvelle, elle doit tenir dans la capacité restante.
-    const holdsSpot = existingRegistration != null && existingRegistration.status !== "CANCELLED";
-    const hasRoom = holdsSpot || !event || takenSpots < event.capacity;
-    if (!hasRoom || !event) return null;
-
-    const registration = await prisma.eventRegistration.upsert({
-      where: { eventId_userId: { eventId, userId } },
-      update: { status: "CONFIRMED", paymentStatus: "PAID", planId },
-      create: { eventId, userId, status: "CONFIRMED", paymentStatus: "PAID", planId },
-    });
-    return {
-      registration,
-      event,
-      wasConfirmed: existingRegistration?.status === "CONFIRMED",
-    };
-  });
-}
-
-async function sendEventRegistrationEmail(
-  user: { email: string; name: string },
-  event: { title: string; date: Date; isOnline: boolean; location: string },
-  logPrefix: string
-) {
-  try {
-    const resolvedEmail = await resolveEmail("event-registration", {
-      memberName: user.name,
-      eventTitle: event.title,
-      eventDateLabel: formatDateFr(event.date),
-      eventLocation: event.isOnline ? "En ligne" : event.location,
-    });
-    if (resolvedEmail) await sendTransactionalEmail({ to: user.email, ...resolvedEmail });
-  } catch (err) {
-    console.error(`[${logPrefix}] failed to send event registration email`, err);
-  }
-}
-
-/**
- * 22 septembre 2026 (`conception/12` §3.3) — case « Je participe » : bascule
- * si le gestionnaire lui-même consomme une place de l'offre. Ne bloque
- * jamais sur le plafond en l'activant — un gestionnaire qui se déclare
- * participant après coup, une fois le plafond atteint par ailleurs, doit
- * pouvoir le faire (c'est à lui de retirer un collaborateur si besoin,
- * pas à cette action de le faire à sa place).
- *
- * Audit (25 septembre 2026) — la case ne changeait que le décompte des
- * places : un gestionnaire qui la cochait après la validation du paiement
- * n'était jamais inscrit à l'évènement, et celui qui la décochait restait
- * inscrit. Une fois l'abonnement `ACTIVE` et lié à un évènement, elle
- * pilote aussi son `EventRegistration` : cocher l'inscrit (même mécanique
- * qu'`acceptCompanyInvite`, capacité de l'évènement vérifiée — toujours pas
- * le plafond de l'offre), décocher annule son inscription (comme
- * `cancelEventRegistration` : statut `CANCELLED`, jamais une inscription
- * déjà enregistrée sur place).
- */
-export async function setAdminParticipates(
-  companyId: string,
-  participates: boolean
-): Promise<ActionResult> {
-  const viewerResult = await requireViewer();
-  if (!viewerResult.success) return viewerResult;
-  const { viewer } = viewerResult;
-
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    include: { subscription: { include: { plan: { include: { event: true } } } } },
-  });
-  if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== viewer.id) {
-    return { success: false, error: "Seul l'admin de l'entreprise peut modifier ce choix." };
-  }
-
-  await prisma.company.update({
-    where: { id: companyId },
-    data: { adminParticipates: participates },
-  });
-
-  let warning: string | undefined;
-  const activeEvent = activeEventOf(company.subscription);
-  if (activeEvent) {
-    if (participates) {
-      const outcome = await registerCompanyMemberToEvent(
-        viewer.id,
-        activeEvent.eventId,
-        activeEvent.planId
-      );
-      if (!outcome) {
-        warning =
-          "Votre choix est enregistré, mais l'évènement est complet : vous n'avez pas pu y être inscrit(e). Contactez l'équipe CEO Summit.";
-      } else if (!outcome.wasConfirmed) {
-        await sendEventRegistrationEmail(viewer, outcome.event, "setAdminParticipates");
-      }
-    } else {
-      await prisma.eventRegistration.updateMany({
-        where: {
-          eventId: activeEvent.eventId,
-          userId: viewer.id,
-          status: { not: "CANCELLED" },
-        },
-        data: { status: "CANCELLED" },
-      });
-    }
-  }
-
-  revalidatePath(`/entreprises/${companyId}`);
-  return { success: true, data: undefined, ...(warning ? { warning } : {}) };
-}
 
 /**
  * Phase 2 offres/paiement (30 juillet 2026) — seul l'admin entreprise invite.
@@ -508,38 +364,9 @@ export async function acceptCompanyInvite(
     console.error("[acceptCompanyInvite] failed to send welcome email", err);
   }
 
-  /**
-   * RG-14 (4 août 2026) — un collaborateur invité APRÈS la confirmation du
-   * paiement de l'entreprise (le cas nominal de la décision "payer avant de
-   * rassembler les collaborateurs") n'était jamais inscrit à l'évènement :
-   * confirmCompanyPayment ne couvre que les membres déjà présents au
-   * moment de la confirmation. On rattrape ici, à l'acceptation — mais
-   * seulement si l'abonnement est encore ACTIVE (pas EXPIRED : inscrire
-   * quelqu'un à une édition déjà passée n'a pas de sens).
-   *
-   * Correctif (7 août 2026, audit) — statut effectif (`computeEffectiveStatus`,
-   * RG-12) plutôt que le statut brut en base, et inscription sérialisée par
-   * `withEventRegistrationLock` avec vérification de capacité (voir
-   * `registerCompanyMemberToEvent`) ; si l'évènement est complet,
-   * l'invitation est tout de même acceptée (l'entreprise a payé pour ce
-   * collaborateur) mais celui-ci n'est pas inscrit — cas limite qui
-   * nécessitera un suivi manuel admin, préférable à un dépassement
-   * silencieux de capacité.
-   *
-   * Correctif (7 août 2026) — email de confirmation d'inscription envoyé
-   * hors du verrou, sans bloquer l'acceptation en cas d'échec d'envoi.
-   */
-  const activeEvent = activeEventOf(subscription);
-  if (activeEvent) {
-    const outcome = await registerCompanyMemberToEvent(
-      newUser.id,
-      activeEvent.eventId,
-      activeEvent.planId
-    );
-    if (outcome) {
-      await sendEventRegistrationEmail(newUser, outcome.event, "acceptCompanyInvite");
-    }
-  }
+  // Module 18 §4.9 (8 oct. 2026) — plus d'inscription automatique à
+  // l'événement : c'est la liste des participants validée par le gérant qui
+  // inscrit (app/actions/company-participants.ts).
 
   return { success: true, data: { email: invite.email } };
 }

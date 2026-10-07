@@ -170,7 +170,7 @@ export function PaymentProofForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!proof) {
+    if (!isEvoliaMethod && !proof) {
       setError("Ajoutez une preuve de paiement avant de soumettre.");
       return;
     }
@@ -178,12 +178,17 @@ export function PaymentProofForm({
     try {
       const result = await submitPaymentProof(companySubscriptionId, {
         method,
-        proofFileKey: proof.key,
+        proofFileKey: isEvoliaMethod ? "" : proof!.key,
         comment,
         ...(isGroupOffer ? { declaredParticipants: declaredCount } : {}),
       });
       if (!result.success) {
         setError(result.error);
+        return;
+      }
+      if (result.data.redirectUrl) {
+        // Carte / Mobile Money : paiement chez Evolia, qui nous le confirme ensuite.
+        window.location.href = result.data.redirectUrl;
         return;
       }
       setSubmitted(true);
@@ -277,9 +282,9 @@ export function PaymentProofForm({
       {isEvoliaMethod ? (
         <Alert variant="gold">
           <AlertDescription>
-            Ce mode de paiement sera bientôt disponible — vous serez alors redirigé vers Evolia pour
-            le finaliser, sans preuve à fournir. En attendant, choisissez virement bancaire ou
-            chèque.
+            Vous allez être redirigé vers la page de paiement sécurisée d&apos;Evolia, notre
+            partenaire de paiement, pour régler par carte ou Mobile Money. Aucune preuve à fournir :
+            votre paiement est confirmé automatiquement.
           </AlertDescription>
         </Alert>
       ) : (
@@ -318,10 +323,10 @@ export function PaymentProofForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || switchingPlan || !meetsThreshold || isEvoliaMethod}
+        disabled={submitting || uploading || switchingPlan || !meetsThreshold}
         className="justify-center"
       >
-        {submitting ? "Envoi…" : "Soumettre pour validation"}
+        {submitting ? "Envoi…" : isEvoliaMethod ? "Payer avec Evolia" : "Soumettre pour validation"}
       </Button>
     </form>
   );

@@ -16,6 +16,8 @@ import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { getEurToArRate } from "@/lib/currency-conversion";
+import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -120,7 +122,7 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
 export async function submitPaymentProof(
   companySubscriptionId: string,
   input: unknown
-): Promise<ActionResult> {
+): Promise<ActionResult<PaymentSubmission>> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
@@ -157,7 +159,8 @@ export async function submitPaymentProof(
    * d'autre (preuve d'une autre entreprise, pièce jointe d'un tout autre
    * usage du bucket).
    */
-  if (!isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
+  const viaEvolia = isEvoliaPaymentMethod(f.method);
+  if (!viaEvolia && !isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
     return { success: false, error: "Preuve de paiement invalide." };
   }
 
@@ -192,14 +195,14 @@ export async function submitPaymentProof(
 
   // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour, pour l'export en euros.
   const eurToArRate = await getEurToArRate();
-  await prisma.$transaction([
+  const [payment] = await prisma.$transaction([
     prisma.companyPayment.create({
       data: {
         companySubscriptionId,
         amount,
         eurToArRate,
         method: f.method,
-        proofFileKey: f.proofFileKey,
+        proofFileKey: viaEvolia ? "" : f.proofFileKey,
         comment: f.comment || null,
         submittedById: viewer.id,
       },
@@ -212,6 +215,13 @@ export async function submitPaymentProof(
       },
     }),
   ]);
+
+  if (viaEvolia) {
+    const started = await startEvoliaCollection(payment.id, viewer.id, true);
+    revalidatePath(`/entreprises/${subscription.companyId}`);
+    revalidatePath("/entreprise/paiement");
+    return started;
+  }
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
@@ -231,7 +241,50 @@ export async function submitPaymentProof(
 
   revalidatePath(`/entreprises/${subscription.companyId}`);
   revalidatePath("/entreprise/paiement");
-  return { success: true, data: undefined };
+  return { success: true, data: { redirectUrl: null } };
+}
+
+/** Après l'enregistrement d'un paiement : où envoyer le gérant (page de paiement Evolia, ou nulle part). */
+type PaymentSubmission = { redirectUrl: string | null };
+
+const EVOLIA_UNAVAILABLE_MESSAGE =
+  "Le paiement par carte ou Mobile Money est momentanément indisponible. Réessayez dans quelques minutes, ou réglez par virement bancaire.";
+
+/**
+ * Intégration Evolia (8 oct. 2026, conception/11 §3) — carte et Mobile
+ * Money : l'inscription est transmise à Evolia, puis le gérant est redirigé
+ * vers leur page de paiement ; Evolia confirme ensuite sur notre webhook
+ * (app/api/webhooks/payments). Si Evolia ne reçoit pas l'inscription, rien
+ * ne pourrait être encaissé : le paiement est annulé (et l'abonnement repasse
+ * en attente de paiement pour une offre initiale) plutôt que de rester bloqué
+ * en revue.
+ */
+async function startEvoliaCollection(
+  paymentId: string,
+  viewerId: string,
+  revertSubscription: boolean
+): Promise<ActionResult<PaymentSubmission>> {
+  if (await pushRegistrationToEvolia(paymentId)) {
+    return { success: true, data: { redirectUrl: evoliaPaymentUrl(paymentId) } };
+  }
+  const payment = await prisma.companyPayment.update({
+    where: { id: paymentId },
+    data: {
+      status: "REJECTED",
+      reviewedAt: new Date(),
+      rejectionReason: "Transmission à Evolia impossible — paiement non lancé.",
+    },
+  });
+  if (revertSubscription) {
+    await prisma.companySubscription.update({
+      where: { id: payment.companySubscriptionId },
+      data: { status: "PENDING_PAYMENT" },
+    });
+  }
+  console.error(
+    `[startEvoliaCollection] push refused for payment ${paymentId} (viewer ${viewerId})`
+  );
+  return { success: false, error: EVOLIA_UNAVAILABLE_MESSAGE };
 }
 
 /**
@@ -245,7 +298,7 @@ export async function submitPaymentProof(
 export async function purchaseUpsellSeats(
   companySubscriptionId: string,
   input: unknown
-): Promise<ActionResult> {
+): Promise<ActionResult<PaymentSubmission>> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
@@ -293,7 +346,8 @@ export async function purchaseUpsellSeats(
   }
   const f = parsed.data;
 
-  if (!isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
+  const viaEvolia = isEvoliaPaymentMethod(f.method);
+  if (!viaEvolia && !isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
     return { success: false, error: "Preuve de paiement invalide." };
   }
 
@@ -322,19 +376,25 @@ export async function purchaseUpsellSeats(
     };
   }
 
-  await prisma.companyPayment.create({
+  const payment = await prisma.companyPayment.create({
     data: {
       companySubscriptionId,
       amount,
       eurToArRate: await getEurToArRate(),
       method: f.method,
-      proofFileKey: f.proofFileKey,
+      proofFileKey: viaEvolia ? "" : f.proofFileKey,
       comment: f.comment || null,
       submittedById: viewer.id,
       upsellPlanId: upsellPlan.id,
       upsellQuantity: f.quantity,
     },
   });
+
+  if (viaEvolia) {
+    const started = await startEvoliaCollection(payment.id, viewer.id, false);
+    revalidatePath(`/entreprises/${subscription.companyId}`);
+    return started;
+  }
 
   if (process.env.ADMIN_ALERT_EMAIL) {
     try {
@@ -350,5 +410,5 @@ export async function purchaseUpsellSeats(
   }
 
   revalidatePath(`/entreprises/${subscription.companyId}`);
-  return { success: true, data: undefined };
+  return { success: true, data: { redirectUrl: null } };
 }

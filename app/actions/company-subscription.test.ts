@@ -9,16 +9,21 @@ vi.mock("@/lib/prisma", () => ({
     company: { findUnique: vi.fn() },
     plan: { findUnique: vi.fn() },
     companySubscription: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    companyPayment: { create: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
+    companyPayment: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
     $transaction: vi.fn(),
     emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
+vi.mock("@/lib/evolia", () => ({
+  pushRegistrationToEvolia: vi.fn().mockResolvedValue(true),
+  evoliaPaymentUrl: (ref: string) => `https://evolia.test/pay/${ref}`,
+}));
 
 import { requireViewer } from "@/lib/require-viewer";
 import { prisma } from "@/lib/prisma";
+import { pushRegistrationToEvolia } from "@/lib/evolia";
 import { selectPlan, submitPaymentProof, purchaseUpsellSeats } from "./company-subscription";
 
 const SESSION = { success: true, viewer: { id: "admin_user_1" } } as never;
@@ -172,7 +177,7 @@ describe("submitPaymentProof", () => {
       company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
       plan: { priceAr: 2_250_000, minParticipants: 10, pricingMode: "PER_PARTICIPANT" },
     } as never);
-    vi.mocked(prisma.$transaction).mockResolvedValue(undefined as never);
+    vi.mocked(prisma.$transaction).mockResolvedValue([{ id: "payment_1" }, {}] as never);
   });
 
   it("creates the payment (amount computed from the declared count × unit price) and flips the subscription to PENDING_REVIEW", async () => {
@@ -286,10 +291,51 @@ describe("submitPaymentProof", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it("rejects card payment, not available until the Evolia bridge exists", async () => {
-    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "CARTE_BANCAIRE" });
+  it("requires a proof for a bank transfer", async () => {
+    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, proofFileKey: "" });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("pushes a card payment to Evolia, without proof, and returns its payment page", async () => {
+    const result = await submitPaymentProof("sub_1", {
+      ...VALID_INPUT,
+      method: "CARTE_BANCAIRE",
+      proofFileKey: "",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: { redirectUrl: "https://evolia.test/pay/payment_1" },
+    });
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ method: "CARTE_BANCAIRE", proofFileKey: "" }),
+      })
+    );
+    expect(pushRegistrationToEvolia).toHaveBeenCalledWith("payment_1");
+  });
+
+  it("cancels the payment and reopens the subscription when Evolia refuses the push", async () => {
+    vi.mocked(pushRegistrationToEvolia).mockResolvedValueOnce(false);
+    vi.mocked(prisma.companyPayment.update).mockResolvedValue({
+      companySubscriptionId: "sub_1",
+    } as never);
+
+    const result = await submitPaymentProof("sub_1", {
+      ...VALID_INPUT,
+      method: "MOBILE_MONEY",
+      proofFileKey: "",
+    });
+
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "REJECTED" }) })
+    );
+    expect(prisma.companySubscription.update).toHaveBeenLastCalledWith({
+      where: { id: "sub_1" },
+      data: { status: "PENDING_PAYMENT" },
+    });
   });
 
   /**
@@ -484,5 +530,21 @@ describe("purchaseUpsellSeats", () => {
     const result = await purchaseUpsellSeats("sub_1", { ...VALID_INPUT, quantity: 3 });
     expect(result.success).toBe(false);
     expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("pays a supplement through Evolia without touching the subscription", async () => {
+    vi.mocked(prisma.companyPayment.create).mockResolvedValue({ id: "payment_up" } as never);
+
+    const result = await purchaseUpsellSeats("sub_1", {
+      ...VALID_INPUT,
+      method: "MOBILE_MONEY",
+      proofFileKey: "",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: { redirectUrl: "https://evolia.test/pay/payment_up" },
+    });
+    expect(prisma.companySubscription.update).not.toHaveBeenCalled();
   });
 });

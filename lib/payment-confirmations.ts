@@ -1,10 +1,12 @@
+import type { PaymentMethod } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
-import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
-import { seatCap } from "@/lib/company-seats";
 import { resolveEmail } from "@/lib/email-template-resolver";
+import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -112,6 +114,7 @@ export async function confirmCompanyPaymentCore(
       }
     }
 
+    await notifyEvolia(payment, true);
     return { success: true, data: { companyId: payment.companySubscription.companyId } };
   }
 
@@ -137,81 +140,9 @@ export async function confirmCompanyPaymentCore(
     return { success: false, error: "Ce paiement a déjà été traité." };
   }
 
-  /**
-   * Phase 2quater (1er août 2026) — même effet de bord que
-   * confirmMembershipPayment, mais pour chaque membre déjà rattaché à
-   * l'entreprise au moment de la confirmation (pas les invitations encore
-   * en attente) — un collaborateur invité après coup n'est pas
-   * rétroactivement inscrit à l'évènement (RG-14 couvre ce cas séparément,
-   * à l'acceptation de l'invitation).
-   *
-   * Correctif (7 août 2026, audit) — sérialisé par
-   * `withEventRegistrationLock` et borné à la capacité restante ; les
-   * membres au-delà ne sont pas inscrits à l'évènement (mais gardent les
-   * avantages plateforme ci-dessous, l'offre étant déjà payée).
-   *
-   * Audit (25 septembre 2026) — n'inscrit plus que les participants réels :
-   * les comptes `ACTIVE` de l'entreprise, sans le gestionnaire s'il n'a pas
-   * coché « Je participe » (`conception/12` §3.3 — il était jusqu'ici
-   * inscrit d'office, place comprise), et jamais au-delà de `seatCap()`
-   * (dans l'ordre de création des comptes, le surplus étant loggué et tracé
-   * dans l'audit pour un suivi manuel).
-   */
-  const plan = payment.companySubscription.plan;
-  const company = payment.companySubscription.company;
-  let skippedForCapacity = 0;
-  let skippedForSeatCap = 0;
-  if (plan.eventId) {
-    const eventId = plan.eventId;
-    const participants = company.users.filter(
-      (u) => u.status === "ACTIVE" && (company.adminParticipates || u.id !== company.companyAdminId)
-    );
-    const cap = seatCap(payment.companySubscription);
-    const users = cap != null ? participants.slice(0, cap) : participants;
-    skippedForSeatCap = participants.length - users.length;
-    if (skippedForSeatCap > 0) {
-      console.warn(
-        `[confirmCompanyPaymentCore] ${skippedForSeatCap} participant(s) of company ${payment.companySubscription.companyId} not registered to event ${eventId}: seat cap (${cap}) exceeded`
-      );
-    }
-    await withEventRegistrationLock(eventId, async () => {
-      const [event, existingRegs, takenSpots] = await Promise.all([
-        prisma.event.findUnique({ where: { id: eventId }, select: { capacity: true } }),
-        prisma.eventRegistration.findMany({
-          where: { eventId, userId: { in: users.map((u) => u.id) } },
-          select: { userId: true },
-        }),
-        prisma.eventRegistration.count({
-          where: { eventId, status: { in: ["CONFIRMED", "PENDING_PAYMENT"] } },
-        }),
-      ]);
-      const alreadyRegisteredIds = new Set(existingRegs.map((r) => r.userId));
-      const newUserIds = users.map((u) => u.id).filter((id) => !alreadyRegisteredIds.has(id));
-      const remainingCapacity = event
-        ? Math.max(0, event.capacity - takenSpots)
-        : newUserIds.length;
-      const admittedIds = new Set(newUserIds.slice(0, remainingCapacity));
-      skippedForCapacity = newUserIds.length - admittedIds.size;
-
-      await Promise.all(
-        users
-          .filter((u) => alreadyRegisteredIds.has(u.id) || admittedIds.has(u.id))
-          .map((u) =>
-            prisma.eventRegistration.upsert({
-              where: { eventId_userId: { eventId, userId: u.id } },
-              update: { status: "CONFIRMED", paymentStatus: "PAID", planId: plan.id },
-              create: {
-                eventId,
-                userId: u.id,
-                status: "CONFIRMED",
-                paymentStatus: "PAID",
-                planId: plan.id,
-              },
-            })
-          )
-      );
-    });
-  }
+  // Module 18 §4.9 (8 oct. 2026) — le paiement donne l'accès à la plateforme,
+  // pas l'inscription à l'événement : c'est la liste des participants validée
+  // par le gérant qui inscrit (app/actions/company-participants.ts).
 
   if (actorId) {
     await prisma.auditLog.create({
@@ -220,15 +151,6 @@ export async function confirmCompanyPaymentCore(
         action: "company_payment.confirm",
         targetType: "CompanyPayment",
         targetId: companyPaymentId,
-        ...(skippedForCapacity > 0 || skippedForSeatCap > 0
-          ? {
-              metadata: {
-                eventId: plan.eventId,
-                ...(skippedForCapacity > 0 ? { skippedForEventCapacity: skippedForCapacity } : {}),
-                ...(skippedForSeatCap > 0 ? { skippedForSeatCap } : {}),
-              },
-            }
-          : {}),
       },
     });
   }
@@ -259,7 +181,31 @@ export async function confirmCompanyPaymentCore(
     }
   }
 
+  await notifyEvolia(payment, false);
   return { success: true, data: { companyId: payment.companySubscription.companyId } };
+}
+
+/**
+ * Intégration Evolia (conception/11 §3) — après confirmation d'un paiement :
+ * - virement ou chèque : Evolia n'a rien encaissé, l'inscription lui est
+ *   transmise pour information à ce moment-là (une carte ou un Mobile Money
+ *   l'a déjà été au lancement du paiement, `startEvoliaPayment`) ;
+ * - supplément : si le gérant a déjà validé sa liste, elle est renvoyée avec
+ *   la nouvelle capacité totale.
+ * Les échecs sont journalisés (`EvoliaPush`) sans faire échouer la confirmation.
+ */
+async function notifyEvolia(
+  payment: {
+    id: string;
+    method: PaymentMethod;
+    companySubscription: { companyId: string; participantsValidatedAt: Date | null };
+  },
+  isUpsell: boolean
+) {
+  if (!isEvoliaPaymentMethod(payment.method)) await pushRegistrationToEvolia(payment.id);
+  if (isUpsell && payment.companySubscription.participantsValidatedAt) {
+    await pushParticipantsToEvolia(payment.companySubscription.companyId);
+  }
 }
 
 export async function confirmEventRegistrationPaymentCore(

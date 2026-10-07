@@ -27,13 +27,15 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { InviteTeammateForm } from "@/components/entreprise/invite-teammate-form";
-import { AdminParticipatesToggle } from "@/components/entreprise/admin-participates-toggle";
+import { EventParticipantsForm } from "@/components/entreprise/event-participants-form";
 import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form";
 import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
-import { initials, formatAriary } from "@/lib/utils";
+import { initials, formatAriary, formatDateFr } from "@/lib/utils";
 import { offerBadgeLabel } from "@/lib/offer-badge";
+import { evoliaPaymentUrl } from "@/lib/evolia";
+import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Aucune offre choisie",
@@ -132,7 +134,7 @@ export default async function CompanyProfilePage({
             status: "PENDING",
             upsellQuantity: { not: null },
           },
-          select: { upsellQuantity: true },
+          select: { id: true, upsellQuantity: true, method: true },
         })
       : null;
   // Rapport QA 1er oct. §2.2 — référentiels pour l'onglet "Modifier" (CompanyForm mode="edit").
@@ -152,6 +154,21 @@ export default async function CompanyProfilePage({
       ? requestedTab
       : "apercu";
   const unreadMessages = await countUnreadMessages(viewer.id);
+  // Module 18 §4.9 — liste des participants à l'événement de l'offre, gérée par le gérant.
+  const linkedEvent =
+    isCompanyAdmin && company.subscription?.plan.event ? company.subscription.plan.event : null;
+  const eventParticipantIds = linkedEvent
+    ? (
+        await prisma.eventRegistration.findMany({
+          where: {
+            eventId: linkedEvent.id,
+            status: "CONFIRMED",
+            userId: { in: company.users.map((u) => u.id) },
+          },
+          select: { userId: true },
+        })
+      ).map((r) => r.userId)
+    : [];
   const subscriptionStatus = company.subscription
     ? computeEffectiveStatus(company.subscription.status, company.subscription.plan.event?.date)
     : undefined;
@@ -307,12 +324,32 @@ export default async function CompanyProfilePage({
                     </span>
                   )}
                 </div>
-                <div className="mb-4">
-                  <AdminParticipatesToggle
-                    companyId={company.id}
-                    participates={company.adminParticipates}
-                  />
-                </div>
+                {linkedEvent && subscriptionStatus === "ACTIVE" && company.subscription && (
+                  <div className="mb-5">
+                    <p className="mb-1 text-sm font-semibold text-navy">{linkedEvent.title}</p>
+                    <p className="mb-3 text-xs text-text-muted">
+                      Cochez les personnes qui participeront à l&apos;événement, puis validez.
+                      Chaque nouveau participant reçoit une confirmation, et la liste est transmise
+                      pour les badges.
+                    </p>
+                    <EventParticipantsForm
+                      companyId={company.id}
+                      candidates={company.users.map((u) => ({
+                        id: u.id,
+                        name: u.name,
+                        title: u.title,
+                        isManager: u.id === company.companyAdminId,
+                      }))}
+                      initialSelected={eventParticipantIds}
+                      cap={applicableCap}
+                      validatedAtLabel={
+                        company.subscription.participantsValidatedAt
+                          ? formatDateFr(company.subscription.participantsValidatedAt)
+                          : null
+                      }
+                    />
+                  </div>
+                )}
                 {/* Audit (25 septembre 2026) — collaborateurs rassemblés après
                     paiement (BACKLOG_MVP §3), comme `inviteTeammate`. */}
                 {subscriptionStatus === "ACTIVE" ? (
@@ -337,6 +374,17 @@ export default async function CompanyProfilePage({
                       Supplément de {pendingUpsellPayment.upsellQuantity} place(s) en attente de
                       validation.
                     </p>
+                    {isEvoliaPaymentMethod(pendingUpsellPayment.method) && (
+                      <p className="mt-2 text-sm text-text-mid">
+                        Paiement en cours chez Evolia, confirmé automatiquement.{" "}
+                        <a
+                          href={evoliaPaymentUrl(pendingUpsellPayment.id)}
+                          className="font-semibold text-navy underline"
+                        >
+                          Reprendre le paiement
+                        </a>
+                      </p>
+                    )}
                   </div>
                 ) : (
                   upsellPlans.length > 0 &&
