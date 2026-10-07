@@ -64,15 +64,18 @@ describe("GET /api/admin/finances/export", () => {
     expect(res.headers.get("Content-Type")).toContain("text/csv");
     expect(res.headers.get("Content-Disposition")).toContain("export-comptable-ceo-summit.csv");
 
-    const lines = (await res.text()).split("\r\n");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // Marqueur UTF-8 pour qu'Excel lise les accents et « € ».
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const lines = new TextDecoder().decode(bytes).split("\r\n");
     expect(lines[0]).toBe(
-      "Membre,Source,Description,Montant (€),Montant (Ar),Taux (Ar/€),Méthode,Date"
+      "Membre;Source;Description;Montant (€);Montant (Ar);Taux (Ar/€);Taux estimé;Méthode;Date"
     );
     // Événement (15/07) au taux du jour faute de taux enregistré, avant l'offre (15/01).
     expect(lines[1]).toContain("Jean-Pierre R.");
-    expect(lines[1]).toContain("200.00,960000,4800.00 (estimé)");
+    expect(lines[1]).toContain("200,00;960000;4800,00;Oui");
     expect(lines[2]).toContain("Sarah R.");
-    expect(lines[2]).toContain("300.00,1500000,5000.00,");
+    expect(lines[2]).toContain("300,00;1500000;5000,00;Non");
   });
 
   it("returns the same content as a PDF with ?format=pdf", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toCsv } from "./csv";
+import { excelDecimal, toCsv, toExcelCsv } from "./csv";
 
 describe("toCsv", () => {
   it("joins rows with CRLF and fields with commas", () => {
@@ -47,5 +47,28 @@ describe("toCsv", () => {
 
   it("leaves fields with a trigger character elsewhere untouched", () => {
     expect(toCsv([["jean-pierre@example.mg"]])).toBe("jean-pierre@example.mg");
+  });
+});
+
+describe("toExcelCsv", () => {
+  it("starts with a UTF-8 BOM and separates fields with semicolons", () => {
+    expect(
+      toExcelCsv([
+        ["Méthode", "Montant (€)"],
+        ["a", "b"],
+      ])
+    ).toBe("﻿Méthode;Montant (€)\r\na;b");
+  });
+
+  it("quotes a field containing a semicolon but not one containing a comma", () => {
+    expect(toExcelCsv([["Dupont; Fils", "Rakoto, Jean"]])).toBe('﻿"Dupont; Fils";Rakoto, Jean');
+  });
+});
+
+describe("excelDecimal", () => {
+  it("uses a decimal comma for decimal numbers only", () => {
+    expect(excelDecimal("750.00")).toBe("750,00");
+    expect(excelDecimal("1500000")).toBe("1500000");
+    expect(excelDecimal("Offre 2.0")).toBe("Offre 2.0");
   });
 });

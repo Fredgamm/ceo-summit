@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { toCsv } from "@/lib/csv";
+import { toExcelCsv } from "@/lib/csv";
 import { formatDateFr } from "@/lib/utils";
 
 /** E3-T04 — "Export liste inscrits CSV". */
@@ -40,7 +40,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     ]),
   ];
 
-  const csv = toCsv(rows);
+  const csv = toExcelCsv(rows);
   const filename = `inscrits-${event.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.csv`;
 
   return new NextResponse(csv, {

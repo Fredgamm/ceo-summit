@@ -1,6 +1,14 @@
 import { toEuroAmount, type FinanceTransaction } from "@/lib/finance";
 import { formatDateFr } from "@/lib/utils";
 
+const METHOD_LABEL: Record<string, string> = {
+  VIREMENT: "Virement",
+  CHEQUE: "Chèque",
+  CARTE_BANCAIRE: "Carte bancaire",
+  MOBILE_MONEY: "Mobile Money",
+  INCLUS: "Inclus",
+};
+
 const SOURCE_LABEL: Record<FinanceTransaction["source"], string> = {
   COMPANY: "Entreprise",
   EVENT: "Événement",
@@ -13,6 +21,7 @@ export const FINANCE_EXPORT_HEADER = [
   "Montant (€)",
   "Montant (Ar)",
   "Taux (Ar/€)",
+  "Taux estimé",
   "Méthode",
   "Date",
 ];
@@ -51,8 +60,9 @@ export function buildFinanceExportTable(
       t.description,
       euro.amountEur.toFixed(2),
       String(t.amount),
-      `${euro.rate.toFixed(2)}${euro.rateEstimated ? " (estimé)" : ""}`,
-      t.method,
+      euro.rate.toFixed(2),
+      euro.rateEstimated ? "Oui" : "Non",
+      METHOD_LABEL[t.method] ?? t.method,
       formatDateFr(t.date),
     ];
   });

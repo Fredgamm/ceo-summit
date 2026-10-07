@@ -13,7 +13,7 @@ const MUTED = "#6B7280";
 const BORDER = "#E5E7EB";
 
 /** Largeurs relatives des colonnes, dans l'ordre de FINANCE_EXPORT_HEADER. */
-const COLUMN_FLEX = [2.2, 1.1, 2.6, 1.1, 1.4, 1.2, 1.1, 1.3];
+const COLUMN_FLEX = [2.0, 1.0, 2.4, 1.1, 1.3, 0.9, 0.8, 1.2, 1.3];
 /** Colonnes de montants, alignées à droite. */
 const NUMERIC_COLUMNS = new Set([3, 4, 5]);
 
@@ -73,7 +73,7 @@ function FinanceExportDocument({ table, generatedAtLabel }: FinanceExportPdfProp
               <View key={r} style={styles.row} wrap={false}>
                 {row.map((value, i) => (
                   <Text key={i} style={[styles.cell, cellStyle(i)]}>
-                    {i === 3 || i === 4 ? formatThousands(value) : value}
+                    {i === 3 || i === 4 || i === 5 ? formatThousands(value) : value}
                   </Text>
                 ))}
               </View>
@@ -93,7 +93,9 @@ function FinanceExportDocument({ table, generatedAtLabel }: FinanceExportPdfProp
               <Text style={[styles.totalCell, cellStyle(4)]}>
                 {formatThousands(String(table.totalAr))}
               </Text>
-              <Text style={{ flex: COLUMN_FLEX[5] + COLUMN_FLEX[6] + COLUMN_FLEX[7] }} />
+              <Text
+                style={{ flex: COLUMN_FLEX[5] + COLUMN_FLEX[6] + COLUMN_FLEX[7] + COLUMN_FLEX[8] }}
+              />
             </View>
           </>
         )}
@@ -103,7 +105,7 @@ function FinanceExportDocument({ table, generatedAtLabel }: FinanceExportPdfProp
             "Montants en euros : prix officiel de l'offre ; à défaut (événements), montant en Ariary converti au taux du paiement. Le montant en Ariary est celui payé."
           }
           {table.hasEstimatedRate
-            ? " « estimé » : taux non enregistré au paiement, remplacé par le taux du jour de l'export."
+            ? " Taux estimé : taux non enregistré au paiement, remplacé par le taux du jour de l'export."
             : ""}
         </Text>
       </Page>

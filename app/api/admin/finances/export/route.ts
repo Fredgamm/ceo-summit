@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { toCsv } from "@/lib/csv";
+import { excelDecimal, toExcelCsv } from "@/lib/csv";
 import { formatDateFr } from "@/lib/utils";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import {
@@ -71,7 +71,11 @@ export async function GET(req: Request) {
     });
   }
 
-  const csv = toCsv([table.header, ...table.rows]);
+  // Euros et taux en virgule décimale, pour qu'Excel les lise comme des nombres.
+  const csvRows = table.rows.map((row) =>
+    row.map((value, i) => (i === 3 || i === 5 ? excelDecimal(value) : value))
+  );
+  const csv = toExcelCsv([table.header, ...csvRows]);
   return new NextResponse(csv, {
     status: 200,
     headers: {
