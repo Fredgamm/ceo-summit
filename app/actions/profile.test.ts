@@ -29,7 +29,7 @@ const VALID_INPUT = {
   linkedinUrl: "https://linkedin.com/in/marie-dupont",
   country: "Madagascar",
   sectors: ["Finance & Banque"],
-  phone: "",
+  phone: "034 12 345 67",
 };
 
 describe("updateProfile", () => {
@@ -76,7 +76,7 @@ describe("updateProfile", () => {
         linkedinUrl: "https://linkedin.com/in/marie-dupont",
         country: "Madagascar",
         sectors: ["Finance & Banque"],
-        phone: null,
+        phone: "034 12 345 67",
       },
     });
   });
@@ -130,6 +130,20 @@ describe("updateProfile", () => {
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ phone: "034 12 345 67" }) })
     );
+  });
+
+  it("rejects a missing phone number", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, phone: "" });
+
+    expect(result).toEqual({ success: false, error: "Le téléphone est requis" });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a phone number that is too short", async () => {
+    const result = await updateProfile({ ...VALID_INPUT, phone: "034 12" });
+
+    expect(result.success).toBe(false);
+    expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
   it("rejects a phone number with invalid characters without touching the database", async () => {

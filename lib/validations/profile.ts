@@ -70,15 +70,17 @@ export const profileSchema = z.object({
    * qui soumet un achat groupé. Format libre, pas de validation stricte de
    * préfixe pays — les numéros locaux et internationaux doivent tous deux
    * passer.
+   *
+   * Rapport QA du 7 oct. 2026 (§2) — obligatoire pour tous à l'édition du
+   * profil, y compris les membres inscrits avant cette règle.
    */
   phone: z
-    .string()
+    .string({ required_error: "Le téléphone est requis" })
     .trim()
+    .min(1, "Le téléphone est requis")
     .max(30)
     .regex(/^[\d\s+()-]*$/, "Numéro de téléphone invalide")
-    .optional()
-    .or(z.literal(""))
-    .default(""),
+    .refine((value) => value.replace(/\D/g, "").length >= 8, "Numéro de téléphone trop court"),
 });
 
 export type ProfileInput = z.infer<typeof profileSchema>;

@@ -185,7 +185,7 @@ export function ProfileEditForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-phone">Téléphone (optionnel)</Label>
+            <Label htmlFor="edit-phone">Téléphone *</Label>
             <Input
               id="edit-phone"
               type="tel"

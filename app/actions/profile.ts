@@ -51,7 +51,7 @@ export async function updateProfile(input: unknown): Promise<ActionResult> {
       linkedinUrl: linkedinUrl || null,
       country: country || null,
       sectors,
-      phone: phone || null,
+      phone,
     },
   });
 
