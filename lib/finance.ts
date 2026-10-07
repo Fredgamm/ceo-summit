@@ -39,6 +39,8 @@ export interface FinanceTransaction {
   amount: number;
   /** Taux EUR→Ar au moment du paiement ; nul pour les paiements antérieurs au 7 oct. 2026. */
   eurToArRate: number | null;
+  /** Prix officiel en euros de ce qui a été payé (offre × unités), si l'offre en a un. */
+  officialEur: number | null;
   method: string;
   date: Date;
 }
@@ -51,17 +53,38 @@ export interface EuroAmount {
 }
 
 /**
- * Rapport QA du 7 oct. 2026 (§4.2) — montant en euros au taux du moment du
- * paiement. Les paiements enregistrés avant ce taux prennent le taux du jour
- * (`fallbackRate`), signalé comme estimé.
+ * Rapport QA du 7 oct. 2026 (§4.2) — montant en euros de l'export : le prix
+ * officiel de l'offre quand il existe (décision client : 25 000 € pour Gold,
+ * pas une reconversion de l'Ariary), sinon le montant en Ariary converti au
+ * taux du moment du paiement. Le taux affiché est celui du paiement ; pour les
+ * paiements enregistrés avant sa conservation, celui du jour (`fallbackRate`),
+ * signalé comme estimé.
  */
 export function toEuroAmount(transaction: FinanceTransaction, fallbackRate: number): EuroAmount {
   const rate = transaction.eurToArRate ?? fallbackRate;
+  const amountEur = transaction.officialEur ?? transaction.amount / rate;
   return {
-    amountEur: Math.round((transaction.amount / rate) * 100) / 100,
+    amountEur: Math.round(amountEur * 100) / 100,
     rate,
     rateEstimated: transaction.eurToArRate == null,
   };
+}
+
+interface PriceablePlan {
+  priceAr: number;
+  priceEur: number | null;
+  pricingMode: string | null;
+}
+
+/**
+ * Prix officiel en euros d'un paiement d'offre. Pour une offre au participant,
+ * le nombre de participants payés se déduit du montant (prix unitaire × n),
+ * qui ne change plus une fois le paiement soumis.
+ */
+export function officialOfferEur(plan: PriceablePlan, amountAr: number): number | null {
+  if (plan.priceEur == null) return null;
+  if (plan.pricingMode !== "PER_PARTICIPANT" || plan.priceAr <= 0) return plan.priceEur;
+  return plan.priceEur * Math.max(1, Math.round(amountAr / plan.priceAr));
 }
 
 /**
@@ -88,8 +111,8 @@ export interface CompanyPaymentForFinance {
   method: string;
   createdAt: Date;
   upsellQuantity: number | null;
-  upsellPlan: { name: string } | null;
-  companySubscription: { company: { name: string }; plan: { name: string } };
+  upsellPlan: { name: string; priceEur: number | null } | null;
+  companySubscription: { company: { name: string }; plan: { name: string } & PriceablePlan };
 }
 
 export function companyPaymentToTransaction(p: CompanyPaymentForFinance): FinanceTransaction {
@@ -104,6 +127,12 @@ export function companyPaymentToTransaction(p: CompanyPaymentForFinance): Financ
     description,
     amount: p.amount,
     eurToArRate: p.eurToArRate,
+    officialEur:
+      p.upsellQuantity != null
+        ? p.upsellPlan?.priceEur != null
+          ? p.upsellPlan.priceEur * p.upsellQuantity
+          : null
+        : officialOfferEur(p.companySubscription.plan, p.amount),
     method: p.method,
     date: p.createdAt,
   };
@@ -126,6 +155,8 @@ export function eventRegistrationToTransaction(r: EventRegistrationForFinance): 
     description: r.event.title,
     amount: r.event.price,
     eurToArRate: r.eurToArRate,
+    // Les événements n'ont qu'un prix en Ariary : conversion au taux du paiement.
+    officialEur: null,
     method: r.paymentMethod ?? "",
     date: r.createdAt,
   };
@@ -133,9 +164,12 @@ export function eventRegistrationToTransaction(r: EventRegistrationForFinance): 
 
 /** Includes Prisma attendus par {@link companyPaymentToTransaction}. */
 export const COMPANY_PAYMENT_FINANCE_INCLUDE = {
-  upsellPlan: { select: { name: true } },
+  upsellPlan: { select: { name: true, priceEur: true } },
   companySubscription: {
-    include: { company: { select: { name: true } }, plan: { select: { name: true } } },
+    include: {
+      company: { select: { name: true } },
+      plan: { select: { name: true, priceAr: true, priceEur: true, pricingMode: true } },
+    },
   },
 } as const;
 

@@ -99,9 +99,11 @@ function FinanceExportDocument({ table, generatedAtLabel }: FinanceExportPdfProp
         )}
 
         <Text style={styles.note}>
-          Montants en euros convertis au taux du moment du paiement.
+          {
+            "Montants en euros : prix officiel de l'offre ; à défaut (événements), montant en Ariary converti au taux du paiement. Le montant en Ariary est celui payé."
+          }
           {table.hasEstimatedRate
-            ? " « estimé » : paiement enregistré avant la conservation du taux, converti au taux du jour de l'export."
+            ? " « estimé » : taux non enregistré au paiement, remplacé par le taux du jour de l'export."
             : ""}
         </Text>
       </Page>

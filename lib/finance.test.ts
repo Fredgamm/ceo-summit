@@ -99,6 +99,7 @@ describe("mergeFinanceTransactions", () => {
     description: "d",
     amount: 1,
     eurToArRate: null,
+    officialEur: null,
     method: "Evolia",
     date: new Date(date),
   });
@@ -119,53 +120,99 @@ describe("mergeFinanceTransactions", () => {
 });
 
 describe("companyPaymentToTransaction", () => {
+  const gold = {
+    name: "Gold",
+    priceAr: 125_036_663,
+    priceEur: 25_000,
+    pricingMode: "FIXED_BUNDLE",
+  };
   const payment = {
     id: "pay_1",
-    amount: 12_000_000,
-    eurToArRate: 5000,
+    amount: 125_036_663,
+    eurToArRate: 4944.22,
     method: "VIREMENT",
     createdAt: new Date("2026-09-30T10:00:00Z"),
     upsellQuantity: null,
     upsellPlan: null,
-    companySubscription: { company: { name: "Société X" }, plan: { name: "Gold" } },
+    companySubscription: { company: { name: "Société X" }, plan: gold },
   };
 
-  it("describes an offer payment by its plan", () => {
+  it("describes an offer payment by its plan, with the official euro price", () => {
     expect(companyPaymentToTransaction(payment)).toEqual({
       id: "pay_1",
       source: "COMPANY",
       memberName: "Société X",
       description: "Offre Gold",
-      amount: 12_000_000,
-      eurToArRate: 5000,
+      amount: 125_036_663,
+      eurToArRate: 4944.22,
+      officialEur: 25_000,
       method: "VIREMENT",
       date: payment.createdAt,
     });
   });
 
-  it("labels a seat upsell as such instead of as the main offer", () => {
+  it("multiplies a per-participant offer by the participants paid for", () => {
+    const tx = companyPaymentToTransaction({
+      ...payment,
+      amount: 3_738_000 * 12,
+      companySubscription: {
+        company: { name: "Société X" },
+        plan: {
+          name: "Groupement 10",
+          priceAr: 3_738_000,
+          priceEur: 750,
+          pricingMode: "PER_PARTICIPANT",
+        },
+      },
+    });
+    expect(tx.officialEur).toBe(9000);
+  });
+
+  it("labels a seat upsell as such and prices it by quantity", () => {
     const tx = companyPaymentToTransaction({
       ...payment,
       upsellQuantity: 3,
-      upsellPlan: { name: "Executive Pass" },
+      upsellPlan: { name: "Executive Pass", priceEur: 950 },
     });
     expect(tx.description).toBe("Supplément Executive Pass × 3");
+    expect(tx.officialEur).toBe(2850);
+  });
+
+  it("has no official euro price when the offer has none", () => {
+    const tx = companyPaymentToTransaction({
+      ...payment,
+      companySubscription: { company: { name: "Société X" }, plan: { ...gold, priceEur: null } },
+    });
+    expect(tx.officialEur).toBeNull();
   });
 });
 
 describe("toEuroAmount", () => {
-  const tx = (amount: number, eurToArRate: number | null): FinanceTransaction => ({
+  const tx = (
+    amount: number,
+    eurToArRate: number | null,
+    officialEur: number | null = null
+  ): FinanceTransaction => ({
     id: "t",
     source: "COMPANY",
     memberName: "X",
     description: "d",
     amount,
     eurToArRate,
+    officialEur,
     method: "VIREMENT",
     date: new Date("2026-10-07"),
   });
 
-  it("converts with the rate recorded at payment time", () => {
+  it("uses the official offer price when there is one, whatever the rate", () => {
+    expect(toEuroAmount(tx(125_036_663, 4944.22, 25_000), 4800)).toEqual({
+      amountEur: 25_000,
+      rate: 4944.22,
+      rateEstimated: false,
+    });
+  });
+
+  it("converts with the rate recorded at payment time otherwise", () => {
     expect(toEuroAmount(tx(10_000_000, 5000), 4800)).toEqual({
       amountEur: 2000,
       rate: 5000,

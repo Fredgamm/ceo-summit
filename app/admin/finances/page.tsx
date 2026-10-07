@@ -177,7 +177,7 @@ export default async function AdminFinancesPage({
           </table>
           {transactions.some((t) => t.eurToArRate == null) && (
             <p className="border-t border-border px-4 py-2 text-xs text-text-muted">
-              * Paiement enregistré avant la conservation du taux : converti au taux du jour.
+              * Taux non enregistré au paiement : taux du jour.
             </p>
           )}
         </div>
