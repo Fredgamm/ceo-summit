@@ -11,14 +11,13 @@ import {
   type CatalogueSearchParams,
 } from "@/lib/catalogue";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { CatalogueFilters } from "@/components/catalogue/catalogue-filters";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Liste des membres" };
 
@@ -75,7 +74,6 @@ export default async function CataloguePage({
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}
@@ -107,7 +105,6 @@ export default async function CataloguePage({
               companyName={m.company?.name ?? null}
               country={m.country}
               avatarUrl={m.avatarUrl}
-              role={m.role}
               offerName={m.company?.subscription?.plan.name ?? null}
               isTopOffer={
                 topOfferPriceAr != null && m.company?.subscription?.plan.priceAr === topOfferPriceAr

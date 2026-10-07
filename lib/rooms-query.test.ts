@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRoomsWhere, meetsRoomAccess, ROOM_ACCESS_LABEL } from "./rooms-query";
+import { buildRoomsWhere, meetsRoomAccess } from "./rooms-query";
 
 /**
  * Décision d'architecture (sept. 2026, conception/09) — accès égal pour tout
@@ -38,23 +38,5 @@ describe("buildRoomsWhere", () => {
 
   it("ignores an unknown sector", () => {
     expect(buildRoomsWhere({ secteur: "Bidon" }, VALID_SECTORS).sector).toBeUndefined();
-  });
-
-  it("filters by a known access level", () => {
-    expect(buildRoomsWhere({ acces: "CHAIRMAN_ONLY" }, VALID_SECTORS).minTier).toBe(
-      "CHAIRMAN_ONLY"
-    );
-  });
-
-  it("ignores an unknown access level", () => {
-    expect(buildRoomsWhere({ acces: "BIDON" }, VALID_SECTORS).minTier).toBeUndefined();
-  });
-});
-
-describe("ROOM_ACCESS_LABEL", () => {
-  it("has a label for every access level", () => {
-    expect(ROOM_ACCESS_LABEL.ALL_MEMBERS).toBe("Tous membres");
-    expect(ROOM_ACCESS_LABEL.EXECUTIVE_PLUS).toBe("Executive & Chairman");
-    expect(ROOM_ACCESS_LABEL.CHAIRMAN_ONLY).toBe("Chairman uniquement");
   });
 });

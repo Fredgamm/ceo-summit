@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { renderEventBadgePdf } from "@/lib/pdf/event-badge-pdf";
-import { formatDateFr, tierLabel } from "@/lib/utils";
+import { formatDateFr } from "@/lib/utils";
 
 /**
  * GET /evenements/[id]/badge/pdf — badge téléchargeable au format A6
@@ -39,8 +39,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     return NextResponse.json({ error: "Badge non disponible." }, { status: 403 });
   }
 
-  const tier = getViewerTierFromCompany(viewer.company);
-  const accessLabel = registration.plan?.name ?? tierLabel(tier);
+  const accessLabel =
+    registration.plan?.name ?? viewer.company?.subscription?.plan.name ?? "Membre";
 
   const pdf = await renderEventBadgePdf({
     eventTitle: event.title,

@@ -1,19 +1,17 @@
 /**
- * E8-T09 — "Les variables disponibles : {{prénom}}, {{nom}}, {{tier}}, {{entreprise}}"
+ * E8-T09 — "Les variables disponibles : {{prénom}}, {{nom}}, {{entreprise}}"
  * (bo-communications.html). Simple substitution, no templating engine needed
- * for 4 flat variables.
+ * for 3 flat variables.
  */
 export interface BroadcastVariables {
   prenom: string;
   nom: string;
-  tier: string;
   entreprise: string;
 }
 
 const VARIABLE_KEYS: Record<keyof BroadcastVariables, string> = {
   prenom: "prénom",
   nom: "nom",
-  tier: "tier",
   entreprise: "entreprise",
 };
 

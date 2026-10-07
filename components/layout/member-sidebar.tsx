@@ -34,7 +34,7 @@ const BOTTOM_ITEMS = [
 ];
 
 interface MemberSidebarProps {
-  user: { name: string; tier: string; avatarUrl?: string | null; isAdmin?: boolean };
+  user: { name: string; avatarUrl?: string | null; isAdmin?: boolean };
   badges?: Partial<Record<"opportunities" | "rooms" | "messages", number>>;
 }
 

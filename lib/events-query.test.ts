@@ -26,16 +26,6 @@ describe("buildUpcomingEventsWhere", () => {
     expect(where.type).toBeUndefined();
   });
 
-  it("filters by a known access tier", () => {
-    const where = buildUpcomingEventsWhere({ acces: "CHAIRMAN" });
-    expect(where.minTier).toBe("CHAIRMAN");
-  });
-
-  it("ignores an unknown access tier", () => {
-    const where = buildUpcomingEventsWhere({ acces: "VIP_UNICORN" });
-    expect(where.minTier).toBeUndefined();
-  });
-
   it('narrows the date window to the rest of the current month for date="mois"', () => {
     const where = buildUpcomingEventsWhere({ date: "mois" });
     // Calendar-month boundary is computed in local time (deliberately — "ce

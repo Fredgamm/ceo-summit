@@ -1,22 +1,16 @@
-import type { Prisma, Role } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 /**
  * E2-T03 — pure query-building logic for `/catalogue`, kept separate from
  * the page component so the filter/sort/pagination rules are unit-testable
- * without touching Prisma. `role` doubles as "current tier" here: the Evolia
- * webhook (E1-T02) keeps User.role in sync with the active Membership.tier,
- * so filtering/sorting on it is both correct and a plain indexed column —
- * no relation-based orderBy needed for the "tier" sort.
+ * without touching Prisma.
  */
 
 export const CATALOGUE_PAGE_SIZE = 12;
 
-const VALID_TIERS = ["MEMBER", "EXECUTIVE", "CHAIRMAN"] as const;
-
 export interface CatalogueSearchParams {
   secteur?: string;
   pays?: string;
-  tier?: string;
   q?: string;
   tri?: string;
   page?: string;
@@ -45,9 +39,6 @@ export function buildCatalogueQuery(
   if (params.pays && referentials.validCountries.includes(params.pays)) {
     where.country = params.pays;
   }
-  if (params.tier && (VALID_TIERS as readonly string[]).includes(params.tier)) {
-    where.role = params.tier as Role;
-  }
   if (params.q?.trim()) {
     const q = params.q.trim();
     where.OR = [
@@ -67,11 +58,9 @@ export function buildCatalogueQuery(
   const orderBy: Prisma.UserOrderByWithRelationInput =
     params.tri === "alpha"
       ? { name: "asc" }
-      : params.tri === "tier"
-        ? { role: "desc" }
-        : params.tri === "recent"
-          ? { createdAt: "desc" }
-          : { company: { subscription: { plan: { priceAr: "desc" } } } };
+      : params.tri === "recent"
+        ? { createdAt: "desc" }
+        : { company: { subscription: { plan: { priceAr: "desc" } } } };
 
   return {
     where,

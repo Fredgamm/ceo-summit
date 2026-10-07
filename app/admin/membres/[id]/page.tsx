@@ -6,22 +6,16 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { buildActivityFeed } from "@/lib/admin-dashboard";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MemberActionsPanel } from "@/components/admin/member-actions-panel";
 import { MemberNoteForm } from "@/components/admin/member-note-form";
-import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Membre" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 const STATUS_BADGE: Record<string, "active" | "suspended" | "pending" | "refused" | "draft"> = {
   ACTIVE: "active",
@@ -60,8 +54,6 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
   });
   if (!member) notFound();
 
-  const tier = getViewerTierFromCompany(member.company);
-
   const activity = buildActivityFeed(
     member.eventRegistrations.map((r) => ({
       type: "registration",
@@ -85,7 +77,6 @@ export default async function AdminMemberDetailPage({ params }: { params: { id: 
               {[member.title, member.company?.name, member.country].filter(Boolean).join(" · ")}
             </p>
             <div className="mt-1.5 flex items-center gap-2">
-              {tier && <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>}
               <Badge variant={STATUS_BADGE[member.status]}>{STATUS_LABEL[member.status]}</Badge>
               <span className="text-xs text-text-muted">
                 Membre depuis {formatDateFr(member.createdAt)}

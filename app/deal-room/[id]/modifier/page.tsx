@@ -4,11 +4,10 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { PublishWizard } from "@/components/deal-room/publish-wizard";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Modifier une opportunité" };
 
@@ -45,7 +44,6 @@ export default async function EditOpportunityPage({ params }: { params: { id: st
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

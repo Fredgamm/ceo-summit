@@ -10,30 +10,6 @@ describe("buildBroadcastRecipientsWhere", () => {
     });
   });
 
-  it("scopes CHAIRMAN to companies whose plan rank meets the Chairman threshold", () => {
-    expect(buildBroadcastRecipientsWhere("CHAIRMAN")).toEqual({
-      status: "ACTIVE",
-      company: {
-        subscription: {
-          status: { in: ["ACTIVE", "EXPIRED"] },
-          plan: { rank: { gte: 3 } },
-        },
-      },
-    });
-  });
-
-  it("scopes EXECUTIVE to companies whose plan rank meets the Executive threshold", () => {
-    expect(buildBroadcastRecipientsWhere("EXECUTIVE")).toEqual({
-      status: "ACTIVE",
-      company: {
-        subscription: {
-          status: { in: ["ACTIVE", "EXPIRED"] },
-          plan: { rank: { gte: 2 } },
-        },
-      },
-    });
-  });
-
   it("filters CUSTOM by country and sector when provided", () => {
     expect(
       buildBroadcastRecipientsWhere("CUSTOM", {

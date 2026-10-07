@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { EventType, Tier } from "@prisma/client";
+import type { EventType } from "@prisma/client";
 
 import { createEvent, updateEvent } from "@/app/actions/admin-events";
 import { EVENT_IMAGE_ALLOWED_MIME_TYPES, EVENT_IMAGE_MAX_BYTES } from "@/lib/validations/event";
@@ -29,12 +29,6 @@ const TYPES: { value: EventType; label: string }[] = [
   { value: "RENCONTRE", label: "Rencontre B2B" },
 ];
 
-const TIERS: { value: Tier; label: string }[] = [
-  { value: "MEMBER", label: "Tous membres" },
-  { value: "EXECUTIVE", label: "Executive minimum" },
-  { value: "CHAIRMAN", label: "Chairman uniquement" },
-];
-
 export interface EventFormValues {
   title: string;
   type: EventType;
@@ -45,7 +39,6 @@ export interface EventFormValues {
   zoomMeetingId: string;
   date: string; // datetime-local string, e.g. "2026-10-14T19:30"
   capacity: string;
-  minTier: Tier;
   price: string;
   imageUrl: string;
 }
@@ -60,7 +53,6 @@ const EMPTY_VALUES: EventFormValues = {
   zoomMeetingId: "",
   date: "",
   capacity: "50",
-  minTier: "MEMBER",
   price: "0",
   imageUrl: "",
 };
@@ -332,21 +324,6 @@ export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: Eve
                 onChange={(e) => set("capacity", e.target.value)}
                 required
               />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ev-tier">Tier minimum requis</Label>
-              <Select value={values.minTier} onValueChange={(v) => set("minTier", v as Tier)}>
-                <SelectTrigger id="ev-tier">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIERS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>

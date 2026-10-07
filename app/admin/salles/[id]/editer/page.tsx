@@ -33,7 +33,6 @@ export default async function EditRoomPage({ params }: { params: { id: string } 
           name: room.name,
           description: room.description ?? "",
           sector: room.sector,
-          minTier: room.minTier,
         }}
       />
     </div>

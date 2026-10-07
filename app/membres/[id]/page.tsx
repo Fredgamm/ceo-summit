@@ -7,22 +7,16 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
 import { safeHref } from "@/lib/normalize-url";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Profil membre" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 /**
  * E2-T01 — page profil membre. Deal Room and Services tabs are placeholders
@@ -53,14 +47,12 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
   const websiteHref = safeHref(user.websiteUrl);
   const linkedinHref = safeHref(user.linkedinUrl);
   const companyWebsiteHref = safeHref(user.company?.website);
-  const tier = getViewerTierFromCompany(user.company);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}
@@ -80,7 +72,6 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
                 {[user.title, user.company?.name, user.country].filter(Boolean).join(" · ")}
               </p>
               <div className="mt-1.5 flex items-center gap-2">
-                {tier && <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>}
                 <span className="text-xs text-text-muted">
                   Membre depuis {formatDateFr(user.createdAt)}
                 </span>

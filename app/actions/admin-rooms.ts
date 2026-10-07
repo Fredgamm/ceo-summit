@@ -28,7 +28,6 @@ export async function createRoom(input: unknown): Promise<ActionResult<{ id: str
       name: f.name,
       description: f.description || null,
       sector: f.sector,
-      minTier: f.minTier,
     },
   });
   await prisma.auditLog.create({
@@ -55,7 +54,6 @@ export async function updateRoom(roomId: string, input: unknown): Promise<Action
       name: f.name,
       description: f.description || null,
       sector: f.sector,
-      minTier: f.minTier,
     },
   });
   await prisma.auditLog.create({

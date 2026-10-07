@@ -5,7 +5,7 @@ import { InstallPrompt } from "@/components/layout/install-prompt";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
-  user: { name: string; tier: string; avatarUrl?: string | null; isAdmin?: boolean };
+  user: { name: string; avatarUrl?: string | null; isAdmin?: boolean };
   badges?: {
     opportunities?: number;
     rooms?: number;

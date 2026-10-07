@@ -9,11 +9,9 @@ import type { Prisma } from "@prisma/client";
 export interface EventsSearchParams {
   type?: string;
   date?: string;
-  acces?: string;
 }
 
 const VALID_TYPES = ["SUMMIT", "DINER", "WEBINAIRE", "RENCONTRE"];
-const VALID_TIERS = ["MEMBER", "EXECUTIVE", "CHAIRMAN"];
 
 export function buildUpcomingEventsWhere(params: EventsSearchParams): Prisma.EventWhereInput {
   const now = new Date();
@@ -21,9 +19,6 @@ export function buildUpcomingEventsWhere(params: EventsSearchParams): Prisma.Eve
 
   if (params.type && VALID_TYPES.includes(params.type)) {
     where.type = params.type as Prisma.EventWhereInput["type"];
-  }
-  if (params.acces && VALID_TIERS.includes(params.acces)) {
-    where.minTier = params.acces as Prisma.EventWhereInput["minTier"];
   }
 
   if (params.date === "mois") {

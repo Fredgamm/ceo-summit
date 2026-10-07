@@ -15,15 +15,9 @@ import { Button } from "@/components/ui/button";
 import { ContactPanel } from "@/components/deal-room/contact-panel";
 import { ReceivedContactActions } from "@/components/deal-room/received-contact-actions";
 import { WithdrawContactButton } from "@/components/deal-room/withdraw-contact-button";
-import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail opportunité" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
   const session = await auth();
@@ -77,7 +71,6 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
       })
     : [];
 
-  const authorTier = getViewerTierFromCompany(opportunity.author.company);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   // B4 (audit du 29 juillet 2026) — attachments are R2 keys in a private
@@ -98,7 +91,6 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}
@@ -179,11 +171,6 @@ export default async function OpportunityDetailPage({ params }: { params: { id: 
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
-                {authorTier && (
-                  <Badge variant={TIER_BADGE[authorTier]} className="mt-1">
-                    {tierLabel(authorTier)}
-                  </Badge>
-                )}
               </div>
             </Link>
 

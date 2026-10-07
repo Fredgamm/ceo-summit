@@ -11,7 +11,6 @@ export const eventFormSchema = z.object({
   zoomMeetingId: z.string().optional().default(""),
   date: z.string().min(1, "La date est requise"),
   capacity: z.coerce.number().int().positive("La capacité doit être positive"),
-  minTier: z.enum(["MEMBER", "EXECUTIVE", "CHAIRMAN"]),
   price: z.coerce.number().int().min(0, "Le prix ne peut pas être négatif"),
   imageUrl: z.string().optional().default(""),
 });

@@ -11,18 +11,17 @@ import {
   type ServicesSearchParams,
 } from "@/lib/services-query";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { ServiceFilters } from "@/components/catalogue-services/service-filters";
 import { ServiceCard } from "@/components/catalogue-services/service-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Catalogue de services" };
 
-/** E5-T01 — liste des fiches services, filtrées par catégorie/pays/tier du prestataire. */
+/** E5-T01 — liste des fiches services, filtrées par catégorie/pays du prestataire. */
 export default async function ServicesCataloguePage({
   searchParams,
 }: {
@@ -61,7 +60,6 @@ export default async function ServicesCataloguePage({
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

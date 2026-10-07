@@ -83,12 +83,6 @@ export function initials(name: string): string {
     .join("");
 }
 
-/** Display label for a Tier/Role enum value: "EXECUTIVE" -> "Executive". Falls back to "Membre" when absent. */
-export function tierLabel(tier?: string | null): string {
-  if (!tier) return "Membre";
-  return tier.charAt(0) + tier.slice(1).toLowerCase();
-}
-
 /**
  * Décision d'architecture (sept. 2026, conception/09) — accès égal pour tout
  * membre dont l'entreprise a une offre active/validée : un événement reste

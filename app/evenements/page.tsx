@@ -12,12 +12,11 @@ import {
   type EventsSearchParams,
 } from "@/lib/events-query";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { EventFilters } from "@/components/events/event-filters";
 import { EventCard } from "@/components/events/event-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Événements" };
 
@@ -32,8 +31,6 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
     include: VIEWER_TIER_INCLUDE,
   });
   if (!viewer) redirect("/login");
-
-  const viewerTier = getViewerTierFromCompany(viewer.company);
 
   const [upcoming, past] = await Promise.all([
     prisma.event.findMany({
@@ -66,7 +63,6 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

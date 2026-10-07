@@ -33,22 +33,6 @@ describe("buildServicesQuery", () => {
     ]);
   });
 
-  it("filters by the provider's company plan rank meeting the tier threshold", () => {
-    const query = buildServicesQuery({ tier: "CHAIRMAN" }, VALID_COUNTRIES);
-    expect(query.where.author).toEqual({
-      company: {
-        subscription: {
-          status: { in: ["ACTIVE", "EXPIRED"] },
-          plan: { rank: { gte: 3 } },
-        },
-      },
-    });
-  });
-
-  it("ignores an unknown tier", () => {
-    expect(buildServicesQuery({ tier: "BIDON" }, VALID_COUNTRIES).where.author).toBeUndefined();
-  });
-
   it("filters by a title search", () => {
     expect(buildServicesQuery({ q: "audit" }, VALID_COUNTRIES).where.title).toEqual({
       contains: "audit",

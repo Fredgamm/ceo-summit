@@ -15,14 +15,6 @@ describe("buildAdminMembersQuery", () => {
     expect(query.take).toBe(ADMIN_MEMBERS_PAGE_SIZE);
   });
 
-  it("filters by a known tier via the role column", () => {
-    expect(buildAdminMembersQuery({ tier: "CHAIRMAN" }, REFERENTIALS).where.role).toBe("CHAIRMAN");
-  });
-
-  it("ignores an unknown tier", () => {
-    expect(buildAdminMembersQuery({ tier: "GOD_MODE" }, REFERENTIALS).where.role).toBeUndefined();
-  });
-
   it("filters by a known status", () => {
     expect(buildAdminMembersQuery({ statut: "SUSPENDED" }, REFERENTIALS).where.status).toBe(
       "SUSPENDED"

@@ -4,7 +4,6 @@ import type { Prisma, MembershipStatus } from "@prisma/client";
 
 export const ADMIN_MEMBERS_PAGE_SIZE = 20;
 
-const VALID_TIERS = ["MEMBER", "EXECUTIVE", "CHAIRMAN"];
 const VALID_STATUSES: MembershipStatus[] = [
   "ACTIVE",
   "PENDING_ACTIVATION",
@@ -15,7 +14,6 @@ const VALID_STATUSES: MembershipStatus[] = [
 
 export interface AdminMembersSearchParams {
   q?: string;
-  tier?: string;
   pays?: string;
   secteur?: string;
   statut?: string;
@@ -38,9 +36,6 @@ export function buildAdminMembersQuery(
 
   const where: Prisma.UserWhereInput = {};
 
-  if (params.tier && VALID_TIERS.includes(params.tier)) {
-    where.role = params.tier as Prisma.UserWhereInput["role"];
-  }
   if (params.pays && referentials.validCountries.includes(params.pays)) {
     where.country = params.pays;
   }

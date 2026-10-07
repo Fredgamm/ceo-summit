@@ -132,7 +132,6 @@ const VALID_ROOM_INPUT = {
   name: "Énergie & Environnement",
   description: "Transition énergétique en Océan Indien",
   sector: "Énergie & Environnement",
-  minTier: "ALL_MEMBERS" as const,
 };
 
 describe("createRoom", () => {
@@ -150,7 +149,7 @@ describe("createRoom", () => {
     expect(result).toEqual({ success: true, data: { id: "room_1" } });
     expect(prisma.room.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ name: VALID_ROOM_INPUT.name, minTier: "ALL_MEMBERS" }),
+        data: expect.objectContaining({ name: VALID_ROOM_INPUT.name }),
       })
     );
     expect(prisma.auditLog.create).toHaveBeenCalledWith(

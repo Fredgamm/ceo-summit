@@ -1,15 +1,8 @@
 import Link from "next/link";
-import type { Tier } from "@prisma/client";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
+import { formatAriary, formatEuro, formatDateFr, initials } from "@/lib/utils";
 
 interface OpportunityCardProps {
   id: string;
@@ -22,7 +15,6 @@ interface OpportunityCardProps {
   deadline: Date | null;
   createdAt: Date;
   author: { name: string; title: string | null; avatarUrl: string | null; role: string };
-  authorTier: Tier | null;
 }
 
 export function OpportunityCard({
@@ -36,7 +28,6 @@ export function OpportunityCard({
   deadline,
   createdAt,
   author,
-  authorTier,
 }: OpportunityCardProps) {
   return (
     <Link
@@ -67,7 +58,6 @@ export function OpportunityCard({
           <p className="truncate text-sm font-semibold text-navy">{author.name}</p>
           {author.title && <p className="truncate text-xs text-text-muted">{author.title}</p>}
         </div>
-        {authorTier && <Badge variant={TIER_BADGE[authorTier]}>{tierLabel(authorTier)}</Badge>}
       </div>
     </Link>
   );

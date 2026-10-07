@@ -2,15 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { renderBroadcastBody } from "./broadcast-template";
 
-const VARS = { prenom: "Jean-Pierre", nom: "Rakoto", tier: "Executive", entreprise: "TechOcean" };
+const VARS = { prenom: "Jean-Pierre", nom: "Rakoto", entreprise: "TechOcean" };
 
 describe("renderBroadcastBody", () => {
   it("substitutes all known variables", () => {
-    const result = renderBroadcastBody(
-      "Bonjour {{prénom}} {{nom}} ({{tier}}, {{entreprise}})",
-      VARS
-    );
-    expect(result).toBe("Bonjour Jean-Pierre Rakoto (Executive, TechOcean)");
+    const result = renderBroadcastBody("Bonjour {{prénom}} {{nom}} ({{entreprise}})", VARS);
+    expect(result).toBe("Bonjour Jean-Pierre Rakoto (TechOcean)");
   });
 
   it("substitutes a variable used multiple times", () => {

@@ -21,7 +21,6 @@ import { DealRoomFilters } from "@/components/deal-room/deal-room-filters";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Deal Room" };
 
@@ -103,7 +102,6 @@ export default async function DealRoomPage({
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}
@@ -144,7 +142,6 @@ export default async function DealRoomPage({
                 avatarUrl: opp.author.avatarUrl,
                 role: opp.author.role,
               }}
-              authorTier={getViewerTierFromCompany(opp.author.company)}
             />
           ))}
         </div>

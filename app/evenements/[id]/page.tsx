@@ -10,14 +10,14 @@ import { getActivePlans } from "@/lib/plans-query";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { parseSpeakers, speakersToText } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
-import { formatAriary, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -68,7 +68,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
   ]);
   const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
 
-  const viewerTier = getViewerTierFromCompany(viewer.company);
   const isRegistered =
     viewerRegistration !== null && TAKEN_STATUSES.includes(viewerRegistration.status);
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
@@ -100,7 +99,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

@@ -5,12 +5,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProfileEditForm } from "@/components/profile/profile-edit-form";
 import { Button } from "@/components/ui/button";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Éditer mon profil" };
 
@@ -37,7 +36,6 @@ export default async function EditProfilePage() {
     <AppShell
       user={{
         name: user.name,
-        tier: tierLabel(getViewerTierFromCompany(user.company)),
         avatarUrl: user.avatarUrl,
         isAdmin: user.isPlatformAdmin,
       }}

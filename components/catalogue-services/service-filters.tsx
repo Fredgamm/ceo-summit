@@ -13,13 +13,7 @@ import {
 
 const ALL = "__all__";
 
-const TIERS = [
-  { value: "MEMBER", label: "Member" },
-  { value: "EXECUTIVE", label: "Executive" },
-  { value: "CHAIRMAN", label: "Chairman" },
-];
-
-/** E5-T01 — filtres catégorie/pays/tier du prestataire. `countries` fourni par la page serveur parente (E8-T11). */
+/** E5-T01 — filtres catégorie/pays du prestataire. `countries` fourni par la page serveur parente (E8-T11). */
 export function ServiceFilters({ countries }: { countries: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -61,20 +55,6 @@ export function ServiceFilters({ countries }: { countries: string[] }) {
           {countries.map((c) => (
             <SelectItem key={c} value={c}>
               {c}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={searchParams.get("tier") || ALL} onValueChange={(v) => updateParam("tier", v)}>
-        <SelectTrigger className="w-[160px]">
-          <SelectValue placeholder="Tous niveaux" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous niveaux</SelectItem>
-          {TIERS.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
             </SelectItem>
           ))}
         </SelectContent>

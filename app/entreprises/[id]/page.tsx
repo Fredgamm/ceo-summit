@@ -32,7 +32,7 @@ import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form
 import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
-import { initials, tierLabel, formatAriary } from "@/lib/utils";
+import { initials, formatAriary } from "@/lib/utils";
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Aucune offre choisie",
@@ -159,7 +159,6 @@ export default async function CompanyProfilePage({
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}
@@ -222,7 +221,6 @@ export default async function CompanyProfilePage({
                   companyName={null}
                   country={u.country}
                   avatarUrl={u.avatarUrl}
-                  role={u.role}
                 />
               ))}
             </div>

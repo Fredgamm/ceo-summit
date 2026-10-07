@@ -38,16 +38,6 @@ describe("buildCatalogueQuery", () => {
     expect(query.where.country).toBeUndefined();
   });
 
-  it("filters by a known tier via the role column", () => {
-    const query = buildCatalogueQuery({ tier: "EXECUTIVE" }, REFERENTIALS);
-    expect(query.where.role).toBe("EXECUTIVE");
-  });
-
-  it("ignores an invalid tier", () => {
-    const query = buildCatalogueQuery({ tier: "GOD_MODE" }, REFERENTIALS);
-    expect(query.where.role).toBeUndefined();
-  });
-
   it("builds a case-insensitive OR search across name, title and company name", () => {
     const query = buildCatalogueQuery({ q: "Rakoto" }, REFERENTIALS);
     expect(query.where.OR).toEqual([
@@ -64,10 +54,6 @@ describe("buildCatalogueQuery", () => {
 
   it("sorts alphabetically when tri=alpha", () => {
     expect(buildCatalogueQuery({ tri: "alpha" }, REFERENTIALS).orderBy).toEqual({ name: "asc" });
-  });
-
-  it("sorts by tier (role desc) when tri=tier", () => {
-    expect(buildCatalogueQuery({ tri: "tier" }, REFERENTIALS).orderBy).toEqual({ role: "desc" });
   });
 
   it("sorts recent-first when tri=recent", () => {

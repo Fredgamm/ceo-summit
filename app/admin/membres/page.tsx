@@ -15,15 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MemberFilters } from "@/components/admin/member-filters";
-import { formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Membres" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 const STATUS_BADGE: Record<string, "active" | "suspended" | "pending" | "refused" | "draft"> = {
   ACTIVE: "active",
@@ -92,7 +86,6 @@ export default async function AdminMembresPage({
               <tr>
                 <th className="px-4 py-2.5 text-left">Membre</th>
                 <th className="px-4 py-2.5 text-left">Entreprise</th>
-                <th className="px-4 py-2.5 text-left">Tier</th>
                 <th className="px-4 py-2.5 text-left">Pays</th>
                 <th className="px-4 py-2.5 text-left">Membre depuis</th>
                 <th className="px-4 py-2.5 text-left">Statut</th>
@@ -115,13 +108,6 @@ export default async function AdminMembresPage({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-text-mid">{member.company?.name ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    {TIER_BADGE[member.role] ? (
-                      <Badge variant={TIER_BADGE[member.role]}>{tierLabel(member.role)}</Badge>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
                   <td className="px-4 py-3 text-text-mid">{member.country ?? "—"}</td>
                   <td className="px-4 py-3 text-text-muted">{formatDateFr(member.createdAt)}</td>
                   <td className="px-4 py-3">

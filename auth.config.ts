@@ -35,7 +35,6 @@ export const authConfig = {
         token.id = user.id;
         token.role = user.role;
         token.isPlatformAdmin = user.isPlatformAdmin;
-        token.tier = user.tier;
         token.hasCompanyAccess = user.hasCompanyAccess;
         token.status = user.status;
         /**
@@ -56,7 +55,6 @@ export const authConfig = {
       session.user.id = token.id as string;
       session.user.role = token.role as (typeof session.user)["role"];
       session.user.isPlatformAdmin = token.isPlatformAdmin as boolean;
-      session.user.tier = token.tier as string | null;
       session.user.hasCompanyAccess = token.hasCompanyAccess as boolean;
       session.user.status = token.status as string;
       session.user.loginAt = typeof token.loginAt === "number" ? token.loginAt : null;

@@ -3,18 +3,11 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
-import { Badge } from "@/components/ui/badge";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { Button } from "@/components/ui/button";
-import { formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Mon badge" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 /**
  * E3-T04 — badge numérique. "Si l'inscription n'est pas confirmée (paiement
@@ -47,8 +40,6 @@ export default async function EventBadgePage({ params }: { params: { id: string 
     redirect(`/evenements/${event.id}`);
   }
 
-  const tier = getViewerTierFromCompany(viewer.company);
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface p-6">
       <div className="w-full max-w-[380px] overflow-hidden rounded-2xl bg-gradient-to-br from-navy to-navy-dark p-6 text-white shadow-card-lg">
@@ -66,7 +57,6 @@ export default async function EventBadgePage({ params }: { params: { id: string 
             <p className="font-bold">{viewer.name}</p>
             <p className="text-xs text-white/60">{viewer.title ?? "Membre CEO Summit"}</p>
           </div>
-          {tier && <Badge variant={TIER_BADGE[tier]}>{tierLabel(tier)}</Badge>}
         </div>
 
         <Button asChild variant="secondary" className="mt-6 w-full justify-center">

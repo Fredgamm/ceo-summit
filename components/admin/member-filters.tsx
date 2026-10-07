@@ -14,12 +14,6 @@ import {
 
 const ALL = "__all__";
 
-const TIERS = [
-  { value: "MEMBER", label: "Member" },
-  { value: "EXECUTIVE", label: "Executive" },
-  { value: "CHAIRMAN", label: "Chairman" },
-];
-
 const STATUSES = [
   { value: "ACTIVE", label: "Actif" },
   { value: "PENDING_ACTIVATION", label: "En attente d'activation" },
@@ -64,20 +58,6 @@ export function MemberFilters({ sectors, countries }: { sectors: string[]; count
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
-
-      <Select value={searchParams.get("tier") || ALL} onValueChange={(v) => updateParam("tier", v)}>
-        <SelectTrigger className="w-[150px]">
-          <SelectValue placeholder="Tous les tiers" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous les tiers</SelectItem>
-          {TIERS.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
 
       <Select value={searchParams.get("pays") || ALL} onValueChange={(v) => updateParam("pays", v)}>
         <SelectTrigger className="w-[150px]">

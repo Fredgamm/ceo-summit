@@ -81,7 +81,6 @@ export default async function EditEventPage({ params }: { params: { id: string }
           zoomMeetingId: event.zoomMeetingId ?? "",
           date: toDatetimeLocalValue(event.date),
           capacity: String(event.capacity),
-          minTier: event.minTier,
           price: String(event.price),
           imageUrl: event.imageUrl ?? "",
         }}

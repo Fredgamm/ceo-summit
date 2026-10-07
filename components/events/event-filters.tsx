@@ -27,13 +27,6 @@ const DATES = [
   { value: "trimestre", label: "Prochain trimestre" },
 ];
 
-const ACCES = [
-  { value: ALL, label: "Tous les accès" },
-  { value: "MEMBER", label: "Tous membres" },
-  { value: "EXECUTIVE", label: "Executive+" },
-  { value: "CHAIRMAN", label: "Chairman" },
-];
-
 /** E3-T01 — type/date/accès filters drive the URL, same pattern as CatalogueFilters. */
 export function EventFilters() {
   const router = useRouter();
@@ -81,22 +74,6 @@ export function EventFilters() {
             {DATES.map((d) => (
               <SelectItem key={d.value} value={d.value}>
                 {d.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={searchParams.get("acces") || ALL}
-          onValueChange={(v) => updateParam("acces", v)}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {ACCES.map((a) => (
-              <SelectItem key={a.value} value={a.value}>
-                {a.label}
               </SelectItem>
             ))}
           </SelectContent>

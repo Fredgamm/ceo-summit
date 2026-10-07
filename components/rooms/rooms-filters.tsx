@@ -1,9 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { RoomAccessLevel } from "@prisma/client";
 
-import { ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import {
   Select,
   SelectContent,
@@ -14,9 +12,7 @@ import {
 
 const ALL = "__all__";
 
-const ACCESS_LEVELS = Object.entries(ROOM_ACCESS_LABEL) as [RoomAccessLevel, string][];
-
-/** E4-T02 — filtres secteur/accès minimum. `sectors` fourni par la page serveur parente (E8-T11). */
+/** E4-T02 — filtre secteur. `sectors` fourni par la page serveur parente (E8-T11). */
 export function RoomsFilters({ sectors }: { sectors: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -43,23 +39,6 @@ export function RoomsFilters({ sectors }: { sectors: string[] }) {
           {sectors.map((s) => (
             <SelectItem key={s} value={s}>
               {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select
-        value={searchParams.get("acces") || ALL}
-        onValueChange={(v) => updateParam("acces", v)}
-      >
-        <SelectTrigger className="w-[190px]">
-          <SelectValue placeholder="Tous les accès" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={ALL}>Tous les accès</SelectItem>
-          {ACCESS_LEVELS.map(([value, label]) => (
-            <SelectItem key={value} value={value}>
-              {label}
             </SelectItem>
           ))}
         </SelectContent>

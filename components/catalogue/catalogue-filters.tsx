@@ -16,17 +16,10 @@ import { cn } from "@/lib/utils";
 
 const ALL = "__all__";
 
-const TIERS = [
-  { value: "MEMBER", label: "Member" },
-  { value: "EXECUTIVE", label: "Executive" },
-  { value: "CHAIRMAN", label: "Chairman" },
-];
-
 const SORTS = [
   { value: "offre", label: "Trier : Offre (plus chère d'abord)" },
   { value: "recent", label: "Activité récente" },
   { value: "alpha", label: "Alphabétique" },
-  { value: "tier", label: "Niveau membership" },
 ];
 
 /**
@@ -120,23 +113,6 @@ export function CatalogueFilters({
             {countries.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={searchParams.get("tier") || ALL}
-          onValueChange={(v) => updateParam("tier", v === ALL ? "" : v)}
-        >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Tous niveaux" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Tous niveaux</SelectItem>
-            {TIERS.map((t) => (
-              <SelectItem key={t.value} value={t.value}>
-                {t.label}
               </SelectItem>
             ))}
           </SelectContent>

@@ -2,10 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { RoomAccessLevel } from "@prisma/client";
 
 import { createRoom, updateRoom } from "@/app/actions/admin-rooms";
-import { ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,20 +17,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const ACCESS_LEVELS = Object.entries(ROOM_ACCESS_LABEL) as [RoomAccessLevel, string][];
-
 export interface RoomFormValues {
   name: string;
   description: string;
   sector: string;
-  minTier: RoomAccessLevel;
 }
 
 const EMPTY_VALUES: RoomFormValues = {
   name: "",
   description: "",
   sector: "",
-  minTier: "ALL_MEMBERS",
 };
 
 interface RoomFormProps {
@@ -43,7 +37,7 @@ interface RoomFormProps {
   sectors: string[];
 }
 
-/** E8-T08 — "CRUD salles + gestion accès tier". */
+/** E8-T08 — "CRUD salles". */
 export function RoomForm({ mode, roomId, initialValues, sectors }: RoomFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<RoomFormValues>({ ...EMPTY_VALUES, ...initialValues });
@@ -115,25 +109,6 @@ export function RoomForm({ mode, roomId, initialValues, sectors }: RoomFormProps
               {sectors.map((s) => (
                 <SelectItem key={s} value={s}>
                   {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Accès minimum *</Label>
-          <Select
-            value={values.minTier}
-            onValueChange={(v) => set("minTier", v as RoomAccessLevel)}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ACCESS_LEVELS.map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

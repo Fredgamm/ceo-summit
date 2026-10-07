@@ -137,13 +137,10 @@ export async function authorizeCredentials(rawCredentials: unknown, request?: Re
     throw new Error("ACCOUNT_EXPIRED");
   }
 
-  // 4 août 2026 (CEO Summit devenu intégralement B2B) — le tier et
-  // l'accès plateforme viennent désormais exclusivement du rang de
-  // l'offre de l'entreprise (voir lib/plan-access.ts). `EXPIRED`
-  // compte encore pour l'accès plateforme : seul l'accès à l'édition
-  // d'évènement expire, pas les avantages plateforme (RG-12).
-  const tier = getViewerTierFromCompany(user.company);
-  const hasCompanyAccess = tier !== null;
+  // L'accès plateforme vient de l'offre de l'entreprise (voir
+  // lib/plan-access.ts). `EXPIRED` compte encore : seul l'accès à
+  // l'édition d'évènement expire, pas les avantages plateforme (RG-12).
+  const hasCompanyAccess = getViewerTierFromCompany(user.company) !== null;
 
   return {
     id: user.id,
@@ -152,7 +149,6 @@ export async function authorizeCredentials(rawCredentials: unknown, request?: Re
     image: user.avatarUrl,
     role: user.role,
     isPlatformAdmin: user.isPlatformAdmin,
-    tier,
     hasCompanyAccess,
     status,
   };

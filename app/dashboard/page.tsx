@@ -18,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Accueil" };
 
@@ -161,7 +161,6 @@ export default async function DashboardPage() {
     <AppShell
       user={{
         name: user.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: user.avatarUrl,
         isAdmin: user.isPlatformAdmin,
       }}
@@ -180,17 +179,9 @@ export default async function DashboardPage() {
             <p className="text-xs text-text-muted">
               {[user.title, user.company?.name].filter(Boolean).join(" · ")}
             </p>
-            <Badge
-              variant={
-                viewerTier === "CHAIRMAN"
-                  ? "chairman"
-                  : viewerTier === "EXECUTIVE"
-                    ? "executive"
-                    : "member"
-              }
-            >
-              {tierLabel(viewerTier)}
-            </Badge>
+            {user.company?.subscription?.plan.name && (
+              <Badge variant="secondary">{user.company.subscription.plan.name}</Badge>
+            )}
           </Link>
 
           <div className="border-t border-border py-5">
@@ -365,7 +356,6 @@ export default async function DashboardPage() {
                 deadline={opp.deadline}
                 createdAt={opp.createdAt}
                 author={opp.author}
-                authorTier={getViewerTierFromCompany(opp.author.company)}
               />
             ))}
           </div>
@@ -421,7 +411,6 @@ export default async function DashboardPage() {
                 companyName={member.company?.name ?? null}
                 country={member.country}
                 avatarUrl={member.avatarUrl}
-                role={member.role}
               />
             ))}
           </div>

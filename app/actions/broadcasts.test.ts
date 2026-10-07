@@ -53,16 +53,13 @@ describe("getSegmentCounts", () => {
   });
 
   it("returns real counts per segment", async () => {
-    vi.mocked(prisma.user.count)
-      .mockResolvedValueOnce(147)
-      .mockResolvedValueOnce(38)
-      .mockResolvedValueOnce(72);
+    vi.mocked(prisma.user.count).mockResolvedValueOnce(147);
 
     const result = await getSegmentCounts();
 
     expect(result).toEqual({
       success: true,
-      data: { ALL_ACTIVE: 147, CHAIRMAN: 38, EXECUTIVE: 72 },
+      data: { ALL_ACTIVE: 147 },
     });
   });
 });
@@ -210,9 +207,15 @@ describe("sendBroadcast", () => {
 
   it("rejects a segment with no matching recipients", async () => {
     vi.mocked(prisma.user.findMany).mockResolvedValue([]);
-    const result = await sendBroadcast("Sujet", "Corps", "CHAIRMAN");
+    const result = await sendBroadcast("Sujet", "Corps", "CUSTOM", "Comores");
     expect(result.success).toBe(false);
     expect(prisma.broadcast.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a retired tier segment", async () => {
+    const result = await sendBroadcast("Sujet", "Corps", "CHAIRMAN" as never);
+    expect(result.success).toBe(false);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
   });
 
   it("creates the broadcast, emails every recipient, and records recipients", async () => {

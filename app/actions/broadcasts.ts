@@ -2,18 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import type { BroadcastSegment } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { buildBroadcastRecipientsWhere } from "@/lib/broadcast-segments";
+import { buildBroadcastRecipientsWhere, type SendableSegment } from "@/lib/broadcast-segments";
 import { renderBroadcastBody } from "@/lib/broadcast-template";
 import { requireAdmin } from "@/lib/admin-auth";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getSignedDownloadUrl, isKeyUnderPrefix } from "@/lib/r2";
 import { BROADCAST_ATTACHMENT_LINK_TTL_SECONDS } from "@/lib/validations/broadcast";
-import { tierLabel } from "@/lib/utils";
 import BroadcastEmail from "@/emails/broadcast-email";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -27,7 +25,7 @@ const broadcastContentSchema = z.object({
   subject: z.string().trim().min(1, "L'objet est requis").max(200),
   body: z.string().trim().min(1, "Le corps du message est requis").max(20_000),
 });
-const broadcastSegmentSchema = z.enum(["ALL_ACTIVE", "CHAIRMAN", "EXECUTIVE", "CUSTOM"]);
+const broadcastSegmentSchema = z.enum(["ALL_ACTIVE", "CUSTOM"]);
 
 function splitName(name: string): { prenom: string; nom: string } {
   const [prenom, ...rest] = name.trim().split(" ");
@@ -63,21 +61,11 @@ async function resolveAttachmentLinks(
 }
 
 /** E8-T09 — comptes réels par segment, affichés dans le composeur avant envoi. */
-export async function getSegmentCounts(): Promise<
-  ActionResult<{ ALL_ACTIVE: number; CHAIRMAN: number; EXECUTIVE: number }>
-> {
+export async function getSegmentCounts(): Promise<ActionResult<{ ALL_ACTIVE: number }>> {
   await requireAdmin("communications");
 
-  const [allActive, chairman, executive] = await Promise.all([
-    prisma.user.count({ where: buildBroadcastRecipientsWhere("ALL_ACTIVE") }),
-    prisma.user.count({ where: buildBroadcastRecipientsWhere("CHAIRMAN") }),
-    prisma.user.count({ where: buildBroadcastRecipientsWhere("EXECUTIVE") }),
-  ]);
-
-  return {
-    success: true,
-    data: { ALL_ACTIVE: allActive, CHAIRMAN: chairman, EXECUTIVE: executive },
-  };
+  const allActive = await prisma.user.count({ where: buildBroadcastRecipientsWhere("ALL_ACTIVE") });
+  return { success: true, data: { ALL_ACTIVE: allActive } };
 }
 
 export async function getCustomSegmentCount(
@@ -114,7 +102,6 @@ export async function sendTestBroadcast(
   const renderedBody = renderBroadcastBody(body, {
     prenom,
     nom,
-    tier: tierLabel(getViewerTierFromCompany(viewer.company)),
     entreprise: viewer.company?.name ?? "—",
   });
   const resolvedAttachments = await resolveAttachmentLinks(attachments);
@@ -132,7 +119,7 @@ export async function sendTestBroadcast(
 export async function sendBroadcast(
   subject: string,
   body: string,
-  segment: BroadcastSegment,
+  segment: SendableSegment,
   country?: string,
   sector?: string,
   planIds?: string[],
@@ -186,7 +173,6 @@ export async function sendBroadcast(
       const renderedBody = renderBroadcastBody(body, {
         prenom,
         nom,
-        tier: tierLabel(getViewerTierFromCompany(recipient.company)),
         entreprise: recipient.company?.name ?? "—",
       });
 

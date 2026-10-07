@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { buildActiveOpportunitiesWhere } from "@/lib/admin-deal-room-query";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import {
   QuickApproveButton,
@@ -16,7 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Deal Room" };
 
@@ -38,12 +38,6 @@ const STATUS_LABEL: Record<string, string> = {
   UNPUBLISHED: "Dépubliée",
   REFUSED: "Refusée",
   EXPIRED: "Expirée",
-};
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
 };
 
 /** E8-T06 — file de modération Deal Room : à valider / actives / archivées. */
@@ -172,11 +166,6 @@ export default async function AdminDealRoomPage({
                       <AvatarFallback>{initials(opp.author.name)}</AvatarFallback>
                     </Avatar>
                     <span className="font-semibold text-navy">{opp.author.name}</span>
-                    {getViewerTierFromCompany(opp.author.company) && (
-                      <Badge variant={TIER_BADGE[getViewerTierFromCompany(opp.author.company)!]}>
-                        {tierLabel(getViewerTierFromCompany(opp.author.company))}
-                      </Badge>
-                    )}
                     <span>· Soumis le {formatDateFr(opp.createdAt)}</span>
                     {opp.budget != null && <span>· {formatAriary(opp.budget)}</span>}
                     {opp.budgetEur != null && <span>· {formatEuro(opp.budgetEur)}</span>}

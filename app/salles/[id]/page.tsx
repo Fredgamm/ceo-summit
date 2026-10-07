@@ -12,7 +12,6 @@ import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomChat } from "@/components/rooms/room-chat";
 import { Badge } from "@/components/ui/badge";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Salle" };
 
@@ -53,7 +52,6 @@ export default async function RoomPage({ params }: { params: { id: string } }) {
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

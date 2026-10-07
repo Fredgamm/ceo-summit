@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import type { BroadcastSegment } from "@prisma/client";
 
 import {
   getSegmentCounts,
@@ -10,7 +9,7 @@ import {
   sendBroadcast,
   sendTestBroadcast,
 } from "@/app/actions/broadcasts";
-import { SEGMENT_LABEL } from "@/lib/broadcast-segments";
+import { SEGMENT_LABEL, type SendableSegment } from "@/lib/broadcast-segments";
 import { pluralize } from "@/lib/utils";
 import {
   BROADCAST_ATTACHMENT_ALLOWED_MIME_TYPES,
@@ -33,15 +32,10 @@ import {
 const ALL = "__all__";
 
 /**
- * Rapport QA du 1er oct. 2026 (§3.2b) — les segments figés CHAIRMAN/
- * EXECUTIVE ne sont plus proposés : ciblage par une ou plusieurs offres
- * du catalogue (dynamique, pas limité à 2 paliers historiques). Seuls
- * ALL_ACTIVE et CUSTOM restent sélectionnables ; l'enum Prisma garde les
- * valeurs CHAIRMAN/EXECUTIVE pour ne pas casser l'historique des
- * broadcasts déjà envoyés avec ces segments (toujours affichés tels quels
- * dans l'onglet Historique).
+ * Ciblage par une ou plusieurs offres via CUSTOM. L'enum Prisma garde
+ * CHAIRMAN/EXECUTIVE pour l'historique des broadcasts déjà envoyés.
  */
-const SELECTABLE_SEGMENTS: BroadcastSegment[] = ["ALL_ACTIVE", "CUSTOM"];
+const SELECTABLE_SEGMENTS: SendableSegment[] = ["ALL_ACTIVE", "CUSTOM"];
 
 /**
  * E8-T09 — composer un broadcast : segment, aperçu, envoi test, envoi réel.
@@ -61,18 +55,14 @@ export function BroadcastComposer({
   const router = useRouter();
   const [subject, setSubject] = React.useState("");
   const [body, setBody] = React.useState("");
-  const [segment, setSegment] = React.useState<BroadcastSegment>("ALL_ACTIVE");
+  const [segment, setSegment] = React.useState<SendableSegment>("ALL_ACTIVE");
   const [country, setCountry] = React.useState("");
   const [sector, setSector] = React.useState("");
   const [planIds, setPlanIds] = React.useState<string[]>([]);
   const [attachments, setAttachments] = React.useState<{ key: string; name: string }[]>([]);
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
-  const [counts, setCounts] = React.useState<{
-    ALL_ACTIVE: number;
-    CHAIRMAN: number;
-    EXECUTIVE: number;
-  } | null>(null);
+  const [counts, setCounts] = React.useState<{ ALL_ACTIVE: number } | null>(null);
   const [customCount, setCustomCount] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [testing, setTesting] = React.useState(false);
@@ -203,7 +193,7 @@ export function BroadcastComposer({
           <Alert variant="gold">
             <AlertDescription>
               Variables disponibles : <strong>{"{{prénom}}"}</strong>, <strong>{"{{nom}}"}</strong>,{" "}
-              <strong>{"{{tier}}"}</strong>, <strong>{"{{entreprise}}"}</strong>
+              <strong>{"{{entreprise}}"}</strong>
             </AlertDescription>
           </Alert>
 

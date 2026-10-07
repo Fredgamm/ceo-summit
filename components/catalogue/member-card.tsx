@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { cn, initials, tierLabel } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 
 interface MemberCardProps {
   id: string;
@@ -11,7 +11,6 @@ interface MemberCardProps {
   companyName: string | null;
   country: string | null;
   avatarUrl: string | null;
-  role: string;
   /** Nom de l'offre souscrite par l'entreprise (ex. "Executive Pass"), pour le badge premium. */
   offerName?: string | null;
   /**
@@ -24,12 +23,6 @@ interface MemberCardProps {
   isTopOffer?: boolean;
 }
 
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
-
 export function MemberCard({
   id,
   name,
@@ -37,7 +30,6 @@ export function MemberCard({
   companyName,
   country,
   avatarUrl,
-  role,
   offerName = null,
   isTopOffer = false,
 }: MemberCardProps) {
@@ -59,7 +51,6 @@ export function MemberCard({
         {companyName && <p className="truncate text-xs text-text-muted">{companyName}</p>}
         <div className="mt-1.5 flex flex-wrap gap-1.5">
           {isTopOffer && offerName && <Badge variant="chairman">{offerName}</Badge>}
-          {TIER_BADGE[role] && <Badge variant={TIER_BADGE[role]}>{tierLabel(role)}</Badge>}
           {country && <Badge variant="secondary">{country}</Badge>}
         </div>
       </div>

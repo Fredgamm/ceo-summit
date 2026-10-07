@@ -5,14 +5,13 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildConversationsWhere, otherParticipantId } from "@/lib/conversations-query";
 import { decryptMessageContent } from "@/lib/message-crypto";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   ConversationList,
   type ConversationListItem,
 } from "@/components/messages/conversation-list";
 import { SplitPane } from "@/components/messages/split-pane";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Messagerie" };
 
@@ -69,7 +68,6 @@ export default async function MessagerieLayout({ children }: { children: React.R
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(getViewerTierFromCompany(viewer.company)),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

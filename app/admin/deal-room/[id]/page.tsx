@@ -5,13 +5,13 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getSignedDownloadUrl } from "@/lib/r2";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { OpportunityChecklist } from "@/components/admin/deal-room/opportunity-checklist";
 import { OpportunityDecisionPanel } from "@/components/admin/deal-room/opportunity-decision-panel";
 import { ModerationNoteForm } from "@/components/admin/deal-room/moderation-note-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { formatAriary, formatEuro, formatDateFr, initials, tierLabel } from "@/lib/utils";
+import { formatAriary, formatEuro, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Examiner une opportunité" };
 
@@ -22,12 +22,6 @@ const STATUS_LABEL: Record<string, string> = {
   REFUSED: "Refusée",
   UNPUBLISHED: "Dépubliée",
   EXPIRED: "Expirée",
-};
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
 };
 
 /** E8-T06 — fiche d'examen : contenu, checklist, décision, navigation dans la file. */
@@ -65,8 +59,6 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
   const queueIndex = queue.findIndex((o) => o.id === opportunity.id);
   const prevId = queueIndex > 0 ? queue[queueIndex - 1].id : null;
   const nextId = queueIndex >= 0 && queueIndex < queue.length - 1 ? queue[queueIndex + 1].id : null;
-
-  const authorTier = getViewerTierFromCompany(opportunity.author.company);
 
   // B4 (audit du 29 juillet 2026) — see app/deal-room/[id]/page.tsx for the
   // member-facing equivalent; same private-key → signed-URL resolution.
@@ -127,10 +119,6 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
                 </div>
               )}
               <div className="rounded-md bg-surface p-3">
-                <p className="mb-1 text-xs font-bold uppercase text-text-muted">Visibilité</p>
-                <p className="font-bold text-navy">{tierLabel(opportunity.visibility)}+</p>
-              </div>
-              <div className="rounded-md bg-surface p-3">
                 <p className="mb-1 text-xs font-bold uppercase text-text-muted">Soumise le</p>
                 <p className="font-bold text-navy">{formatDateFr(opportunity.createdAt)}</p>
               </div>
@@ -173,9 +161,6 @@ export default async function AdminOpportunityDetailPage({ params }: { params: {
                 <p className="font-bold text-navy">{opportunity.author.name}</p>
                 <p className="text-xs text-text-muted">{opportunity.author.title}</p>
                 <div className="mt-1 flex items-center gap-2">
-                  {authorTier && (
-                    <Badge variant={TIER_BADGE[authorTier]}>{tierLabel(authorTier)}</Badge>
-                  )}
                   <span className="text-xs text-text-muted">
                     Membre depuis {formatDateFr(opportunity.author.createdAt)}
                   </span>

@@ -6,13 +6,12 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { buildRoomsWhere, type RoomsSearchParams } from "@/lib/rooms-query";
 import { countUnreadMessages } from "@/lib/conversations";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomsFilters } from "@/components/rooms/rooms-filters";
 import { RoomsGrid } from "@/components/rooms/rooms-grid";
 import { EmptyState } from "@/components/ui/empty-state";
-import { tierLabel } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Salles thématiques" };
 
@@ -27,7 +26,6 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
   });
   if (!viewer) redirect("/login");
 
-  const viewerTier = getViewerTierFromCompany(viewer.company);
   const validSectors = await getReferentialLabels("sector");
   const where = buildRoomsWhere(searchParams, validSectors);
 
@@ -65,7 +63,6 @@ export default async function RoomsPage({ searchParams }: { searchParams: RoomsS
     <AppShell
       user={{
         name: viewer.name,
-        tier: tierLabel(viewerTier),
         avatarUrl: viewer.avatarUrl,
         isAdmin: viewer.isPlatformAdmin,
       }}

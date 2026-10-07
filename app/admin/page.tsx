@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
 import { buildActivityFeed, buildMonthlyRevenueSeries, computeMRR } from "@/lib/admin-dashboard";
-import { buildBroadcastRecipientsWhere } from "@/lib/broadcast-segments";
 import { RevenueChart } from "@/components/admin/revenue-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAriary, formatDateFr } from "@/lib/utils";
@@ -20,8 +19,6 @@ export const metadata: Metadata = { title: "Admin — Tableau de bord" };
 export default async function AdminDashboardPage() {
   const [
     activeUsersCount,
-    chairmanCount,
-    executiveCount,
     activeSubscriptions,
     allCompanyPaymentsForRevenue,
     paidEventRegistrations,
@@ -32,12 +29,6 @@ export default async function AdminDashboardPage() {
     recentRegistrations,
   ] = await Promise.all([
     prisma.user.count({ where: { status: "ACTIVE" } }),
-    prisma.user.count({
-      where: { status: "ACTIVE", ...buildBroadcastRecipientsWhere("CHAIRMAN") },
-    }),
-    prisma.user.count({
-      where: { status: "ACTIVE", ...buildBroadcastRecipientsWhere("EXECUTIVE") },
-    }),
     prisma.companySubscription.findMany({
       where: { status: { in: ["ACTIVE", "EXPIRED"] } },
       select: {
@@ -89,8 +80,6 @@ export default async function AdminDashboardPage() {
       include: { user: { select: { name: true } }, event: { select: { title: true } } },
     }),
   ]);
-
-  const roleCounts = { CHAIRMAN: chairmanCount, EXECUTIVE: executiveCount };
 
   // Un abonnement ACTIVE/EXPIRED a toujours des dates réelles — filtre
   // défensif, voir admin/finances/page.tsx.
@@ -165,9 +154,6 @@ export default async function AdminDashboardPage() {
           <CardContent className="pt-6">
             <p className="text-2xl font-bold text-navy">{activeUsersCount}</p>
             <p className="text-sm text-text-muted">Membres actifs</p>
-            <p className="mt-2 text-xs text-text-muted">
-              {roleCounts.CHAIRMAN} Chairman · {roleCounts.EXECUTIVE} Executive
-            </p>
           </CardContent>
         </Card>
         <Card>

@@ -4,18 +4,11 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatAriary, formatDateFr, tierLabel } from "@/lib/utils";
+import { formatAriary, formatDateFr } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Inscrits" };
-
-const TIER_BADGE: Record<string, "member" | "executive" | "chairman"> = {
-  MEMBER: "member",
-  EXECUTIVE: "executive",
-  CHAIRMAN: "chairman",
-};
 
 const PAYMENT_LABEL: Record<string, string> = {
   PENDING: "En attente",
@@ -105,7 +98,6 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
             <thead className="bg-surface text-xs uppercase text-text-muted">
               <tr>
                 <th className="px-4 py-2.5 text-left">Participant</th>
-                <th className="px-4 py-2.5 text-left">Tier</th>
                 <th className="px-4 py-2.5 text-left">Offre</th>
                 <th className="px-4 py-2.5 text-left">Inscrit le</th>
                 <th className="px-4 py-2.5 text-left">Paiement</th>
@@ -117,11 +109,6 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
                   <td className="px-4 py-3">
                     <p className="font-semibold text-navy">{r.user.name}</p>
                     <p className="text-xs text-text-muted">{r.user.email}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    {TIER_BADGE[r.user.role] && (
-                      <Badge variant={TIER_BADGE[r.user.role]}>{tierLabel(r.user.role)}</Badge>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-text-mid">{r.plan?.name ?? "—"}</td>
                   <td className="px-4 py-3 text-text-muted">{formatDateFr(r.createdAt)}</td>

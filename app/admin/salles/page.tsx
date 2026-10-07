@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { ROOM_ACCESS_LABEL } from "@/lib/rooms-query";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,12 +11,6 @@ import { RoomAdminActions } from "@/components/admin/room-admin-actions";
 import { RoomReportDialog } from "@/components/admin/room-report-dialog";
 
 export const metadata: Metadata = { title: "Admin — Salles" };
-
-const ACCESS_BADGE = {
-  ALL_MEMBERS: "member",
-  EXECUTIVE_PLUS: "executive",
-  CHAIRMAN_ONLY: "chairman",
-} as const;
 
 /** E4-T04 — modération salles : signalements en attente + liste/archivage. */
 export default async function AdminRoomsPage() {
@@ -105,7 +98,6 @@ export default async function AdminRoomsPage() {
                 <tr>
                   <th className="px-4 py-2.5 text-left">Salle</th>
                   <th className="px-4 py-2.5 text-left">Secteur</th>
-                  <th className="px-4 py-2.5 text-left">Accès</th>
                   <th className="px-4 py-2.5 text-left">Messages</th>
                   <th className="px-4 py-2.5 text-left">Statut</th>
                   <th className="px-4 py-2.5" />
@@ -123,11 +115,6 @@ export default async function AdminRoomsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-text-mid">{room.sector}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={ACCESS_BADGE[room.minTier]}>
-                        {ROOM_ACCESS_LABEL[room.minTier]}
-                      </Badge>
-                    </td>
                     <td className="px-4 py-3 font-semibold text-navy">{room._count.messages}</td>
                     <td className="px-4 py-3">
                       <Badge variant={room.status === "ACTIVE" ? "active" : "draft"}>
