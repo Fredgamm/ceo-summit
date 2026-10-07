@@ -11,8 +11,8 @@ interface MemberCardProps {
   companyName: string | null;
   country: string | null;
   avatarUrl: string | null;
-  /** Nom de l'offre souscrite par l'entreprise (ex. "Executive Pass"), pour le badge premium. */
-  offerName?: string | null;
+  /** Badge de l'offre de l'entreprise (offres à prix fixe seulement, voir lib/offer-badge.ts). */
+  offerBadge?: string | null;
   /**
    * Rapport QA du 30 sept. 2026 (§11) — met en avant la carte de l'offre la
    * plus chère actuellement souscrite (calculé côté page, pas ici : cette
@@ -30,7 +30,7 @@ export function MemberCard({
   companyName,
   country,
   avatarUrl,
-  offerName = null,
+  offerBadge = null,
   isTopOffer = false,
 }: MemberCardProps) {
   return (
@@ -50,7 +50,7 @@ export function MemberCard({
         {title && <p className="truncate text-xs text-text-mid">{title}</p>}
         {companyName && <p className="truncate text-xs text-text-muted">{companyName}</p>}
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {isTopOffer && offerName && <Badge variant="chairman">{offerName}</Badge>}
+          {offerBadge && <Badge variant="chairman">{offerBadge}</Badge>}
           {country && <Badge variant="secondary">{country}</Badge>}
         </div>
       </div>

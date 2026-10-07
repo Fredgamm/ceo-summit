@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatDateFr, initials } from "@/lib/utils";
+import { offerBadgeLabel } from "@/lib/offer-badge";
 
 export const metadata: Metadata = { title: "Accueil" };
 
@@ -179,8 +180,8 @@ export default async function DashboardPage() {
             <p className="text-xs text-text-muted">
               {[user.title, user.company?.name].filter(Boolean).join(" · ")}
             </p>
-            {user.company?.subscription?.plan.name && (
-              <Badge variant="secondary">{user.company.subscription.plan.name}</Badge>
+            {offerBadgeLabel(user.company?.subscription) && (
+              <Badge variant="chairman">{offerBadgeLabel(user.company?.subscription)}</Badge>
             )}
           </Link>
 

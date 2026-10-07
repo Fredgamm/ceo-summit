@@ -18,6 +18,7 @@ import { CatalogueFilters } from "@/components/catalogue/catalogue-filters";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { offerBadgeLabel } from "@/lib/offer-badge";
 
 export const metadata: Metadata = { title: "Liste des membres" };
 
@@ -56,7 +57,7 @@ export default async function CataloguePage({
       skip,
       take,
       include: {
-        company: { select: { name: true, subscription: { select: { plan: true } } } },
+        company: { select: { name: true, subscription: { select: { status: true, plan: true } } } },
       },
     }),
     prisma.user.count({ where }),
@@ -105,7 +106,7 @@ export default async function CataloguePage({
               companyName={m.company?.name ?? null}
               country={m.country}
               avatarUrl={m.avatarUrl}
-              offerName={m.company?.subscription?.plan.name ?? null}
+              offerBadge={offerBadgeLabel(m.company?.subscription)}
               isTopOffer={
                 topOfferPriceAr != null && m.company?.subscription?.plan.priceAr === topOfferPriceAr
               }

@@ -33,6 +33,7 @@ import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { initials, formatAriary } from "@/lib/utils";
+import { offerBadgeLabel } from "@/lib/offer-badge";
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Aucune offre choisie",
@@ -170,7 +171,12 @@ export default async function CompanyProfilePage({
           <AvatarFallback className="rounded-xl">{initials(company.name)}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-bold text-navy">{company.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold text-navy">{company.name}</h1>
+            {offerBadgeLabel(company.subscription) && (
+              <Badge variant="chairman">{offerBadgeLabel(company.subscription)}</Badge>
+            )}
+          </div>
           <p className="text-sm text-text-muted">
             {[company.sector, company.country].filter(Boolean).join(" · ")}
           </p>
