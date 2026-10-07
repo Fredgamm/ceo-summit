@@ -54,9 +54,13 @@ export function ReferentialSelect({
   return (
     <>
       <Select
-        value={value || undefined}
+        value={value}
         disabled={disabled}
         onValueChange={(next) => {
+          // Radix renvoie "" quand la valeur reçue n'est pas encore parmi
+          // ses options (cas d'une valeur trouvée par la recherche) : ce
+          // n'est jamais un choix de l'utilisateur, on l'ignore.
+          if (!next) return;
           if (next === SEARCH_VALUE) setSearchOpen(true);
           else onValueChange(next);
         }}
