@@ -319,7 +319,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
   "event": "company.registration.pushed",
   "companyId": "cmp_8f21ab",
   "ceoSummitReference": "cmp_9f2ab3d8e1",
-  "paymentMethod": "MOBILE_MONEY",
+  "paymentMethod": "evolia",
   "amountDue": 2500000,
   "currency": "MGA",
   "company": {
@@ -396,7 +396,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
   "event": "company.registration.pushed",
   "companyId": "cmp_8f21ab",
   "ceoSummitReference": "cmp_9f2ab3d8e1",
-  "paymentMethod": "CARTE_BANCAIRE",
+  "paymentMethod": "evolia",
   "amountDue": 4365000,
   "currency": "MGA",
   "company": {
@@ -432,7 +432,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               ],
               [
                 "paymentMethod",
-                `Moyen de paiement enregistré par CEO Summit : "CARTE_BANCAIRE" ou "MOBILE_MONEY" (à encaisser par vos soins), "VIREMENT" ou "CHEQUE" (déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
+                `"evolia" (carte bancaire ou Mobile Money, à encaisser par vos soins) ou "virement" (virement ou chèque, déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
               ],
               [
                 "eventDetails",

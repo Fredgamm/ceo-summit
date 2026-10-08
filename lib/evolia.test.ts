@@ -120,7 +120,7 @@ describe("pushRegistrationToEvolia", () => {
     expect(data.payload).toMatchObject({
       event: "company.registration.pushed",
       ceoSummitReference: "payment_1",
-      paymentMethod: "CARTE_BANCAIRE",
+      paymentMethod: "evolia",
       amountDue: 12_500_000,
       currency: "MGA",
       company: { name: "Rakoto Holding", sector: "Banque", country: "Madagascar" },
@@ -144,6 +144,7 @@ describe("pushRegistrationToEvolia", () => {
     await pushRegistrationToEvolia("payment_1");
 
     expect(pushedPayload().payload).not.toHaveProperty("amountDue");
+    expect(pushedPayload().payload).toMatchObject({ paymentMethod: "virement" });
   });
 
   it("describes only the purchased seats for an upsell", async () => {

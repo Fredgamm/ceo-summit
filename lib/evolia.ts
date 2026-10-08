@@ -127,7 +127,9 @@ export async function pushRegistrationToEvolia(companyPaymentId: string): Promis
       event: "company.registration.pushed",
       companyId: company.id,
       ceoSummitReference: payment.id,
-      paymentMethod: payment.method,
+      // Valeurs attendues par Evolia : « evolia » (à encaisser par eux) ou
+      // « virement » (virement ou chèque, déjà validé par l'admin CEO Summit).
+      paymentMethod: collectsPayment ? "evolia" : "virement",
       ...(collectsPayment ? { amountDue: payment.amount, currency: "MGA" } : {}),
       company: companyInfo(company),
       offer: {
