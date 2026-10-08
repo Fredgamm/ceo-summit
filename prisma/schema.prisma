@@ -210,21 +210,24 @@ model User {
   updatedAt             DateTime  @updatedAt
 
   eventRegistrations           EventRegistration[]
-  opportunitiesAuthored        Opportunity[]        @relation("OpportunityAuthor")
-  opportunityContactsInitiated OpportunityContact[] @relation("ContactInitiator")
-  opportunityContactsReceived  OpportunityContact[] @relation("ContactReceiver")
+  opportunitiesAuthored        Opportunity[]            @relation("OpportunityAuthor")
+  opportunityContactsInitiated OpportunityContact[]     @relation("ContactInitiator")
+  opportunityContactsReceived  OpportunityContact[]     @relation("ContactReceiver")
   creditBalance                CreditBalance?
   creditTransactions           CreditTransaction[]
   creditPurchases              CreditPurchase[]
   roomMessages                 RoomMessage[]
-  sentMessages                 Message[]            @relation("MessageSender")
-  conversationsAsMember1       Conversation[]       @relation("ConversationMember1")
-  conversationsAsMember2       Conversation[]       @relation("ConversationMember2")
+  sentMessages                 Message[]                @relation("MessageSender")
+  conversationsAsMember1       Conversation[]           @relation("ConversationMember1")
+  conversationsAsMember2       Conversation[]           @relation("ConversationMember2")
   serviceListings              ServiceListing[]
   activationTokens             ActivationToken[]
   passwordResetTokens          PasswordResetToken[]
-  reportsFiled                 RoomReport[]         @relation("ReportedBy")
-  auditLogsAsAdmin             AuditLog[]           @relation("AuditActor")
+  reportsFiled                 RoomReport[]             @relation("ReportedBy")
+  auditLogsAsAdmin             AuditLog[]               @relation("AuditActor")
+  meetingSlots                 MeetingParticipantSlot[]
+  meetingRequestsSent          MeetingBooking[]         @relation("MeetingRequester")
+  meetingRequestsReceived      MeetingBooking[]         @relation("MeetingRecipient")
 
   @@index([email])
   @@index([role, status])
@@ -628,6 +631,10 @@ model Event {
   date          DateTime
   /// Intégration Evolia (8 oct. 2026) — fin de l'événement, transmise avec le début.
   endDate       DateTime?
+  /// Module 21 D19 (8 oct. 2026) — fuseau IANA dans lequel toutes les heures
+  /// de l'événement sont saisies et affichées (voir lib/event-timezone.ts).
+  /// Les dates restent stockées en UTC.
+  timezone      String      @default("Indian/Antananarivo")
   capacity      Int
   minTier       Tier        @default(MEMBER)
   /// Phase 1 offres dynamiques (30 juillet 2026) — remplace `minTier` à
@@ -657,6 +664,11 @@ model Event {
   /// édition) — postes de scan distincts (ex. "Entrée VIP", "Entrée Staff")
   /// pour un même évènement, voir EventCheckpoint.
   checkpoints   EventCheckpoint[]
+  /// Module 21 (8 oct. 2026) — créneaux de rendez-vous B2B (networking),
+  /// option distincte du Programme (`sessions`).
+  meetingSetup  EventMeetingSetup?
+  meetingSlots  MeetingTimeSlot[]
+  meetings      MeetingBooking[]
 
   @@index([status, date])
   @@index([type])
@@ -1176,4 +1188,125 @@ model EvoliaPush {
 
   @@index([status, createdAt])
   @@index([companyId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module 21 (8 oct. 2026) — rendez-vous B2B en événement
+// (conception/21_rdv_b2b_specification_integration.md). Aucune table
+// physique : un rendez-vous relie deux participants sur un créneau, dans la
+// zone RDV de l'événement.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum MeetingSetupStatus {
+  DRAFT
+  PUBLISHED
+}
+
+/// Statut d'un créneau de la grille admin. DISABLED : désactivé par l'admin
+/// pour tous les participants (§3.0).
+enum MeetingSlotStatus {
+  DRAFT
+  PUBLISHED
+  DISABLED
+}
+
+/// Disponibilité d'un participant sur un créneau (§3.2). Pas de ligne =
+/// inactif (opt-in, D3) ; INACTIVE = désactivé après avoir été activé.
+enum MeetingAvailability {
+  INACTIVE
+  FREE
+  PENDING
+  BOOKED
+}
+
+/// Statut d'une demande / d'un rendez-vous (§3.2). « Terminé » est calculé
+/// (D5) : CONFIRMED dont l'heure de fin est passée.
+enum MeetingBookingStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+  EXPIRED
+  WITHDRAWN
+  CANCELLED
+}
+
+/// Réglages de l'option « Créneaux rendez-vous » d'un événement (un au plus).
+/// La réservation est ouverte de la publication à la fin de l'événement
+/// (RG-11) : pas de dates d'ouverture ni de fermeture.
+model EventMeetingSetup {
+  id                  String             @id @default(cuid())
+  eventId             String             @unique
+  event               Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// Zone RDV (ex. « Espace B2B, niveau 1 ») et indications d'accès, obligatoires.
+  zone                String
+  accessInstructions  String             @db.Text
+  slotDurationMinutes Int                @default(30)
+  status              MeetingSetupStatus @default(DRAFT)
+  publishedAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+}
+
+model MeetingTimeSlot {
+  id               String                   @id @default(cuid())
+  eventId          String
+  event            Event                    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  startTime        DateTime
+  endTime          DateTime
+  status           MeetingSlotStatus        @default(DRAFT)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  participantSlots MeetingParticipantSlot[]
+  bookings         MeetingBooking[]
+
+  @@unique([eventId, startTime])
+  @@index([eventId, status, startTime])
+}
+
+/// Créée quand le participant active le créneau (D3). Unique par membre et
+/// par créneau. Une demande passe les créneaux des deux participants de
+/// FREE à PENDING par une mise à jour conditionnelle (RG-03).
+model MeetingParticipantSlot {
+  id        String              @id @default(cuid())
+  slotId    String
+  slot      MeetingTimeSlot     @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    MeetingAvailability @default(FREE)
+  /// Demande ou rendez-vous qui bloque ce créneau (PENDING ou BOOKED).
+  bookingId String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([slotId, userId])
+  @@index([userId, status])
+}
+
+model MeetingBooking {
+  id                String               @id @default(cuid())
+  eventId           String
+  event             Event                @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  slotId            String
+  slot              MeetingTimeSlot      @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  requesterId       String
+  requester         User                 @relation("MeetingRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipientId       String
+  recipient         User                 @relation("MeetingRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  /// Motif obligatoire, 10 à 500 caractères (RG-08).
+  reason            String               @db.Text
+  status            MeetingBookingStatus @default(PENDING)
+  /// Échéance de réponse (RG-06, D13), calculée à l'envoi.
+  expiresAt         DateTime
+  respondedAt       DateTime?
+  /// Jeton de réponse depuis l'email (V2, RG-15), haché.
+  decisionTokenHash String?              @unique
+  cancelReason      String?              @db.Text
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([eventId, status])
+  @@index([requesterId, status])
+  @@index([recipientId, status])
+  @@index([slotId])
+  @@index([status, expiresAt])
 }

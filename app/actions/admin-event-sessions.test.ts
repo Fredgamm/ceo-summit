@@ -6,7 +6,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     adminUser: { findUnique: vi.fn() },
-    eventSession: { create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+    event: { findUnique: vi.fn() },
+    eventSession: { create: vi.fn(), update: vi.fn(), delete: vi.fn(), findUnique: vi.fn() },
   },
 }));
 
@@ -30,9 +31,32 @@ describe("admin event session actions", () => {
     vi.clearAllMocks();
     vi.mocked(auth).mockResolvedValue(ADMIN_SESSION);
     vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({ timezone: "Indian/Reunion" } as never);
+    vi.mocked(prisma.eventSession.findUnique).mockResolvedValue({
+      event: { timezone: "Indian/Reunion" },
+    } as never);
   });
 
   describe("createEventSession", () => {
+    it("reads the hours in the event's timezone (module 21 D19)", async () => {
+      vi.mocked(prisma.eventSession.create).mockResolvedValue({ id: "sess_1" } as never);
+
+      await createEventSession("evt_1", VALID_INPUT);
+
+      const data = vi.mocked(prisma.eventSession.create).mock.calls[0][0].data;
+      expect((data.startTime as Date).toISOString()).toBe("2026-11-24T10:30:00.000Z");
+      expect((data.endTime as Date).toISOString()).toBe("2026-11-24T11:30:00.000Z");
+    });
+
+    it("fails cleanly for an unknown event", async () => {
+      vi.mocked(prisma.event.findUnique).mockResolvedValue(null);
+
+      const result = await createEventSession("evt_missing", VALID_INPUT);
+
+      expect(result.success).toBe(false);
+      expect(prisma.eventSession.create).not.toHaveBeenCalled();
+    });
+
     it("creates a session with parsed speakers, scoped to the given event", async () => {
       vi.mocked(prisma.eventSession.create).mockResolvedValue({ id: "sess_1" } as never);
 

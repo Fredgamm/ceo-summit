@@ -18,6 +18,13 @@ import { Button } from "@/components/ui/button";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
 import { formatAriary, formatDateFr, initials } from "@/lib/utils";
+import {
+  formatDayKey,
+  formatTimeInZone,
+  formatTimeRangeInZone,
+  timezoneLabel,
+  zonedDayKey,
+} from "@/lib/event-timezone";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -84,16 +91,13 @@ export default async function EventDetailPage({ params }: { params: { id: string
   // la grille multi-colonnes, pas construite ici pour rester simple).
   const sessionsByDay = new Map<string, typeof event.sessions>();
   for (const eventSession of event.sessions) {
-    const dayKey = eventSession.startTime.toISOString().slice(0, 10);
+    // Module 21 D19 — jour et heures dans le fuseau de l'événement.
+    const dayKey = zonedDayKey(eventSession.startTime, event.timezone);
     const existing = sessionsByDay.get(dayKey) ?? [];
     existing.push(eventSession);
     sessionsByDay.set(dayKey, existing);
   }
-  const formatTimeRange = (start: Date, end: Date) => {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const t = (d: Date) => `${pad(d.getHours())}h${pad(d.getMinutes())}`;
-    return `${t(start)} – ${t(end)}`;
-  };
+  const tzLabel = timezoneLabel(event.timezone);
 
   return (
     <AppShell
@@ -114,7 +118,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </Badge>
         <h1 className="text-2xl font-bold">{event.title}</h1>
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/70">
-          <span>📅 {formatDateFr(event.date)}</span>
+          <span>📅 {formatDateFr(event.date, event.timezone)}</span>
           <span>{event.isOnline ? "🌐 En ligne" : `📍 ${event.location}`}</span>
           <span>
             👥 {event._count.registrations}/{event.capacity} inscrits
@@ -133,12 +137,13 @@ export default async function EventDetailPage({ params }: { params: { id: string
 
           {event.sessions.length > 0 && (
             <div className="rounded-lg border border-border bg-white p-6">
-              <h2 className="mb-3 text-base font-bold text-navy">Programme</h2>
+              <h2 className="text-base font-bold text-navy">Programme</h2>
+              <p className="mb-3 text-xs text-text-muted">Horaires en {tzLabel}</p>
               <div className="flex flex-col gap-5">
                 {[...sessionsByDay.entries()].map(([dayKey, daySessions]) => (
                   <div key={dayKey} className="border-l-2 border-gold pl-4">
                     <p className="mb-2 text-xs font-bold uppercase text-gold">
-                      {formatDateFr(new Date(dayKey))}
+                      {formatDayKey(dayKey)}
                     </p>
                     <div className="flex flex-col gap-3">
                       {daySessions.map((eventSession) => (
@@ -148,7 +153,11 @@ export default async function EventDetailPage({ params }: { params: { id: string
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold text-navy">
-                              {formatTimeRange(eventSession.startTime, eventSession.endTime)}
+                              {formatTimeRangeInZone(
+                                eventSession.startTime,
+                                eventSession.endTime,
+                                event.timezone
+                              )}
                             </span>
                             <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-navy">
                               {eventSession.room}
@@ -291,7 +300,18 @@ export default async function EventDetailPage({ params }: { params: { id: string
             <dl className="flex flex-col gap-2 text-sm">
               <div className="flex justify-between">
                 <dt className="text-text-muted">Date</dt>
-                <dd className="font-semibold text-navy">{formatDateFr(event.date)}</dd>
+                <dd className="font-semibold text-navy">
+                  {formatDateFr(event.date, event.timezone)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-text-muted">Horaires</dt>
+                <dd className="text-right font-semibold text-navy">
+                  {event.endDate
+                    ? formatTimeRangeInZone(event.date, event.endDate, event.timezone)
+                    : formatTimeInZone(event.date, event.timezone)}
+                  <span className="block text-xs font-normal text-text-muted">{tzLabel}</span>
+                </dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-text-muted">Lieu</dt>

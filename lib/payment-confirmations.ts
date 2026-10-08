@@ -241,7 +241,7 @@ export async function confirmEventRegistrationPaymentCore(
     const email = await resolveEmail("event-registration", {
       memberName: registration.user.name,
       eventTitle: registration.event.title,
-      eventDateLabel: formatDateFr(registration.event.date),
+      eventDateLabel: formatDateFr(registration.event.date, registration.event.timezone),
       eventLocation: registration.event.isOnline ? "En ligne" : registration.event.location,
     });
     if (email) await sendTransactionalEmail({ to: registration.user.email, ...email });

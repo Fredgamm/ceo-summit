@@ -69,14 +69,14 @@ export async function registerCompanyMemberToEvent(
 
 export async function sendEventRegistrationEmail(
   user: { email: string; name: string },
-  event: { title: string; date: Date; isOnline: boolean; location: string },
+  event: { title: string; date: Date; timezone: string; isOnline: boolean; location: string },
   logPrefix: string
 ) {
   try {
     const resolvedEmail = await resolveEmail("event-registration", {
       memberName: user.name,
       eventTitle: event.title,
-      eventDateLabel: formatDateFr(event.date),
+      eventDateLabel: formatDateFr(event.date, event.timezone),
       eventLocation: event.isOnline ? "En ligne" : event.location,
     });
     if (resolvedEmail) await sendTransactionalEmail({ to: user.email, ...resolvedEmail });

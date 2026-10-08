@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
   const pdf = await renderEventBadgePdf({
     eventTitle: event.title,
-    eventDateLabel: formatDateFr(event.date),
+    eventDateLabel: formatDateFr(event.date, event.timezone),
     eventLocation: event.isOnline ? "En ligne" : event.location,
     participantName: viewer.name,
     participantTitle: viewer.title,

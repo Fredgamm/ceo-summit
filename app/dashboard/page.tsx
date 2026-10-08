@@ -306,7 +306,7 @@ export default async function DashboardPage() {
             <p className="text-lg font-bold">{nextEvent.title}</p>
             <p className="text-sm text-white/60">
               📍 {nextEvent.isOnline ? "En ligne" : nextEvent.location} ·{" "}
-              {formatDateFr(nextEvent.date)}
+              {formatDateFr(nextEvent.date, nextEvent.timezone)}
             </p>
           </div>
           <div className="sm:ml-auto sm:shrink-0">

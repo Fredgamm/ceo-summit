@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { seatCap } from "@/lib/company-seats";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { toZonedIso } from "@/lib/event-timezone";
 
 /**
  * Intégration Evolia — échange 1 (conception/11 §3) : CEO Summit pousse les
@@ -21,26 +22,9 @@ const DEFAULT_REGISTRATION_URL = "https://event.aiolia.us/integration/ceosummit/
 const DEFAULT_PAYMENT_URL = "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
 const REQUEST_TIMEOUT_MS = 10_000;
 
-export const EVOLIA_TIMEZONE = "Indian/Antananarivo";
-
 export function evoliaPaymentUrl(reference: string): string {
   const template = process.env.EVOLIA_PAYMENT_URL ?? DEFAULT_PAYMENT_URL;
   return template.replace("{ceoSummitReference}", encodeURIComponent(reference));
-}
-
-/**
- * Date et heure telles que saisies par l'admin, avec le décalage de
- * Madagascar explicite (« 2026-11-15T09:00:00+03:00 »). Les horaires sont
- * saisis et affichés à l'heure du serveur (sans fuseau, module 18 §4.2) :
- * on reprend donc ces composants locaux plutôt que l'instant UTC stocké, qui
- * serait décalé de 3 h en production.
- */
-export function toMadagascarIso(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}:00+03:00`
-  );
 }
 
 export function signEvoliaBody(body: string, secret: string): string {
@@ -62,9 +46,11 @@ function eventInfo(company: CompanyForPush) {
   return {
     id: event.id,
     title: event.title,
-    startsAt: toMadagascarIso(event.date),
-    endsAt: event.endDate ? toMadagascarIso(event.endDate) : null,
-    timezone: EVOLIA_TIMEZONE,
+    // Module 21 D19 — heure et décalage du fuseau de l'événement
+    // (« 2026-11-15T09:00:00+03:00 » à Madagascar, « +04:00 » à La Réunion).
+    startsAt: toZonedIso(event.date, event.timezone),
+    endsAt: event.endDate ? toZonedIso(event.endDate, event.timezone) : null,
+    timezone: event.timezone,
     location: event.isOnline ? "En ligne" : event.location,
   };
 }

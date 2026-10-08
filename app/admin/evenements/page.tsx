@@ -69,7 +69,9 @@ export default async function AdminEventsPage() {
               {events.map((event) => (
                 <tr key={event.id}>
                   <td className="px-4 py-3 font-semibold text-navy">{event.title}</td>
-                  <td className="px-4 py-3 text-text-muted">{formatDateFr(event.date)}</td>
+                  <td className="px-4 py-3 text-text-muted">
+                    {formatDateFr(event.date, event.timezone)}
+                  </td>
                   <td className="px-4 py-3 text-text-mid">
                     {event.isOnline ? "En ligne" : event.location}
                   </td>

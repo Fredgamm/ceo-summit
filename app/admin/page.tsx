@@ -232,7 +232,7 @@ export default async function AdminDashboardPage() {
                   <div>
                     <p className="font-semibold text-navy">{event.title}</p>
                     <p className="text-xs text-text-muted">
-                      {formatDateFr(event.date)} · {event.location}
+                      {formatDateFr(event.date, event.timezone)} · {event.location}
                     </p>
                   </div>
                   <span className="text-xs font-semibold text-text-muted">

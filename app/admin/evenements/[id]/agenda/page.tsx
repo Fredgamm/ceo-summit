@@ -8,16 +8,15 @@ import { speakersToText } from "@/lib/event-content";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { EventSessionActions } from "@/components/admin/events/event-session-actions";
-import { formatDateFr } from "@/lib/utils";
 import { AddButton } from "@/components/ui/add-button";
+import {
+  formatDayKey,
+  formatTimeRangeInZone,
+  timezoneLabel,
+  zonedDayKey,
+} from "@/lib/event-timezone";
 
 export const metadata: Metadata = { title: "Admin — Agenda de l'évènement" };
-
-function formatTimeRange(start: Date, end: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const t = (d: Date) => `${pad(d.getHours())}h${pad(d.getMinutes())}`;
-  return `${t(start)} – ${t(end)}`;
-}
 
 /**
  * E10 — agenda dynamique multi-salles (5 août 2026). Sessions groupées par
@@ -37,7 +36,10 @@ export default async function EventAgendaPage({ params }: { params: { id: string
   }
 
   const [event, sessions] = await Promise.all([
-    prisma.event.findUnique({ where: { id: params.id }, select: { id: true, title: true } }),
+    prisma.event.findUnique({
+      where: { id: params.id },
+      select: { id: true, title: true, timezone: true },
+    }),
     prisma.eventSession.findMany({
       where: { eventId: params.id },
       orderBy: { startTime: "asc" },
@@ -47,7 +49,8 @@ export default async function EventAgendaPage({ params }: { params: { id: string
 
   const days = new Map<string, typeof sessions>();
   for (const session of sessions) {
-    const dayKey = session.startTime.toISOString().slice(0, 10);
+    // Module 21 D19 — jour et heures dans le fuseau de l'événement.
+    const dayKey = zonedDayKey(session.startTime, event.timezone);
     const existing = days.get(dayKey) ?? [];
     existing.push(session);
     days.set(dayKey, existing);
@@ -61,6 +64,7 @@ export default async function EventAgendaPage({ params }: { params: { id: string
             ← {event.title}
           </Link>
           <h1 className="text-xl font-bold text-navy">Agenda multi-salles</h1>
+          <p className="text-xs text-text-muted">Horaires en {timezoneLabel(event.timezone)}</p>
         </div>
         <AddButton href={`/admin/evenements/${event.id}/agenda/nouveau`}>
           Ajouter une session
@@ -77,7 +81,7 @@ export default async function EventAgendaPage({ params }: { params: { id: string
           {[...days.entries()].map(([dayKey, daySessions]) => (
             <div key={dayKey}>
               <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-text-muted">
-                {formatDateFr(new Date(dayKey))}
+                {formatDayKey(dayKey)}
               </h2>
               <div className="flex flex-col gap-3">
                 {daySessions.map((session) => (
@@ -88,7 +92,11 @@ export default async function EventAgendaPage({ params }: { params: { id: string
                     <div className="flex-1">
                       <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                         <span className="font-semibold text-navy">
-                          {formatTimeRange(session.startTime, session.endTime)}
+                          {formatTimeRangeInZone(
+                            session.startTime,
+                            session.endTime,
+                            event.timezone
+                          )}
                         </span>
                         <span className="rounded-full bg-surface-2 px-2 py-0.5 font-semibold text-navy">
                           {session.room}

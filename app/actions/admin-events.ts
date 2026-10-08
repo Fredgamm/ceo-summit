@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { eventFormSchema } from "@/lib/validations/event";
 import { parseSpeakersText } from "@/lib/event-content";
+import { utcToZonedLocal, zonedLocalToUtc } from "@/lib/event-timezone";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -24,6 +25,10 @@ function toEventData(
     return { error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  // Module 21 D19 — saisies lues dans le fuseau de l'événement.
+  const date = zonedLocalToUtc(f.date, f.timezone);
+  const endDate = zonedLocalToUtc(f.endDate, f.timezone);
+  if (!date || !endDate) return { error: "Dates invalides" };
   return {
     data: {
       title: f.title,
@@ -33,8 +38,9 @@ function toEventData(
       location: f.location,
       isOnline: f.isOnline,
       zoomMeetingId: f.zoomMeetingId || null,
-      date: new Date(f.date),
-      endDate: new Date(f.endDate),
+      timezone: f.timezone,
+      date,
+      endDate,
       capacity: f.capacity,
       price: f.price,
       imageUrl: f.imageUrl || null,
@@ -64,7 +70,47 @@ export async function updateEvent(eventId: string, input: unknown): Promise<Acti
   const result = toEventData(input);
   if ("error" in result) return { success: false, error: result.error };
 
-  await prisma.event.update({ where: { id: eventId }, data: result.data });
+  const previous = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { timezone: true },
+  });
+  if (!previous) return { success: false, error: "Événement introuvable" };
+
+  const newTimezone = result.data.timezone ?? previous.timezone;
+  if (newTimezone === previous.timezone) {
+    await prisma.event.update({ where: { id: eventId }, data: result.data });
+  } else {
+    // Changement de fuseau : les sessions du Programme et les créneaux de
+    // rendez-vous gardent l'heure affichée (« 14h00 » reste 14h00, dans le
+    // nouveau fuseau), comme le début et la fin saisis dans le formulaire.
+    const [sessions, slots] = await Promise.all([
+      prisma.eventSession.findMany({
+        where: { eventId },
+        select: { id: true, startTime: true, endTime: true },
+      }),
+      prisma.meetingTimeSlot.findMany({
+        where: { eventId },
+        select: { id: true, startTime: true, endTime: true },
+      }),
+    ]);
+    const shift = (d: Date) =>
+      zonedLocalToUtc(utcToZonedLocal(d, previous.timezone), newTimezone) ?? d;
+    await prisma.$transaction([
+      prisma.event.update({ where: { id: eventId }, data: result.data }),
+      ...sessions.map((s) =>
+        prisma.eventSession.update({
+          where: { id: s.id },
+          data: { startTime: shift(s.startTime), endTime: shift(s.endTime) },
+        })
+      ),
+      ...slots.map((s) =>
+        prisma.meetingTimeSlot.update({
+          where: { id: s.id },
+          data: { startTime: shift(s.startTime), endTime: shift(s.endTime) },
+        })
+      ),
+    ]);
+  }
 
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "event.update", targetType: "Event", targetId: eventId },

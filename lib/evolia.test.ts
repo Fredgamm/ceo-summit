@@ -21,14 +21,15 @@ import {
   pushParticipantsToEvolia,
   pushRegistrationToEvolia,
   signEvoliaBody,
-  toMadagascarIso,
 } from "./evolia";
 
 const EVENT = {
   id: "event_1",
   title: "CEO Summit 2026",
-  date: new Date(2026, 10, 15, 9, 0),
-  endDate: new Date(2026, 10, 15, 18, 30),
+  // 9h00 – 18h30, heure de Madagascar (UTC+3).
+  date: new Date("2026-11-15T06:00:00Z"),
+  endDate: new Date("2026-11-15T15:30:00Z"),
+  timezone: "Indian/Antananarivo",
   isOnline: false,
   location: "Antananarivo",
 };
@@ -97,10 +98,6 @@ afterEach(() => {
 describe("helpers", () => {
   it("builds the payment link from the reference", () => {
     expect(evoliaPaymentUrl("pay_1")).toBe("https://event.aiolia.us/ceosummit/payment/pay_1");
-  });
-
-  it("keeps the entered local time with Madagascar's offset", () => {
-    expect(toMadagascarIso(new Date(2026, 10, 15, 9, 5))).toBe("2026-11-15T09:05:00+03:00");
   });
 
   it("signs the raw body with HMAC-SHA256", () => {

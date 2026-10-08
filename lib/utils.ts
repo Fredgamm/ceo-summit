@@ -63,13 +63,19 @@ export function formatPlanPriceLive(
   return formatAriary(plan.priceAr);
 }
 
-/** Format a date the CEO Summit way: 15 août 2026 */
-export function formatDateFr(date: Date | string): string {
+/**
+ * Format a date the CEO Summit way: 15 août 2026. Le jour est celui du
+ * fuseau donné (module 21 D19 : passer `event.timezone` pour une date
+ * d'événement), Madagascar par défaut, et non celui du serveur (UTC en
+ * production).
+ */
+export function formatDateFr(date: Date | string, timeZone = "Indian/Antananarivo"): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone,
   }).format(d);
 }
 

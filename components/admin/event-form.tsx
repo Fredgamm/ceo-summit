@@ -7,6 +7,7 @@ import type { EventType } from "@prisma/client";
 
 import { createEvent, updateEvent } from "@/app/actions/admin-events";
 import { EVENT_IMAGE_ALLOWED_MIME_TYPES, EVENT_IMAGE_MAX_BYTES } from "@/lib/validations/event";
+import { DEFAULT_EVENT_TIMEZONE, EVENT_TIMEZONES, timezoneLabel } from "@/lib/event-timezone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +38,8 @@ export interface EventFormValues {
   location: string;
   isOnline: boolean;
   zoomMeetingId: string;
+  /** Module 21 D19 — fuseau IANA de l'événement ; `date`/`endDate` sont lues dans ce fuseau. */
+  timezone: string;
   date: string; // datetime-local string, e.g. "2026-10-14T19:30"
   endDate: string;
   capacity: string;
@@ -52,6 +55,7 @@ const EMPTY_VALUES: EventFormValues = {
   location: "",
   isOnline: false,
   zoomMeetingId: "",
+  timezone: DEFAULT_EVENT_TIMEZONE,
   date: "",
   endDate: "",
   capacity: "50",
@@ -206,6 +210,21 @@ export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: Eve
             <CardTitle>Date & lieu</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ev-timezone">Fuseau horaire de l&apos;événement *</Label>
+              <Select value={values.timezone} onValueChange={(v) => set("timezone", v)}>
+                <SelectTrigger id="ev-timezone">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EVENT_TIMEZONES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ev-date">Début (date et heure) *</Label>
@@ -230,8 +249,10 @@ export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: Eve
               </div>
             </div>
             <p className="-mt-2 text-xs text-text-muted">
-              Heure de Madagascar. Le début et la fin sont transmis à Evolia avec chaque
-              inscription.
+              Heures saisies en {timezoneLabel(values.timezone)} : c&apos;est aussi le cas du
+              Programme et des créneaux de rendez-vous, et c&apos;est l&apos;heure affichée aux
+              participants. Changer le fuseau conserve les heures affichées. Le début et la fin sont
+              transmis à Evolia avec chaque inscription.
             </p>
 
             <label className="flex items-center gap-2 text-sm">

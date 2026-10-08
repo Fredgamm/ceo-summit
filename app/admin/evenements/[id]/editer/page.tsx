@@ -5,15 +5,11 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { speakersToText } from "@/lib/event-content";
+import { utcToZonedLocal } from "@/lib/event-timezone";
 import { EventForm } from "@/components/admin/event-form";
 import { EventStatusActions } from "@/components/admin/event-status-actions";
 
 export const metadata: Metadata = { title: "Admin — Éditer l'événement" };
-
-function toDatetimeLocalValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default async function EditEventPage({ params }: { params: { id: string } }) {
   try {
@@ -79,8 +75,9 @@ export default async function EditEventPage({ params }: { params: { id: string }
           location: event.location,
           isOnline: event.isOnline,
           zoomMeetingId: event.zoomMeetingId ?? "",
-          date: toDatetimeLocalValue(event.date),
-          endDate: event.endDate ? toDatetimeLocalValue(event.endDate) : "",
+          timezone: event.timezone,
+          date: utcToZonedLocal(event.date, event.timezone),
+          endDate: event.endDate ? utcToZonedLocal(event.endDate, event.timezone) : "",
           capacity: String(event.capacity),
           price: String(event.price),
           imageUrl: event.imageUrl ?? "",

@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { EventSessionForm } from "@/components/admin/events/event-session-form";
+import { timezoneLabel } from "@/lib/event-timezone";
 
 export const metadata: Metadata = { title: "Admin — Nouvelle session" };
 
@@ -18,7 +19,7 @@ export default async function NewEventSessionPage({ params }: { params: { id: st
 
   const event = await prisma.event.findUnique({
     where: { id: params.id },
-    select: { id: true, title: true },
+    select: { id: true, title: true, timezone: true },
   });
   if (!event) notFound();
 
@@ -28,7 +29,11 @@ export default async function NewEventSessionPage({ params }: { params: { id: st
         ← Agenda — {event.title}
       </Link>
       <h1 className="mb-4 mt-2 text-xl font-bold text-navy">Nouvelle session</h1>
-      <EventSessionForm mode="create" eventId={event.id} />
+      <EventSessionForm
+        mode="create"
+        eventId={event.id}
+        timezoneLabel={timezoneLabel(event.timezone)}
+      />
     </div>
   );
 }

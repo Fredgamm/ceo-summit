@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { eventSessionFormSchema } from "@/lib/validations/event-session";
 import { parseSpeakersText } from "@/lib/event-content";
+import { zonedLocalToUtc } from "@/lib/event-timezone";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -19,19 +20,26 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  */
 type SessionFields = Omit<Prisma.EventSessionUncheckedCreateInput, "eventId">;
 
-function toSessionData(input: unknown): { error: string } | { data: SessionFields } {
+/** Module 21 D19 — horaires lus dans le fuseau de l'événement. */
+function toSessionData(
+  input: unknown,
+  timeZone: string
+): { error: string } | { data: SessionFields } {
   const parsed = eventSessionFormSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Champs invalides" };
   }
   const f = parsed.data;
+  const startTime = zonedLocalToUtc(f.startTime, timeZone);
+  const endTime = zonedLocalToUtc(f.endTime, timeZone);
+  if (!startTime || !endTime) return { error: "Horaires invalides" };
   return {
     data: {
       title: f.title,
       description: f.description || null,
       room: f.room,
-      startTime: new Date(f.startTime),
-      endTime: new Date(f.endTime),
+      startTime,
+      endTime,
       speakers: parseSpeakersText(f.speakersText) as unknown as Prisma.InputJsonValue,
     },
   };
@@ -43,7 +51,13 @@ export async function createEventSession(
 ): Promise<ActionResult<{ id: string }>> {
   await requireAdmin("evenements");
 
-  const result = toSessionData(input);
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { timezone: true },
+  });
+  if (!event) return { success: false, error: "Événement introuvable" };
+
+  const result = toSessionData(input, event.timezone);
   if ("error" in result) return { success: false, error: result.error };
 
   const session = await prisma.eventSession.create({
@@ -58,7 +72,13 @@ export async function createEventSession(
 export async function updateEventSession(sessionId: string, input: unknown): Promise<ActionResult> {
   await requireAdmin("evenements");
 
-  const result = toSessionData(input);
+  const current = await prisma.eventSession.findUnique({
+    where: { id: sessionId },
+    select: { event: { select: { timezone: true } } },
+  });
+  if (!current) return { success: false, error: "Session introuvable" };
+
+  const result = toSessionData(input, current.event.timezone);
   if ("error" in result) return { success: false, error: result.error };
 
   const updated = await prisma.eventSession.update({ where: { id: sessionId }, data: result.data });

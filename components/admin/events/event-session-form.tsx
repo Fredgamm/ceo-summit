@@ -33,6 +33,8 @@ interface EventSessionFormProps {
   eventId: string;
   sessionId?: string;
   initialValues?: Partial<EventSessionFormValues>;
+  /** Module 21 D19 — « heure de La Réunion » : fuseau dans lequel les heures sont lues. */
+  timezoneLabel: string;
 }
 
 /**
@@ -47,6 +49,7 @@ export function EventSessionForm({
   eventId,
   sessionId,
   initialValues,
+  timezoneLabel,
 }: EventSessionFormProps) {
   const router = useRouter();
   const [values, setValues] = React.useState<EventSessionFormValues>({
@@ -124,6 +127,7 @@ export function EventSessionForm({
             />
           </div>
         </div>
+        <p className="-mt-2 text-xs text-text-muted">Heures saisies en {timezoneLabel}.</p>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="session-desc">Description</Label>

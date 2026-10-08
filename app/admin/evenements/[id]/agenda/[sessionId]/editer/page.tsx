@@ -5,14 +5,10 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { speakersToText } from "@/lib/event-content";
+import { timezoneLabel, utcToZonedLocal } from "@/lib/event-timezone";
 import { EventSessionForm } from "@/components/admin/events/event-session-form";
 
 export const metadata: Metadata = { title: "Admin — Éditer une session" };
-
-function toDatetimeLocalValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default async function EditEventSessionPage({
   params,
@@ -27,7 +23,10 @@ export default async function EditEventSessionPage({
   }
 
   const [event, session] = await Promise.all([
-    prisma.event.findUnique({ where: { id: params.id }, select: { id: true, title: true } }),
+    prisma.event.findUnique({
+      where: { id: params.id },
+      select: { id: true, title: true, timezone: true },
+    }),
     prisma.eventSession.findUnique({ where: { id: params.sessionId } }),
   ]);
   if (!event || !session || session.eventId !== event.id) notFound();
@@ -42,12 +41,13 @@ export default async function EditEventSessionPage({
         mode="edit"
         eventId={event.id}
         sessionId={session.id}
+        timezoneLabel={timezoneLabel(event.timezone)}
         initialValues={{
           title: session.title,
           description: session.description ?? "",
           room: session.room,
-          startTime: toDatetimeLocalValue(session.startTime),
-          endTime: toDatetimeLocalValue(session.endTime),
+          startTime: utcToZonedLocal(session.startTime, event.timezone),
+          endTime: utcToZonedLocal(session.endTime, event.timezone),
           speakersText: speakersToText(session.speakers),
         }}
       />

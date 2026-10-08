@@ -54,7 +54,9 @@ export default async function EventRegistrationsPage({ params }: { params: { id:
       <div className="rounded-lg bg-navy p-6 text-white">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase text-gold">{formatDateFr(event.date)}</p>
+            <p className="text-xs font-bold uppercase text-gold">
+              {formatDateFr(event.date, event.timezone)}
+            </p>
             <h1 className="text-xl font-bold">{event.title}</h1>
           </div>
           <div className="flex gap-6 text-center">

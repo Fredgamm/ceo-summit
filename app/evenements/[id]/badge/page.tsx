@@ -46,7 +46,8 @@ export default async function EventBadgePage({ params }: { params: { id: string 
         <p className="text-xs uppercase tracking-wide text-white/50">Badge digital CEO Summit</p>
         <h1 className="mt-1 text-lg font-extrabold">{event.title}</h1>
         <p className="mt-1 text-sm text-white/60">
-          {formatDateFr(event.date)} · {event.isOnline ? "En ligne" : event.location}
+          {formatDateFr(event.date, event.timezone)} ·{" "}
+          {event.isOnline ? "En ligne" : event.location}
         </p>
 
         <div className="mt-5 flex items-center gap-3">

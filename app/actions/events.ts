@@ -132,7 +132,7 @@ export async function registerForEvent(
     const resolvedEmail = await resolveEmail(registrationKey, {
       memberName: viewer.name,
       eventTitle: event.title,
-      eventDateLabel: formatDateFr(event.date),
+      eventDateLabel: formatDateFr(event.date, event.timezone),
       eventLocation: event.isOnline ? "En ligne" : event.location,
     });
     if (resolvedEmail) await sendTransactionalEmail({ to: viewer.email, ...resolvedEmail });
