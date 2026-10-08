@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 
 import { setAllMeetingSlots, toggleMeetingSlot } from "@/app/actions/meetings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -26,24 +25,74 @@ export interface MyMeetingEventView {
   zone: string;
   accessInstructions: string;
   days: { label: string; slots: MySlotView[] }[];
-  counts: { total: number; active: number; pending: number; booked: number };
+  counts: { total: number; active: number; inactive: number; pending: number; booked: number };
 }
 
-const STATUS: Record<
-  Status,
-  { label: string; variant: "draft" | "active" | "pending" | "chairman" }
-> = {
-  INACTIVE: { label: "Inactif", variant: "draft" },
-  FREE: { label: "Disponible", variant: "active" },
-  PENDING: { label: "Demande en attente", variant: "pending" },
-  BOOKED: { label: "Rendez-vous confirmé", variant: "chairman" },
+/**
+ * Code couleur des statuts (conception/21 §3.2, doc client §4.5) : libre en
+ * vert, en attente en orange, réservé en bleu marine, inactif en gris ; un
+ * créneau passé est grisé.
+ */
+const STATUS: Record<Status | "PAST", { label: string; dot: string; badge: string }> = {
+  FREE: {
+    label: "Libre",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  },
+  PENDING: {
+    label: "En attente",
+    dot: "bg-amber-500",
+    badge: "bg-amber-50 text-amber-800 ring-amber-200",
+  },
+  BOOKED: { label: "Réservé", dot: "bg-navy", badge: "bg-navy-light text-navy ring-navy/30" },
+  INACTIVE: {
+    label: "Inactif",
+    dot: "bg-slate-400",
+    badge: "bg-slate-100 text-slate-600 ring-slate-200",
+  },
+  PAST: { label: "Passé", dot: "bg-slate-300", badge: "bg-slate-50 text-slate-400 ring-slate-200" },
 };
+
+/** Interrupteur actif / inactif. */
+function Toggle({
+  checked,
+  disabled,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        checked ? "bg-emerald-500" : "bg-slate-300"
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+          checked ? "translate-x-5" : "translate-x-0.5"
+        )}
+      />
+    </button>
+  );
+}
 
 /**
  * Module 21 lot 3 (8 oct. 2026) — onglet « Mes créneaux » (conception/21
- * P4). Les créneaux publiés sont inactifs tant que le participant ne les
- * active pas (D3). Un créneau en attente ou réservé ne se désactive pas
- * (RG-13).
+ * P4). Les créneaux publiés sont actifs par défaut (D3 révisée) : le
+ * participant désactive ceux où il n'est pas disponible. Un créneau en
+ * attente, réservé ou passé ne se modifie pas (RG-13).
  */
 export function MyMeetingSlots({
   events,
@@ -76,7 +125,8 @@ export function MyMeetingSlots({
       {missingProfileFields.length > 0 && (
         <Alert>
           <AlertDescription>
-            Pour activer des créneaux, complétez votre profil : {missingProfileFields.join(", ")}.{" "}
+            Votre profil est incomplet ({missingProfileFields.join(", ")}) : les autres participants
+            ne pourront pas vous demander de rendez-vous tant qu&apos;il ne l&apos;est pas.{" "}
             <Link href="/profil/editer" className="font-semibold underline">
               Compléter mon profil
             </Link>
@@ -121,65 +171,67 @@ export function MyMeetingSlots({
             </div>
           </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {[
-              { label: "Créneaux", value: event.counts.total },
-              { label: "Disponibles", value: event.counts.active },
-              { label: "En attente", value: event.counts.pending },
-              { label: "Confirmés", value: event.counts.booked },
+              { label: "Créneaux", value: event.counts.total, dot: null },
+              { label: "Libres", value: event.counts.active, dot: STATUS.FREE.dot },
+              { label: "En attente", value: event.counts.pending, dot: STATUS.PENDING.dot },
+              { label: "Réservés", value: event.counts.booked, dot: STATUS.BOOKED.dot },
+              { label: "Inactifs", value: event.counts.inactive, dot: STATUS.INACTIVE.dot },
             ].map((c) => (
               <div key={c.label} className="rounded-md bg-surface-2 p-3">
                 <p className="text-xl font-bold text-navy">{c.value}</p>
-                <p className="text-xs text-text-muted">{c.label}</p>
+                <p className="flex items-center gap-1.5 text-xs text-text-muted">
+                  {c.dot && <span className={cn("h-2 w-2 rounded-full", c.dot)} />}
+                  {c.label}
+                </p>
               </div>
             ))}
           </div>
-
-          {event.counts.active + event.counts.pending + event.counts.booked === 0 && (
-            <p className="mb-4 text-sm text-text-mid">
-              Activez les créneaux où vous êtes disponible : les autres participants pourront alors
-              vous demander un rendez-vous sur ces horaires.
-            </p>
-          )}
+          <p className="mb-4 text-sm text-text-mid">
+            Vos créneaux sont actifs par défaut : désactivez ceux où vous n&apos;êtes pas
+            disponible. Les autres participants peuvent vous demander un rendez-vous sur les
+            créneaux libres.
+          </p>
 
           <div className="flex flex-col gap-4">
             {event.days.map((day) => (
               <div key={day.label}>
                 <p className="mb-2 text-xs font-bold uppercase text-gold">{day.label}</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <ul className="divide-y divide-border rounded-md border border-border">
                   {day.slots.map((slot) => {
-                    const status = STATUS[slot.status];
-                    const locked = slot.status === "PENDING" || slot.status === "BOOKED";
+                    const status = slot.started ? STATUS.PAST : STATUS[slot.status];
+                    const locked =
+                      slot.started || slot.status === "PENDING" || slot.status === "BOOKED";
                     const on = slot.status !== "INACTIVE";
                     return (
-                      <div
+                      <li
                         key={slot.id}
                         className={cn(
-                          "flex items-center justify-between gap-2 rounded-md border px-3 py-2",
-                          on ? "border-emerald-200 bg-emerald-50/50" : "border-border",
-                          slot.started && "opacity-50"
+                          "grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5",
+                          slot.started && "opacity-60"
                         )}
                       >
-                        <div className="flex flex-col">
-                          <span className="text-sm font-semibold text-navy">{slot.range}</span>
-                          <Badge variant={status.variant} className="w-fit">
-                            {slot.started ? "Passé" : status.label}
-                          </Badge>
-                        </div>
-                        {!slot.started && !locked && (
-                          <Button
-                            size="sm"
-                            variant={on ? "ghost" : "outline"}
-                            disabled={busy !== null}
-                            onClick={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
-                          >
-                            {busy === slot.id ? "…" : on ? "Désactiver" : "Activer"}
-                          </Button>
-                        )}
-                      </div>
+                        <span className="text-sm font-semibold text-navy">{slot.range}</span>
+                        <Toggle
+                          checked={on}
+                          disabled={locked || busy !== null}
+                          label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
+                          onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
+                        />
+                        <span
+                          className={cn(
+                            "inline-flex w-28 items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                            status.badge
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full", status.dot)} />
+                          {status.label}
+                        </span>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </div>
             ))}
           </div>

@@ -1,18 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
-import { meetingEventIdFor, missingMeetingProfileFields } from "@/lib/meeting-participation";
+import { meetingEventIdFor } from "@/lib/meeting-participation";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 /**
- * Module 21 lot 3 (8 oct. 2026) — « Mes créneaux » : le participant active
- * les créneaux où il est disponible (opt-in, D3). Désactiver ne touche ni
- * une demande en cours ni un rendez-vous confirmé (RG-13). Toutes les
- * règles sont vérifiées ici, pas seulement à l'affichage.
+ * Module 21 lot 3 (8 oct. 2026) — « Mes créneaux ». Les créneaux publiés
+ * sont **actifs par défaut** pour les participants inscrits par une offre
+ * (D3, révisée le 8 oct. à la demande du client) : pas de ligne
+ * `MeetingParticipantSlot` = disponible. Le participant désactive ceux où il
+ * n'est pas libre. Désactiver ne touche ni une demande en cours ni un
+ * rendez-vous confirmé (RG-13). Le profil minimum (RG-02) est exigé au
+ * moment d'une demande, pour les deux participants (lot 4).
  */
 
 function revalidateMine() {
@@ -38,10 +42,6 @@ async function checkParticipation(userId: string, eventId: string, now: Date) {
   return null;
 }
 
-function profileError(missing: string[]) {
-  return `Complétez votre profil avant d'activer des créneaux (${missing.join(", ")}).`;
-}
-
 export async function toggleMeetingSlot(slotId: string, active: boolean): Promise<ActionResult> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return { success: false, error: viewerResult.error };
@@ -52,57 +52,58 @@ export async function toggleMeetingSlot(slotId: string, active: boolean): Promis
     where: { id: slotId },
     select: { eventId: true, status: true, startTime: true },
   });
-  if (!slot || slot.status !== "PUBLISHED")
+  if (!slot || slot.status !== "PUBLISHED") {
     return { success: false, error: "Créneau introuvable." };
+  }
   if (slot.startTime <= now) return { success: false, error: "Ce créneau a déjà commencé." };
 
   const participationError = await checkParticipation(viewer.id, slot.eventId, now);
   if (participationError) return { success: false, error: participationError };
 
+  const key = { slotId, userId: viewer.id };
   if (active) {
-    const missing = missingMeetingProfileFields(viewer);
-    if (missing.length > 0) return { success: false, error: profileError(missing) };
-
-    const existing = await prisma.meetingParticipantSlot.findUnique({
-      where: { slotId_userId: { slotId, userId: viewer.id } },
-      select: { status: true },
+    // Sans ligne, le créneau est déjà actif (par défaut).
+    await prisma.meetingParticipantSlot.updateMany({
+      where: { ...key, status: "INACTIVE" },
+      data: { status: "FREE" },
     });
-    if (!existing) {
-      await prisma.meetingParticipantSlot.create({
-        data: { slotId, userId: viewer.id, status: "FREE" },
-      });
-    } else if (existing.status === "INACTIVE") {
-      await prisma.meetingParticipantSlot.updateMany({
-        where: { slotId, userId: viewer.id, status: "INACTIVE" },
-        data: { status: "FREE" },
-      });
-    }
   } else {
     // Passage conditionnel FREE → INACTIVE : une demande arrivée entre-temps
     // (FREE → PENDING) n'est jamais écrasée (RG-13).
     const { count } = await prisma.meetingParticipantSlot.updateMany({
-      where: { slotId, userId: viewer.id, status: "FREE" },
+      where: { ...key, status: "FREE" },
       data: { status: "INACTIVE" },
     });
     if (count === 0) {
       const current = await prisma.meetingParticipantSlot.findUnique({
-        where: { slotId_userId: { slotId, userId: viewer.id } },
+        where: { slotId_userId: key },
         select: { status: true },
       });
       if (current?.status === "PENDING" || current?.status === "BOOKED") {
-        return {
-          success: false,
-          error:
-            current.status === "PENDING"
-              ? "Une demande de rendez-vous est en cours sur ce créneau : répondez-y d'abord."
-              : "Un rendez-vous est confirmé sur ce créneau.",
-        };
+        return { success: false, error: lockedSlotError(current.status) };
+      }
+      if (!current) {
+        try {
+          await prisma.meetingParticipantSlot.create({ data: { ...key, status: "INACTIVE" } });
+        } catch (err) {
+          // Une demande vient de créer la ligne (contrainte d'unicité) : on ne l'écrase pas.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            return { success: false, error: lockedSlotError("PENDING") };
+          }
+          throw err;
+        }
       }
     }
   }
 
   revalidateMine();
   return { success: true, data: undefined };
+}
+
+function lockedSlotError(status: "PENDING" | "BOOKED") {
+  return status === "PENDING"
+    ? "Une demande de rendez-vous est en cours sur ce créneau : répondez-y d'abord."
+    : "Un rendez-vous est confirmé sur ce créneau.";
 }
 
 /**
@@ -124,30 +125,29 @@ export async function setAllMeetingSlots(
 
   const upcoming = { eventId, status: "PUBLISHED" as const, startTime: { gt: now } };
 
-  if (!active) {
+  if (active) {
     const { count } = await prisma.meetingParticipantSlot.updateMany({
-      where: { userId: viewer.id, status: "FREE", slot: upcoming },
-      data: { status: "INACTIVE" },
+      where: { userId: viewer.id, status: "INACTIVE", slot: upcoming },
+      data: { status: "FREE" },
     });
     revalidateMine();
     return { success: true, data: { changed: count } };
   }
 
-  const missing = missingMeetingProfileFields(viewer);
-  if (missing.length > 0) return { success: false, error: profileError(missing) };
-
+  // Les créneaux sans ligne (actifs par défaut) reçoivent une ligne inactive ;
+  // les créneaux en attente ou réservés ne bougent pas.
   const slots = await prisma.meetingTimeSlot.findMany({ where: upcoming, select: { id: true } });
-  const [created, reactivated] = await prisma.$transaction([
+  const [created, deactivated] = await prisma.$transaction([
     prisma.meetingParticipantSlot.createMany({
-      data: slots.map((s) => ({ slotId: s.id, userId: viewer.id, status: "FREE" as const })),
+      data: slots.map((s) => ({ slotId: s.id, userId: viewer.id, status: "INACTIVE" as const })),
       skipDuplicates: true,
     }),
     prisma.meetingParticipantSlot.updateMany({
-      where: { userId: viewer.id, status: "INACTIVE", slot: upcoming },
-      data: { status: "FREE" },
+      where: { userId: viewer.id, status: "FREE", slot: upcoming },
+      data: { status: "INACTIVE" },
     }),
   ]);
 
   revalidateMine();
-  return { success: true, data: { changed: created.count + reactivated.count } };
+  return { success: true, data: { changed: created.count + deactivated.count } };
 }

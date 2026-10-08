@@ -270,8 +270,8 @@ describe("admin meeting actions", () => {
         data: { status: "CANCELLED", cancelReason: "Créneau désactivé par l'organisation." },
       });
       expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
-        where: { slotId: "slot_1" },
-        data: { status: "INACTIVE", bookingId: null },
+        where: { slotId: "slot_1", status: { in: ["PENDING", "BOOKED"] } },
+        data: { status: "FREE", bookingId: null },
       });
       expect(prisma.meetingTimeSlot.update).toHaveBeenCalledWith({
         where: { id: "slot_1" },

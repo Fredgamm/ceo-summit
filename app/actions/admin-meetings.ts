@@ -231,9 +231,9 @@ export async function deleteMeetingSlot(slotId: string): Promise<ActionResult> {
 /**
  * Désactive (pour tous les participants) ou réactive un créneau. Désactiver
  * un créneau qui porte des demandes ou des rendez-vous exige
- * `confirmCancel` : ils sont alors annulés (RG-12) et les disponibilités des
- * participants sur ce créneau repassent inactives. Réactiver ne rend pas
- * ces disponibilités : chaque participant doit réactiver le créneau.
+ * `confirmCancel` : ils sont alors annulés (RG-12) et le créneau des
+ * participants concernés est libéré. Les choix actif / inactif de chacun
+ * sont conservés : réactiver le créneau le rend tel qu'il était.
  */
 export async function setMeetingSlotDisabled(
   slotId: string,
@@ -287,9 +287,11 @@ export async function setMeetingSlotDisabled(
       where: { slotId, status: ACTIVE_BOOKING },
       data: { status: "CANCELLED", cancelReason: CANCELLED_BY_ADMIN },
     }),
+    // Créneaux bloqués par les demandes annulées : libérés. Les choix des
+    // participants (actif / inactif) sont conservés pour une réactivation.
     prisma.meetingParticipantSlot.updateMany({
-      where: { slotId },
-      data: { status: "INACTIVE", bookingId: null },
+      where: { slotId, status: { in: ["PENDING", "BOOKED"] } },
+      data: { status: "FREE", bookingId: null },
     }),
     prisma.meetingTimeSlot.update({ where: { id: slotId }, data: { status: "DISABLED" } }),
   ]);

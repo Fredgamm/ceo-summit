@@ -72,7 +72,7 @@ export async function meetingEventIdFor(userId: string): Promise<string | null> 
   return active.eventId;
 }
 
-/** Statut affiché d'un créneau pour le participant (pas de ligne = inactif, D3). */
+/** Statut d'un créneau pour le participant (pas de ligne = disponible par défaut, D3 révisée). */
 export type MySlotStatus = MeetingAvailability;
 
 export interface MySlot {
@@ -91,7 +91,7 @@ export interface MyMeetingEvent {
   zone: string;
   accessInstructions: string;
   days: { day: string; slots: MySlot[] }[];
-  counts: { total: number; active: number; pending: number; booked: number };
+  counts: { total: number; active: number; inactive: number; pending: number; booked: number };
 }
 
 /**
@@ -133,11 +133,12 @@ export async function loadMyMeetingEvents(
 
   return events.map((event) => {
     const byDay = new Map<string, MySlot[]>();
-    const counts = { total: 0, active: 0, pending: 0, booked: 0 };
+    const counts = { total: 0, active: 0, inactive: 0, pending: 0, booked: 0 };
     for (const slot of event.meetingSlots) {
-      const status = slot.participantSlots[0]?.status ?? "INACTIVE";
+      const status = slot.participantSlots[0]?.status ?? "FREE";
       counts.total++;
       if (status === "FREE") counts.active++;
+      if (status === "INACTIVE") counts.inactive++;
       if (status === "PENDING") counts.pending++;
       if (status === "BOOKED") counts.booked++;
       const day = zonedDayKey(slot.startTime, event.timezone);
