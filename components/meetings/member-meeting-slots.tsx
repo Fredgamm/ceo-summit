@@ -156,39 +156,40 @@ export function MemberMeetingSlots({
                     <li
                       key={slot.id}
                       className={cn(
-                        "flex items-center gap-3 rounded-lg border border-border bg-slate-50/60 px-3 py-2.5",
+                        // Même grille que « Mes créneaux » : heure, action centrée, statut.
+                        "grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg border border-border bg-slate-50/60 px-3 py-2.5",
                         slot.state === "past" && "opacity-60"
                       )}
                     >
-                      <Clock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-                      <span className="whitespace-nowrap text-sm font-semibold text-navy">
+                      <span className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-navy">
+                        <Clock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
                         {slot.range}
                       </span>
+                      {canAsk ? (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setError(null);
+                            setSelected({ id: slot.id, label: `${day.label}, ${slot.range}` });
+                          }}
+                        >
+                          Demander
+                        </Button>
+                      ) : (
+                        <span
+                          className="flex items-center justify-center text-text-muted"
+                          title="Non disponible"
+                        >
+                          <Lock className="h-4 w-4" aria-label="Non disponible" />
+                        </span>
+                      )}
                       <span
                         className={cn(
-                          "rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                          "justify-self-end rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
                           state.badge
                         )}
                       >
                         {state.label}
-                      </span>
-                      <span className="ml-auto flex items-center">
-                        {canAsk ? (
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setError(null);
-                              setSelected({ id: slot.id, label: `${day.label}, ${slot.range}` });
-                            }}
-                          >
-                            Demander
-                          </Button>
-                        ) : (
-                          <span className="flex items-center gap-1 text-xs text-text-muted">
-                            <Lock className="h-3.5 w-3.5" aria-hidden />
-                            {slot.state === "available" ? "Indisponible" : state.label}
-                          </span>
-                        )}
                       </span>
                     </li>
                   );

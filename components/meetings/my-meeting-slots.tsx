@@ -214,17 +214,19 @@ export function MyMeetingSlots({
                       <li
                         key={slot.id}
                         className={cn(
-                          "flex items-center gap-3 rounded-lg border border-border bg-slate-50/60 px-3 py-2.5",
+                          // Trois colonnes : l'interrupteur reste centré et aligné
+                          // d'une carte à l'autre, quelle que soit la largeur de l'heure.
+                          "grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg border border-border bg-slate-50/60 px-3 py-2.5",
                           slot.started && "opacity-60"
                         )}
                       >
-                        <Clock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-                        <span className="whitespace-nowrap text-sm font-semibold text-navy">
+                        <span className="flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-navy">
+                          <Clock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
                           {slot.range}
                         </span>
                         {locked ? (
                           <span
-                            className="flex h-6 w-11 shrink-0 items-center justify-center text-text-muted"
+                            className="flex h-6 w-11 items-center justify-center text-text-muted"
                             title="Non modifiable"
                           >
                             <Lock className="h-4 w-4" aria-label="Non modifiable" />
@@ -239,7 +241,7 @@ export function MyMeetingSlots({
                         )}
                         <span
                           className={cn(
-                            "ml-auto rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                            "justify-self-end rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
                             status.badge
                           )}
                         >
