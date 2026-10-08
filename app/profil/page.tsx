@@ -11,9 +11,13 @@ export const metadata: Metadata = { title: "Mon profil" };
  * connecté, tel que les autres le voient, avec en plus sa complétion, ses
  * coordonnées et ses contenus non publiés. L'édition reste sur /profil/editer.
  */
-export default async function MyProfilePage() {
+export default async function MyProfilePage({
+  searchParams,
+}: {
+  searchParams?: { onglet?: string };
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  return <MemberProfilePage params={{ id: session.user.id }} />;
+  return <MemberProfilePage params={{ id: session.user.id }} searchParams={searchParams} />;
 }

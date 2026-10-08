@@ -11,6 +11,9 @@ import { safeHref } from "@/lib/normalize-url";
 import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { offerBadgeLabel } from "@/lib/offer-badge";
 import { profileCompleteness } from "@/lib/profile-completeness";
+import { loadMyMeetingEvents, missingMeetingProfileFields } from "@/lib/meeting-participation";
+import { formatDayKey, formatTimeRangeInZone, timezoneLabel } from "@/lib/event-timezone";
+import { MyMeetingSlots, type MyMeetingEventView } from "@/components/meetings/my-meeting-slots";
 import { AppShell } from "@/components/layout/app-shell";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
@@ -39,8 +42,19 @@ const OPPORTUNITY_STATUS_LABEL: Record<string, string> = {
  * l'offre (offres à prix fixe seulement, §6.2), onglets Profil, Entreprise,
  * Opportunités et Services. Sur son propre profil, le membre voit aussi sa
  * complétion, ses coordonnées et ses contenus non publiés.
+ *
+ * Module 21 lot 3 (8 oct. 2026) — onglet « Mes créneaux » sur son propre
+ * profil, dès qu'il participe à un événement dont les créneaux de
+ * rendez-vous sont publiés. `?onglet=creneaux` l'ouvre directement (lien des
+ * emails).
  */
-export default async function MemberProfilePage({ params }: { params: { id: string } }) {
+export default async function MemberProfilePage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { onglet?: string };
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
@@ -97,6 +111,35 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
   const companyWebsiteHref = safeHref(user.company?.website);
   const offerBadge = offerBadgeLabel(user.company?.subscription);
   const completeness = isSelf ? profileCompleteness(user) : null;
+  const meetingEvents: MyMeetingEventView[] = isSelf
+    ? (await loadMyMeetingEvents(user.id)).map((event) => ({
+        id: event.id,
+        title: event.title,
+        timezoneLabel: timezoneLabel(event.timezone),
+        zone: event.zone,
+        accessInstructions: event.accessInstructions,
+        counts: event.counts,
+        days: event.days.map((d) => ({
+          label: formatDayKey(d.day),
+          slots: d.slots.map((s) => ({
+            id: s.id,
+            range: formatTimeRangeInZone(s.startTime, s.endTime, event.timezone),
+            status: s.status,
+            started: s.started,
+          })),
+        })),
+      }))
+    : [];
+  const showMySlots = meetingEvents.length > 0;
+  const tabs = [
+    "profil",
+    "entreprise",
+    "deal-room",
+    "services",
+    ...(showMySlots ? ["creneaux"] : []),
+  ];
+  const defaultTab =
+    searchParams?.onglet && tabs.includes(searchParams.onglet) ? searchParams.onglet : "profil";
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
@@ -150,12 +193,13 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
         </div>
       </div>
 
-      <Tabs defaultValue="profil">
+      <Tabs defaultValue={defaultTab}>
         <TabsList>
           <TabsTrigger value="profil">Profil</TabsTrigger>
           <TabsTrigger value="entreprise">Entreprise</TabsTrigger>
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
+          {showMySlots && <TabsTrigger value="creneaux">Mes créneaux</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="profil">
@@ -319,6 +363,15 @@ export default async function MemberProfilePage({ params }: { params: { id: stri
         <TabsContent value="services">
           <CompanyServicesManager services={services} isCompanyAdmin={canManageServices} />
         </TabsContent>
+
+        {showMySlots && (
+          <TabsContent value="creneaux">
+            <MyMeetingSlots
+              events={meetingEvents}
+              missingProfileFields={missingMeetingProfileFields(user)}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </AppShell>
   );
