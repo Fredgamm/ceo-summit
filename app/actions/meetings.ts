@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
-import { missingMeetingProfileFields } from "@/lib/meeting-participation";
+import { meetingEventIdFor, missingMeetingProfileFields } from "@/lib/meeting-participation";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -19,23 +19,21 @@ function revalidateMine() {
   revalidatePath("/profil");
 }
 
-/** Inscription confirmée, réservation ouverte (publiée, événement non terminé). */
+/**
+ * Participant de l'événement par son offre (`meetingEventIdFor`),
+ * réservation ouverte (publiée, événement non terminé).
+ */
 async function checkParticipation(userId: string, eventId: string, now: Date) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
-    select: {
-      date: true,
-      endDate: true,
-      meetingSetup: { select: { status: true } },
-      registrations: { where: { userId, status: "CONFIRMED" }, select: { id: true } },
-    },
+    select: { date: true, endDate: true, meetingSetup: { select: { status: true } } },
   });
   if (!event || event.meetingSetup?.status !== "PUBLISHED") {
     return "Les rendez-vous de cet événement ne sont pas ouverts.";
   }
   if ((event.endDate ?? event.date) < now) return "L'événement est terminé.";
-  if (event.registrations.length === 0) {
-    return "Vous n'êtes pas inscrit comme participant à cet événement.";
+  if ((await meetingEventIdFor(userId)) !== eventId) {
+    return "Les rendez-vous de cet événement sont réservés aux participants inscrits par une offre active liée à l'événement.";
   }
   return null;
 }

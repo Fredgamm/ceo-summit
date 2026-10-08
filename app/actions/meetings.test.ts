@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
+vi.mock("@/lib/meeting-participation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/meeting-participation")>();
+  return { ...actual, meetingEventIdFor: vi.fn() };
+});
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     event: { findUnique: vi.fn() },
@@ -18,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
+import { meetingEventIdFor } from "@/lib/meeting-participation";
 import { setAllMeetingSlots, toggleMeetingSlot } from "./meetings";
 
 const VIEWER = {
@@ -33,7 +38,6 @@ const EVENT = {
   date: FUTURE,
   endDate: new Date(FUTURE.getTime() + 24 * 3600 * 1000),
   meetingSetup: { status: "PUBLISHED" },
-  registrations: [{ id: "reg_1" }],
 };
 
 describe("member meeting slot actions", () => {
@@ -41,6 +45,7 @@ describe("member meeting slot actions", () => {
     vi.clearAllMocks();
     vi.mocked(requireViewer).mockResolvedValue({ success: true, viewer: VIEWER } as never);
     vi.mocked(prisma.event.findUnique).mockResolvedValue(EVENT as never);
+    vi.mocked(meetingEventIdFor).mockResolvedValue("evt_1");
     vi.mocked(prisma.meetingTimeSlot.findUnique).mockResolvedValue({
       eventId: "evt_1",
       status: "PUBLISHED",
@@ -90,11 +95,8 @@ describe("member meeting slot actions", () => {
       expect(prisma.meetingParticipantSlot.create).not.toHaveBeenCalled();
     });
 
-    it("refuses a member who is not a confirmed participant", async () => {
-      vi.mocked(prisma.event.findUnique).mockResolvedValue({
-        ...EVENT,
-        registrations: [],
-      } as never);
+    it("refuses a member who is not a participant through an active offer of this event", async () => {
+      vi.mocked(meetingEventIdFor).mockResolvedValue(null);
 
       const result = await toggleMeetingSlot("slot_1", true);
 

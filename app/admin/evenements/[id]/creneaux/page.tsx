@@ -11,6 +11,7 @@ import {
   zonedDayKey,
 } from "@/lib/event-timezone";
 import { eventDayKeys } from "@/lib/meeting-slots";
+import { MEETING_EVENT_TYPE } from "@/lib/meeting-participation";
 import { formatDateFr } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,7 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
       endDate: true,
       timezone: true,
       isOnline: true,
+      type: true,
       meetingSetup: true,
       meetingSlots: {
         orderBy: { startTime: "asc" },
@@ -82,6 +84,9 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
   const setup = event.meetingSetup;
   const published = setup?.status === "PUBLISHED";
   const isOver = (event.endDate ?? event.date) < new Date();
+  // Créneaux réservés aux « Summit annuel » sur place (8 oct. 2026).
+  const notSummit = event.type !== MEETING_EVENT_TYPE;
+  const editable = !event.isOnline && !notSummit && !isOver;
   const slots = event.meetingSlots;
   const draftCount = slots.filter((s) => s.status === "DRAFT").length;
 
@@ -109,7 +114,7 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
             </Link>
           </p>
         </div>
-        {setup && !isOver && (
+        {setup && editable && (
           <MeetingPublishButton
             eventId={event.id}
             draftCount={draftCount}
@@ -143,6 +148,14 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
         </div>
       </div>
 
+      {notSummit && (
+        <Alert>
+          <AlertDescription>
+            Les créneaux rendez-vous sont réservés aux événements de type « Summit annuel ». Changez
+            le type de l&apos;événement pour en configurer.
+          </AlertDescription>
+        </Alert>
+      )}
       {event.isOnline && (
         <Alert>
           <AlertDescription>
@@ -160,7 +173,7 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
         </Alert>
       )}
 
-      {!event.isOnline && !isOver && (
+      {editable && (
         <Card>
           <CardHeader>
             <CardTitle>1. Zone RDV</CardTitle>
@@ -178,7 +191,7 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
         </Card>
       )}
 
-      {setup && !isOver && (
+      {setup && editable && (
         <Card>
           <CardHeader>
             <CardTitle>2. Générer les créneaux</CardTitle>
@@ -204,7 +217,7 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
 
       <Card>
         <CardHeader>
-          <CardTitle>{setup && !isOver ? "3. Créneaux" : "Créneaux"}</CardTitle>
+          <CardTitle>{setup && editable ? "3. Créneaux" : "Créneaux"}</CardTitle>
         </CardHeader>
         <CardContent>
           {slots.length === 0 ? (
@@ -249,7 +262,7 @@ export default async function EventMeetingSlotsPage({ params }: { params: { id: 
                             slotId={slot.id}
                             disabled={slot.status === "DISABLED"}
                             canDelete={slot._count.bookings === 0}
-                            readOnly={isOver}
+                            readOnly={!editable}
                           />
                         </div>
                       );

@@ -5,6 +5,8 @@
  *
  *   npx tsx scripts/backfill-event-registrations.ts           # aperçu, n'écrit rien
  *   npx tsx scripts/backfill-event-registrations.ts --apply   # inscrit et envoie les emails
+ *   npx tsx scripts/backfill-event-registrations.ts --apply --no-notify
+ *       # inscrit sans email ni envoi Evolia (base de test locale)
  *
  * ⚠ `--apply` envoie l'email d'inscription à chaque nouveau participant et
  * pousse les listes vers Evolia : à lancer une seule fois, sur la bonne base.
@@ -16,6 +18,7 @@ import { autoRegisterCompanyMembers } from "../lib/event-auto-registration";
 
 async function main() {
   const apply = process.argv.includes("--apply");
+  const notify = !process.argv.includes("--no-notify");
   const subscriptions = await prisma.companySubscription.findMany({
     where: { plan: { eventId: { not: null } } },
     include: {
@@ -48,7 +51,7 @@ async function main() {
         `${cap ?? "∞"} place(s)`
     );
     if (apply) {
-      const result = await autoRegisterCompanyMembers(sub.company.id, "backfill");
+      const result = await autoRegisterCompanyMembers(sub.company.id, "backfill", { notify });
       total += result.registered;
       console.log(
         `   → ${result.registered} inscrit(s)${result.full ? `, ${result.full} refusé(s) : événement complet` : ""}`

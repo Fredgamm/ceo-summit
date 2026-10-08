@@ -25,7 +25,8 @@ export default async function AdminMeetingsPage() {
   }
 
   const events = await prisma.event.findMany({
-    where: { isOnline: false, status: { in: ["DRAFT", "PUBLISHED"] } },
+    // Créneaux réservés aux « Summit annuel » sur place (8 oct. 2026).
+    where: { type: "SUMMIT", isOnline: false, status: { in: ["DRAFT", "PUBLISHED"] } },
     orderBy: { date: "asc" },
     select: {
       id: true,
@@ -45,15 +46,16 @@ export default async function AdminMeetingsPage() {
       <div>
         <h1 className="text-xl font-bold text-navy">Créneaux rendez-vous</h1>
         <p className="text-sm text-text-muted">
-          Choisissez un événement pour déployer ses créneaux de rendez-vous B2B. Ils sont distincts
-          du Programme (agenda multi-salles).
+          Choisissez un événement « Summit annuel » pour déployer ses créneaux de rendez-vous B2B.
+          Ils sont distincts du Programme (agenda multi-salles) et réservés aux membres inscrits par
+          une offre liée à l&apos;événement.
         </p>
       </div>
 
       {events.length === 0 ? (
         <EmptyState
-          title="Aucun événement en présentiel"
-          description="Créez d'abord un événement (non en ligne) depuis la page Événements."
+          title="Aucun Summit annuel en présentiel"
+          description="Les créneaux rendez-vous sont réservés aux événements de type « Summit annuel », sur place. Créez-en un depuis la page Événements."
         />
       ) : (
         <div className="overflow-hidden rounded-lg border border-border bg-white">

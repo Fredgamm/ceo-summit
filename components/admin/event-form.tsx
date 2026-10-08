@@ -195,6 +195,10 @@ export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: Eve
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-text-muted">
+                Catégorie affichée aux membres (filtres, badge). Les créneaux rendez-vous B2B ne
+                sont disponibles que pour un « Summit annuel » sur place.
+              </p>
             </div>
 
             <div className="flex flex-col gap-1.5">

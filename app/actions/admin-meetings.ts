@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { zonedLocalToUtc } from "@/lib/event-timezone";
 import { buildSlotGrid, eventDayKeys } from "@/lib/meeting-slots";
+import { MEETING_EVENT_TYPE } from "@/lib/meeting-participation";
 import {
   meetingGridSchema,
   meetingSetupSchema,
@@ -41,12 +42,22 @@ async function loadEvent(eventId: string) {
       endDate: true,
       timezone: true,
       isOnline: true,
+      type: true,
       meetingSetup: { select: { status: true } },
     },
   });
 }
 
 type LoadedEvent = NonNullable<Awaited<ReturnType<typeof loadEvent>>>;
+
+/** Créneaux réservés aux événements « Summit annuel », sur place (8 oct. 2026). */
+function eventTypeError(event: Pick<LoadedEvent, "type" | "isOnline">): string | null {
+  if (event.type !== MEETING_EVENT_TYPE) {
+    return "Les créneaux rendez-vous sont réservés aux événements de type « Summit annuel ».";
+  }
+  if (event.isOnline) return "Les rendez-vous B2B se tiennent sur place : événement en ligne.";
+  return null;
+}
 
 /** RG-11 : après la fin de l'événement, le module passe en lecture seule. */
 function isOver(event: LoadedEvent, now = new Date()) {
@@ -66,12 +77,8 @@ export async function saveMeetingSetup(eventId: string, input: unknown): Promise
   }
   const event = await loadEvent(eventId);
   if (!event) return { success: false, error: "Événement introuvable" };
-  if (event.isOnline) {
-    return {
-      success: false,
-      error: "Les rendez-vous B2B se tiennent sur place : événement en ligne.",
-    };
-  }
+  const typeError = eventTypeError(event);
+  if (typeError) return { success: false, error: typeError };
 
   await prisma.eventMeetingSetup.upsert({
     where: { eventId },
@@ -103,6 +110,8 @@ export async function generateMeetingSlots(
   }
   const event = await loadEvent(eventId);
   if (!event) return { success: false, error: "Événement introuvable" };
+  const typeError = eventTypeError(event);
+  if (typeError) return { success: false, error: typeError };
   if (!event.meetingSetup) {
     return { success: false, error: "Enregistrez d'abord la zone RDV et ses indications." };
   }
@@ -162,6 +171,8 @@ export async function addMeetingSlot(eventId: string, input: unknown): Promise<A
   }
   const event = await loadEvent(eventId);
   if (!event) return { success: false, error: "Événement introuvable" };
+  const typeError = eventTypeError(event);
+  if (typeError) return { success: false, error: typeError };
   if (!event.meetingSetup) {
     return { success: false, error: "Enregistrez d'abord la zone RDV et ses indications." };
   }
@@ -308,6 +319,8 @@ export async function publishMeetingSlots(
 
   const event = await loadEvent(eventId);
   if (!event) return { success: false, error: "Événement introuvable" };
+  const typeError = eventTypeError(event);
+  if (typeError) return { success: false, error: typeError };
   if (!event.meetingSetup) {
     return { success: false, error: "Enregistrez d'abord la zone RDV et ses indications." };
   }

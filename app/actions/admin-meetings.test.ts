@@ -47,6 +47,7 @@ const EVENT = {
   endDate: new Date("2027-03-13T14:00:00Z"),
   timezone: "Indian/Reunion",
   isOnline: false,
+  type: "SUMMIT",
   meetingSetup: { status: "DRAFT" },
 };
 
@@ -78,6 +79,25 @@ describe("admin meeting actions", () => {
 
       expect(result.success).toBe(true);
       expect(prisma.eventMeetingSetup.upsert).toHaveBeenCalled();
+    });
+
+    it("refuses an event that is not a « Summit annuel »", async () => {
+      vi.mocked(prisma.event.findUnique).mockResolvedValue({
+        ...EVENT,
+        type: "RENCONTRE",
+      } as never);
+
+      const result = await saveMeetingSetup("evt_1", {
+        zone: "Espace B2B",
+        accessInstructions: "Niveau 1, à gauche.",
+        slotDurationMinutes: 30,
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: "Les créneaux rendez-vous sont réservés aux événements de type « Summit annuel ».",
+      });
+      expect(prisma.eventMeetingSetup.upsert).not.toHaveBeenCalled();
     });
 
     it("refuses an online event", async () => {

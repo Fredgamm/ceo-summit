@@ -2,6 +2,7 @@ import type { MeetingAvailability } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { zonedDayKey } from "@/lib/event-timezone";
+import { activeEventOf } from "@/lib/event-participation";
 
 /**
  * Module 21 lot 3 (8 oct. 2026) — côté participant : éligibilité (RG-02) et
@@ -21,6 +22,54 @@ export function missingMeetingProfileFields(user: {
   if (!user.phone?.trim()) missing.push("téléphone");
   if (!user.email?.trim()) missing.push("e-mail");
   return missing;
+}
+
+/**
+ * Les créneaux de rendez-vous B2B sont réservés aux événements « Summit
+ * annuel » (demande du client, 8 oct. 2026).
+ */
+export const MEETING_EVENT_TYPE = "SUMMIT" as const;
+
+/**
+ * Événement pour lequel le membre peut avoir des créneaux, ou `null`. Il
+ * faut, comme pour l'inscription (module 21 §3.0 étape 3) :
+ * - un compte actif ;
+ * - une entreprise dont l'offre est active (statut effectif) et liée à un
+ *   événement « Summit annuel » ;
+ * - une inscription confirmée à cet événement, faite par cette offre (le
+ *   gérant ne l'a pas retiré de la liste).
+ * Le profil minimum (RG-02) est vérifié en plus pour activer ou demander.
+ */
+export async function meetingEventIdFor(userId: string): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      status: true,
+      company: {
+        select: {
+          subscription: {
+            select: {
+              status: true,
+              plan: {
+                select: { id: true, eventId: true, event: { select: { date: true, type: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (user?.status !== "ACTIVE") return null;
+  const subscription = user.company?.subscription;
+  const active = activeEventOf(subscription);
+  if (!active || subscription?.plan.event?.type !== MEETING_EVENT_TYPE) return null;
+
+  const registration = await prisma.eventRegistration.findUnique({
+    where: { eventId_userId: { eventId: active.eventId, userId } },
+    select: { status: true, planId: true },
+  });
+  if (registration?.status !== "CONFIRMED" || registration.planId !== active.planId) return null;
+  return active.eventId;
 }
 
 /** Statut affiché d'un créneau pour le participant (pas de ligne = inactif, D3). */
@@ -46,17 +95,20 @@ export interface MyMeetingEvent {
 }
 
 /**
- * Événements dont le participant est inscrit (inscription confirmée), dont
- * les créneaux sont publiés et qui ne sont pas terminés (RG-11), avec ses
+ * L'événement « Summit annuel » de l'offre du participant (`meetingEventIdFor`),
+ * si ses créneaux sont publiés et qu'il n'est pas terminé (RG-11), avec ses
  * disponibilités. Les créneaux désactivés par l'admin n'apparaissent pas.
  */
 export async function loadMyMeetingEvents(
   userId: string,
   now = new Date()
 ): Promise<MyMeetingEvent[]> {
+  const eventId = await meetingEventIdFor(userId);
+  if (!eventId) return [];
   const events = await prisma.event.findMany({
     where: {
-      registrations: { some: { userId, status: "CONFIRMED" } },
+      id: eventId,
+      type: MEETING_EVENT_TYPE,
       meetingSetup: { status: "PUBLISHED" },
       OR: [{ endDate: { gte: now } }, { endDate: null, date: { gte: now } }],
     },

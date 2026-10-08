@@ -44,12 +44,14 @@ export default async function EditEventPage({ params }: { params: { id: string }
           >
             Agenda multi-salles →
           </Link>
-          <Link
-            href={`/admin/evenements/${event.id}/creneaux`}
-            className="text-sm font-semibold text-navy-mid"
-          >
-            Créneaux rendez-vous ({meetingSlotsCount}) →
-          </Link>
+          {event.type === "SUMMIT" && !event.isOnline && (
+            <Link
+              href={`/admin/evenements/${event.id}/creneaux`}
+              className="text-sm font-semibold text-navy-mid"
+            >
+              Créneaux rendez-vous ({meetingSlotsCount}) →
+            </Link>
+          )}
           <Link
             href={`/admin/plans?eventId=${event.id}`}
             className="text-sm font-semibold text-navy-mid"

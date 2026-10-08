@@ -24,8 +24,11 @@ import {
  */
 export async function autoRegisterCompanyMembers(
   companyId: string,
-  logPrefix: string
+  logPrefix: string,
+  /** `notify: false` : ni email ni envoi Evolia (rattrapage sur une base de test). */
+  options: { notify?: boolean } = {}
 ): Promise<{ registered: number; full: number }> {
+  const notify = options.notify ?? true;
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     include: {
@@ -74,7 +77,7 @@ export async function autoRegisterCompanyMembers(
     if (member.id === company.companyAdminId) managerRegistered = true;
     if (!outcome.wasConfirmed) {
       registered++;
-      await sendEventRegistrationEmail(member, outcome.event, logPrefix);
+      if (notify) await sendEventRegistrationEmail(member, outcome.event, logPrefix);
     }
   }
 
@@ -87,7 +90,7 @@ export async function autoRegisterCompanyMembers(
       `[${logPrefix}] event ${activeEvent.eventId} full: ${full} member(s) not registered`
     );
   }
-  if (registered > 0) {
+  if (registered > 0 && notify) {
     // Liste à jour vers Evolia (badges). Un échec est journalisé (EvoliaPush).
     await pushParticipantsToEvolia(companyId);
   }
