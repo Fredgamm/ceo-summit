@@ -451,6 +451,29 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             liste intégrale et à jour de ses participants confirmés.
           </p>
 
+          <p>Règles communes aux deux valeurs de event, alignées sur vos contrôles :</p>
+          <ul className="list-disc pl-5">
+            <li>
+              <code>ceoSummitReference</code> est présent sur chaque appel ; sur
+              company.participants.confirmed, c&apos;est la référence du paiement de l&apos;offre,
+              déjà transmise avec l&apos;inscription.
+            </li>
+            <li>
+              <code>participants</code> n&apos;est jamais vide : pour un supplément acheté avant la
+              validation de la liste, il contient le gestionnaire.
+            </li>
+            <li>
+              Une liste de participants n&apos;est envoyée qu&apos;une fois l&apos;abonnement actif,
+              donc après l&apos;encaissement.
+            </li>
+            <li>
+              Offre sans paiement (partenaire institutionnel intégré par CEO Summit) : avant sa
+              première liste, un company.registration.pushed part avec{" "}
+              <code>paymentMethod: &quot;virement&quot;</code>, sans montant, et pour référence
+              l&apos;identifiant de son abonnement.
+            </li>
+          </ul>
+
           <Callout>
             <strong>Ne pas générer de badge à partir d&apos;un company.registration.pushed.</strong>{" "}
             Le gestionnaire qui inscrit l&apos;entreprise et paie n&apos;est pas forcément
