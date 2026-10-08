@@ -66,12 +66,6 @@ const SECTIONS: {
     title: "Opérations",
     items: [
       {
-        href: "/admin/rendez-vous",
-        label: "Créneaux rendez-vous",
-        icon: CalendarClock,
-        section: "evenements",
-      },
-      {
         href: "/admin/entreprises",
         label: "Entreprises",
         icon: Building2,
@@ -89,6 +83,12 @@ const SECTIONS: {
         label: "Emails",
         icon: Mails,
         section: "emails",
+      },
+      {
+        href: "/admin/rendez-vous",
+        label: "Créneaux rendez-vous",
+        icon: CalendarClock,
+        section: "evenements",
       },
     ],
   },
