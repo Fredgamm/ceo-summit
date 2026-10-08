@@ -164,3 +164,124 @@ export async function loadMyMeetingEvents(
     };
   });
 }
+
+/** Ce que le visiteur voit d'un créneau sur le profil d'un autre participant. */
+export type VisitorSlotState = "available" | "taken" | "you-unavailable" | "past";
+
+export interface MemberMeetingView {
+  eventId: string;
+  eventTitle: string;
+  timezone: string;
+  zone: string;
+  /** Le membre visité ne peut pas encore recevoir de demande (profil incomplet). */
+  memberUnavailable: boolean;
+  /** Demande en cours ou rendez-vous déjà pris entre les deux (RG-10). */
+  existingBooking: { status: "PENDING" | "CONFIRMED"; startTime: Date } | null;
+  days: {
+    day: string;
+    slots: { id: string; startTime: Date; endTime: Date; state: VisitorSlotState }[];
+  }[];
+}
+
+/**
+ * Module 21 lot 4 — onglet « Rendez-vous événement » du profil d'un autre
+ * participant (conception/21 P2). `null` si le visiteur et le membre ne
+ * participent pas tous deux au même Summit par une offre, ou si la
+ * réservation n'est pas ouverte. Les créneaux que le membre a désactivés ne
+ * sont pas montrés ; ceux en attente ou réservés apparaissent « pris ».
+ */
+export async function loadMemberMeetingView(
+  visitorId: string,
+  memberId: string,
+  now = new Date()
+): Promise<MemberMeetingView | null> {
+  if (visitorId === memberId) return null;
+  const [visitorEventId, memberEventId] = await Promise.all([
+    meetingEventIdFor(visitorId),
+    meetingEventIdFor(memberId),
+  ]);
+  if (!visitorEventId || visitorEventId !== memberEventId) return null;
+
+  const event = await prisma.event.findFirst({
+    where: {
+      id: visitorEventId,
+      type: MEETING_EVENT_TYPE,
+      meetingSetup: { status: "PUBLISHED" },
+      OR: [{ endDate: { gte: now } }, { endDate: null, date: { gte: now } }],
+    },
+    select: {
+      id: true,
+      title: true,
+      timezone: true,
+      meetingSetup: { select: { zone: true } },
+      meetingSlots: {
+        where: { status: "PUBLISHED" },
+        orderBy: { startTime: "asc" },
+        select: {
+          id: true,
+          startTime: true,
+          endTime: true,
+          participantSlots: {
+            where: { userId: { in: [visitorId, memberId] } },
+            select: { userId: true, status: true },
+          },
+        },
+      },
+    },
+  });
+  if (!event) return null;
+
+  const [member, existing] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: memberId },
+      select: { name: true, email: true, phone: true, companyId: true },
+    }),
+    prisma.meetingBooking.findFirst({
+      where: {
+        eventId: event.id,
+        status: { in: ["PENDING", "CONFIRMED"] },
+        OR: [
+          { requesterId: visitorId, recipientId: memberId },
+          { requesterId: memberId, recipientId: visitorId },
+        ],
+      },
+      select: { status: true, slot: { select: { startTime: true } } },
+    }),
+  ]);
+
+  const byDay = new Map<string, MemberMeetingView["days"][number]["slots"]>();
+  for (const slot of event.meetingSlots) {
+    const statusOf = (userId: string) =>
+      slot.participantSlots.find((p) => p.userId === userId)?.status ?? "FREE";
+    const memberStatus = statusOf(memberId);
+    if (memberStatus === "INACTIVE") continue;
+    const state: VisitorSlotState =
+      slot.startTime <= now
+        ? "past"
+        : memberStatus !== "FREE"
+          ? "taken"
+          : statusOf(visitorId) !== "FREE"
+            ? "you-unavailable"
+            : "available";
+    const day = zonedDayKey(slot.startTime, event.timezone);
+    byDay.set(day, [
+      ...(byDay.get(day) ?? []),
+      { id: slot.id, startTime: slot.startTime, endTime: slot.endTime, state },
+    ]);
+  }
+
+  return {
+    eventId: event.id,
+    eventTitle: event.title,
+    timezone: event.timezone,
+    zone: event.meetingSetup?.zone ?? "",
+    memberUnavailable: !member || missingMeetingProfileFields(member).length > 0,
+    existingBooking: existing
+      ? {
+          status: existing.status as "PENDING" | "CONFIRMED",
+          startTime: existing.slot.startTime,
+        }
+      : null,
+    days: [...byDay.entries()].map(([day, slots]) => ({ day, slots })),
+  };
+}

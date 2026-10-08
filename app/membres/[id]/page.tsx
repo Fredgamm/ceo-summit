@@ -11,9 +11,20 @@ import { safeHref } from "@/lib/normalize-url";
 import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { offerBadgeLabel } from "@/lib/offer-badge";
 import { profileCompleteness } from "@/lib/profile-completeness";
-import { loadMyMeetingEvents, missingMeetingProfileFields } from "@/lib/meeting-participation";
-import { formatDayKey, formatTimeRangeInZone, timezoneLabel } from "@/lib/event-timezone";
+import {
+  loadMemberMeetingView,
+  loadMyMeetingEvents,
+  missingMeetingProfileFields,
+} from "@/lib/meeting-participation";
+import {
+  formatDayKey,
+  formatTimeInZone,
+  formatTimeRangeInZone,
+  timezoneLabel,
+  zonedDayKey,
+} from "@/lib/event-timezone";
 import { MyMeetingSlots, type MyMeetingEventView } from "@/components/meetings/my-meeting-slots";
+import { MemberMeetingSlots } from "@/components/meetings/member-meeting-slots";
 import { AppShell } from "@/components/layout/app-shell";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
@@ -132,12 +143,16 @@ export default async function MemberProfilePage({
     : [];
   // Toujours visible sur son propre profil, même vide (demande du client).
   const showMySlots = isSelf;
+  // Module 21 lot 4 — « Rendez-vous événement » : profil d'un autre
+  // participant du même Summit (les deux inscrits par une offre).
+  const memberMeeting = isSelf ? null : await loadMemberMeetingView(viewer.id, user.id);
   const tabs = [
     "profil",
     "entreprise",
     "deal-room",
     "services",
     ...(showMySlots ? ["creneaux"] : []),
+    ...(memberMeeting ? ["rendez-vous"] : []),
   ];
   const defaultTab =
     searchParams?.onglet && tabs.includes(searchParams.onglet) ? searchParams.onglet : "profil";
@@ -201,6 +216,7 @@ export default async function MemberProfilePage({
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
           {showMySlots && <TabsTrigger value="creneaux">Mes créneaux</TabsTrigger>}
+          {memberMeeting && <TabsTrigger value="rendez-vous">Rendez-vous événement</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="profil">
@@ -379,6 +395,37 @@ export default async function MemberProfilePage({
                 description="Les créneaux apparaissent ici quand l'organisation les publie pour un événement auquel vous participez. Vous pourrez alors activer ceux où vous êtes disponible."
               />
             )}
+          </TabsContent>
+        )}
+
+        {memberMeeting && (
+          <TabsContent value="rendez-vous">
+            <MemberMeetingSlots
+              memberId={user.id}
+              memberName={user.name}
+              eventTitle={memberMeeting.eventTitle}
+              zone={memberMeeting.zone}
+              timezoneLabel={timezoneLabel(memberMeeting.timezone)}
+              memberUnavailable={memberMeeting.memberUnavailable}
+              existingBooking={
+                memberMeeting.existingBooking
+                  ? {
+                      status: memberMeeting.existingBooking.status,
+                      label: `${formatDayKey(
+                        zonedDayKey(memberMeeting.existingBooking.startTime, memberMeeting.timezone)
+                      )}, ${formatTimeInZone(memberMeeting.existingBooking.startTime, memberMeeting.timezone)}`,
+                    }
+                  : null
+              }
+              days={memberMeeting.days.map((d) => ({
+                label: formatDayKey(d.day),
+                slots: d.slots.map((s) => ({
+                  id: s.id,
+                  range: formatTimeRangeInZone(s.startTime, s.endTime, memberMeeting.timezone),
+                  state: s.state,
+                })),
+              }))}
+            />
           </TabsContent>
         )}
       </Tabs>

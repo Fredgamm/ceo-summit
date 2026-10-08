@@ -4,11 +4,17 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     eventRegistration: { findUnique: vi.fn() },
+    event: { findFirst: vi.fn() },
+    meetingBooking: { findFirst: vi.fn() },
   },
 }));
 
 import { prisma } from "@/lib/prisma";
-import { meetingEventIdFor, missingMeetingProfileFields } from "./meeting-participation";
+import {
+  loadMemberMeetingView,
+  meetingEventIdFor,
+  missingMeetingProfileFields,
+} from "./meeting-participation";
 
 const FUTURE = new Date(Date.now() + 30 * 24 * 3600 * 1000);
 
@@ -83,5 +89,61 @@ describe("missingMeetingProfileFields", () => {
     expect(
       missingMeetingProfileFields({ name: "Marie", email: "m@x.mg", phone: " ", companyId: null })
     ).toEqual(["entreprise", "téléphone"]);
+  });
+});
+
+describe("loadMemberMeetingView (visitor side, lot 4)", () => {
+  const PROFILE = { name: "Paul", email: "p@x.mg", phone: "+262", companyId: "c" };
+  const slot = (id: string, hoursFromNow: number, statuses: Record<string, string>) => ({
+    id,
+    startTime: new Date(Date.now() + hoursFromNow * 3600 * 1000),
+    endTime: new Date(Date.now() + (hoursFromNow + 0.5) * 3600 * 1000),
+    participantSlots: Object.entries(statuses).map(([userId, status]) => ({ userId, status })),
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Éligibilité (select.status) puis profil du membre visité.
+    vi.mocked(prisma.user.findUnique).mockImplementation(((args: {
+      select: { status?: boolean };
+    }) => Promise.resolve(args.select.status ? member() : PROFILE)) as never);
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue({
+      status: "CONFIRMED",
+      planId: "plan_1",
+    } as never);
+    vi.mocked(prisma.meetingBooking.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.event.findFirst).mockResolvedValue({
+      id: "evt_1",
+      title: "CEO Summit",
+      timezone: "Indian/Reunion",
+      meetingSetup: { zone: "Espace B2B" },
+      meetingSlots: [
+        slot("past", -1, {}), // triés par heure, comme la requête
+        slot("free", 48, {}), // libre par défaut
+        slot("taken", 49, { member: "PENDING" }),
+        slot("hidden", 50, { member: "INACTIVE" }),
+        slot("busy", 51, { visitor: "BOOKED" }),
+      ],
+    } as never);
+  });
+
+  it("shows free slots, greys taken ones, hides deactivated ones", async () => {
+    const view = await loadMemberMeetingView("visitor", "member");
+
+    const states = view!.days.flatMap((d) => d.slots.map((s) => [s.id, s.state]));
+    expect(states).toEqual([
+      ["past", "past"],
+      ["free", "available"],
+      ["taken", "taken"],
+      ["busy", "you-unavailable"],
+    ]);
+    expect(view!.memberUnavailable).toBe(false);
+  });
+
+  it("is not shown on one's own profile, nor when one of them is not a participant", async () => {
+    expect(await loadMemberMeetingView("member", "member")).toBeNull();
+
+    vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue(null);
+    expect(await loadMemberMeetingView("visitor", "member")).toBeNull();
   });
 });
