@@ -8,6 +8,10 @@ import type { EventType } from "@prisma/client";
 import { createEvent, updateEvent } from "@/app/actions/admin-events";
 import { EVENT_IMAGE_ALLOWED_MIME_TYPES, EVENT_IMAGE_MAX_BYTES } from "@/lib/validations/event";
 import { DEFAULT_EVENT_TIMEZONE, EVENT_TIMEZONES, timezoneLabel } from "@/lib/event-timezone";
+import {
+  EventAttachmentsField,
+  type EventAttachmentValue,
+} from "@/components/admin/events/event-attachments-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,7 +38,6 @@ export interface EventFormValues {
   title: string;
   type: EventType;
   description: string;
-  speakersText: string;
   location: string;
   isOnline: boolean;
   zoomMeetingId: string;
@@ -45,13 +48,14 @@ export interface EventFormValues {
   capacity: string;
   price: string;
   imageUrl: string;
+  /** Module 21 D17 — pièces jointes, à la place des intervenants (D18). */
+  attachments: EventAttachmentValue[];
 }
 
 const EMPTY_VALUES: EventFormValues = {
   title: "",
   type: "RENCONTRE",
   description: "",
-  speakersText: "",
   location: "",
   isOnline: false,
   zoomMeetingId: "",
@@ -61,6 +65,7 @@ const EMPTY_VALUES: EventFormValues = {
   capacity: "50",
   price: "0",
   imageUrl: "",
+  attachments: [],
 };
 
 interface EventFormProps {
@@ -77,9 +82,9 @@ interface EventFormProps {
 }
 
 /**
- * E3-T05 — création/édition événement. Programme et intervenants s'éditent
- * en texte libre (une ligne = un élément) plutôt qu'avec un éditeur de blocs
- * — voir lib/event-content.ts pour le format exact et la justification.
+ * E3-T05 — création/édition événement. Le Programme se gère dans l'agenda
+ * multi-salles, les intervenants par session ; la section « Intervenants »
+ * est remplacée par les pièces jointes (module 21, D17-D18).
  */
 export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: EventFormProps) {
   const router = useRouter();
@@ -306,18 +311,13 @@ export function EventForm({ mode, eventId, initialValues, offersCount = 0 }: Eve
 
         <Card>
           <CardHeader>
-            <CardTitle>Intervenants</CardTitle>
+            <CardTitle>Pièces jointes</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              rows={4}
-              placeholder={"Sarah Razanamahery | DG | BNI Madagascar"}
-              value={values.speakersText}
-              onChange={(e) => set("speakersText", e.target.value)}
+            <EventAttachmentsField
+              value={values.attachments}
+              onChange={(next) => set("attachments", next)}
             />
-            <p className="mt-1.5 text-xs text-text-muted">
-              Une ligne par intervenant, format « Nom | Poste | Entreprise ».
-            </p>
           </CardContent>
         </Card>
 

@@ -6,8 +6,8 @@ import type { EventStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { eventFormSchema } from "@/lib/validations/event";
-import { parseSpeakersText } from "@/lib/event-content";
 import { utcToZonedLocal, zonedLocalToUtc } from "@/lib/event-timezone";
+import { isAttachmentMime, isUploadedAttachmentUrl } from "@/lib/event-attachments";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -17,9 +17,15 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
  * (aucun cron), donc pas construits — ce serait EX-T03 (monitoring/infra), qui n'existe
  * pas non plus.
  */
+type AttachmentRow = Omit<Prisma.EventAttachmentCreateManyInput, "eventId">;
+
+/**
+ * Module 21 D18 — la section « Intervenants » a disparu du formulaire :
+ * `speakers` n'est plus écrit (les données existantes restent en base).
+ */
 function toEventData(
   input: unknown
-): { error: string } | { data: Prisma.EventUncheckedCreateInput } {
+): { error: string } | { data: Prisma.EventUncheckedCreateInput; attachments: AttachmentRow[] } {
   const parsed = eventFormSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Champs invalides" };
@@ -29,12 +35,15 @@ function toEventData(
   const date = zonedLocalToUtc(f.date, f.timezone);
   const endDate = zonedLocalToUtc(f.endDate, f.timezone);
   if (!date || !endDate) return { error: "Dates invalides" };
+  if (f.attachments.some((a) => !isUploadedAttachmentUrl(a.url) || !isAttachmentMime(a.mimeType))) {
+    return { error: "Pièce jointe invalide : renvoyez le fichier." };
+  }
   return {
+    attachments: f.attachments.map((a, position) => ({ ...a, position })),
     data: {
       title: f.title,
       type: f.type,
       description: f.description,
-      speakers: parseSpeakersText(f.speakersText) as unknown as Prisma.InputJsonValue,
       location: f.location,
       isOnline: f.isOnline,
       zoomMeetingId: f.zoomMeetingId || null,
@@ -54,7 +63,13 @@ export async function createEvent(input: unknown): Promise<ActionResult<{ id: st
   const result = toEventData(input);
   if ("error" in result) return { success: false, error: result.error };
 
-  const event = await prisma.event.create({ data: { ...result.data, status: "DRAFT" } });
+  const event = await prisma.event.create({
+    data: {
+      ...result.data,
+      status: "DRAFT",
+      attachments: { createMany: { data: result.attachments } },
+    },
+  });
 
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "event.create", targetType: "Event", targetId: event.id },
@@ -77,9 +92,15 @@ export async function updateEvent(eventId: string, input: unknown): Promise<Acti
   if (!previous) return { success: false, error: "Événement introuvable" };
 
   const newTimezone = result.data.timezone ?? previous.timezone;
-  if (newTimezone === previous.timezone) {
-    await prisma.event.update({ where: { id: eventId }, data: result.data });
-  } else {
+  const operations: Prisma.PrismaPromise<unknown>[] = [
+    prisma.event.update({ where: { id: eventId }, data: result.data }),
+    // Pièces jointes : la liste du formulaire fait foi (ajouts, retraits, ordre).
+    prisma.eventAttachment.deleteMany({ where: { eventId } }),
+    prisma.eventAttachment.createMany({
+      data: result.attachments.map((a) => ({ ...a, eventId })),
+    }),
+  ];
+  if (newTimezone !== previous.timezone) {
     // Changement de fuseau : les sessions du Programme et les créneaux de
     // rendez-vous gardent l'heure affichée (« 14h00 » reste 14h00, dans le
     // nouveau fuseau), comme le début et la fin saisis dans le formulaire.
@@ -95,8 +116,7 @@ export async function updateEvent(eventId: string, input: unknown): Promise<Acti
     ]);
     const shift = (d: Date) =>
       zonedLocalToUtc(utcToZonedLocal(d, previous.timezone), newTimezone) ?? d;
-    await prisma.$transaction([
-      prisma.event.update({ where: { id: eventId }, data: result.data }),
+    operations.push(
       ...sessions.map((s) =>
         prisma.eventSession.update({
           where: { id: s.id },
@@ -108,9 +128,10 @@ export async function updateEvent(eventId: string, input: unknown): Promise<Acti
           where: { id: s.id },
           data: { startTime: shift(s.startTime), endTime: shift(s.endTime) },
         })
-      ),
-    ]);
+      )
+    );
   }
+  await prisma.$transaction(operations);
 
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "event.update", targetType: "Event", targetId: eventId },

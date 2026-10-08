@@ -47,12 +47,6 @@ const SECTIONS: {
     items: [
       { href: "/admin/evenements", label: "Événements", icon: CalendarDays, section: "evenements" },
       {
-        href: "/admin/rendez-vous",
-        label: "Créneaux rendez-vous",
-        icon: CalendarClock,
-        section: "evenements",
-      },
-      {
         href: "/admin/deal-room",
         label: "Deal Room",
         icon: Diamond,
@@ -71,6 +65,12 @@ const SECTIONS: {
   {
     title: "Opérations",
     items: [
+      {
+        href: "/admin/rendez-vous",
+        label: "Créneaux rendez-vous",
+        icon: CalendarClock,
+        section: "evenements",
+      },
       {
         href: "/admin/entreprises",
         label: "Entreprises",

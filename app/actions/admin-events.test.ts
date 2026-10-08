@@ -9,6 +9,7 @@ vi.mock("@/lib/prisma", () => ({
     event: { create: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
     eventSession: { findMany: vi.fn(), update: vi.fn() },
     meetingTimeSlot: { findMany: vi.fn(), update: vi.fn() },
+    eventAttachment: { deleteMany: vi.fn(), createMany: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -25,7 +26,6 @@ const VALID_INPUT = {
   title: "Dîner Privé — Finance",
   type: "DINER" as const,
   description: "Un dîner privé pour dirigeants du secteur financier.",
-  speakersText: "Sarah Razanamahery | DG | BNI Madagascar",
   location: "Hotel Carlton",
   isOnline: false,
   zoomMeetingId: "",
@@ -34,6 +34,14 @@ const VALID_INPUT = {
   capacity: 20,
   price: 300000,
   imageUrl: "",
+};
+
+const ATTACHMENT = {
+  title: "Programme détaillé",
+  url: "/api/dev/local-storage/ceo-summit-event-assets/events/attachments/abc/programme.pdf",
+  fileName: "programme.pdf",
+  mimeType: "application/pdf",
+  sizeBytes: 120_000,
 };
 
 describe("admin event actions", () => {
@@ -75,20 +83,46 @@ describe("admin event actions", () => {
       expect(prisma.event.create).not.toHaveBeenCalled();
     });
 
-    it("creates a draft event with parsed speakers", async () => {
+    it("creates a draft event with its attachments, in order (module 21 D17)", async () => {
       vi.mocked(prisma.event.create).mockResolvedValue({ id: "evt_1" } as never);
 
-      const result = await createEvent(VALID_INPUT);
+      const result = await createEvent({ ...VALID_INPUT, attachments: [ATTACHMENT] });
 
       expect(result.success).toBe(true);
-      expect(prisma.event.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            status: "DRAFT",
-            speakers: [{ name: "Sarah Razanamahery", title: "DG", company: "BNI Madagascar" }],
-          }),
-        })
-      );
+      const data = vi.mocked(prisma.event.create).mock.calls[0]![0].data;
+      expect(data.status).toBe("DRAFT");
+      expect(data.attachments).toEqual({
+        createMany: { data: [{ ...ATTACHMENT, position: 0 }] },
+      });
+    });
+
+    it("no longer writes speakers (D18: existing data stays untouched)", async () => {
+      vi.mocked(prisma.event.create).mockResolvedValue({ id: "evt_1" } as never);
+
+      await createEvent({ ...VALID_INPUT, speakersText: "Sarah | DG | BNI" });
+
+      expect(vi.mocked(prisma.event.create).mock.calls[0]![0].data).not.toHaveProperty("speakers");
+    });
+
+    it("refuses an attachment that was not uploaded through the platform", async () => {
+      const result = await createEvent({
+        ...VALID_INPUT,
+        attachments: [{ ...ATTACHMENT, url: "https://evil.example/programme.pdf" }],
+      });
+
+      expect(result.success).toBe(false);
+      expect(prisma.event.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses more than 10 attachments", async () => {
+      const attachments = Array.from({ length: 11 }, (_, i) => ({
+        ...ATTACHMENT,
+        url: ATTACHMENT.url.replace("abc", `f${i}`),
+      }));
+
+      const result = await createEvent({ ...VALID_INPUT, attachments });
+
+      expect(result.success).toBe(false);
     });
 
     it("rejects an invalid input without creating anything", async () => {
@@ -135,6 +169,27 @@ describe("admin event actions", () => {
       expect(prisma.event.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: "evt_1" } })
       );
+    });
+
+    it("replaces the attachment list with the form's, in one transaction", async () => {
+      const second = {
+        ...ATTACHMENT,
+        title: "Plan d'accès",
+        url: ATTACHMENT.url.replace("abc", "def"),
+      };
+
+      await updateEvent("evt_1", { ...VALID_INPUT, attachments: [second, ATTACHMENT] });
+
+      expect(prisma.eventAttachment.deleteMany).toHaveBeenCalledWith({
+        where: { eventId: "evt_1" },
+      });
+      expect(prisma.eventAttachment.createMany).toHaveBeenCalledWith({
+        data: [
+          { ...second, position: 0, eventId: "evt_1" },
+          { ...ATTACHMENT, position: 1, eventId: "evt_1" },
+        ],
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
 

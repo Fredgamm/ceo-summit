@@ -4,7 +4,6 @@ import { notFound, redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
-import { speakersToText } from "@/lib/event-content";
 import { utcToZonedLocal } from "@/lib/event-timezone";
 import { EventForm } from "@/components/admin/event-form";
 import { EventStatusActions } from "@/components/admin/event-status-actions";
@@ -20,7 +19,10 @@ export default async function EditEventPage({ params }: { params: { id: string }
   }
 
   const [event, offersCount, meetingSlotsCount] = await Promise.all([
-    prisma.event.findUnique({ where: { id: params.id } }),
+    prisma.event.findUnique({
+      where: { id: params.id },
+      include: { attachments: { orderBy: { position: "asc" } } },
+    }),
     prisma.plan.count({ where: { eventId: params.id } }),
     prisma.meetingTimeSlot.count({ where: { eventId: params.id } }),
   ]);
@@ -78,7 +80,6 @@ export default async function EditEventPage({ params }: { params: { id: string }
           title: event.title,
           type: event.type,
           description: event.description,
-          speakersText: speakersToText(event.speakers),
           location: event.location,
           isOnline: event.isOnline,
           zoomMeetingId: event.zoomMeetingId ?? "",
@@ -88,6 +89,13 @@ export default async function EditEventPage({ params }: { params: { id: string }
           capacity: String(event.capacity),
           price: String(event.price),
           imageUrl: event.imageUrl ?? "",
+          attachments: event.attachments.map((a) => ({
+            title: a.title,
+            url: a.url,
+            fileName: a.fileName,
+            mimeType: a.mimeType,
+            sizeBytes: a.sizeBytes,
+          })),
         }}
       />
     </div>

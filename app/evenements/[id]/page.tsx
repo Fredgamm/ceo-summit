@@ -8,7 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { getActivePlans } from "@/lib/plans-query";
 import { getEurToArRate } from "@/lib/currency-conversion";
-import { parseSpeakers, speakersToText } from "@/lib/event-content";
+import { speakersToText } from "@/lib/event-content";
+import { attachmentKindLabel, formatFileSize } from "@/lib/event-attachments";
 import { countUnreadMessages } from "@/lib/conversations";
 import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
@@ -54,6 +55,8 @@ export default async function EventDetailPage({ params }: { params: { id: string
         take: 12,
       },
       sessions: { orderBy: { startTime: "asc" } },
+      // Module 21 D17-D18 — pièces jointes à la place des « Intervenants confirmés ».
+      attachments: { orderBy: { position: "asc" } },
       _count: { select: { registrations: { where: { status: { in: TAKEN_STATUSES } } } } },
     },
   });
@@ -81,7 +84,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
   const isPast = event.date < new Date();
 
-  const speakers = parseSpeakers(event.speakers);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   // E10 — agenda dynamique multi-salles (5 août 2026) : sessions groupées
@@ -179,24 +181,30 @@ export default async function EventDetailPage({ params }: { params: { id: string
             </div>
           )}
 
-          {speakers.length > 0 && (
+          {event.attachments.length > 0 && (
             <div className="rounded-lg border border-border bg-white p-6">
-              <h2 className="mb-3 text-base font-bold text-navy">Intervenants confirmés</h2>
-              <div className="flex flex-col gap-3">
-                {speakers.map((speaker) => (
-                  <div key={speaker.name} className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback>{initials(speaker.name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-semibold text-navy">{speaker.name}</p>
-                      <p className="text-xs text-text-muted">
-                        {[speaker.title, speaker.company].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-                  </div>
+              <h2 className="mb-3 text-base font-bold text-navy">Documents</h2>
+              <ul className="flex flex-col divide-y divide-border">
+                {event.attachments.map((attachment) => (
+                  <li key={attachment.id}>
+                    <a
+                      href={attachment.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={attachment.fileName}
+                      className="flex items-center gap-3 py-2 text-sm hover:text-navy-mid"
+                    >
+                      <span className="rounded bg-surface-2 px-2 py-1 text-xs font-bold text-navy">
+                        {attachmentKindLabel(attachment.mimeType)}
+                      </span>
+                      <span className="flex-1 font-semibold text-navy">{attachment.title}</span>
+                      <span className="text-xs text-text-muted">
+                        {formatFileSize(attachment.sizeBytes)} ↓
+                      </span>
+                    </a>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
 

@@ -624,6 +624,8 @@ model Event {
   title         String
   type          EventType   @default(RENCONTRE)
   description   String      @db.Text
+  /// Plus saisi ni affiché depuis le module 21 (D18) : les intervenants se
+  /// gèrent par session du Programme. Conservé pour ne rien perdre.
   speakers      Json? // [{ name, title, company, photoUrl }]
   location      String
   isOnline      Boolean     @default(false)
@@ -669,6 +671,9 @@ model Event {
   meetingSetup  EventMeetingSetup?
   meetingSlots  MeetingTimeSlot[]
   meetings      MeetingBooking[]
+  /// Module 21 D17 (8 oct. 2026) — documents téléchargeables, à la place
+  /// de la section « Intervenants » (`speakers` reste en base, D18).
+  attachments   EventAttachment[]
 
   @@index([status, date])
   @@index([type])
@@ -1309,4 +1314,22 @@ model MeetingBooking {
   @@index([recipientId, status])
   @@index([slotId])
   @@index([status, expiresAt])
+}
+
+/// Module 21 D17 (8 oct. 2026) — pièce jointe d'un événement (PDF, image,
+/// Word, Excel, PowerPoint ; 20 Mo, 10 par événement), visible des membres
+/// sur la fiche de l'événement. Voir lib/event-attachments.ts.
+model EventAttachment {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title     String
+  url       String
+  fileName  String
+  mimeType  String
+  sizeBytes Int
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([eventId, position])
 }
