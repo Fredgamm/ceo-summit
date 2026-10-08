@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    companyPayment: { findUnique: vi.fn() },
+    companyPayment: { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
     company: { findUnique: vi.fn() },
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
@@ -170,10 +170,13 @@ describe("pushParticipantsToEvolia", () => {
       { user: { id: "user_2", name: "Jean Rabe", email: "jean@example.mg" } },
     ] as never);
 
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+
     await pushParticipantsToEvolia("company_1");
 
     expect(pushedPayload().payload).toMatchObject({
       event: "company.participants.confirmed",
+      ceoSummitReference: "payment_1",
       offer: { includedParticipants: 3 },
       participants: [
         { fullName: "Marie Dupont", isInitiator: true },

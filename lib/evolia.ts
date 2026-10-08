@@ -17,7 +17,7 @@ import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
  * webhook entrant).
  */
 
-const DEFAULT_REGISTRATION_URL = "https://event.aiolia.us/integration/ceosummit/registrations";
+const DEFAULT_REGISTRATION_URL = "https://api-event.aiolia.us/integration/ceosummit/registrations";
 const DEFAULT_PAYMENT_URL = "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -158,9 +158,23 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<void>
     });
     if (!company?.subscription) return;
 
+    // Evolia exige `ceoSummitReference` sur chaque envoi : celle du paiement
+    // de l'offre (déjà transmise avec l'inscription), ou l'abonnement pour une
+    // offre sans paiement (partenaire institutionnel).
+    const offerPayment = await prisma.companyPayment.findFirst({
+      where: {
+        companySubscriptionId: company.subscription.id,
+        status: "CONFIRMED",
+        upsellQuantity: null,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+
     const payload = {
       event: "company.participants.confirmed",
       companyId: company.id,
+      ceoSummitReference: offerPayment?.id ?? company.subscription.id,
       company: companyInfo(company),
       offer: {
         name: company.subscription.plan.name,

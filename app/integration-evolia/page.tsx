@@ -228,7 +228,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
           <ul className="list-disc pl-5">
             <li>
               <strong>URL :</strong>{" "}
-              <code>POST https://event.aiolia.us/integration/ceosummit/registrations</code>
+              <code>POST https://api-event.aiolia.us/integration/ceosummit/registrations</code>
             </li>
             <li>
               <strong>Corps :</strong> JSON (<code>Content-Type: application/json</code>), un des
@@ -353,6 +353,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
           <Json>{`{
   "event": "company.participants.confirmed",
   "companyId": "cmp_8f21ab",
+  "ceoSummitReference": "cmp_9f2ab3d8e1",
   "company": {
     "name": "Groupe Exemple SA",
     "sector": "Fintech",
