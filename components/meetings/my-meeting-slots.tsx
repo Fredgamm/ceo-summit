@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { setAllMeetingSlots, toggleMeetingSlot } from "@/app/actions/meetings";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Clock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Status = "INACTIVE" | "FREE" | "PENDING" | "BOOKED";
@@ -31,40 +32,32 @@ export interface MyMeetingEventView {
 /**
  * Code couleur des statuts (conception/21 §3.2, doc client §4.5) : libre en
  * vert, en attente en orange, réservé en bleu marine, inactif en gris ; un
- * créneau passé est grisé. Créneaux en grille, une colonne sur mobile.
+ * créneau passé est grisé. Une ligne par créneau (heure, statut, action), en grille.
  */
-const STATUS: Record<
-  Status | "PAST",
-  { label: string; badge: string; card: string; count: string }
-> = {
+const STATUS: Record<Status | "PAST", { label: string; badge: string; count: string }> = {
   FREE: {
     label: "Libre",
     badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-    card: "border-l-emerald-500",
     count: "text-emerald-700",
   },
   PENDING: {
     label: "En attente",
     badge: "bg-amber-50 text-amber-800 ring-amber-200",
-    card: "border-l-amber-500",
     count: "text-amber-700",
   },
   BOOKED: {
     label: "Réservé",
     badge: "bg-navy-light text-navy ring-navy/30",
-    card: "border-l-navy",
     count: "text-navy",
   },
   INACTIVE: {
     label: "Inactif",
     badge: "bg-slate-100 text-slate-600 ring-slate-200",
-    card: "border-l-slate-300",
     count: "text-slate-500",
   },
   PAST: {
     label: "Passé",
     badge: "bg-slate-50 text-slate-400 ring-slate-200",
-    card: "border-l-slate-200",
     count: "text-slate-400",
   },
 };
@@ -211,7 +204,7 @@ export function MyMeetingSlots({
             {event.days.map((day) => (
               <div key={day.label}>
                 <p className="mb-2 text-xs font-bold uppercase text-gold">{day.label}</p>
-                <ul className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {day.slots.map((slot) => {
                     const status = slot.started ? STATUS.PAST : STATUS[slot.status];
                     const locked =
@@ -221,27 +214,36 @@ export function MyMeetingSlots({
                       <li
                         key={slot.id}
                         className={cn(
-                          "flex flex-col gap-2 rounded-md border border-l-4 border-border bg-white px-3 py-2.5",
-                          status.card,
+                          "flex items-center gap-3 rounded-lg border border-border bg-slate-50/60 px-3 py-2.5",
                           slot.started && "opacity-60"
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-navy">{slot.range}</span>
-                          <Toggle
-                            checked={on}
-                            disabled={locked || busy !== null}
-                            label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
-                            onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
-                          />
-                        </div>
+                        <Clock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+                        <span className="whitespace-nowrap text-sm font-semibold text-navy">
+                          {slot.range}
+                        </span>
                         <span
                           className={cn(
-                            "w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                            "rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
                             status.badge
                           )}
                         >
                           {status.label}
+                        </span>
+                        <span className="ml-auto flex items-center">
+                          {locked ? (
+                            <span className="flex items-center gap-1 text-xs text-text-muted">
+                              <Lock className="h-3.5 w-3.5" aria-hidden />
+                              {status.label}
+                            </span>
+                          ) : (
+                            <Toggle
+                              checked={on}
+                              disabled={busy !== null}
+                              label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
+                              onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
+                            />
+                          )}
                         </span>
                       </li>
                     );
