@@ -32,7 +32,7 @@ export interface MyMeetingEventView {
 /**
  * Code couleur des statuts (conception/21 §3.2, doc client §4.5) : libre en
  * vert, en attente en orange, réservé en bleu marine, inactif en gris ; un
- * créneau passé est grisé. Une ligne par créneau (heure, statut, action), en grille.
+ * créneau passé est grisé. Une ligne par créneau (heure, interrupteur, statut), en grille.
  */
 const STATUS: Record<Status | "PAST", { label: string; badge: string; count: string }> = {
   FREE: {
@@ -222,28 +222,28 @@ export function MyMeetingSlots({
                         <span className="whitespace-nowrap text-sm font-semibold text-navy">
                           {slot.range}
                         </span>
+                        {locked ? (
+                          <span
+                            className="flex h-6 w-11 shrink-0 items-center justify-center text-text-muted"
+                            title="Non modifiable"
+                          >
+                            <Lock className="h-4 w-4" aria-label="Non modifiable" />
+                          </span>
+                        ) : (
+                          <Toggle
+                            checked={on}
+                            disabled={busy !== null}
+                            label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
+                            onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
+                          />
+                        )}
                         <span
                           className={cn(
-                            "rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                            "ml-auto rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
                             status.badge
                           )}
                         >
                           {status.label}
-                        </span>
-                        <span className="ml-auto flex items-center">
-                          {locked ? (
-                            <span className="flex items-center gap-1 text-xs text-text-muted">
-                              <Lock className="h-3.5 w-3.5" aria-hidden />
-                              {status.label}
-                            </span>
-                          ) : (
-                            <Toggle
-                              checked={on}
-                              disabled={busy !== null}
-                              label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
-                              onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
-                            />
-                          )}
                         </span>
                       </li>
                     );
