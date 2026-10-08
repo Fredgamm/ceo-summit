@@ -98,18 +98,18 @@ export async function autoRegisterCompanyMembers(
 }
 
 /**
- * L'admin lie une offre à un événement (ou change d'événement) : les
- * inscriptions faites par cette offre sur l'ancien événement sont annulées,
- * puis les membres de chaque entreprise abonnée sont inscrits au nouveau.
+ * L'admin enregistre une offre liée à un événement : les membres de chaque
+ * entreprise abonnée sont inscrits (sans effet sur ceux déjà inscrits ou
+ * retirés par leur gérant — ré-enregistrer l'offre rattrape donc un membre
+ * oublié). Si l'événement a changé, les inscriptions faites par cette offre
+ * sur l'ancien événement sont d'abord annulées.
  */
 export async function syncPlanEventRegistrations(
   planId: string,
   previousEventId: string | null,
   newEventId: string | null
 ): Promise<{ registered: number }> {
-  if (previousEventId === newEventId) return { registered: 0 };
-
-  if (previousEventId) {
+  if (previousEventId && previousEventId !== newEventId) {
     await prisma.eventRegistration.updateMany({
       where: { eventId: previousEventId, planId, status: { not: "CANCELLED" } },
       data: { status: "CANCELLED" },

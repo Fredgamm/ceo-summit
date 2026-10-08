@@ -156,10 +156,16 @@ describe("syncPlanEventRegistrations", () => {
     ] as never);
   });
 
-  it("does nothing when the event did not change", async () => {
-    await syncPlanEventRegistrations("plan_1", "event_1", "event_1");
+  it("re-saving an offer on the same event registers forgotten members, cancelling nothing", async () => {
+    const result = await syncPlanEventRegistrations("plan_1", "event_1", "event_1");
 
     expect(prisma.eventRegistration.updateMany).not.toHaveBeenCalled();
+    expect(result).toEqual({ registered: 3 });
+  });
+
+  it("does nothing for an offer not linked to any event", async () => {
+    await syncPlanEventRegistrations("plan_1", null, null);
+
     expect(prisma.companySubscription.findMany).not.toHaveBeenCalled();
   });
 
