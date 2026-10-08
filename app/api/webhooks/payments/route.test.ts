@@ -23,6 +23,7 @@ vi.mock("@/lib/payment-confirmations", () => ({
   confirmEventRegistrationPaymentCore: vi
     .fn()
     .mockResolvedValue({ success: true, data: undefined }),
+  reviveCancelledEvoliaPayment: vi.fn().mockResolvedValue("none"),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -34,6 +35,7 @@ import { prisma } from "@/lib/prisma";
 import {
   confirmCompanyPaymentCore,
   confirmEventRegistrationPaymentCore,
+  reviveCancelledEvoliaPayment,
 } from "@/lib/payment-confirmations";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -57,6 +59,7 @@ describe("POST /api/webhooks/payments", () => {
     vi.mocked(prisma.eventRegistration.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(null as never);
     vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, retryAfterSec: 0 });
+    vi.mocked(reviveCancelledEvoliaPayment).mockResolvedValue("none");
     vi.mocked(confirmCompanyPaymentCore).mockResolvedValue({
       success: true,
       data: { companyId: "company_1" },
@@ -116,6 +119,39 @@ describe("POST /api/webhooks/payments", () => {
       expect.objectContaining({
         where: { id: "log_1" },
         data: expect.objectContaining({ status: "PROCESSED" }),
+      })
+    );
+  });
+
+  it("honours a payment the company cancelled but paid anyway at Evolia", async () => {
+    vi.mocked(reviveCancelledEvoliaPayment).mockResolvedValue("revived");
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(confirmCompanyPaymentCore).toHaveBeenCalledWith("payment_1", null);
+  });
+
+  it("does not reactivate anything for a double payment, only flags it", async () => {
+    vi.mocked(reviveCancelledEvoliaPayment).mockResolvedValue("already-paid");
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ error: expect.stringContaining("double paiement") }),
       })
     );
   });

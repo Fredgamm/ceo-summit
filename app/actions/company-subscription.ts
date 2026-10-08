@@ -16,7 +16,11 @@ import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { getEurToArRate } from "@/lib/currency-conversion";
-import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import {
+  CANCELLED_BY_COMPANY_REASON,
+  EVOLIA_CANCEL_DELAY_MS,
+  isEvoliaPaymentMethod,
+} from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
@@ -411,4 +415,70 @@ export async function purchaseUpsellSeats(
 
   revalidatePath(`/entreprises/${subscription.companyId}`);
   return { success: true, data: { redirectUrl: null } };
+}
+
+/**
+ * 8 oct. 2026 — paiement carte / Mobile Money abandonné : le gérant l'annule
+ * pour choisir un autre mode de paiement, sans passer par l'équipe. Possible
+ * seulement après `EVOLIA_CANCEL_DELAY_MS`, le temps qu'une confirmation déjà
+ * en route arrive ; si Evolia confirme malgré tout plus tard, le paiement est
+ * honoré (`reviveCancelledEvoliaPayment`).
+ */
+export async function cancelPendingEvoliaPayment(companyPaymentId: string): Promise<ActionResult> {
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
+
+  const payment = await prisma.companyPayment.findUnique({
+    where: { id: companyPaymentId },
+    include: { companySubscription: { include: { company: true } } },
+  });
+  if (!payment) return { success: false, error: "Paiement introuvable." };
+  const subscription = payment.companySubscription;
+  if (subscription.company.companyAdminId !== viewer.id) {
+    return { success: false, error: "Seul le gérant de l'entreprise peut annuler ce paiement." };
+  }
+  if (payment.status !== "PENDING" || !isEvoliaPaymentMethod(payment.method)) {
+    return { success: false, error: "Ce paiement ne peut plus être annulé." };
+  }
+  if (Date.now() - payment.createdAt.getTime() < EVOLIA_CANCEL_DELAY_MS) {
+    return {
+      success: false,
+      error:
+        "Si vous venez de payer, la confirmation peut prendre quelques minutes. Réessayez dans un quart d'heure.",
+    };
+  }
+
+  const cancelled = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.companyPayment.updateMany({
+      where: { id: companyPaymentId, status: "PENDING" },
+      data: {
+        status: "REJECTED",
+        reviewedAt: new Date(),
+        rejectionReason: CANCELLED_BY_COMPANY_REASON,
+      },
+    });
+    if (count === 0) return false;
+    if (payment.upsellQuantity == null) {
+      await tx.companySubscription.updateMany({
+        where: { id: subscription.id, status: "PENDING_REVIEW" },
+        data: { status: "PENDING_PAYMENT" },
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        actorId: viewer.id,
+        action: "company_payment.cancel_by_company",
+        targetType: "CompanyPayment",
+        targetId: companyPaymentId,
+        metadata: { method: payment.method, upsell: payment.upsellQuantity != null },
+      },
+    });
+    return true;
+  });
+  if (!cancelled) return { success: false, error: "Ce paiement vient d'être traité." };
+
+  revalidatePath(`/entreprises/${subscription.companyId}`);
+  revalidatePath("/entreprise/paiement");
+  return { success: true, data: undefined };
 }

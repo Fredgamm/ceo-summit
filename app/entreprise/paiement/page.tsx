@@ -11,6 +11,7 @@ import { PlanPrice } from "@/components/entreprise/plan-price";
 import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { evoliaPaymentUrl } from "@/lib/evolia";
+import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
 import { pluralize } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Paiement" };
@@ -115,16 +116,18 @@ export default async function CompanyPaymentPage({
             {subscription.status === "PENDING_REVIEW" &&
               (pendingEvoliaPayment ? (
                 <Alert className="mb-4">
-                  <AlertDescription>
-                    Votre paiement par carte ou Mobile Money est en cours chez Evolia : l&apos;accès
-                    de votre équipe s&apos;activera dès qu&apos;Evolia nous l&apos;aura confirmé.
-                    Paiement interrompu ?{" "}
-                    <a
-                      href={evoliaPaymentUrl(pendingEvoliaPayment.id)}
-                      className="font-semibold text-navy underline"
-                    >
-                      Reprendre le paiement
-                    </a>
+                  <AlertDescription className="flex flex-col gap-3">
+                    <span>
+                      Votre paiement par carte ou Mobile Money est en cours chez Evolia :
+                      l&apos;accès de votre équipe s&apos;activera dès qu&apos;Evolia nous
+                      l&apos;aura confirmé. Paiement interrompu ? Reprenez-le, ou choisissez un
+                      autre mode de paiement.
+                    </span>
+                    <EvoliaPendingPayment
+                      paymentId={pendingEvoliaPayment.id}
+                      paymentUrl={evoliaPaymentUrl(pendingEvoliaPayment.id)}
+                      startedAt={pendingEvoliaPayment.createdAt.toISOString()}
+                    />
                   </AlertDescription>
                 </Alert>
               ) : (

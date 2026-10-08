@@ -157,6 +157,13 @@ export default async function AdminCompanyDetailPage({ params }: { params: { id:
               ? "Supplément de participants à valider"
               : "Paiement à valider"}
           </h2>
+          {payment.upsellQuantity == null && company.subscription?.status === "ACTIVE" && (
+            <p className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
+              Double paiement possible : l&apos;abonnement est déjà actif (par exemple un paiement
+              par carte confirmé par Evolia après que l&apos;entreprise est passée au virement).
+              Vérifiez avant de confirmer, et remboursez l&apos;un des deux paiements.
+            </p>
+          )}
           {payment.upsellQuantity != null && payment.upsellPlan && (
             <p className="mb-3 text-sm text-text-mid">
               {payment.upsellQuantity} × {payment.upsellPlan.name} — n&apos;active pas
