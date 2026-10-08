@@ -29,23 +29,27 @@ export interface MemberSlotView {
 }
 
 /** Même code couleur que « Mes créneaux » : libre vert, pris orange, indisponible gris. */
-const STATE: Record<State, { label: string; dot: string; badge: string }> = {
+const STATE: Record<State, { label: string; badge: string; card: string }> = {
   available: {
     label: "Libre",
-    dot: "bg-emerald-500",
     badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+    card: "border-l-emerald-500",
   },
   taken: {
     label: "Déjà pris",
-    dot: "bg-amber-500",
     badge: "bg-amber-50 text-amber-800 ring-amber-200",
+    card: "border-l-amber-500",
   },
   "you-unavailable": {
     label: "Vous êtes indisponible",
-    dot: "bg-slate-400",
     badge: "bg-slate-100 text-slate-600 ring-slate-200",
+    card: "border-l-slate-300",
   },
-  past: { label: "Passé", dot: "bg-slate-300", badge: "bg-slate-50 text-slate-400 ring-slate-200" },
+  past: {
+    label: "Passé",
+    badge: "bg-slate-50 text-slate-400 ring-slate-200",
+    card: "border-l-slate-200",
+  },
 };
 
 /**
@@ -147,7 +151,7 @@ export function MemberMeetingSlots({
           {days.map((day) => (
             <div key={day.label}>
               <p className="mb-2 text-xs font-bold uppercase text-gold">{day.label}</p>
-              <ul className="divide-y divide-border rounded-md border border-border">
+              <ul className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                 {day.slots.map((slot) => {
                   const state = STATE[slot.state];
                   const canAsk = slot.state === "available" && !blocked;
@@ -155,31 +159,34 @@ export function MemberMeetingSlots({
                     <li
                       key={slot.id}
                       className={cn(
-                        "grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5",
+                        "flex flex-col gap-2 rounded-md border border-l-4 border-border bg-white px-3 py-2.5",
+                        state.card,
                         slot.state !== "available" && "opacity-70"
                       )}
                     >
-                      <span className="text-sm font-semibold text-navy">{slot.range}</span>
-                      <span
-                        className={cn(
-                          "inline-flex items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
-                          state.badge
-                        )}
-                      >
-                        <span className={cn("h-1.5 w-1.5 rounded-full", state.dot)} />
-                        {state.label}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant={canAsk ? "default" : "ghost"}
-                        disabled={!canAsk}
-                        onClick={() => {
-                          setError(null);
-                          setSelected({ id: slot.id, label: `${day.label}, ${slot.range}` });
-                        }}
-                      >
-                        Demander
-                      </Button>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-navy">{slot.range}</span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                            state.badge
+                          )}
+                        >
+                          {state.label}
+                        </span>
+                      </div>
+                      {canAsk && (
+                        <Button
+                          size="sm"
+                          className="w-full"
+                          onClick={() => {
+                            setError(null);
+                            setSelected({ id: slot.id, label: `${day.label}, ${slot.range}` });
+                          }}
+                        >
+                          Demander
+                        </Button>
+                      )}
                     </li>
                   );
                 })}

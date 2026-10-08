@@ -31,26 +31,42 @@ export interface MyMeetingEventView {
 /**
  * Code couleur des statuts (conception/21 §3.2, doc client §4.5) : libre en
  * vert, en attente en orange, réservé en bleu marine, inactif en gris ; un
- * créneau passé est grisé.
+ * créneau passé est grisé. Créneaux en grille, une colonne sur mobile.
  */
-const STATUS: Record<Status | "PAST", { label: string; dot: string; badge: string }> = {
+const STATUS: Record<
+  Status | "PAST",
+  { label: string; badge: string; card: string; count: string }
+> = {
   FREE: {
     label: "Libre",
-    dot: "bg-emerald-500",
     badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+    card: "border-l-emerald-500",
+    count: "text-emerald-700",
   },
   PENDING: {
     label: "En attente",
-    dot: "bg-amber-500",
     badge: "bg-amber-50 text-amber-800 ring-amber-200",
+    card: "border-l-amber-500",
+    count: "text-amber-700",
   },
-  BOOKED: { label: "Réservé", dot: "bg-navy", badge: "bg-navy-light text-navy ring-navy/30" },
+  BOOKED: {
+    label: "Réservé",
+    badge: "bg-navy-light text-navy ring-navy/30",
+    card: "border-l-navy",
+    count: "text-navy",
+  },
   INACTIVE: {
     label: "Inactif",
-    dot: "bg-slate-400",
     badge: "bg-slate-100 text-slate-600 ring-slate-200",
+    card: "border-l-slate-300",
+    count: "text-slate-500",
   },
-  PAST: { label: "Passé", dot: "bg-slate-300", badge: "bg-slate-50 text-slate-400 ring-slate-200" },
+  PAST: {
+    label: "Passé",
+    badge: "bg-slate-50 text-slate-400 ring-slate-200",
+    card: "border-l-slate-200",
+    count: "text-slate-400",
+  },
 };
 
 /** Interrupteur actif / inactif. */
@@ -173,18 +189,15 @@ export function MyMeetingSlots({
 
           <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {[
-              { label: "Créneaux", value: event.counts.total, dot: null },
-              { label: "Libres", value: event.counts.active, dot: STATUS.FREE.dot },
-              { label: "En attente", value: event.counts.pending, dot: STATUS.PENDING.dot },
-              { label: "Réservés", value: event.counts.booked, dot: STATUS.BOOKED.dot },
-              { label: "Inactifs", value: event.counts.inactive, dot: STATUS.INACTIVE.dot },
+              { label: "Créneaux", value: event.counts.total, color: "text-navy" },
+              { label: "Libres", value: event.counts.active, color: STATUS.FREE.count },
+              { label: "En attente", value: event.counts.pending, color: STATUS.PENDING.count },
+              { label: "Réservés", value: event.counts.booked, color: STATUS.BOOKED.count },
+              { label: "Inactifs", value: event.counts.inactive, color: STATUS.INACTIVE.count },
             ].map((c) => (
               <div key={c.label} className="rounded-md bg-surface-2 p-3">
-                <p className="text-xl font-bold text-navy">{c.value}</p>
-                <p className="flex items-center gap-1.5 text-xs text-text-muted">
-                  {c.dot && <span className={cn("h-2 w-2 rounded-full", c.dot)} />}
-                  {c.label}
-                </p>
+                <p className={cn("text-xl font-bold", c.color)}>{c.value}</p>
+                <p className="text-xs text-text-muted">{c.label}</p>
               </div>
             ))}
           </div>
@@ -198,7 +211,7 @@ export function MyMeetingSlots({
             {event.days.map((day) => (
               <div key={day.label}>
                 <p className="mb-2 text-xs font-bold uppercase text-gold">{day.label}</p>
-                <ul className="divide-y divide-border rounded-md border border-border">
+                <ul className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   {day.slots.map((slot) => {
                     const status = slot.started ? STATUS.PAST : STATUS[slot.status];
                     const locked =
@@ -208,24 +221,26 @@ export function MyMeetingSlots({
                       <li
                         key={slot.id}
                         className={cn(
-                          "grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5",
+                          "flex flex-col gap-2 rounded-md border border-l-4 border-border bg-white px-3 py-2.5",
+                          status.card,
                           slot.started && "opacity-60"
                         )}
                       >
-                        <span className="text-sm font-semibold text-navy">{slot.range}</span>
-                        <Toggle
-                          checked={on}
-                          disabled={locked || busy !== null}
-                          label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
-                          onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
-                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-navy">{slot.range}</span>
+                          <Toggle
+                            checked={on}
+                            disabled={locked || busy !== null}
+                            label={`${slot.range} : ${on ? "désactiver" : "activer"}`}
+                            onChange={() => run(slot.id, () => toggleMeetingSlot(slot.id, !on))}
+                          />
+                        </div>
                         <span
                           className={cn(
-                            "inline-flex w-28 items-center justify-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                            "w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset",
                             status.badge
                           )}
                         >
-                          <span className={cn("h-1.5 w-1.5 rounded-full", status.dot)} />
                           {status.label}
                         </span>
                       </li>
