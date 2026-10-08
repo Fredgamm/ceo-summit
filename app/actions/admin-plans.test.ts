@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/event-auto-registration", () => ({
+  autoRegisterCompanyMembers: vi.fn().mockResolvedValue({ registered: 0, full: 0 }),
+  syncPlanEventRegistrations: vi.fn().mockResolvedValue({ registered: 0 }),
+}));
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/currency-conversion", () => ({
@@ -25,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { syncPlanEventRegistrations } from "@/lib/event-auto-registration";
 import { createPlan, updatePlan, togglePlanActive, deletePlan, reorderPlans } from "./admin-plans";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
@@ -142,6 +147,17 @@ describe("createPlan", () => {
 });
 
 describe("updatePlan", () => {
+  it("registers the offer's members when the offer is linked to an event (module 21)", async () => {
+    vi.mocked(prisma.plan.findUnique)
+      .mockResolvedValueOnce(null) // slug libre
+      .mockResolvedValueOnce({ eventId: null } as never); // avant la mise à jour
+    vi.mocked(prisma.plan.update).mockResolvedValue({ eventId: "event_1" } as never);
+
+    await updatePlan("plan_1", VALID_PLAN_INPUT);
+
+    expect(syncPlanEventRegistrations).toHaveBeenCalledWith("plan_1", null, "event_1");
+  });
+
   it("updates a plan and logs the action", async () => {
     const result = await updatePlan("plan_1", VALID_PLAN_INPUT);
     expect(result.success).toBe(true);

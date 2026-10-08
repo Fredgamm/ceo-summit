@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/event-auto-registration", () => ({
+  autoRegisterCompanyMembers: vi.fn().mockResolvedValue({ registered: 0, full: 0 }),
+  syncPlanEventRegistrations: vi.fn().mockResolvedValue({ registered: 0 }),
+}));
 vi.mock("next/headers", () => ({ headers: () => new Headers() }));
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, retryAfterSec: 0 }),

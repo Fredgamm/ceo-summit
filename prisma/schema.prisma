@@ -393,10 +393,9 @@ model Plan {
   /// précis (ex. les pass "Engagement 2025 — CEO Summit") plutôt qu'à la
   /// plateforme en général. `null` = offre standard plateforme (mécanisme
   /// de renouvellement une fois les crédits d'une offre d'évènement
-  /// épuisés). Payer une offre d'évènement crée automatiquement la ou les
-  /// `EventRegistration` correspondantes à la confirmation admin — voir
-  /// app/actions/admin-memberships.ts::confirmMembershipPayment et
-  /// app/actions/admin-companies.ts::confirmCompanyPayment.
+  /// épuisés). Module 21 (8 oct. 2026) : offre liée = inscription à
+  /// l'événement — les membres des entreprises abonnées sont inscrits dans
+  /// la limite des places (lib/event-auto-registration.ts).
   eventId              String?
   event                Event?           @relation("EventOffers", fields: [eventId], references: [id])
   createdAt            DateTime         @default(now())

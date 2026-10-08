@@ -10,6 +10,7 @@ import { BCRYPT_ROUNDS } from "@/lib/password";
 import { isPartnerOffer, partnershipEndDate } from "@/lib/partner-offers";
 import { acceptPartnerInviteSchema } from "@/lib/validations/partner";
 import { validateSectorAndCountry } from "@/app/actions/company";
+import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -127,6 +128,16 @@ export async function acceptPartnerInvite(
       };
     }
     throw err;
+  }
+
+  // Module 21 §3.0 étape 3 (8 oct. 2026) — offre partenaire liée à un
+  // événement = inscription du gérant du partenaire (seul membre à ce stade).
+  const accepted = await prisma.partnerInvite.findUnique({
+    where: { id: invite.id },
+    select: { companyId: true },
+  });
+  if (accepted?.companyId) {
+    await autoRegisterCompanyMembers(accepted.companyId, "acceptPartnerInvite");
   }
 
   return { success: true, data: { email: invite.email } };

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Prisma } from "@prisma/client";
 
+vi.mock("@/lib/event-auto-registration", () => ({
+  autoRegisterCompanyMembers: vi.fn().mockResolvedValue({ registered: 0, full: 0 }),
+  syncPlanEventRegistrations: vi.fn().mockResolvedValue({ registered: 0 }),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
 
@@ -46,6 +50,7 @@ import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { inviteTeammate, resendInvite, revokeInvite, acceptCompanyInvite } from "./company-invites";
+import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 const VIEWER = { id: "admin_user_1", name: "Jean Rakoto", email: "jean@example.mg" };
 const FUTURE = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -414,7 +419,7 @@ describe("acceptCompanyInvite", () => {
     );
   });
 
-  it("no longer registers the collaborator to the event: the manager's validated list does (module 18 §4.9)", async () => {
+  it("registers the new collaborator to the offer's event if a seat is left (module 21)", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       status: "ACTIVE",
       declaredParticipants: null,
@@ -424,7 +429,10 @@ describe("acceptCompanyInvite", () => {
 
     await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
 
-    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
+    expect(autoRegisterCompanyMembers).toHaveBeenCalledWith(
+      expect.any(String),
+      "acceptCompanyInvite"
+    );
   });
 
   it("rejects an already-accepted invite", async () => {

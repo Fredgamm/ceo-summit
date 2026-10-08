@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/event-auto-registration", () => ({
+  autoRegisterCompanyMembers: vi.fn().mockResolvedValue({ registered: 0, full: 0 }),
+  syncPlanEventRegistrations: vi.fn().mockResolvedValue({ registered: 0 }),
+}));
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -41,6 +45,7 @@ vi.mock("@/lib/evolia", () => ({
   pushParticipantsToEvolia: vi.fn().mockResolvedValue(undefined),
 }));
 
+import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
@@ -175,7 +180,7 @@ describe("confirmCompanyPayment", () => {
     expect(result.success).toBe(true);
   });
 
-  it("no longer registers members to the linked event: the manager's validated list does (module 18 §4.9)", async () => {
+  it("registers the company's members to the linked event once active (module 21)", async () => {
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
       ...PAYMENT_BASE,
       companySubscription: {
@@ -187,7 +192,10 @@ describe("confirmCompanyPayment", () => {
     const result = await confirmCompanyPayment("payment_1");
 
     expect(result.success).toBe(true);
-    expect(prisma.eventRegistration.upsert).not.toHaveBeenCalled();
+    expect(autoRegisterCompanyMembers).toHaveBeenCalledWith(
+      PAYMENT_BASE.companySubscription.companyId,
+      "confirmCompanyPaymentCore"
+    );
   });
 
   it("pushes a bank transfer to Evolia for information once confirmed", async () => {

@@ -18,6 +18,7 @@ import { setPasswordSchema } from "@/lib/validations/auth";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { BCRYPT_ROUNDS } from "@/lib/password";
 import { resolveEmail } from "@/lib/email-template-resolver";
+import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 /**
  * `warning` (audit du 25 septembre 2026) — succès partiel à signaler à
@@ -364,9 +365,9 @@ export async function acceptCompanyInvite(
     console.error("[acceptCompanyInvite] failed to send welcome email", err);
   }
 
-  // Module 18 §4.9 (8 oct. 2026) — plus d'inscription automatique à
-  // l'événement : c'est la liste des participants validée par le gérant qui
-  // inscrit (app/actions/company-participants.ts).
+  // Module 21 §3.0 étape 3 (8 oct. 2026) — offre liée à un événement =
+  // inscription : le nouveau collaborateur est inscrit s'il reste une place.
+  await autoRegisterCompanyMembers(invite.companyId, "acceptCompanyInvite");
 
   return { success: true, data: { email: invite.email } };
 }

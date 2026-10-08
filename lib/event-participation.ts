@@ -6,10 +6,9 @@ import { withEventRegistrationLock } from "@/lib/event-registration-lock";
 import { formatDateFr } from "@/lib/utils";
 
 /**
- * Inscription des participants d'une entreprise à l'événement de son offre
- * (module 18 §4.9). Depuis le 8 octobre 2026, elle ne se fait plus d'office
- * au paiement ni à l'arrivée d'un collaborateur : c'est la liste validée par
- * le gérant (`app/actions/company-participants.ts`) qui inscrit.
+ * Inscription des participants d'une entreprise à l'événement de son offre.
+ * Automatique dans la limite des places (module 21, `lib/event-auto-registration.ts`),
+ * puis ajustable par le gérant (module 18 §4.9, `app/actions/company-participants.ts`).
  */
 
 type SubscriptionForEvent = {

@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/event-auto-registration", () => ({
+  autoRegisterCompanyMembers: vi.fn().mockResolvedValue({ registered: 0, full: 0 }),
+  syncPlanEventRegistrations: vi.fn().mockResolvedValue({ registered: 0 }),
+}));
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     companyPayment: { findUnique: vi.fn(), updateMany: vi.fn() },
@@ -19,6 +23,7 @@ vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue({}) }));
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { confirmCompanyPaymentCore } from "./payment-confirmations";
+import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 const UPSELL_PAYMENT = {
   id: "payment_1",
@@ -74,6 +79,11 @@ describe("confirmCompanyPaymentCore — upsell branch", () => {
     const result = await confirmCompanyPaymentCore("payment_1", "admin_1");
 
     expect(result).toEqual({ success: true, data: { companyId: "company_1" } });
+    // Module 21 — les nouvelles places sont remplies par les membres pas encore inscrits.
+    expect(autoRegisterCompanyMembers).toHaveBeenCalledWith(
+      "company_1",
+      "confirmCompanyPaymentCore"
+    );
     expect(prisma.companySubscription.update).toHaveBeenCalledWith({
       where: { id: "sub_1" },
       data: { extraSeats: { increment: 3 } },

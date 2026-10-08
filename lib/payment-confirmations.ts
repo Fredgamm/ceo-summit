@@ -7,6 +7,7 @@ import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
+import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -115,6 +116,11 @@ export async function confirmCompanyPaymentCore(
     }
 
     await notifyEvolia(payment, true);
+    // Module 21 — les nouvelles places sont remplies par les membres pas encore inscrits.
+    await autoRegisterCompanyMembers(
+      payment.companySubscription.companyId,
+      "confirmCompanyPaymentCore"
+    );
     return { success: true, data: { companyId: payment.companySubscription.companyId } };
   }
 
@@ -140,9 +146,9 @@ export async function confirmCompanyPaymentCore(
     return { success: false, error: "Ce paiement a déjà été traité." };
   }
 
-  // Module 18 §4.9 (8 oct. 2026) — le paiement donne l'accès à la plateforme,
-  // pas l'inscription à l'événement : c'est la liste des participants validée
-  // par le gérant qui inscrit (app/actions/company-participants.ts).
+  // Module 21 §3.0 étape 3 (8 oct. 2026) — l'offre liée à un événement vaut
+  // inscription : les membres sont inscrits après les notifications ci-dessous
+  // (`autoRegisterCompanyMembers`), le gérant ajuste ensuite la liste.
 
   if (actorId) {
     await prisma.auditLog.create({
@@ -182,6 +188,10 @@ export async function confirmCompanyPaymentCore(
   }
 
   await notifyEvolia(payment, false);
+  await autoRegisterCompanyMembers(
+    payment.companySubscription.companyId,
+    "confirmCompanyPaymentCore"
+  );
   return { success: true, data: { companyId: payment.companySubscription.companyId } };
 }
 

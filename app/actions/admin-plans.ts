@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { planFormSchema } from "@/lib/validations/plan";
 import { convertEurToAr } from "@/lib/currency-conversion";
 import { cleanPlanName } from "@/lib/plans-query";
+import { syncPlanEventRegistrations } from "@/lib/event-auto-registration";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -87,6 +88,7 @@ export async function createPlan(input: unknown): Promise<ActionResult<{ id: str
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.create", targetType: "Plan", targetId: plan.id },
   });
+  await syncPlanEventRegistrations(plan.id, null, plan.eventId);
 
   revalidatePath("/admin/plans");
   return { success: true, data: { id: plan.id } };
@@ -110,10 +112,20 @@ export async function updatePlan(planId: string, input: unknown): Promise<Action
     if (!event) return { success: false, error: "Événement introuvable." };
   }
 
-  await prisma.plan.update({ where: { id: planId }, data: await toPlanData(parsed.data) });
+  const previous = await prisma.plan.findUnique({
+    where: { id: planId },
+    select: { eventId: true },
+  });
+  const updated = await prisma.plan.update({
+    where: { id: planId },
+    data: await toPlanData(parsed.data),
+  });
   await prisma.auditLog.create({
     data: { actorId: adminId, action: "plan.update", targetType: "Plan", targetId: planId },
   });
+  // Module 21 §3.0 étape 3 — offre liée à un événement = inscription : les
+  // membres des entreprises abonnées sont inscrits (dans la limite des places).
+  await syncPlanEventRegistrations(planId, previous?.eventId ?? null, updated.eventId);
 
   revalidatePath("/admin/plans");
   revalidatePath(`/admin/plans/${planId}/editer`);
