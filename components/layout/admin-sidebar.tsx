@@ -8,6 +8,7 @@ import {
   Home,
   Users,
   CalendarDays,
+  CalendarClock,
   Diamond,
   LayoutGrid,
   Briefcase,
@@ -45,6 +46,12 @@ const SECTIONS: {
     title: "Contenu",
     items: [
       { href: "/admin/evenements", label: "Événements", icon: CalendarDays, section: "evenements" },
+      {
+        href: "/admin/rendez-vous",
+        label: "Créneaux rendez-vous",
+        icon: CalendarClock,
+        section: "evenements",
+      },
       {
         href: "/admin/deal-room",
         label: "Deal Room",

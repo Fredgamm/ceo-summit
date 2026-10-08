@@ -19,9 +19,10 @@ export default async function EditEventPage({ params }: { params: { id: string }
     throw err;
   }
 
-  const [event, offersCount] = await Promise.all([
+  const [event, offersCount, meetingSlotsCount] = await Promise.all([
     prisma.event.findUnique({ where: { id: params.id } }),
     prisma.plan.count({ where: { eventId: params.id } }),
+    prisma.meetingTimeSlot.count({ where: { eventId: params.id } }),
   ]);
   if (!event) notFound();
 
@@ -40,6 +41,12 @@ export default async function EditEventPage({ params }: { params: { id: string }
             className="text-sm font-semibold text-navy-mid"
           >
             Agenda multi-salles →
+          </Link>
+          <Link
+            href={`/admin/evenements/${event.id}/creneaux`}
+            className="text-sm font-semibold text-navy-mid"
+          >
+            Créneaux rendez-vous ({meetingSlotsCount}) →
           </Link>
           <Link
             href={`/admin/plans?eventId=${event.id}`}
