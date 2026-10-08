@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
-import { Building2, Globe, Handshake, Linkedin, Mail, Phone } from "lucide-react";
+import { Building2, CalendarClock, Globe, Handshake, Linkedin, Mail, Phone } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -44,8 +44,8 @@ const OPPORTUNITY_STATUS_LABEL: Record<string, string> = {
  * complétion, ses coordonnées et ses contenus non publiés.
  *
  * Module 21 lot 3 (8 oct. 2026) — onglet « Mes créneaux » sur son propre
- * profil, dès qu'il participe à un événement dont les créneaux de
- * rendez-vous sont publiés. `?onglet=creneaux` l'ouvre directement (lien des
+ * profil, toujours visible (vide tant qu'aucun événement auquel il participe
+ * n'a de créneaux publiés). `?onglet=creneaux` l'ouvre directement (lien des
  * emails).
  */
 export default async function MemberProfilePage({
@@ -130,7 +130,8 @@ export default async function MemberProfilePage({
         })),
       }))
     : [];
-  const showMySlots = meetingEvents.length > 0;
+  // Toujours visible sur son propre profil, même vide (demande du client).
+  const showMySlots = isSelf;
   const tabs = [
     "profil",
     "entreprise",
@@ -366,10 +367,18 @@ export default async function MemberProfilePage({
 
         {showMySlots && (
           <TabsContent value="creneaux">
-            <MyMeetingSlots
-              events={meetingEvents}
-              missingProfileFields={missingMeetingProfileFields(user)}
-            />
+            {meetingEvents.length > 0 ? (
+              <MyMeetingSlots
+                events={meetingEvents}
+                missingProfileFields={missingMeetingProfileFields(user)}
+              />
+            ) : (
+              <EmptyState
+                icon={CalendarClock}
+                title="Aucun créneau de rendez-vous pour le moment"
+                description="Les créneaux apparaissent ici quand l'organisation les publie pour un événement auquel vous participez. Vous pourrez alors activer ceux où vous êtes disponible."
+              />
+            )}
           </TabsContent>
         )}
       </Tabs>
