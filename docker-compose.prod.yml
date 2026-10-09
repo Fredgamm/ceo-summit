@@ -1,18 +1,19 @@
 # Production stack for the OVH VPS — separate from docker-compose.yml
 # (which stays as-is for local dev: Postgres/Redis/Adminer only, no app).
 #
-# Usage on the VPS — two phases, not a single `up -d --build`:
-#   docker compose -f docker-compose.prod.yml up -d postgres redis
-#   # wait for postgres to report healthy (docker compose ps)
-#   docker compose -f docker-compose.prod.yml up -d --build
-# Why: app/demande-acces/page.tsx is deliberately built as ISR (reads
-# Referential rows via Prisma), so `next build` needs a reachable, migrated(-
-# enough, an empty table is fine) Postgres already running *during* the
-# `app`/`socket` image build, not just at container start — see the
-# `build.network` below, which is what lets that build reach `postgres` by
-# its service name. Building before Postgres exists fails with "Environment
-# variable not found: DATABASE_URL" — really a live-connection problem, not
-# a missing-var one.
+# 9 oct. 2026 — l'image n'est plus compilée sur le VPS : GitHub Actions la
+# compile et la publie sur GHCR (ghcr.io/<propriétaire>/ceo-summit:<commit>),
+# le VPS ne fait que la télécharger. La compilation saturait le processeur et
+# la mémoire (3,7 Go) du serveur pendant ~15 min, en pleine production.
+# Elle n'a besoin d'aucune base de données (vérifié : aucune page
+# pré-générée ne lit Prisma depuis le retrait de /demande-acces).
+#
+# Usage on the VPS (fait par .github/workflows/ci-cd.yml) :
+#   export IMAGE_TAG=<commit>
+#   docker compose -f docker-compose.prod.yml pull app socket
+#   docker compose -f docker-compose.prod.yml up -d --no-build
+# Secours manuel, si GHCR est indisponible : `up -d --build` recompile sur
+# place (bloc `build` conservé ci-dessous).
 #
 # This VPS is shared with other projects (own Postgres/Redis on the host's
 # standard ports, own nginx already bound to 80/443) — see DEPLOY.md. So,
@@ -67,13 +68,13 @@ services:
       retries: 5
 
   app:
+    image: ${CEO_SUMMIT_IMAGE:-ghcr.io/fredgamm/ceo-summit}:${IMAGE_TAG:-latest}
+    # Secours uniquement (compilation sur le VPS) — voir l'en-tête du fichier.
     build:
       context: .
       dockerfile: Dockerfile
-      network: ceo-summit-net
       args:
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
-        DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
     env_file: .env
     depends_on:
@@ -85,7 +86,10 @@ services:
     # command (unlike `migrate dev`, which refuses to run non-interactively —
     # see the EPERM/offline-migration notes in README.md for why that
     # distinction mattered throughout this project's local dev history).
-    command: sh -c "npx prisma migrate deploy && npm run start"
+    # 9 oct. 2026 — plusieurs processus Next.js (server/web-cluster.js) pour
+    # utiliser plusieurs cœurs ; WEB_CONCURRENCY dans .env (2 par défaut, à
+    # relever si la mémoire du serveur augmente).
+    command: sh -c "npx prisma migrate deploy && node server/web-cluster.js"
     ports:
       - "127.0.0.1:3020:3000"
     volumes:
@@ -97,13 +101,13 @@ services:
       - ./.local-storage:/app/.local-storage
 
   socket:
+    image: ${CEO_SUMMIT_IMAGE:-ghcr.io/fredgamm/ceo-summit}:${IMAGE_TAG:-latest}
+    # Secours uniquement (compilation sur le VPS) — voir l'en-tête du fichier.
     build:
       context: .
       dockerfile: Dockerfile
-      network: ceo-summit-net
       args:
         NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
-        DATABASE_URL: ${DATABASE_URL}
     restart: unless-stopped
     env_file: .env
     depends_on:

@@ -330,6 +330,21 @@ manager OVH (hors de portée de ce dépôt).
 
 ## 12. CI/CD (déploiement automatique)
 
+> **Mise à jour du 9 octobre 2026.** La branche déployée est
+> `mvp-connect-simple`, et l'image n'est plus compilée sur le VPS :
+> - le job `image` compile l'image Docker dans GitHub Actions et la publie
+>   sur GHCR (`ghcr.io/fredgamm/ceo-summit:<commit>` et `:latest`) ;
+> - le job `deploy` se connecte au VPS, met à jour le dépôt (pour
+>   `docker-compose.prod.yml`), télécharge l'image (`docker compose pull`)
+>   et redémarre les conteneurs (`up -d --no-build`) ;
+> - le site tourne en plusieurs processus Next.js (`server/web-cluster.js`) ;
+>   leur nombre se règle avec `WEB_CONCURRENCY` dans `/opt/ceo-summit/.env`
+>   (2 par défaut, chaque processus consommant 150 à 400 Mo de mémoire).
+>
+> **Secours** si GHCR est indisponible : sur le VPS,
+> `docker compose -f docker-compose.prod.yml up -d --build` recompile sur
+> place, comme avant.
+
 Depuis `.github/workflows/ci-cd.yml`, chaque push sur `main` déclenche : un
 job `ci` (lint, type-check, tests, migrations sur une base Postgres
 éphémère fraîche, build), puis — seulement si `ci` réussit — un job
