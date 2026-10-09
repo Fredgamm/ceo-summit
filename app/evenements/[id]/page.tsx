@@ -9,7 +9,6 @@ import { eventCapacityBadge } from "@/lib/events-query";
 import { cleanPlanName, getActivePlans } from "@/lib/plans-query";
 import { activeEventOf } from "@/lib/event-participation";
 import { seatCap } from "@/lib/company-seats";
-import { getEurToArRate } from "@/lib/currency-conversion";
 import { parseSpeakers, speakersToText } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
 import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -17,10 +16,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
 import { EventAccessTicket } from "@/components/evenements/event-access-ticket";
-import { formatAriary, formatDateFr, formatEuro, initials } from "@/lib/utils";
+import { formatAriary, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -60,9 +58,8 @@ export default async function EventDetailPage({ params }: { params: { id: string
    * configurées, elles remplacent l'ancien bouton simple d'inscription
    * (virement/mobile money, sans preuve) pour éviter un double mécanisme.
    */
-  const [eventOffers, liveEurToArRate, viewerRegistration] = await Promise.all([
+  const [eventOffers, viewerRegistration] = await Promise.all([
     getActivePlans({ selfServiceOnly: true, eventId: event.id }),
-    getEurToArRate(),
     // Lu à part : `event.registrations` n'est qu'un aperçu de 12 participants.
     prisma.eventRegistration.findUnique({
       where: { eventId_userId: { eventId: event.id, userId: viewer.id } },
@@ -91,15 +88,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const companySeats = accessViaOffer && companySubscription ? seatCap(companySubscription) : null;
 
   const showPasses = eventOffers.length > 0 && !accessViaOffer && !isRegistered && !isPast;
-  const cheapestPass = [...eventOffers].sort(
-    (a, b) => (a.priceEur ?? a.priceAr) - (b.priceEur ?? b.priceAr)
-  )[0];
-  const cheapestPassLabel = cheapestPass
-    ? cheapestPass.priceEur != null
-      ? formatEuro(cheapestPass.priceEur)
-      : formatAriary(cheapestPass.priceAr)
-    : null;
-
   const pad = (n: number) => String(n).padStart(2, "0");
   const clock = (d: Date) => `${pad(d.getHours())}h${pad(d.getMinutes())}`;
   const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
@@ -289,21 +277,18 @@ export default async function EventDetailPage({ params }: { params: { id: string
             </EventAccessTicket>
           ) : showPasses ? (
             <EventAccessTicket
-              eyebrow="Accès par pass entreprise"
-              title={cheapestPassLabel ? `À partir de ${cheapestPassLabel}` : "Pass entreprise"}
+              eyebrow="Accès par offre entreprise"
+              title="Réservé aux offres qui l'incluent"
               actions={
                 <Button asChild variant="gold" className="w-full justify-center">
-                  <a href="#pass-entreprise">
-                    {eventOffers.length > 1
-                      ? `Comparer les ${eventOffers.length} pass`
-                      : "Voir le pass"}
-                  </a>
+                  <a href="mailto:register@ceo-summit.mg">Contacter l&apos;équipe</a>
                 </Button>
               }
             >
               <p>
-                Un pass donne accès à l&apos;événement et à la plateforme pour les collaborateurs de
-                votre entreprise.
+                Cet événement est accessible aux entreprises dont l&apos;offre CEO Summit
+                l&apos;inclut. Pour y participer, contactez l&apos;équipe des inscriptions :
+                register@ceo-summit.mg.
               </p>
             </EventAccessTicket>
           ) : (
@@ -370,53 +355,6 @@ export default async function EventDetailPage({ params }: { params: { id: string
           </div>
         </aside>
       </div>
-
-      {showPasses && (
-        <section
-          id="pass-entreprise"
-          className="mt-8 scroll-mt-6 rounded-lg border-2 border-gold-light bg-gold-pale p-6"
-        >
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
-            Pass entreprise
-          </p>
-          <h2 className="mt-1 text-lg font-bold text-navy">Choisir le pass de votre entreprise</h2>
-          <p className="mb-5 mt-1 max-w-2xl text-sm text-text-mid">
-            Chaque pass donne accès à {event.title} et à la plateforme. Le gérant de
-            l&apos;entreprise désigne ensuite les collaborateurs qui participent.
-          </p>
-          {viewer.company ? (
-            isCompanyAdmin ? (
-              <PlanPicker
-                companyId={viewer.company.id}
-                plans={eventOffers}
-                liveEurToArRate={liveEurToArRate}
-              />
-            ) : (
-              <p className="text-sm text-text-muted">
-                Seul le gérant de votre entreprise peut choisir un pass.
-              </p>
-            )
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {eventOffers.map((plan) => (
-                <Button
-                  key={plan.id}
-                  asChild
-                  variant="outline"
-                  className="h-auto justify-center py-3"
-                >
-                  <Link href={`/entreprise/creer?offre=${plan.slug}`}>
-                    {plan.name} —{" "}
-                    {plan.pricingMode === "PER_PARTICIPANT"
-                      ? `${formatAriary(plan.priceAr)}/participant`
-                      : formatAriary(plan.priceAr)}
-                  </Link>
-                </Button>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
     </AppShell>
   );
 }
