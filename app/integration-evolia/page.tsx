@@ -224,6 +224,18 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             <code>ceoSummitReference</code> tant qu&apos;elle n&apos;a pas été payée.
           </p>
 
+          <p>
+            <strong className="text-navy">Retour vers CEO Summit après paiement :</strong> une fois
+            le paiement finalisé sur votre page, redirigez le gestionnaire vers :
+          </p>
+          <Json>{`https://app.ceo-summit.mg/entreprise/paiement/confirmation?ref={ceoSummitReference}`}</Json>
+          <p>
+            Cette page attend que votre confirmation (§2) soit enregistrée, quelques secondes au
+            plus, puis ouvre l&apos;espace du gestionnaire sur la désignation des participants à
+            l&apos;événement. Elle fonctionne même si la redirection précède votre webhook. Cette
+            redirection ne remplace pas le webhook : c&apos;est lui seul qui active l&apos;accès.
+          </p>
+
           <SubHeading>Endpoint et authentification</SubHeading>
           <ul className="list-disc pl-5">
             <li>

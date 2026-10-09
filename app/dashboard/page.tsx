@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatDateFr, initials } from "@/lib/utils";
 import { offerBadgeLabel } from "@/lib/offer-badge";
+import { activeEventOf } from "@/lib/event-participation";
 import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Accueil" };
@@ -64,7 +65,10 @@ export default async function DashboardPage() {
       orderBy: { date: "asc" },
       take: 2,
       include: {
-        registrations: { where: { userId: user.id }, select: { id: true } },
+        registrations: {
+          where: { userId: user.id, status: { not: "CANCELLED" } },
+          select: { id: true },
+        },
         _count: { select: { registrations: { where: { status: { in: TAKEN_STATUSES } } } } },
       },
     }),
@@ -136,6 +140,22 @@ export default async function DashboardPage() {
   ]);
 
   const nextEvent = upcomingEvents[0] ?? null;
+
+  // Module 18 §4.9 — si l'offre de l'entreprise donne accès à ce prochain
+  // événement, la bannière ne propose pas de s'inscrire : c'est le gérant qui
+  // désigne les participants.
+  const offerEvent = activeEventOf(companySubscription);
+  const eventViaOffer = nextEvent != null && offerEvent?.eventId === nextEvent.id;
+  const companyParticipants =
+    eventViaOffer && isCompanyAdmin && user.companyId
+      ? await prisma.eventRegistration.count({
+          where: {
+            eventId: nextEvent.id,
+            status: "CONFIRMED",
+            user: { companyId: user.companyId },
+          },
+        })
+      : 0;
 
   const completeness = profileCompleteness(user);
 
@@ -308,12 +328,33 @@ export default async function DashboardPage() {
               📍 {nextEvent.isOnline ? "En ligne" : nextEvent.location} ·{" "}
               {formatDateFr(nextEvent.date)}
             </p>
+            {eventViaOffer && (
+              <p className="mt-2 text-sm text-white/80">
+                {isCompanyAdmin
+                  ? companyParticipants > 0
+                    ? `Votre offre donne accès à cet événement — ${companyParticipants} participant${companyParticipants > 1 ? "s" : ""} inscrit${companyParticipants > 1 ? "s" : ""}. Vous pouvez modifier la liste à tout moment.`
+                    : "Votre offre donne accès à cet événement : désignez les collaborateurs de votre entreprise qui y participeront."
+                  : nextEvent.registrations.length > 0
+                    ? "Vous êtes inscrit(e) à cet événement par votre entreprise."
+                    : "Votre entreprise a accès à cet événement : son gérant désigne les participants."}
+              </p>
+            )}
           </div>
           <div className="sm:ml-auto sm:shrink-0">
             <Button asChild variant="gold">
-              <Link href={`/evenements/${nextEvent.id}`}>
-                {nextEvent.registrations.length > 0 ? "Voir mon inscription" : "S'inscrire"}
-              </Link>
+              {eventViaOffer && isCompanyAdmin ? (
+                <Link href={`/entreprises/${user.companyId}?tab=gestion`}>
+                  {companyParticipants > 0 ? "Gérer les participants" : "Désigner les participants"}
+                </Link>
+              ) : (
+                <Link href={`/evenements/${nextEvent.id}`}>
+                  {nextEvent.registrations.length > 0
+                    ? "Voir mon inscription"
+                    : eventViaOffer
+                      ? "Voir l'événement"
+                      : "S'inscrire"}
+                </Link>
+              )}
             </Button>
           </div>
         </div>
