@@ -20,6 +20,7 @@ import { CancelRegistrationButton } from "@/components/evenements/cancel-registr
 import { EventAccessTicket } from "@/components/evenements/event-access-ticket";
 import { arToEur, formatDateFr, formatEuro, initials } from "@/lib/utils";
 import { getEurToArRate } from "@/lib/currency-conversion";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -299,6 +300,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
                   ? "Gratuit"
                   : formatEuro(arToEur(event.price, await getEurToArRate()))}
               </p>
+              {event.price > 0 && <AriaryHint amountAr={event.price} exact />}
               <p className="mt-1 text-xs text-text-muted">
                 {event.price === 0 ? "Inclus membership" : "par participant"}
               </p>

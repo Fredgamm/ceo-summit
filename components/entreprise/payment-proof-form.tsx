@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 /**
  * 22 septembre 2026 (`conception/12`) — deux cas, et deux seulement :
@@ -254,6 +255,7 @@ export function PaymentProofForm({
         <p className="text-lg font-bold text-navy">
           Montant dû : {formatEuro(amountEur ?? arToEur(amount, liveEurToArRate))}
         </p>
+        <AriaryHint amountAr={amount} exact />
         {isGroupOffer && minParticipants && !meetsThreshold && (
           <p className="mt-1 text-xs text-red-600">
             Cette offre démarre à {pluralize(minParticipants, "participant")} — il en manque{" "}

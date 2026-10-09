@@ -20,6 +20,7 @@ import {
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
 import { arToEur, formatEuro, formatPlanPriceLive } from "@/lib/utils";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 /**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
@@ -252,6 +253,7 @@ export function UpsellPurchaseForm({
         <p className="text-lg font-bold text-navy">
           Montant dû : {formatEuro(amountEur ?? arToEur(amount, liveEurToArRate))}
         </p>
+        <AriaryHint amountAr={amount} exact />
       </div>
 
       <div className="flex flex-col gap-1.5">

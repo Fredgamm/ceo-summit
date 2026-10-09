@@ -11,6 +11,7 @@ import { AccessGrantedRefresh } from "@/components/entreprise/access-granted-ref
 import { Button } from "@/components/ui/button";
 import { formatEuro, planPriceEur } from "@/lib/utils";
 import { getEurToArRate } from "@/lib/currency-conversion";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 export const metadata: Metadata = { title: "Accès en attente" };
 
@@ -152,8 +153,9 @@ function IntendedPlanPath({
     <>
       <p className="mb-6 text-sm leading-relaxed text-text-mid">
         Vous vous êtes inscrit pour <strong>{plan.name}</strong> (
-        {plan.pricingMode === "PER_PARTICIPANT" ? `${price} par participant` : price}) — créez la
-        fiche de votre entreprise pour continuer.
+        {plan.pricingMode === "PER_PARTICIPANT" ? `${price} par participant` : price}
+        <AriaryHint amountAr={plan.priceAr} exact className="inline" />) — créez la fiche de votre
+        entreprise pour continuer.
       </p>
       <Button asChild className="mb-4 w-full justify-center">
         <Link href={`/entreprise/creer?offre=${plan.slug}`}>Créer mon entreprise</Link>

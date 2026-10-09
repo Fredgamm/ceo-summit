@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { EventCapacityBadge } from "@/lib/events-query";
 import { Badge } from "@/components/ui/badge";
 import { arToEur, formatDateFr, formatEuro } from "@/lib/utils";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 const TYPE_LABEL: Record<string, string> = {
   SUMMIT: "Summit",
@@ -77,6 +78,9 @@ export function EventCard({
               : price === 0
                 ? "Gratuit"
                 : formatEuro(arToEur(price, eurToArRate))}
+            {!includedInOffer && price > 0 && (
+              <AriaryHint amountAr={price} exact className="font-normal" />
+            )}
           </span>
           {!isRegistered && (
             <span className="text-xs font-semibold text-navy-mid">

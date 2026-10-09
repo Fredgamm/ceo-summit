@@ -8,6 +8,7 @@ import { registerForEvent } from "@/app/actions/events";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { arToEur, formatDateFr, formatEuro } from "@/lib/utils";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 const STEP_COUNT = 3;
 
@@ -90,6 +91,7 @@ export function RegistrationWizard({
             <p className="text-text-mid">{isOnline ? "En ligne" : eventLocation}</p>
             <p className="mt-2 font-bold text-navy">
               {isFree ? "Gratuit" : formatEuro(arToEur(price, eurToArRate))}
+              {!isFree && <AriaryHint amountAr={price} exact className="font-normal" />}
             </p>
           </div>
 
