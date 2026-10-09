@@ -84,9 +84,17 @@ export async function finishOnboarding(): Promise<ActionResult> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
 
+  const { viewer } = viewerResult;
+  // Un collaborateur ne choisit pas de secteur à l'accueil : il reprend celui
+  // de son entreprise, pour figurer dans l'annuaire et les envois filtrés
+  // par secteur. Il peut le modifier ensuite depuis son profil.
+  const companySector = viewer.company?.sector;
   await prisma.user.update({
-    where: { id: viewerResult.viewer.id },
-    data: { onboardingCompletedAt: new Date() },
+    where: { id: viewer.id },
+    data: {
+      onboardingCompletedAt: new Date(),
+      ...(viewer.sectors.length === 0 && companySector ? { sectors: [companySector] } : {}),
+    },
   });
 
   return { success: true, data: undefined };

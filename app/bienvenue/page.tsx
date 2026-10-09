@@ -21,7 +21,10 @@ export default async function WelcomePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    include: { company: { select: { sector: true } } },
+  });
   if (!user) redirect("/login");
   if (user.onboardingCompletedAt) redirect("/dashboard");
 
@@ -37,6 +40,7 @@ export default async function WelcomePage() {
           initialBio={user.bio ?? ""}
           initialSectors={user.sectors}
           availableSectors={availableSectors}
+          askSectors={!user.company?.sector}
         />
       </div>
     </div>

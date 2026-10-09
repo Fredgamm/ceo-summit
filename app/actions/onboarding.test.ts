@@ -6,7 +6,9 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
       update: vi.fn().mockResolvedValue({}),
-      findUnique: vi.fn().mockResolvedValue({ id: "user_1", status: "ACTIVE" }),
+      findUnique: vi
+        .fn()
+        .mockResolvedValue({ id: "user_1", status: "ACTIVE", sectors: [], company: null }),
     },
   },
 }));
@@ -96,6 +98,38 @@ describe("onboarding server actions", () => {
       const result = await finishOnboarding();
 
       expect(result.success).toBe(true);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user_1" },
+        data: { onboardingCompletedAt: expect.any(Date) },
+      });
+    });
+
+    it("gives a company member the sector of their company, without asking", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: "user_1",
+        status: "ACTIVE",
+        sectors: [],
+        company: { sector: "Finance & Banque" },
+      } as never);
+
+      await finishOnboarding();
+
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: "user_1" },
+        data: { onboardingCompletedAt: expect.any(Date), sectors: ["Finance & Banque"] },
+      });
+    });
+
+    it("keeps sectors the member already chose", async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: "user_1",
+        status: "ACTIVE",
+        sectors: ["Technologie & Digital"],
+        company: { sector: "Finance & Banque" },
+      } as never);
+
+      await finishOnboarding();
+
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: "user_1" },
         data: { onboardingCompletedAt: expect.any(Date) },

@@ -17,7 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ReferentialSearchButton } from "@/components/referentials/referential-search-button";
 import { visibleReferentialOptions } from "@/lib/referential-options";
 
-const STEP_COUNT = 4;
+type StepKey = "welcome" | "profile" | "sectors" | "closing";
 
 interface OnboardingWizardProps {
   firstName: string;
@@ -26,6 +26,8 @@ interface OnboardingWizardProps {
   initialSectors: string[];
   /** Référentiel admin-éditable (E8-T11, 5 août 2026) — fourni par la page serveur parente. */
   availableSectors: string[];
+  /** Faux pour un membre rattaché à une entreprise (secteur repris de l'entreprise). */
+  askSectors?: boolean;
 }
 
 /**
@@ -39,9 +41,17 @@ export function OnboardingWizard({
   initialBio,
   initialSectors,
   availableSectors,
+  askSectors = true,
 }: OnboardingWizardProps) {
+  // Un collaborateur d'entreprise n'a pas à choisir de secteur : il reprend
+  // celui de son entreprise, saisi par le gérant (voir finishOnboarding).
+  const steps: StepKey[] = askSectors
+    ? ["welcome", "profile", "sectors", "closing"]
+    : ["welcome", "profile", "closing"];
+  const STEP_COUNT = steps.length;
   const router = useRouter();
   const [step, setStep] = React.useState(1);
+  const current = steps[step - 1];
   const [title, setTitle] = React.useState(initialTitle);
   const [bio, setBio] = React.useState(initialBio);
   const [sectors, setSectors] = React.useState<string[]>(initialSectors);
@@ -69,14 +79,14 @@ export function OnboardingWizard({
     setError(null);
     setLoading(true);
     try {
-      if (step === 2) {
+      if (current === "profile") {
         const result = await saveOnboardingProfileStep(title, bio);
         if (!result.success) {
           setError(result.error);
           return;
         }
       }
-      if (step === 3) {
+      if (current === "sectors") {
         const result = await saveOnboardingSectorsStep(sectors);
         if (!result.success) {
           setError(result.error);
@@ -110,14 +120,14 @@ export function OnboardingWizard({
         </button>
       </div>
 
-      {step === 1 && <WelcomeStep firstName={firstName} />}
-      {step === 2 && (
+      {current === "welcome" && <WelcomeStep firstName={firstName} />}
+      {current === "profile" && (
         <ProfileStep title={title} bio={bio} onTitleChange={setTitle} onBioChange={setBio} />
       )}
-      {step === 3 && (
+      {current === "sectors" && (
         <SectorsStep selected={sectors} onToggle={toggleSector} available={availableSectors} />
       )}
-      {step === 4 && <ClosingStep />}
+      {current === "closing" && <ClosingStep />}
 
       {error && (
         <Alert variant="destructive" className="mt-4">
