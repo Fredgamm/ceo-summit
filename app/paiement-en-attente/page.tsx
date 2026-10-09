@@ -9,7 +9,8 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { AccessGrantedRefresh } from "@/components/entreprise/access-granted-refresh";
 import { Button } from "@/components/ui/button";
-import { formatAriary } from "@/lib/utils";
+import { formatEuro, planPriceEur } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
 
 export const metadata: Metadata = { title: "Accès en attente" };
 
@@ -50,7 +51,7 @@ export default async function PaymentPendingPage() {
         {hasCompany ? (
           <CompanyPath viewer={viewer!} />
         ) : viewer?.intendedPlan ? (
-          <IntendedPlanPath plan={viewer.intendedPlan} />
+          <IntendedPlanPath plan={viewer.intendedPlan} eurToArRate={await getEurToArRate()} />
         ) : (
           <NoCompanyPath />
         )}
@@ -135,17 +136,24 @@ function CompanyPath({ viewer }: { viewer: CompanyPathViewer }) {
 
 function IntendedPlanPath({
   plan,
+  eurToArRate,
 }: {
-  plan: { slug: string; name: string; priceAr: number; pricingMode: string | null };
+  plan: {
+    slug: string;
+    name: string;
+    priceAr: number;
+    priceEur: number | null;
+    pricingMode: string | null;
+  };
+  eurToArRate: number;
 }) {
+  const price = formatEuro(planPriceEur(plan, eurToArRate));
   return (
     <>
       <p className="mb-6 text-sm leading-relaxed text-text-mid">
         Vous vous êtes inscrit pour <strong>{plan.name}</strong> (
-        {plan.pricingMode === "PER_PARTICIPANT"
-          ? `${formatAriary(plan.priceAr)} par participant`
-          : formatAriary(plan.priceAr)}
-        ) — créez la fiche de votre entreprise pour continuer.
+        {plan.pricingMode === "PER_PARTICIPANT" ? `${price} par participant` : price}) — créez la
+        fiche de votre entreprise pour continuer.
       </p>
       <Button asChild className="mb-4 w-full justify-center">
         <Link href={`/entreprise/creer?offre=${plan.slug}`}>Créer mon entreprise</Link>

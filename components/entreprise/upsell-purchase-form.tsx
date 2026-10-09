@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
-import { formatAriary, formatEuro, formatPlanPriceLive } from "@/lib/utils";
+import { arToEur, formatEuro, formatPlanPriceLive } from "@/lib/utils";
 
 /**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
@@ -249,14 +249,9 @@ export function UpsellPurchaseForm({
           {declaredQuantity} ×{" "}
           {selectedPlan ? formatPlanPriceLive(selectedPlan, liveEurToArRate) : "—"}
         </p>
-        {amountEur != null ? (
-          <>
-            <p className="text-lg font-bold text-navy">Montant dû : {formatEuro(amountEur)}</p>
-            <p className="text-xs text-text-muted">≈ {formatAriary(amount)}</p>
-          </>
-        ) : (
-          <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
-        )}
+        <p className="text-lg font-bold text-navy">
+          Montant dû : {formatEuro(amountEur ?? arToEur(amount, liveEurToArRate))}
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">

@@ -52,15 +52,27 @@ export function formatPlanPrice(plan: { priceAr: number; priceEur?: number | nul
  * ne jamais faire varier le montant qu'une entreprise doit effectivement
  * payer pendant qu'un paiement est en cours.
  */
+/**
+ * 9 oct. 2026 — les membres ne voient plus que des euros. Un montant stocké
+ * en Ariary (seule valeur facturée) est converti au cours du jour.
+ */
+export function arToEur(amountAr: number, eurToArRate: number): number {
+  return eurToArRate > 0 ? Math.round(amountAr / eurToArRate) : 0;
+}
+
+/** Prix d'une offre en euros : son prix officiel en €, sinon l'Ariary converti au cours du jour. */
+export function planPriceEur(
+  plan: { priceAr: number; priceEur?: number | null },
+  eurToArRate: number
+): number {
+  return plan.priceEur ?? arToEur(plan.priceAr, eurToArRate);
+}
+
 export function formatPlanPriceLive(
   plan: { priceAr: number; priceEur?: number | null },
   liveEurToArRate: number
 ): string {
-  if (plan.priceEur != null) {
-    const liveAr = Math.round(plan.priceEur * liveEurToArRate);
-    return `${formatEuro(plan.priceEur)} (≈ ${formatAriary(liveAr)} au cours du jour)`;
-  }
-  return formatAriary(plan.priceAr);
+  return formatEuro(planPriceEur(plan, liveEurToArRate));
 }
 
 /** Format a date the CEO Summit way: 15 août 2026 */

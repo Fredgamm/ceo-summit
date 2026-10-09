@@ -32,7 +32,7 @@ import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form
 import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
-import { initials, formatAriary, formatDateFr } from "@/lib/utils";
+import { initials, formatDateFr, formatEuro, planPriceEur } from "@/lib/utils";
 import { offerBadgeLabel } from "@/lib/offer-badge";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
@@ -287,7 +287,7 @@ export default async function CompanyProfilePage({
                 {company.subscription ? (
                   <p className="text-sm text-text-mid">
                     {company.subscription.plan.name} —{" "}
-                    {formatAriary(company.subscription.plan.priceAr)}
+                    {formatEuro(planPriceEur(company.subscription.plan, liveEurToArRate))}
                     {company.subscription.plan.pricingMode === "PER_PARTICIPANT" &&
                       " par participant"}
                   </p>

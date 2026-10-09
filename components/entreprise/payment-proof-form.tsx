@@ -7,7 +7,7 @@ import type { PaymentMethod, Plan, PlanPricingMode } from "@prisma/client";
 import { selectPlan, submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
-import { formatAriary, formatEuro, pluralize } from "@/lib/utils";
+import { arToEur, formatEuro, planPriceEur, pluralize } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ export function PaymentProofForm({
   pricingMode,
   maxTeamMembers,
   groupPlans,
+  liveEurToArRate,
 }: {
   companyId: string;
   companySubscriptionId: string;
@@ -68,6 +69,8 @@ export function PaymentProofForm({
    * faut y basculer automatiquement (voir handleDeclaredParticipantsBlur).
    */
   groupPlans: Plan[];
+  /** Cours du jour, pour afficher en euros une offre sans prix en €. */
+  liveEurToArRate: number;
 }) {
   const router = useRouter();
   const isGroupOffer = pricingMode === "PER_PARTICIPANT";
@@ -237,7 +240,8 @@ export function PaymentProofForm({
       <div className="rounded-md border border-border bg-surface p-4">
         {isGroupOffer ? (
           <p className="text-sm text-text-mid">
-            {pluralize(declaredCount, "participant")} × {formatAriary(priceAr)}
+            {pluralize(declaredCount, "participant")} ×{" "}
+            {formatEuro(planPriceEur({ priceAr, priceEur }, liveEurToArRate))}
           </p>
         ) : (
           <p className="text-sm text-text-mid">
@@ -247,14 +251,9 @@ export function PaymentProofForm({
               : "? participant inclus"}
           </p>
         )}
-        {amountEur != null ? (
-          <>
-            <p className="text-lg font-bold text-navy">Montant dû : {formatEuro(amountEur)}</p>
-            <p className="text-xs text-text-muted">≈ {formatAriary(amount)}</p>
-          </>
-        ) : (
-          <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
-        )}
+        <p className="text-lg font-bold text-navy">
+          Montant dû : {formatEuro(amountEur ?? arToEur(amount, liveEurToArRate))}
+        </p>
         {isGroupOffer && minParticipants && !meetsThreshold && (
           <p className="mt-1 text-xs text-red-600">
             Cette offre démarre à {pluralize(minParticipants, "participant")} — il en manque{" "}

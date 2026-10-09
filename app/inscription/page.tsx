@@ -5,7 +5,7 @@ import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query"
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { CompanySignupWizard } from "@/components/auth/company-signup-wizard";
-import { formatAriary } from "@/lib/utils";
+import { formatEuro, planPriceEur } from "@/lib/utils";
 
 type PageProps = { searchParams: { offre?: string } };
 
@@ -30,7 +30,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const title = plan.event ? `${name} — ${plan.event.title}` : name;
   const description =
     plan.description ??
-    `Rejoignez CEO Summit avec l'offre ${name} — ${formatAriary(plan.priceAr)}.`;
+    `Rejoignez CEO Summit avec l'offre ${name} — ${formatEuro(planPriceEur(plan, await getEurToArRate()))}.`;
 
   return { title, description };
 }

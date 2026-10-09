@@ -10,6 +10,7 @@ import { allowedVisibilities } from "@/lib/deal-room-query";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { profileCompleteness } from "@/lib/profile-completeness";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { AppShell } from "@/components/layout/app-shell";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
@@ -139,6 +140,7 @@ export default async function DashboardPage() {
       : Promise.resolve(0),
   ]);
 
+  const eurToArRate = await getEurToArRate();
   const nextEvent = upcomingEvents[0] ?? null;
 
   // Module 18 §4.9 — si l'offre de l'entreprise donne accès à ce prochain
@@ -426,6 +428,7 @@ export default async function DashboardPage() {
                 location={event.location}
                 isOnline={event.isOnline}
                 price={event.price}
+                eurToArRate={eurToArRate}
                 capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
                 isRegistered={event.registrations.length > 0}
                 includedInOffer={offerEvent?.eventId === event.id}

@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
 import { EventAccessTicket } from "@/components/evenements/event-access-ticket";
-import { formatAriary, formatDateFr, initials } from "@/lib/utils";
+import { arToEur, formatDateFr, formatEuro, initials } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -294,7 +295,9 @@ export default async function EventDetailPage({ params }: { params: { id: string
           ) : (
             <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5 text-center">
               <p className="text-xl font-bold text-navy">
-                {event.price === 0 ? "Gratuit" : formatAriary(event.price)}
+                {event.price === 0
+                  ? "Gratuit"
+                  : formatEuro(arToEur(event.price, await getEurToArRate()))}
               </p>
               <p className="mt-1 text-xs text-text-muted">
                 {event.price === 0 ? "Inclus membership" : "par participant"}

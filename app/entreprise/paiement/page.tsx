@@ -151,6 +151,7 @@ export default async function CompanyPaymentPage({
                   pricingMode={subscription.plan.pricingMode}
                   maxTeamMembers={subscription.plan.maxTeamMembers}
                   groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
+                  liveEurToArRate={liveEurToArRate}
                 />
               </div>
             )}

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { registerForEvent } from "@/app/actions/events";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { formatAriary, formatDateFr } from "@/lib/utils";
+import { arToEur, formatDateFr, formatEuro } from "@/lib/utils";
 
 const STEP_COUNT = 3;
 
@@ -18,6 +18,8 @@ interface RegistrationWizardProps {
   eventLocation: string;
   isOnline: boolean;
   price: number;
+  /** Cours du jour : le prix (stocké en Ariary) s'affiche en euros. */
+  eurToArRate: number;
   viewer: { name: string; title: string; email: string; companyName: string | null };
 }
 
@@ -35,6 +37,7 @@ export function RegistrationWizard({
   eventLocation,
   isOnline,
   price,
+  eurToArRate,
   viewer,
 }: RegistrationWizardProps) {
   const router = useRouter();
@@ -85,7 +88,9 @@ export function RegistrationWizard({
             <p className="font-semibold text-navy">{eventTitle}</p>
             <p className="mt-1 text-text-mid">{formatDateFr(eventDate)}</p>
             <p className="text-text-mid">{isOnline ? "En ligne" : eventLocation}</p>
-            <p className="mt-2 font-bold text-navy">{isFree ? "Gratuit" : formatAriary(price)}</p>
+            <p className="mt-2 font-bold text-navy">
+              {isFree ? "Gratuit" : formatEuro(arToEur(price, eurToArRate))}
+            </p>
           </div>
 
           <div className="mb-6 rounded-md border border-border p-4 text-sm">

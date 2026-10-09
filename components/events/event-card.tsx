@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import type { EventCapacityBadge } from "@/lib/events-query";
 import { Badge } from "@/components/ui/badge";
-import { formatAriary, formatDateFr } from "@/lib/utils";
+import { arToEur, formatDateFr, formatEuro } from "@/lib/utils";
 
 const TYPE_LABEL: Record<string, string> = {
   SUMMIT: "Summit",
@@ -28,6 +28,8 @@ interface EventCardProps {
   location: string;
   isOnline: boolean;
   price: number;
+  /** Cours du jour : le prix (stocké en Ariary) s'affiche en euros. */
+  eurToArRate: number;
   capacityBadge: EventCapacityBadge;
   isRegistered: boolean;
   /** L'offre de l'entreprise donne accès à cet événement (le gérant désigne les participants). */
@@ -42,6 +44,7 @@ export function EventCard({
   location,
   isOnline,
   price,
+  eurToArRate,
   capacityBadge,
   isRegistered,
   includedInOffer = false,
@@ -69,7 +72,11 @@ export function EventCard({
         </div>
         <div className="mt-auto flex items-center justify-between">
           <span className="text-sm font-bold text-navy">
-            {includedInOffer ? "Accès inclus" : price === 0 ? "Gratuit" : formatAriary(price)}
+            {includedInOffer
+              ? "Accès inclus"
+              : price === 0
+                ? "Gratuit"
+                : formatEuro(arToEur(price, eurToArRate))}
           </span>
           {!isRegistered && (
             <span className="text-xs font-semibold text-navy-mid">
