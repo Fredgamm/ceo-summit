@@ -428,6 +428,7 @@ export default async function DashboardPage() {
                 price={event.price}
                 capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
                 isRegistered={event.registrations.length > 0}
+                includedInOffer={offerEvent?.eventId === event.id}
               />
             ))}
           </div>

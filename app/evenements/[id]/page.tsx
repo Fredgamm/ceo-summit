@@ -6,7 +6,9 @@ import type { RegistrationStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
-import { getActivePlans } from "@/lib/plans-query";
+import { cleanPlanName, getActivePlans } from "@/lib/plans-query";
+import { activeEventOf } from "@/lib/event-participation";
+import { seatCap } from "@/lib/company-seats";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { parseSpeakers, speakersToText } from "@/lib/event-content";
 import { countUnreadMessages } from "@/lib/conversations";
@@ -17,7 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
-import { formatAriary, formatDateFr, initials } from "@/lib/utils";
+import { EventAccessTicket } from "@/components/evenements/event-access-ticket";
+import { formatAriary, formatDateFr, formatEuro, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail événement" };
 
@@ -74,6 +77,38 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
   const isPast = event.date < new Date();
 
+  // Module 18 §4.9 — l'offre de l'entreprise donne-t-elle déjà accès à cet
+  // événement ? Dans ce cas, pas de pass à acheter : le gérant désigne les
+  // participants depuis l'espace de son entreprise.
+  const companySubscription = viewer.company?.subscription ?? null;
+  const accessViaOffer = activeEventOf(companySubscription)?.eventId === event.id;
+  const companyParticipants =
+    accessViaOffer && isCompanyAdmin && viewer.companyId
+      ? await prisma.eventRegistration.count({
+          where: { eventId: event.id, status: "CONFIRMED", user: { companyId: viewer.companyId } },
+        })
+      : 0;
+  const companySeats = accessViaOffer && companySubscription ? seatCap(companySubscription) : null;
+
+  const showPasses = eventOffers.length > 0 && !accessViaOffer && !isRegistered && !isPast;
+  const cheapestPass = [...eventOffers].sort(
+    (a, b) => (a.priceEur ?? a.priceAr) - (b.priceEur ?? b.priceAr)
+  )[0];
+  const cheapestPassLabel = cheapestPass
+    ? cheapestPass.priceEur != null
+      ? formatEuro(cheapestPass.priceEur)
+      : formatAriary(cheapestPass.priceAr)
+    : null;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const clock = (d: Date) => `${pad(d.getHours())}h${pad(d.getMinutes())}`;
+  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  const eventPeriod = event.endDate
+    ? sameDay(event.date, event.endDate)
+      ? `${formatDateFr(event.date)} · ${clock(event.date)} – ${clock(event.endDate)}`
+      : `Du ${formatDateFr(event.date)} au ${formatDateFr(event.endDate)}`
+    : formatDateFr(event.date);
+
   const speakers = parseSpeakers(event.speakers);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
@@ -114,7 +149,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </Badge>
         <h1 className="text-2xl font-bold">{event.title}</h1>
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/70">
-          <span>📅 {formatDateFr(event.date)}</span>
+          <span>📅 {eventPeriod}</span>
           <span>{event.isOnline ? "🌐 En ligne" : `📍 ${event.location}`}</span>
           <span>
             👥 {event._count.registrations}/{event.capacity} inscrits
@@ -209,40 +244,68 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </div>
 
         <aside className="flex flex-col gap-4">
-          {eventOffers.length > 0 && !isRegistered && !isPast ? (
-            <div className="flex flex-col gap-4">
-              <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
-                  Pass entreprise
+          {accessViaOffer && !isPast ? (
+            <EventAccessTicket
+              eyebrow="Inclus dans votre offre"
+              title={cleanPlanName(companySubscription!.plan.name)}
+              actions={
+                <>
+                  {isCompanyAdmin && (
+                    <Button asChild variant="gold" className="w-full justify-center">
+                      <Link href={`/entreprises/${viewer.companyId}?tab=gestion`}>
+                        {companyParticipants > 0
+                          ? "Gérer les participants"
+                          : "Désigner les participants"}
+                      </Link>
+                    </Button>
+                  )}
+                  {isRegistered && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full justify-center border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                    >
+                      <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
+                    </Button>
+                  )}
+                </>
+              }
+            >
+              {isCompanyAdmin ? (
+                <p>
+                  {companySeats != null
+                    ? `${companyParticipants} / ${companySeats} participants désignés.`
+                    : `${companyParticipants} participant${companyParticipants > 1 ? "s" : ""} désigné${companyParticipants > 1 ? "s" : ""}.`}{" "}
+                  Choisissez qui, dans votre entreprise, assiste à l&apos;événement.
                 </p>
-                {viewer.company ? (
-                  isCompanyAdmin ? (
-                    <PlanPicker
-                      companyId={viewer.company.id}
-                      plans={eventOffers}
-                      liveEurToArRate={liveEurToArRate}
-                    />
-                  ) : (
-                    <p className="text-sm text-text-muted">
-                      Seul l&apos;admin de votre entreprise peut choisir un pass entreprise.
-                    </p>
-                  )
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {eventOffers.map((plan) => (
-                      <Button key={plan.id} asChild variant="outline" className="justify-center">
-                        <Link href={`/entreprise/creer?offre=${plan.slug}`}>
-                          {plan.name} —{" "}
-                          {plan.pricingMode === "PER_PARTICIPANT"
-                            ? `${formatAriary(plan.priceAr)}/participant`
-                            : formatAriary(plan.priceAr)}
-                        </Link>
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+              ) : isRegistered ? (
+                <p>
+                  Vous êtes inscrit(e) par votre entreprise. Pour toute modification, adressez-vous
+                  à son gérant.
+                </p>
+              ) : (
+                <p>Le gérant de votre entreprise désigne les participants à cet événement.</p>
+              )}
+            </EventAccessTicket>
+          ) : showPasses ? (
+            <EventAccessTicket
+              eyebrow="Accès par pass entreprise"
+              title={cheapestPassLabel ? `À partir de ${cheapestPassLabel}` : "Pass entreprise"}
+              actions={
+                <Button asChild variant="gold" className="w-full justify-center">
+                  <a href="#pass-entreprise">
+                    {eventOffers.length > 1
+                      ? `Comparer les ${eventOffers.length} pass`
+                      : "Voir le pass"}
+                  </a>
+                </Button>
+              }
+            >
+              <p>
+                Un pass donne accès à l&apos;événement et à la plateforme pour les collaborateurs de
+                votre entreprise.
+              </p>
+            </EventAccessTicket>
           ) : (
             <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5 text-center">
               <p className="text-xl font-bold text-navy">
@@ -289,13 +352,13 @@ export default async function EventDetailPage({ params }: { params: { id: string
           <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-3 text-xs font-bold uppercase text-text-muted">Détails pratiques</p>
             <dl className="flex flex-col gap-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-text-muted">Date</dt>
-                <dd className="font-semibold text-navy">{formatDateFr(event.date)}</dd>
+              <div className="flex justify-between gap-4">
+                <dt className="shrink-0 text-text-muted">Date</dt>
+                <dd className="text-right font-semibold text-navy">{eventPeriod}</dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-text-muted">Lieu</dt>
-                <dd className="font-semibold text-navy">
+              <div className="flex justify-between gap-4">
+                <dt className="shrink-0 text-text-muted">Lieu</dt>
+                <dd className="text-right font-semibold text-navy">
                   {event.isOnline ? "En ligne" : event.location}
                 </dd>
               </div>
@@ -307,6 +370,53 @@ export default async function EventDetailPage({ params }: { params: { id: string
           </div>
         </aside>
       </div>
+
+      {showPasses && (
+        <section
+          id="pass-entreprise"
+          className="mt-8 scroll-mt-6 rounded-lg border-2 border-gold-light bg-gold-pale p-6"
+        >
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-gold">
+            Pass entreprise
+          </p>
+          <h2 className="mt-1 text-lg font-bold text-navy">Choisir le pass de votre entreprise</h2>
+          <p className="mb-5 mt-1 max-w-2xl text-sm text-text-mid">
+            Chaque pass donne accès à {event.title} et à la plateforme. Le gérant de
+            l&apos;entreprise désigne ensuite les collaborateurs qui participent.
+          </p>
+          {viewer.company ? (
+            isCompanyAdmin ? (
+              <PlanPicker
+                companyId={viewer.company.id}
+                plans={eventOffers}
+                liveEurToArRate={liveEurToArRate}
+              />
+            ) : (
+              <p className="text-sm text-text-muted">
+                Seul le gérant de votre entreprise peut choisir un pass.
+              </p>
+            )
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {eventOffers.map((plan) => (
+                <Button
+                  key={plan.id}
+                  asChild
+                  variant="outline"
+                  className="h-auto justify-center py-3"
+                >
+                  <Link href={`/entreprise/creer?offre=${plan.slug}`}>
+                    {plan.name} —{" "}
+                    {plan.pricingMode === "PER_PARTICIPANT"
+                      ? `${formatAriary(plan.priceAr)}/participant`
+                      : formatAriary(plan.priceAr)}
+                  </Link>
+                </Button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </AppShell>
   );
 }
