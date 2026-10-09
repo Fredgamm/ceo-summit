@@ -50,7 +50,7 @@ export function PaymentConfirmationWatcher({
 
   if (confirmed) {
     return (
-      <div className="flex flex-col items-center gap-4">
+      <div className="flex flex-col items-start gap-4">
         <p className="text-sm text-text-mid">
           Votre paiement est confirmé. Ouverture de votre espace pour désigner les participants à
           l&apos;événement…
@@ -64,7 +64,7 @@ export function PaymentConfirmationWatcher({
 
   if (timedOut) {
     return (
-      <div className="flex flex-col items-center gap-4">
+      <div className="flex flex-col items-start gap-4">
         <p className="text-sm text-text-mid">
           La confirmation de votre paiement prend plus de temps que prévu. Vous recevrez un e-mail
           dès qu&apos;elle nous parvient ; vous pouvez fermer cette page.

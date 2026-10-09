@@ -9,7 +9,7 @@ import { selectPlan } from "@/app/actions/company-subscription";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PlanPrice } from "@/components/entreprise/plan-price";
-import { pluralize } from "@/lib/utils";
+import { formatEuro, planPriceEur, pluralize } from "@/lib/utils";
 
 export function PlanPicker({
   companyId,
@@ -17,6 +17,7 @@ export function PlanPicker({
   currentPlanId,
   initialPlanId,
   liveEurToArRate,
+  compact = false,
 }: {
   companyId: string;
   plans: Plan[];
@@ -34,6 +35,8 @@ export function PlanPicker({
    * réellement facturé (`plan.priceAr`, figé).
    */
   liveEurToArRate: number;
+  /** Liste resserrée (changement d'offre depuis la page de paiement). */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
@@ -53,6 +56,66 @@ export function PlanPicker({
     } finally {
       setSubmittingId(null);
     }
+  }
+
+  const seats = (plan: Plan) =>
+    plan.pricingMode === "PER_PARTICIPANT"
+      ? plan.minParticipants && plan.minParticipants > 1
+        ? `Par participant, à partir de ${plan.minParticipants}`
+        : "Par participant"
+      : plan.maxTeamMembers != null
+        ? `${pluralize(plan.maxTeamMembers, "participant")} inclus`
+        : "Forfait entreprise";
+
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-3">
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+          {plans.map((plan) => {
+            const isCurrent = currentPlanId === plan.id;
+            return (
+              <li
+                key={plan.id}
+                className={`flex items-center gap-4 px-4 py-3 ${isCurrent ? "bg-gold-pale" : "bg-white"}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-navy">{plan.name}</p>
+                  <p className="text-xs text-text-muted">{seats(plan)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold tabular-nums text-navy">
+                    {formatEuro(planPriceEur(plan, liveEurToArRate))}
+                    {plan.pricingMode === "PER_PARTICIPANT" && (
+                      <span className="font-normal text-text-muted"> / pers.</span>
+                    )}
+                  </p>
+                </div>
+                {isCurrent ? (
+                  <span className="w-[92px] text-center text-xs font-semibold text-gold">
+                    Offre actuelle
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-[92px] justify-center"
+                    onClick={() => handleSelect(plan.id)}
+                    disabled={submittingId !== null}
+                  >
+                    {submittingId === plan.id ? "…" : "Choisir"}
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
   }
 
   return (

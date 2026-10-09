@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
-import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
+import { JourneyShell } from "@/components/onboarding/journey-shell";
+import { MembershipCard } from "@/components/onboarding/membership-card";
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { cleanPlanName } from "@/lib/plans-query";
 import { PaymentConfirmationWatcher } from "@/components/entreprise/payment-confirmation-watcher";
 import { Button } from "@/components/ui/button";
 
@@ -28,7 +31,7 @@ export default async function PaymentConfirmationPage({
 
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
-    include: { company: { include: { subscription: true } } },
+    include: { company: { include: { subscription: { include: { plan: true } } } } },
   });
   if (!viewer?.company?.subscription) redirect("/entreprise/paiement");
   const { company } = viewer;
@@ -53,27 +56,33 @@ export default async function PaymentConfirmationPage({
   const cancelled = payment?.status === "REJECTED";
 
   return (
-    <div className="flex flex-col items-center">
-      <OnboardingHeader backHref="/entreprise/paiement" />
-      <div className="mx-auto max-w-lg p-6 text-center">
-        <h1 className="mb-3 text-xl font-bold text-navy">
-          {cancelled ? "Paiement non abouti" : "Merci pour votre paiement"}
-        </h1>
-
-        {cancelled ? (
-          <>
-            <p className="mb-6 text-sm text-text-mid">
-              Ce paiement a été annulé de notre côté. Si vous avez été débité, contactez
-              l&apos;équipe CEO Summit : nous régulariserons votre situation.
-            </p>
-            <Button asChild>
-              <Link href="/entreprise/paiement">Retour au paiement</Link>
-            </Button>
-          </>
-        ) : (
-          <PaymentConfirmationWatcher confirmed={confirmed} destination={destination} />
-        )}
-      </div>
-    </div>
+    <JourneyShell
+      current="activation"
+      title={cancelled ? "Paiement non abouti" : "Merci pour votre paiement"}
+      card={
+        <MembershipCard
+          planName={cleanPlanName(subscription.plan.name)}
+          companyName={company.name}
+          status={confirmed ? "active" : cancelled ? "payment" : "review"}
+        />
+      }
+      headerAction={
+        <SignOutButton className="flex items-center gap-1.5 text-sm font-semibold text-navy-mid hover:text-navy" />
+      }
+    >
+      {cancelled ? (
+        <>
+          <p className="mb-6 text-sm text-text-mid">
+            Ce paiement a été annulé de notre côté. Si vous avez été débité, contactez l&apos;équipe
+            CEO Summit : nous régulariserons votre situation.
+          </p>
+          <Button asChild>
+            <Link href="/entreprise/paiement">Retour au paiement</Link>
+          </Button>
+        </>
+      ) : (
+        <PaymentConfirmationWatcher confirmed={confirmed} destination={destination} />
+      )}
+    </JourneyShell>
   );
 }

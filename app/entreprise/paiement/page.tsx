@@ -7,12 +7,12 @@ import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query"
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
-import { PlanPrice } from "@/components/entreprise/plan-price";
-import { OnboardingHeader } from "@/components/onboarding/onboarding-header";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { JourneyShell } from "@/components/onboarding/journey-shell";
+import { MembershipCard } from "@/components/onboarding/membership-card";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
-import { pluralize } from "@/lib/utils";
+import { planPriceEur, pluralize } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Paiement" };
 
@@ -85,104 +85,134 @@ export default async function CompanyPaymentPage({
     ? resolvedInitialPlanId
     : null;
 
-  return (
-    <div className="flex flex-col items-center">
-      <OnboardingHeader backHref="/paiement-en-attente" />
-      <div className="mx-auto max-w-4xl p-6">
-        {subscription ? (
-          <>
-            <h1 className="mb-1 text-xl font-bold text-navy">
-              Paiement — {cleanPlanName(subscription.plan.name)}
-            </h1>
-            <div className="mb-2">
-              <PlanPrice
-                plan={subscription.plan}
-                liveEurToArRate={liveEurToArRate}
-                suffix={
-                  subscription.plan.pricingMode === "PER_PARTICIPANT"
-                    ? ` par participant, à partir de ${subscription.plan.minParticipants ?? 1}`
-                    : subscription.plan.maxTeamMembers != null
-                      ? ` — ${pluralize(subscription.plan.maxTeamMembers, "participant")} inclus`
-                      : " — ? participant inclus"
-                }
-              />
-            </div>
-            <p className="mb-4 text-sm text-text-muted">
-              Choisissez votre mode de paiement. Si &quot;Virement bancaire ou Chèque&quot;,
-              uploadez une pièce justificative (bordereau, ordre de virement, reçu, capture) —
-              l&apos;équipe CEO Summit validera ensuite votre inscription.
+  const plan = subscription?.plan ?? null;
+  const isReview = subscription?.status === "PENDING_REVIEW";
+  const card = (
+    <MembershipCard
+      planName={plan ? cleanPlanName(plan.name) : null}
+      priceEur={plan ? planPriceEur(plan, liveEurToArRate) : null}
+      priceAr={
+        plan
+          ? plan.priceEur != null
+            ? Math.round(plan.priceEur * liveEurToArRate)
+            : plan.priceAr
+          : null
+      }
+      priceSuffix={plan?.pricingMode === "PER_PARTICIPANT" ? " / participant" : undefined}
+      detail={
+        plan
+          ? plan.pricingMode === "PER_PARTICIPANT"
+            ? "Tarif par participant"
+            : plan.maxTeamMembers != null
+              ? `${pluralize(plan.maxTeamMembers, "participant")} inclus`
+              : null
+          : null
+      }
+      companyName={company.name}
+      status={isReview ? "review" : "payment"}
+    />
+  );
+  const signOut = (
+    <SignOutButton className="flex items-center gap-1.5 text-sm font-semibold text-navy-mid hover:text-navy" />
+  );
+
+  if (!subscription) {
+    return (
+      <JourneyShell
+        current="offre"
+        wide
+        title="Choisissez votre offre"
+        subtitle={`Pour ${company.name} : l'accès de toute l'équipe s'active une fois le paiement confirmé.`}
+        card={card}
+        headerAction={signOut}
+      >
+        <PlanPicker
+          companyId={company.id}
+          plans={allPlans}
+          initialPlanId={initialPlanId}
+          liveEurToArRate={liveEurToArRate}
+        />
+      </JourneyShell>
+    );
+  }
+
+  if (isReview) {
+    return (
+      <JourneyShell
+        current="activation"
+        title={pendingEvoliaPayment ? "Paiement en cours chez Evolia" : "Paiement en vérification"}
+        subtitle={
+          pendingEvoliaPayment
+            ? "L'accès de votre équipe s'active dès qu'Evolia nous confirme le paiement, généralement en quelques secondes."
+            : "L'équipe CEO Summit vérifie votre preuve de paiement. Vous recevrez un e-mail dès que l'accès de votre équipe est activé."
+        }
+        card={card}
+        headerAction={signOut}
+      >
+        {pendingEvoliaPayment ? (
+          <div className="rounded-lg border border-border p-5">
+            <p className="mb-4 text-sm text-text-mid">
+              Paiement interrompu ? Reprenez-le là où vous l&apos;avez laissé, ou choisissez un
+              autre mode de paiement.
             </p>
-
-            {subscription.status === "PENDING_REVIEW" &&
-              (pendingEvoliaPayment ? (
-                <Alert className="mb-4">
-                  <AlertDescription className="flex flex-col gap-3">
-                    <span>
-                      Votre paiement par carte ou Mobile Money est en cours chez Evolia :
-                      l&apos;accès de votre équipe s&apos;activera dès qu&apos;Evolia nous
-                      l&apos;aura confirmé. Paiement interrompu ? Reprenez-le, ou choisissez un
-                      autre mode de paiement.
-                    </span>
-                    <EvoliaPendingPayment
-                      paymentId={pendingEvoliaPayment.id}
-                      paymentUrl={evoliaPaymentUrl(pendingEvoliaPayment.id)}
-                      startedAt={pendingEvoliaPayment.createdAt.toISOString()}
-                    />
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <Alert className="mb-4">
-                  <AlertDescription>
-                    Votre paiement est en cours de validation par l&apos;équipe CEO Summit —
-                    l&apos;accès de votre équipe s&apos;activera dès confirmation.
-                  </AlertDescription>
-                </Alert>
-              ))}
-
-            {subscription.status === "PENDING_PAYMENT" && (
-              <div className="mb-8 max-w-lg">
-                <PaymentProofForm
-                  companyId={company.id}
-                  companySubscriptionId={subscription.id}
-                  planId={subscription.planId}
-                  priceAr={subscription.plan.priceAr}
-                  priceEur={subscription.plan.priceEur}
-                  minParticipants={subscription.plan.minParticipants}
-                  pricingMode={subscription.plan.pricingMode}
-                  maxTeamMembers={subscription.plan.maxTeamMembers}
-                  groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
-                  liveEurToArRate={liveEurToArRate}
-                />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <h1 className="mb-1 text-xl font-bold text-navy">Choisir une offre</h1>
-            <p className="mb-4 text-sm text-text-muted">
-              Pour {company.name} — l&apos;accès de toute l&apos;équipe s&apos;active une fois le
-              paiement confirmé.
-            </p>
-          </>
-        )}
-
-        {subscription?.status !== "PENDING_REVIEW" && (
-          <div className={subscription ? "border-t border-border pt-6" : ""}>
-            {subscription && (
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-text-muted">
-                Changer d&apos;offre
-              </h2>
-            )}
-            <PlanPicker
-              companyId={company.id}
-              plans={allPlans}
-              currentPlanId={subscription?.planId}
-              initialPlanId={initialPlanId}
-              liveEurToArRate={liveEurToArRate}
+            <EvoliaPendingPayment
+              paymentId={pendingEvoliaPayment.id}
+              paymentUrl={evoliaPaymentUrl(pendingEvoliaPayment.id)}
+              startedAt={pendingEvoliaPayment.createdAt.toISOString()}
             />
           </div>
+        ) : (
+          <p className="text-sm text-text-mid">
+            Une question sur votre paiement ? Écrivez à{" "}
+            <a href="mailto:register@ceo-summit.mg" className="font-semibold text-navy">
+              register@ceo-summit.mg
+            </a>
+            .
+          </p>
         )}
-      </div>
-    </div>
+      </JourneyShell>
+    );
+  }
+
+  return (
+    <JourneyShell
+      current="paiement"
+      title="Réglez votre adhésion"
+      subtitle="Carte bancaire ou Mobile Money : paiement immédiat via Evolia, notre partenaire de paiement. Virement ou chèque : joignez la preuve, notre équipe la valide."
+      card={card}
+      headerAction={signOut}
+    >
+      <PaymentProofForm
+        companyId={company.id}
+        companySubscriptionId={subscription.id}
+        planId={subscription.planId}
+        priceAr={subscription.plan.priceAr}
+        priceEur={subscription.plan.priceEur}
+        minParticipants={subscription.plan.minParticipants}
+        pricingMode={subscription.plan.pricingMode}
+        maxTeamMembers={subscription.plan.maxTeamMembers}
+        groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
+        liveEurToArRate={liveEurToArRate}
+      />
+
+      <details className="group mt-10 border-t border-border pt-6">
+        <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-navy-mid hover:text-navy">
+          Changer d&apos;offre
+          <span className="text-xs font-normal text-text-muted group-open:hidden">
+            Offre actuelle : {cleanPlanName(subscription.plan.name)}
+          </span>
+        </summary>
+        <div className="mt-4">
+          <PlanPicker
+            compact
+            companyId={company.id}
+            plans={allPlans}
+            currentPlanId={subscription.planId}
+            initialPlanId={initialPlanId}
+            liveEurToArRate={liveEurToArRate}
+          />
+        </div>
+      </details>
+    </JourneyShell>
   );
 }

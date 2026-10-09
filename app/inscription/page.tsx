@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 
 import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { getReferentialLabels } from "@/lib/referentials-query";
@@ -51,30 +50,12 @@ export default async function InscriptionPage({ searchParams }: PageProps) {
     : null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-[760px] rounded-lg border border-border bg-white p-8 shadow-card-md">
-        <div className="mb-6 text-center">
-          <Image
-            src="/logo/ceo-summit-logo.png"
-            alt="CEO Summit"
-            width={160}
-            height={77}
-            className="mx-auto mb-4"
-          />
-          <h1 className="text-xl font-bold text-navy">Créer mon compte</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Rejoignez CEO Summit — le paiement se fait à l&apos;étape suivante.
-          </p>
-        </div>
-
-        <CompanySignupWizard
-          plans={plans}
-          intendedPlan={intendedPlan}
-          sectors={sectors}
-          countries={countries}
-          liveEurToArRate={liveEurToArRate}
-        />
-      </div>
-    </div>
+    <CompanySignupWizard
+      plans={plans}
+      intendedPlan={intendedPlan}
+      sectors={sectors}
+      countries={countries}
+      liveEurToArRate={liveEurToArRate}
+    />
   );
 }
