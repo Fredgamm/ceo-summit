@@ -1,20 +1,25 @@
+import { prisma } from "@/lib/prisma";
+
 /**
- * 3 septembre 2026 (catalogue de sponsoring en euros) — conversion EUR→Ar
- * pour l'affichage informatif "≈ X Ar" des offres cotées en euros
- * (Plan.priceEur). N'alimente jamais un calcul de montant dû : le montant
- * réellement facturé/validé reste toujours Plan.priceAr, figé au moment de
- * la création/modification de l'offre par l'admin — voir schema.prisma.
+ * 3 septembre 2026 (catalogue de sponsoring en euros) — conversion EUR→Ar.
+ * Depuis le 12 oct. 2026, ce taux sert aussi au montant facturé des offres
+ * cotées en euros (voir lib/company-payment-amount.ts::unitPriceAr).
  *
- * Taux mis en cache en mémoire (process) pendant CACHE_TTL_MS pour éviter un
- * appel réseau à chaque affichage de page ; secours sur un taux fixe si
- * l'API externe est indisponible, plutôt que de faire échouer la création
- * d'une offre.
+ * Source : ExchangeRate-API, accès libre (open.er-api.com), mis à jour une
+ * fois par jour. Taux gardé en mémoire (processus) pendant CACHE_TTL_MS pour
+ * éviter un appel réseau à chaque affichage de page.
+ *
+ * Si la source est injoignable : dernier taux reçu (en mémoire, sinon
+ * enregistré en base à chaque réception, donc conservé après un redémarrage
+ * ou un déploiement), et seulement en tout dernier recours un taux fixe.
  */
 
 const RATE_API_URL = "https://open.er-api.com/v6/latest/EUR";
 const CACHE_TTL_MS = 60 * 60 * 1000;
-/** Taux de secours (approximatif, révisé le 3 septembre 2026) si l'API est injoignable. */
-const FALLBACK_EUR_TO_AR_RATE = 4850;
+/** Dernier taux reçu, enregistré dans PlatformSetting (valeur JSON : { rate, fetchedAt }). */
+export const LAST_EUR_TO_AR_RATE_KEY = "eur_to_ar_last_rate";
+/** Tout dernier recours (aucun taux jamais reçu) — révisé le 12 octobre 2026. */
+const FALLBACK_EUR_TO_AR_RATE = 5050;
 
 let cachedRate: { value: number; fetchedAt: number } | null = null;
 
@@ -27,6 +32,32 @@ async function fetchLiveEurToArRate(): Promise<number> {
   return rate;
 }
 
+async function saveLastRate(rate: number, fetchedAt: number): Promise<void> {
+  try {
+    const value = JSON.stringify({ rate, fetchedAt: new Date(fetchedAt).toISOString() });
+    await prisma.platformSetting.upsert({
+      where: { key: LAST_EUR_TO_AR_RATE_KEY },
+      update: { value },
+      create: { key: LAST_EUR_TO_AR_RATE_KEY, value },
+    });
+  } catch (err) {
+    console.error("[currency-conversion] enregistrement du dernier taux impossible", err);
+  }
+}
+
+async function readLastRate(): Promise<number | null> {
+  try {
+    const setting = await prisma.platformSetting.findUnique({
+      where: { key: LAST_EUR_TO_AR_RATE_KEY },
+    });
+    if (!setting) return null;
+    const rate = Number((JSON.parse(setting.value) as { rate?: unknown }).rate);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getEurToArRate(): Promise<number> {
   if (cachedRate && Date.now() - cachedRate.fetchedAt < CACHE_TTL_MS) {
     return cachedRate.value;
@@ -34,9 +65,15 @@ export async function getEurToArRate(): Promise<number> {
   try {
     const rate = await fetchLiveEurToArRate();
     cachedRate = { value: rate, fetchedAt: Date.now() };
+    await saveLastRate(rate, cachedRate.fetchedAt);
     return rate;
-  } catch {
-    return cachedRate?.value ?? FALLBACK_EUR_TO_AR_RATE;
+  } catch (err) {
+    console.error(
+      "[currency-conversion] taux du jour indisponible, dernier taux connu utilisé",
+      err
+    );
+    if (cachedRate) return cachedRate.value;
+    return (await readLastRate()) ?? FALLBACK_EUR_TO_AR_RATE;
   }
 }
 
