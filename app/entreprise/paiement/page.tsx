@@ -140,7 +140,11 @@ export default async function CompanyPaymentPage({
     return (
       <JourneyShell
         current="activation"
-        title={pendingEvoliaPayment ? "Paiement en cours chez Evolia" : "Paiement en vérification"}
+        title={
+          pendingEvoliaPayment
+            ? "Paiement en cours chez Evolia"
+            : "Paiement en cours de vérification"
+        }
         subtitle={
           pendingEvoliaPayment
             ? "L'accès de votre équipe s'active dès qu'Evolia nous confirme le paiement, généralement en quelques secondes."
@@ -177,7 +181,7 @@ export default async function CompanyPaymentPage({
   return (
     <JourneyShell
       current="paiement"
-      title="Réglez votre adhésion"
+      title="Procédez au paiement"
       subtitle="Carte bancaire ou Mobile Money : paiement immédiat via Evolia, notre partenaire de paiement. Virement ou chèque : joignez la preuve, notre équipe la valide."
       card={card}
       headerAction={signOut}

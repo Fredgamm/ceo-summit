@@ -96,7 +96,7 @@ export default async function PaymentPendingPage() {
     return (
       <JourneyShell
         current="activation"
-        title="Paiement en vérification"
+        title="Paiement en cours de vérification"
         subtitle="L'accès complet à la plateforme s'active automatiquement dès que le paiement est confirmé. Vous recevrez un e-mail."
         card={card}
         headerAction={signOut}

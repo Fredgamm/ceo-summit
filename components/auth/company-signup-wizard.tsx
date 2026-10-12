@@ -111,7 +111,11 @@ export function CompanySignupWizard({
       >
         <div className="flex flex-col gap-10">
           {[
-            { label: "Forfaits entreprise", hint: "Un prix fixe, un nombre de places", list: bundles },
+            {
+              label: "Forfaits entreprise",
+              hint: "Un prix fixe, un nombre de places",
+              list: bundles,
+            },
             {
               label: "Tarif par participant",
               hint: "Vous indiquez votre effectif au paiement",
@@ -186,7 +190,7 @@ export function CompanySignupWizard({
     <JourneyShell
       current="compte"
       title="Créez votre compte"
-      subtitle="Vous serez le gérant de l'espace de votre entreprise : c'est vous qui inviterez ensuite vos collaborateurs."
+      subtitle="Vous serez l'administrateur de cet espace. Une fois votre enregistrement effectué, vous pourrez inscrire vos collaborateurs selon le nombre de places incluses dans votre formule."
       card={card}
       headerAction={loginLink}
     >
@@ -298,8 +302,8 @@ export function CompanySignupWizard({
             </div>
           </div>
           <p className="-mt-2 text-xs text-text-muted">
-            Logo, description et coordonnées se complètent plus tard, depuis l&apos;espace de
-            votre entreprise.
+            Logo, description et coordonnées se complètent plus tard, depuis l&apos;espace de votre
+            entreprise.
           </p>
         </fieldset>
 
