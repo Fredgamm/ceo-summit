@@ -34,6 +34,7 @@ vi.mock("@/lib/evolia", () => ({
 }));
 
 import { requireViewer } from "@/lib/require-viewer";
+import { sendTransactionalEmail } from "@/lib/resend";
 import { prisma } from "@/lib/prisma";
 import { pushRegistrationToEvolia } from "@/lib/evolia";
 import {
@@ -306,6 +307,22 @@ describe("submitPaymentProof", () => {
     const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "INVALID" });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("tells the manager the payment is received and being checked", async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      success: true,
+      viewer: { id: "admin_user_1", name: "Marie", email: "marie@test.local" },
+    } as never);
+
+    await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "marie@test.local",
+        subject: "Paiement reçu — en cours de vérification",
+      })
+    );
   });
 
   it("requires a proof for a bank transfer", async () => {

@@ -83,6 +83,40 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
     ],
   },
   {
+    key: "company-payment-received",
+    category: "COMPANY_BILLING",
+    label: "Paiement entreprise reçu, en vérification",
+    description:
+      "Envoyé à l'administrateur de l'entreprise quand il envoie sa preuve de paiement (virement ou chèque) : le paiement est reçu et en cours de vérification par l'équipe CEO Summit.",
+    triggerHint: "app/actions/company-subscription.ts::submitPaymentProof",
+    variables: [
+      { key: "adminName", label: "Nom de l'administrateur", example: "Jean-Pierre Rakoto" },
+      { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
+      { key: "amount", label: "Montant (déjà formaté)", example: "50 000 € (soit 248 200 000 Ar)" },
+      { key: "method", label: "Mode de paiement", example: "Virement bancaire" },
+    ],
+    defaultSubject: "Paiement reçu — en cours de vérification",
+    defaultBlocks: [
+      { id: "1", type: "heading", text: "Merci, {{adminName}}." },
+      {
+        id: "2",
+        type: "paragraph",
+        text: "Nous avons bien reçu votre paiement de **{{amount}}** ({{method}}) pour **{{companyName}}**. Il est en cours de vérification par l'équipe CEO Summit.",
+      },
+      {
+        id: "3",
+        type: "paragraph",
+        text: "Vous recevrez un e-mail dès sa validation : l'accès à la plateforme s'activera alors pour vous et vos collaborateurs.",
+      },
+      {
+        id: "4",
+        type: "button",
+        label: "Suivre mon paiement",
+        url: "https://app.ceo-summit.mg/paiement-en-attente",
+      },
+    ],
+  },
+  {
     key: "company-payment-confirmed",
     category: "COMPANY_BILLING",
     label: "Paiement entreprise confirmé",

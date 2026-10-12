@@ -9,7 +9,11 @@ import { countUnreadMessages } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { profileCompleteness } from "@/lib/profile-completeness";
-import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import {
+  getViewerTierFromCompany,
+  MEMBER_WITH_ACCESS_WHERE,
+  VIEWER_TIER_INCLUDE,
+} from "@/lib/plan-access";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { AppShell } from "@/components/layout/app-shell";
 import { MemberCard } from "@/components/catalogue/member-card";
@@ -94,7 +98,8 @@ export default async function DashboardPage() {
       },
     }),
     prisma.user.findMany({
-      where: { status: "ACTIVE", id: { not: user.id } },
+      // Un compte dont le paiement n'est pas encore validé n'est pas affiché.
+      where: { ...MEMBER_WITH_ACCESS_WHERE, id: { not: user.id } },
       orderBy: { createdAt: "desc" },
       take: 3,
       include: { company: { select: { name: true } } },

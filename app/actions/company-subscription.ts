@@ -22,6 +22,7 @@ import {
   isEvoliaPaymentMethod,
 } from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
+import { formatEuro } from "@/lib/utils";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -241,6 +242,24 @@ export async function submitPaymentProof(
       // classe que celui corrigé sur signup() le 1er août 2026).
       console.error("[submitPaymentProof] failed to send admin alert email", err);
     }
+  }
+
+  // 12 oct. 2026 — le gérant est prévenu que son paiement est reçu et en cours
+  // de vérification ; l'e-mail « paiement confirmé » suivra la validation.
+  try {
+    const amountEur =
+      subscription.plan.priceEur != null
+        ? subscription.plan.priceEur * declaredParticipants
+        : Math.round(amount / eurToArRate);
+    const email = await resolveEmail("company-payment-received", {
+      adminName: viewer.name,
+      companyName: subscription.company.name,
+      amount: `${formatEuro(amountEur)} (soit ${formatPaymentAmountAr(amount)})`,
+      method: PAYMENT_METHOD_LABEL[f.method] ?? f.method,
+    });
+    if (email) await sendTransactionalEmail({ to: viewer.email, ...email });
+  } catch (err) {
+    console.error("[submitPaymentProof] failed to send payment received email", err);
   }
 
   revalidatePath(`/entreprises/${subscription.companyId}`);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildCatalogueQuery, CATALOGUE_PAGE_SIZE } from "./catalogue";
+import { MEMBER_WITH_ACCESS_WHERE } from "@/lib/plan-access";
 
 const REFERENTIALS = {
   validSectors: ["Finance & Banque"],
@@ -11,7 +12,7 @@ describe("buildCatalogueQuery", () => {
   it("defaults to active members, most expensive offer first, page 1", () => {
     const query = buildCatalogueQuery({}, REFERENTIALS);
 
-    expect(query.where).toEqual({ status: "ACTIVE" });
+    expect(query.where).toEqual(MEMBER_WITH_ACCESS_WHERE);
     expect(query.orderBy).toEqual({ company: { subscription: { plan: { priceAr: "desc" } } } });
     expect(query.skip).toBe(0);
     expect(query.take).toBe(CATALOGUE_PAGE_SIZE);
