@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
+import { unitPriceAr } from "@/lib/company-payment-amount";
 import { arToEur, formatEuro, formatPlanPriceLive } from "@/lib/utils";
 import { AriaryHint } from "@/components/ui/ariary-hint";
 
@@ -57,7 +58,7 @@ export function UpsellPurchaseForm({
   // vide tant que saisi, jamais négatif ni décimal, contrairement à un simple
   // Number(input.value) qui laisserait passer "1e5", "-3" ou "1.5".
   const declaredQuantity = quantity === "" ? 0 : parseInt(quantity, 10);
-  const amount = selectedPlan ? selectedPlan.priceAr * declaredQuantity : 0;
+  const amount = selectedPlan ? unitPriceAr(selectedPlan, liveEurToArRate) * declaredQuantity : 0;
   // Rapport QA du 1er oct. 2026 (§1.3) — priceAr reste le seul montant
   // réellement facturé/validé, priceEur n'est qu'informatif (affiché en
   // principal ici comme demandé, l'Ariary passant en estimation).

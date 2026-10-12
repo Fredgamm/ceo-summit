@@ -11,7 +11,7 @@ import {
   purchaseUpsellSeatsSchema,
   MAX_PAYMENT_AMOUNT,
 } from "@/lib/validations/company-payment";
-import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import { computeDueAmount, meetsMinParticipants, unitPriceAr } from "@/lib/company-payment-amount";
 import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
@@ -189,7 +189,9 @@ export async function submitPaymentProof(
       error: `Cette offre démarre à ${subscription.plan.minParticipants} participants — il en manque ${missing}.`,
     };
   }
-  const amount = computeDueAmount(subscription.plan, declaredParticipants);
+  // 12 oct. 2026 — montant au cours du jour pour une offre cotée en euros.
+  const eurToArRate = await getEurToArRate();
+  const amount = computeDueAmount(subscription.plan, declaredParticipants, eurToArRate);
   if (amount > MAX_PAYMENT_AMOUNT) {
     return {
       success: false,
@@ -198,8 +200,8 @@ export async function submitPaymentProof(
     };
   }
 
-  // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour, pour l'export en euros.
-  const eurToArRate = await getEurToArRate();
+  // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour enregistré avec le
+  // paiement, pour l'export en euros.
   const [payment] = await prisma.$transaction([
     prisma.companyPayment.create({
       data: {
@@ -388,7 +390,8 @@ export async function purchaseUpsellSeats(
     };
   }
 
-  const amount = upsellPlan.priceAr * f.quantity;
+  const eurToArRate = await getEurToArRate();
+  const amount = unitPriceAr(upsellPlan, eurToArRate) * f.quantity;
   // `CompanyPayment.amount` est un `Int` (int4 PostgreSQL) : au-delà, la
   // création échouait en 500.
   if (amount > MAX_PAYMENT_AMOUNT) {
@@ -403,7 +406,7 @@ export async function purchaseUpsellSeats(
     data: {
       companySubscriptionId,
       amount,
-      eurToArRate: await getEurToArRate(),
+      eurToArRate,
       method: f.method,
       proofFileKey: viaEvolia ? "" : f.proofFileKey,
       comment: f.comment || null,

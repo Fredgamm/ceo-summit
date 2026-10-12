@@ -246,6 +246,34 @@ describe("submitPaymentProof", () => {
     );
   });
 
+  it("bills an offer quoted in euros at the day's rate", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: {
+        priceAr: 4_600_000,
+        priceEur: 950,
+        minParticipants: null,
+        pricingMode: "FIXED_BUNDLE",
+      },
+    } as never);
+
+    await submitPaymentProof("sub_1", {
+      method: VALID_INPUT.method,
+      proofFileKey: VALID_INPUT.proofFileKey,
+      comment: "",
+    });
+
+    // getEurToArRate est simulé à 5 000 Ar pour 1 €.
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ amount: 950 * 5000, eurToArRate: 5000 }),
+      })
+    );
+  });
+
   it("computes a flat amount for a FIXED_BUNDLE plan, no declared count required", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       id: "sub_1",

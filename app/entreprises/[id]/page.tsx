@@ -38,6 +38,7 @@ import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { AriaryHint } from "@/components/ui/ariary-hint";
+import { unitPriceAr } from "@/lib/company-payment-amount";
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Aucune offre choisie",
@@ -291,7 +292,9 @@ export default async function CompanyProfilePage({
                     {formatEuro(planPriceEur(company.subscription.plan, liveEurToArRate))}
                     {company.subscription.plan.pricingMode === "PER_PARTICIPANT" &&
                       " par participant"}
-                    <AriaryHint amountAr={company.subscription.plan.priceAr} exact />
+                    <AriaryHint
+                      amountAr={unitPriceAr(company.subscription.plan, liveEurToArRate)}
+                    />
                   </p>
                 ) : (
                   <p className="text-sm text-text-muted">

@@ -81,10 +81,18 @@ interface PriceablePlan {
  * le nombre de participants payés se déduit du montant (prix unitaire × n),
  * qui ne change plus une fois le paiement soumis.
  */
-export function officialOfferEur(plan: PriceablePlan, amountAr: number): number | null {
+export function officialOfferEur(
+  plan: PriceablePlan,
+  amountAr: number,
+  eurToArRate?: number | null
+): number | null {
   if (plan.priceEur == null) return null;
-  if (plan.pricingMode !== "PER_PARTICIPANT" || plan.priceAr <= 0) return plan.priceEur;
-  return plan.priceEur * Math.max(1, Math.round(amountAr / plan.priceAr));
+  // 12 oct. 2026 — prix unitaire au taux du paiement (le montant d'une offre
+  // en euros suit le cours du jour), sinon le prix figé des anciens paiements.
+  const unitAr =
+    eurToArRate != null && eurToArRate > 0 ? Math.round(plan.priceEur * eurToArRate) : plan.priceAr;
+  if (plan.pricingMode !== "PER_PARTICIPANT" || unitAr <= 0) return plan.priceEur;
+  return plan.priceEur * Math.max(1, Math.round(amountAr / unitAr));
 }
 
 /**
@@ -132,7 +140,7 @@ export function companyPaymentToTransaction(p: CompanyPaymentForFinance): Financ
         ? p.upsellPlan?.priceEur != null
           ? p.upsellPlan.priceEur * p.upsellQuantity
           : null
-        : officialOfferEur(p.companySubscription.plan, p.amount),
+        : officialOfferEur(p.companySubscription.plan, p.amount, p.eurToArRate),
     method: p.method,
     date: p.createdAt,
   };

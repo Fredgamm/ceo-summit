@@ -12,6 +12,7 @@ import { JourneyShell } from "@/components/onboarding/journey-shell";
 import { MembershipCard, type MembershipCardStatus } from "@/components/onboarding/membership-card";
 import { Button } from "@/components/ui/button";
 import { AriaryHint } from "@/components/ui/ariary-hint";
+import { unitPriceAr } from "@/lib/company-payment-amount";
 import { cn, formatEuro, planPriceEur } from "@/lib/utils";
 import { getEurToArRate } from "@/lib/currency-conversion";
 
@@ -146,7 +147,7 @@ export default async function PaymentPendingPage() {
             <strong>{cleanPlanName(intendedPlan.name)}</strong> (
             {formatEuro(planPriceEur(intendedPlan, eurToArRate))}
             {intendedPlan.pricingMode === "PER_PARTICIPANT" && " par participant"}
-            <AriaryHint amountAr={intendedPlan.priceAr} exact className="ml-1 inline" />
+            <AriaryHint amountAr={unitPriceAr(intendedPlan, eurToArRate)} className="ml-1 inline" />
             ). Il reste à créer la fiche de votre entreprise.
           </>
         ) : (

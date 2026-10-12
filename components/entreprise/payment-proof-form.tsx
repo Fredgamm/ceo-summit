@@ -101,7 +101,7 @@ export function PaymentProofForm({
       : parseInt(declaredParticipants, 10)
     : 1;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
-  const amount = computeDueAmount(plan, declaredCount);
+  const amount = computeDueAmount({ ...plan, priceEur }, declaredCount, liveEurToArRate);
   const amountEur = priceEur != null ? (isGroupOffer ? priceEur * declaredCount : priceEur) : null;
   const isEvoliaMethod = isEvoliaPaymentMethod(method);
 
