@@ -1,0 +1,339 @@
+# Module 13 — Changelog
+
+> **Statut :** Vivant — mis à jour à chaque évolution notable
+> **Projet :** CEO Summit — Plateforme Digitale
+> **Format :** inspiré de [Keep a Changelog](https://keepachangelog.com/fr/) — entrées groupées par date, les plus récentes en premier.
+
+---
+
+## 2026-10-07 — intégration Evolia, offres partenaires, rapport QA (module 19), nettoyage (module 17)
+
+Tout ce qui suit est déployé en production.
+
+### Ajouté
+
+- **Paiement par carte bancaire et Mobile Money via Evolia**
+  ([module 11](11_documentation_api_integration_evolia.md), v1.6).
+  - **Paiement :** le gérant choisit « Carte bancaire » ou « Mobile Money » puis clique sur « Payer avec Evolia ». L'inscription est transmise à Evolia, et le gérant est redirigé vers leur page de paiement. Aucune preuve n'est demandée : Evolia confirme le paiement sur notre webhook, et l'accès s'ouvre automatiquement.
+  - **Paiement interrompu :** un lien « Reprendre le paiement » reste affiché tant qu'Evolia n'a pas confirmé.
+  - **Places supplémentaires :** le même parcours fonctionne pour l'achat de places supplémentaires.
+- **Envois à Evolia.** Chaque envoi est signé (HMAC-SHA256) et inclut les dates de début et de fin de l'événement. Trois moments déclenchent un envoi :
+  - le lancement d'un paiement par carte ou Mobile Money ;
+  - la confirmation d'un virement ou d'un chèque par l'admin (envoi pour information) ;
+  - la validation de la liste des participants par le gérant.
+- **Section « Envois à Evolia » sur la fiche entreprise admin** : statut de chaque envoi, code de réponse, erreur éventuelle et bouton « Relancer ».
+- **Liste des participants à l'événement validée par le gérant**
+  ([module 18](18_rendez_vous_b2b_evenement.md) §4.9).
+  - Le gérant coche, parmi les comptes de son entreprise, qui participe, lui-même compris, dans la limite des places de son offre.
+  - Valider la liste inscrit les personnes cochées, désinscrit celles qui ont été retirées et transmet la liste à Evolia pour les badges.
+- **Rattachement d'une offre à un événement** depuis le formulaire d'offre admin (« Événement donnant accès »). Le formulaire d'événement demande aussi désormais une **date et heure de fin**.
+- **Offres partenaires institutionnels**
+  ([module 20](20_offre_partenaire_institutionnel.md)).
+  - L'admin invite le gérant avec son nom, son e-mail, l'offre partenaire et le nombre de collaborateurs (2 par défaut, modifiable).
+  - Le gérant crée son mot de passe depuis l'e-mail, sans rien payer, puis invite ses collaborateurs comme une entreprise classique.
+  - L'admin voit les partenaires en attente et ceux qui ont déjà créé leur compte.
+- **Page « Mon profil »** ([module 19](19_rapport_qa_07_oct_2026.md) §3), avec des onglets adaptés au mobile.
+- **Export comptable en euros, en CSV et en PDF** (module 19 §4.2).
+  - L'euro est le prix officiel de l'offre, et le montant en Ariary est converti au taux enregistré lors du paiement.
+  - Le CSV s'ouvre directement dans Excel en français, avec un en-tête lisible.
+- **Catalogue de services dans le menu** (module 17 §3.3).
+- **Sélecteurs secteur et pays** : les 10 valeurs les plus utilisées en premier, puis une recherche pour trouver les autres.
+- Un composant commun pour tous les boutons d'ajout (opportunité, service…), qui ont désormais tous le même aspect.
+
+### Modifié
+
+- **Plus d'inscription automatique à l'événement.** Ni le paiement ni l'arrivée d'un collaborateur n'inscrivent plus personne d'office : seule la liste validée par le gérant inscrit. La case « Je participe » disparaît, remplacée par cette liste.
+- **Accès ouvert dès la validation du paiement**, sans avoir à se déconnecter puis se reconnecter.
+- **Le téléphone est obligatoire** quand on modifie son profil (module 19 §2).
+- **Le badge est réservé aux offres à prix fixe** (module 19 §6.2).
+- **Menu mobile du haut :** « Membres » apparaît juste après « Accueil » (module 19 §5.2).
+- **Tableau de bord admin :** retrait de « Abonnements expirant bientôt » (module 19 §4.1).
+
+### Corrigé
+
+- Une seule icône « afficher le mot de passe » par champ (module 19 §1).
+- Plus aucune page plus large que l'écran sur mobile ; le logo s'affiche sur la page de connexion mobile (module 19 §3.6, §5.1, §5.3).
+- Sélecteur secteur/pays : la valeur trouvée par la recherche est bien appliquée.
+
+### Retiré
+
+Code mort repéré par [l'audit du module 17](17_audit_nettoyage_modules.md) :
+
+- les crédits Deal Room ;
+- le check-in par QR code ;
+- le parcours de candidature et l'activation par lien ;
+- les paliers Member, Executive et Chairman de l'interface ;
+- le webhook Resend, ainsi que les dépendances et images SVG inutilisées.
+
+### À faire
+
+- **Evolia doit autoriser nos envois dans Cloudflare.** Leur pare-feu Cloudflare bloque pour l'instant nos envois (HTTP 403, page « Just a moment… »). Il faut une règle qui laisse passer le chemin `/integration/ceosummit/*`, ou notre serveur `57.128.183.148`. En attendant, le paiement par carte ou Mobile Money échoue proprement et le virement reste disponible.
+- **Evolia doit dire quelle clé signe ses confirmations de paiement** : la même clé que nos envois, ou une autre. Si c'est la même, il faut la copier dans `PAYMENT_WEBHOOK_SECRET` sur le serveur.
+
+---
+
+## 2026-10-02 — correctifs de l'audit du 2 octobre (P0)
+
+### Sécurité et accès
+
+- Un admin désactivé ou suspendu n'a plus accès au back-office, et la gestion des comptes admin a désormais des garde-fous.
+- Les fiches entreprise sont réservées aux membres qui ont payé. Seul le gérant d'une entreprise qui a payé peut déposer un service.
+- La messagerie n'accepte plus d'opportunité rattachée depuis l'URL. Les messages de salle modérés sont retirés des réponses.
+- Le seed est refusé en production. Le déploiement ne part plus que de `mvp-connect-simple`.
+- Une limite de débit s'applique aux 8 routes d'envoi de fichiers.
+- Carte et Mobile Money sont refusés aussi côté serveur, en attendant Evolia. Cette restriction est levée le 7 octobre.
+
+### Corrigé
+
+- La confirmation d'un paiement d'offre est faite en une seule opération : plus de paiement confirmé avec un accès resté fermé.
+- Un double envoi du formulaire d'inscription ne provoque plus d'erreur 500.
+- On peut se réinscrire à un évènement après avoir annulé.
+- Finances : le revenu mensuel (MRR) et l'export comptable sont corrects.
+- Temps réel : la connexion se rétablit après l'expiration du jeton.
+- La photo de profil peut être envoyée avant la validation du paiement.
+- Les pièces jointes des messages groupés (broadcast) fonctionnent sans stockage R2, et les échecs d'envoi sont signalés.
+- Référentiel : impossible de supprimer une valeur encore utilisée.
+- Plus de palier affiché sous le nom dans la barre latérale.
+
+---
+
+## 2026-10-01 — rapport QA client (module 16)
+
+Correctifs du [rapport QA du 1er octobre](16_rapport_qa_1_octobre_2026.md).
+
+### Ajouté
+
+- **Le gérant peut modifier la fiche de son entreprise** (nouvel onglet « Modifier », §2.2), et **ajouter, modifier ou supprimer les services de son entreprise** (§2.5).
+- **Messages groupés (broadcast)** : pièces jointes, et envoi à plusieurs offres à la fois (§3.2).
+- **Aperçu des e-mails automatiques** dans l'admin (§3.3).
+
+### Modifié
+
+- L'euro est le montant principal sur tout l'écran de paiement (§1.3).
+- Deal Room : mes opportunités d'abord, puis celles de mon secteur (§2.4).
+- L'onglet « Gestion » devient « Gestion compte » (§2.1). La rubrique « Adhésions » est supprimée et les liens sont rendus cliquables (§1.4, §3.1).
+
+### Corrigé
+
+- Accord singulier/pluriel de « participant » (§1.2).
+
+---
+
+## 2026-09-30 — rapport QA client (module 15)
+
+Correctifs et évolutions du [rapport de test QA du 30 septembre](15_rapport_qa_30_septembre_2026.md), implémentés et déployés le jour même.
+
+### Ajouté
+
+- **Icône afficher/masquer le mot de passe** sur les 4 champs mot de passe
+  de la plateforme (connexion, création/réinitialisation, acceptation
+  d'invitation, inscription entreprise) — aucun navigateur ne l'affiche
+  plus nativement de façon fiable. Nouveau composant partagé
+  `components/ui/password-input.tsx`.
+- **Budget en € pour une opportunité Deal Room**, en plus de l'Ariary
+  (nouveau champ `Opportunity.budgetEur`, informatif uniquement, jamais lu
+  pour le filtre/tri).
+- **Estimation Ariary au cours du jour** sur les prix affichés en euros
+  (inscription, changement d'offre, achat de supplément) — jusqu'ici cette
+  estimation était figée au moment où l'admin avait créé/modifié l'offre.
+  Le montant réellement facturé/validé reste inchangé (toujours figé, pour
+  ne pas casser la validation manuelle des preuves de paiement).
+- **Tri de l'annuaire des membres par offre** (la plus chère en premier),
+  nouveau par défaut — toujours modifiable via le sélecteur existant. La
+  carte de l'offre actuellement la plus chère du catalogue se distingue
+  visuellement (badge et bordure dorée).
+- **Vrai logo CEO Summit** dans tous les emails transactionnels (jusqu'ici
+  un simple texte).
+- **Logo présent sur tous les écrans d'onboarding** (création d'entreprise,
+  paiement) — il n'apparaissait auparavant que sur l'écran de bienvenue, les
+  autres n'affichaient que le lien « Retour ».
+
+### Modifié
+
+- Sur les cartes d'offre, le **prix en euros est désormais la valeur
+  principale** ; l'estimation Ariary passe en petit texte avec la mention
+  « se référer au cours du jour » plutôt que noyée dans la même ligne.
+- Retrait du sélecteur **« Membership minimum »** du formulaire de
+  publication Deal Room — sans effet réel depuis une décision d'architecture
+  antérieure (tout membre voit déjà toutes les opportunités), il ne servait
+  plus qu'à induire en erreur.
+- Textes reformulés : email de paiement rejeté, email d'invitation
+  collaborateur, contact affiché sur la page « Accès en attente »
+  (coordonnées réelles), texte d'explication de la preuve de paiement,
+  « Cercle des Décideurs » sur l'écran de bienvenue.
+- Tagline des sidebars admin/membre remplacée : « Conquérir de nouveaux
+  possibles / The power to go beyond » (au lieu de « Océan Indien ·
+  Décideurs »).
+
+### Corrigé
+
+- **Coquille "INDIA OCEAN" → "INDIAN OCEAN"** dans les deux fichiers logo
+  (clair et sombre), présente depuis leur création — régénérés depuis la
+  source fournie par le client, avec un recolorage en blanc pour la version
+  destinée aux fonds sombres (illisible sinon sur fond navy). Les 17 écrans
+  de démarrage iOS, générés depuis ce même fichier, sont régénérés en
+  conséquence.
+- **Timeout de déploiement CI/CD** — l'étape SSH de déploiement dépassait
+  parfois le timeout par défaut (10 min) alors que le déploiement avait en
+  réalité réussi (build et démarrage des conteneurs confirmés dans les
+  logs), faisant remonter un échec en CI à tort. Porté à 20 min.
+- **Data-root Docker sorti du contexte de build** — vivait dans le même
+  dossier que le contexte de build Docker, provoquant des échecs
+  intermittents ("can't stat .docker-data") quand le nettoyage disque en
+  début de déploiement modifiait ce dossier pendant que le builder le
+  parcourait. Migration automatique et idempotente ajoutée au workflow.
+
+## 2026-09-25 — correctifs de l'audit MVP
+
+### Sécurité
+
+- **Optimiseur d'images désactivé** — Next.js 14.2.35 y a une faille
+  d'exécution de code à distance sans authentification (GHSA-2xp9-vwfh-vxw4),
+  et il acceptait les images de n'importe quel bucket Amazon S3. La montée
+  vers Next ≥ 15.5.24 reste à planifier (1 critique, 5 élevées à `npm audit`).
+- **Fichiers privés** (preuves de paiement, pièces Deal Room, pièces jointes
+  de salles) : servis seulement au propriétaire, au gestionnaire concerné,
+  aux membres ayant accès, ou à un admin — ils étaient lisibles par tout
+  compte connecté tant que R2 n'est pas branché.
+- **Limitation du nombre de tentatives** : ne se coupe plus quand Redis
+  tombe (compteur mémoire de secours) ; limite par IP au login, à la
+  candidature et au renvoi d'activation.
+- **Comptes et sessions** : un compte suspendu perd l'accès tout de suite
+  (messagerie, salles, uploads, gestion d'entreprise, temps réel), plus 24 h
+  après ; une réinitialisation de mot de passe déconnecte les sessions
+  ouvertes ; le login ne révèle plus l'existence ni le statut d'un compte.
+- **Saisies** : liens `javascript:` refusés dans les sites web et réseaux
+  sociaux, exports CSV protégés contre l'injection de formules, pièces
+  jointes limitées aux fichiers de l'utilisateur, redirection après login
+  verrouillée, conteneur Docker sans droits root, crédits attribuables
+  seulement par le rôle Financier.
+- **Webhooks** : vérification des notifications Resend au format réel
+  (Svix) et protection optionnelle contre le rejeu des confirmations de
+  paiement (en-tête `X-Webhook-Timestamp`).
+- **Clé SSH de déploiement** sortie du dossier projet et exclue de git.
+
+### Places, participants et suppléments
+
+- À la validation du paiement, seuls les participants réels sont inscrits à
+  l'évènement : le gestionnaire seulement s'il a coché « Je participe », et
+  jamais au-delà du nombre de places payées. Cocher / décocher après coup
+  inscrit / désinscrit le gestionnaire.
+- Les invitations s'ouvrent une fois le paiement validé (plus d'invitations
+  illimitées avant paiement sur les offres Groupement) ; le renvoi et
+  l'acceptation revérifient le plafond ; la page et le serveur comptent les
+  places de la même façon.
+- Si l'email d'invitation n'a pas pu partir, le gestionnaire est prévenu.
+- Suppléments : un seul en attente à la fois, affiché comme tel ;
+  abonnement actif requis ; quantité plafonnée à 500 ; places
+  supplémentaires remises à zéro au changement d'offre ; l'admin voit tous
+  les paiements en attente.
+- Le gestionnaire reçoit un email de bienvenue à l'inscription.
+- Une offre supplément (ex. Executive Pass) n'apparaît plus jamais comme
+  offre principale à l'inscription, ni via un lien `?offre=`, ni par appel
+  direct au serveur ; les offres Groupement restent au catalogue.
+- Seules les offres actives et en libre-service sont proposées en
+  supplément (plus d'offre de sponsoring achetable par ce biais).
+
+### Offres
+
+- Une offre déjà souscrite ou achetée en supplément ne peut plus être
+  supprimée : l'admin est invité à la désactiver, l'historique des
+  paiements est conservé.
+- Un prix en euros à 0 est converti côté serveur comme n'importe quel prix
+  en euros ; les champs sans effet selon le mode (seuil en forfait, places
+  en groupement) sont vidés à l'enregistrement.
+- Les astérisques de mise en forme saisis dans un nom d'offre sont retirés
+  (« Early Bird** … » en production) et le nom s'affiche proprement à
+  l'inscription.
+
+### Emails
+
+- En production, un SMTP non configuré ne fait plus « disparaître »
+  silencieusement les emails : l'échec est journalisé explicitement.
+  Expéditeur par défaut aligné sur le compte SMTP si `EMAIL_FROM` est vide.
+- L'invitation collaborateur précise que le lien est valable 7 jours et que
+  l'invité choisit son mot de passe ; l'email d'activation ne parle plus
+  d'un « paiement confirmé » (il suit l'acceptation d'une candidature).
+
+### Documentation Evolia (v1.5)
+
+- État réel du webhook de confirmation (en ligne, à relier aux paiements
+  Evolia une fois l'échange 1 construit), codes `400`/`429` documentés,
+  valeurs réelles de `paymentMethod`, montants toujours en Ariary, en-tête
+  anti-rejeu optionnel.
+- `conception/12` et `BACKLOG_MVP.md` mis à jour.
+
+### Déploiement des correctifs et incident post-redémarrage
+
+- Correctifs fusionnés et déployés en production le 25 septembre (`802f16f`
+  → `224e505`) — confirmé : l'optimiseur d'images renvoie désormais 404 au
+  lieu de servir des images arbitraires.
+- **Healthcheck postgres corrigé** — `pg_isready` sans `-d` ciblait par
+  défaut une base du même nom que l'utilisateur (`ceosummit`), inexistante
+  (la vraie base est `ceo_summit`) ; sans conséquence sur le fonctionnement
+  réel de postgres, mais faussait l'état lu par `depends_on`.
+- **Incident isolé** : un redémarrage VPS (dépannage d'accès SSH, sans
+  rapport avec le déploiement) a coupé postgres brutalement ; le temps de
+  relecture des données (~24 min) a fait planter l'app en boucle (502)
+  faute de base joignable, déjà documenté comme risque connu (`b756e14`).
+  Résolu seul une fois postgres stabilisé, aucune perte de données.
+- **Tarif Groupement confirmé le 25 septembre** par la grille officielle
+  validée par le client : 720 €/pers (seuil 10), 550 €/pers (seuil 30) —
+  conforme à la production, `conception/12` mis à jour en conséquence.
+  Le même document précise aussi le cas Executive Pass (offre principale
+  visible au catalogue, `isUpsell: false`, conforme à cette grille).
+
+## 2026-09-22
+
+### Ajouté
+
+- **Cumul de places et achats de supplément (upsell)** — une entreprise qui a
+  atteint le plafond de son offre peut désormais acheter des places
+  supplémentaires (ex. Executive Pass à l'unité, ou une offre Groupement en
+  lot) sans que ça n'affecte son accès pendant la revue admin.
+- **Bascule automatique d'offre selon la quantité** — que ce soit à l'achat
+  d'un supplément ou au paiement initial, saisir un effectif qui atteint le
+  seuil d'une offre Groupement bascule automatiquement dessus (palier le
+  plus élevé atteint en priorité), au lieu de facturer au tarif de l'offre
+  choisie au départ.
+- **Case « Je participe »** — le gestionnaire qui inscrit l'entreprise et
+  paie ne consomme une place que s'il se déclare lui-même participant.
+- **Bouton Renvoyer** pour une invitation collaborateur restée en attente —
+  régénère le lien et renvoie l'email sans passer par révoquer/réinviter.
+- **Champ Site web** sur le profil membre (`/profil/editer`), affiché aussi
+  sur le profil public et la fiche admin.
+- **Page publique `/integration-evolia`** — documentation technique de
+  l'intégration API accessible sans connexion, à donner directement en URL à
+  l'équipe technique Evolia (reprend `conception/11`, tenue en phase avec).
+
+### Modifié
+
+- **Modèle de tarification des offres simplifié** à deux modes cohérents
+  (Forfait à prix fixe / Groupement à prix par personne) — le mode
+  `TIERED_GROUP` (paliers dégressifs), jamais utilisé par aucune offre
+  active, a été retiré (schéma, UI admin, calculs). Voir module `12`.
+- Une offre Groupement est désormais **automatiquement proposable en
+  supplément**, sans configuration manuelle — la case à cocher correspondante
+  a été retirée du formulaire admin.
+- Le mode de paiement du formulaire de supplément est aligné sur celui du
+  paiement initial (virement, chèque, carte bancaire, Mobile Money — ces
+  deux derniers en attente du pont Evolia).
+- Le champ quantité (supplément et paiement initial) est durci contre les
+  saisies invalides (négatif, décimal, notation scientifique) et clampé au
+  seuil minimum de l'offre.
+- Nom complet et Titre / Poste sont désormais réellement obligatoires sur le
+  profil membre (Titre / Poste acceptait une chaîne vide malgré l'astérisque
+  affiché).
+- Site web et LinkedIn (profil membre) acceptent une saisie sans schéma
+  explicite (`https://` ajouté automatiquement avant validation).
+- Le bouton « Inviter des collaborateurs » du dashboard est maintenant un
+  vrai bouton visible, plus un simple lien texte.
+- La quantité par défaut du formulaire de supplément démarre toujours à 1.
+
+### Corrigé
+
+- **Invitation collaborateur cassée en local** — `CompanyInvite.expiresAt`
+  existait déjà dans la base partagée (ajouté par une autre branche) mais
+  pas dans le schéma de cette branche, provoquant une erreur 500 sur chaque
+  invitation. Le champ est maintenant aligné (avec expiration à 7 jours,
+  comme les autres invitations).

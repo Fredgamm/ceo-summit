@@ -62,3 +62,7 @@ next-env.d.ts
 # Docker daemon data-root relocated here on the shared VPS (see DEPLOY.md) —
 # never committed, just runtime state (images/containers/volumes).
 /.docker-data/
+
+# Documentation de conception (restaurée de l'ancien dépôt parent le 13 oct. 2026) :
+# captures d'écran personnelles non versionnées.
+/docs/*.png

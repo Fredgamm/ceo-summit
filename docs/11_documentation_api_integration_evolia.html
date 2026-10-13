@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API CEO Summit × Evolia</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root{
+    --ink:#12182B;
+    --ink-soft:#4B5568;
+    --paper:#F4F5F9;
+    --surface:#FFFFFF;
+    --line:#DEE2EA;
+    --navy:#1B2C57;
+    --navy-deep:#0D1526;
+    --gold:#AD8226;
+    --good:#1E8055;
+    --good-bg:#E7F4ED;
+    --pending:#B4711F;
+    --pending-bg:#FBEFDF;
+    --code-bg:#0D1526;
+    --code-ink:#DCE3F5;
+    --code-key:#E7C878;
+    --code-str:#8FD0A8;
+    --code-num:#7FB3E0;
+    --focus:#2E63D8;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E8EAF2;
+      --ink-soft:#A6ADC2;
+      --paper:#0B0F1C;
+      --surface:#131829;
+      --line:#262D45;
+      --navy:#93A9E6;
+      --navy-deep:#0D1526;
+      --gold:#D9AF5C;
+      --good:#49C289;
+      --good-bg:#12281F;
+      --pending:#E2984E;
+      --pending-bg:#2C2113;
+      --focus:#7C9CF0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E8EAF2;
+    --ink-soft:#A6ADC2;
+    --paper:#0B0F1C;
+    --surface:#131829;
+    --line:#262D45;
+    --navy:#93A9E6;
+    --navy-deep:#0D1526;
+    --gold:#D9AF5C;
+    --good:#49C289;
+    --good-bg:#12281F;
+    --pending:#E2984E;
+    --pending-bg:#2C2113;
+    --focus:#7C9CF0;
+  }
+
+  *{box-sizing:border-box;}
+  html{ color-scheme:light dark; }
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Manrope",system-ui,sans-serif;
+    font-size:16px;
+    line-height:1.6;
+  }
+  ::selection{ background:var(--gold); color:var(--navy-deep); }
+  a{ color:var(--focus); }
+  a:focus-visible, button:focus-visible{ outline:2px solid var(--focus); outline-offset:2px; }
+
+  h1,h2,h3{ font-family:"Fraunces",Georgia,serif; text-wrap:balance; color:var(--ink); margin:0; }
+  code, .mono, pre, .field-name{ font-family:"IBM Plex Mono","SFMono-Regular",Consolas,monospace; }
+
+  .shell{ max-width:1120px; margin:0 auto; padding:2.75rem 1.75rem 6rem; }
+
+  /* ── Header ─────────────────────────────────────────── */
+  .doc-header{
+    display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
+    gap:1.5rem 2rem;
+    padding-bottom:1.75rem;
+    border-bottom:1px solid var(--line);
+    margin-bottom:2.5rem;
+  }
+  .doc-header .eyebrow{
+    font-size:.72rem; font-weight:700; letter-spacing:.11em; text-transform:uppercase;
+    color:var(--gold); margin:0 0 .5rem;
+  }
+  .doc-header h1{ font-size:clamp(1.7rem, 2.6vw, 2.35rem); font-weight:600; line-height:1.15; }
+  .doc-header .sub{ color:var(--ink-soft); margin-top:.5rem; font-size:.98rem; max-width:46ch; }
+  .meta-pills{ display:flex; flex-wrap:wrap; gap:.5rem; }
+  .pill{
+    display:inline-flex; align-items:center; gap:.4rem;
+    border:1px solid var(--line); border-radius:99px;
+    padding:.32rem .75rem; font-size:.78rem; font-weight:600; color:var(--ink-soft);
+    background:var(--surface); white-space:nowrap;
+  }
+  .pill .dot{ width:.45rem; height:.45rem; border-radius:99px; background:currentColor; }
+
+  /* ── Layout: sidebar + content ──────────────────────── */
+  .layout{ display:grid; grid-template-columns:200px minmax(0,1fr); gap:3rem; align-items:start; }
+  @media (max-width:900px){ .layout{ grid-template-columns:1fr; } }
+
+  nav.toc{ position:sticky; top:2rem; display:flex; flex-direction:column; gap:.15rem; }
+  @media (max-width:900px){
+    nav.toc{ position:static; flex-direction:row; overflow-x:auto; gap:1.25rem; padding-bottom:.75rem; border-bottom:1px solid var(--line); margin-bottom:.5rem; }
+  }
+  nav.toc a{
+    color:var(--ink-soft); text-decoration:none; font-size:.85rem; font-weight:600;
+    padding:.4rem .6rem; border-radius:8px; white-space:nowrap;
+  }
+  nav.toc a:hover{ color:var(--navy); background:var(--surface); }
+  nav.toc .toc-status{ font-size:.68rem; font-weight:700; margin-left:.4rem; }
+
+  main{ min-width:0; display:flex; flex-direction:column; gap:3.25rem; }
+  section{ scroll-margin-top:1.5rem; }
+
+  .section-head{ display:flex; align-items:baseline; gap:.85rem; margin-bottom:.35rem; flex-wrap:wrap; }
+  .section-head .num{ font-family:"Fraunces",serif; font-weight:600; font-size:1.1rem; color:var(--gold); }
+  .section-head h2{ font-size:1.5rem; font-weight:600; }
+  .status-tag{
+    font-size:.7rem; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    padding:.2rem .55rem; border-radius:6px;
+  }
+  .status-tag.live{ color:var(--good); background:var(--good-bg); }
+  .status-tag.pending{ color:var(--pending); background:var(--pending-bg); }
+
+  .lede{ color:var(--ink-soft); max-width:68ch; margin:.9rem 0 0; }
+  .lede strong{ color:var(--ink); }
+
+  .callout{
+    border:1px solid var(--line); border-left:3px solid var(--gold);
+    background:var(--surface); border-radius:10px;
+    padding:1rem 1.15rem; margin-top:1.25rem; max-width:68ch;
+    font-size:.92rem; color:var(--ink-soft);
+  }
+  .callout strong{ color:var(--ink); }
+
+  /* ── Flow diagram ───────────────────────────────────── */
+  .flow{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:1.5rem 1.75rem; margin-bottom:0;
+  }
+  .flow svg{ width:100%; height:auto; display:block; }
+  .flow-caption{ display:flex; justify-content:space-between; margin-top:.9rem; font-size:.82rem; color:var(--ink-soft); }
+
+  /* ── Endpoint bar ───────────────────────────────────── */
+  .endpoint{
+    display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;
+    background:var(--navy-deep); border-radius:10px; padding:.85rem 1.1rem; margin-top:1.5rem;
+  }
+  .endpoint .verb{
+    font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:.78rem;
+    color:var(--navy-deep); background:var(--gold); padding:.2rem .55rem; border-radius:5px;
+  }
+  .endpoint .url{ font-family:"IBM Plex Mono",monospace; color:var(--code-ink); font-size:.88rem; word-break:break-all; }
+  .endpoint .hdr{ font-family:"IBM Plex Mono",monospace; color:var(--code-num); font-size:.8rem; margin-left:auto; }
+
+  /* ── Code block ─────────────────────────────────────── */
+  .code-card{ margin-top:1.1rem; border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+  .code-card .code-label{
+    background:var(--surface); color:var(--ink-soft); font-size:.72rem; font-weight:700;
+    letter-spacing:.06em; text-transform:uppercase; padding:.55rem 1rem; border-bottom:1px solid var(--line);
+  }
+  pre.code{
+    margin:0; background:var(--code-bg); color:var(--code-ink);
+    padding:1.1rem 1.25rem; overflow-x:auto; font-size:.85rem; line-height:1.65;
+  }
+  pre.code .k{ color:var(--code-key); }
+  pre.code .s{ color:var(--code-str); }
+  pre.code .n{ color:var(--code-num); }
+  pre.code .p{ color:#7482A6; }
+
+  /* ── Tables ─────────────────────────────────────────── */
+  .table-wrap{ overflow-x:auto; margin-top:1.1rem; border:1px solid var(--line); border-radius:12px; }
+  table{ border-collapse:collapse; width:100%; min-width:480px; font-size:.88rem; background:var(--surface); }
+  th{
+    text-align:left; font-size:.72rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--ink-soft); padding:.7rem .9rem; border-bottom:1px solid var(--line); background:var(--paper);
+  }
+  td{ padding:.7rem .9rem; border-bottom:1px solid var(--line); vertical-align:top; color:var(--ink-soft); }
+  tr:last-child td{ border-bottom:none; }
+  td .field-name, td code{ color:var(--navy); font-weight:600; font-size:.84rem; }
+  td strong{ color:var(--ink); }
+
+  /* ── Ask list ───────────────────────────────────────── */
+  .ask-box{
+    margin-top:1.25rem; background:var(--pending-bg); border:1px solid var(--pending);
+    border-radius:12px; padding:1.15rem 1.3rem;
+  }
+  .ask-box .ask-title{
+    display:flex; align-items:center; gap:.5rem; font-weight:700; color:var(--pending);
+    font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.75rem;
+  }
+  .ask-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.65rem; counter-reset:ask; }
+  .ask-list li{ counter-increment:ask; display:flex; gap:.7rem; font-size:.92rem; color:var(--ink); }
+  .ask-list li::before{
+    content:counter(ask); flex:none; width:1.5rem; height:1.5rem; border-radius:99px;
+    background:var(--pending); color:var(--paper); font-family:"IBM Plex Mono",monospace; font-weight:600;
+    font-size:.75rem; display:flex; align-items:center; justify-content:center; margin-top:.05rem;
+  }
+  .ask-list b{ color:var(--ink); }
+
+  /* ── Trigger steps ──────────────────────────────────── */
+  .triggers{ display:flex; flex-direction:column; gap:.9rem; margin-top:1.25rem; }
+  .trigger{ display:flex; gap:.9rem; }
+  .trigger .badge{
+    flex:none; width:1.9rem; height:1.9rem; border-radius:8px; background:var(--surface);
+    border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:.85rem; color:var(--navy);
+  }
+  .trigger p{ margin:0; font-size:.92rem; color:var(--ink-soft); }
+  .trigger p strong{ color:var(--ink); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="doc-header">
+    <div>
+      <p class="eyebrow">CEO Summit · Océan Indien</p>
+      <h1>Intégration API — CEO Summit × Evolia</h1>
+      <p class="sub">Contrat d'échange pour le paiement des offres entreprise. Deux appels HTTPS, aucun accès au code requis d'aucun des deux côtés.</p>
+    </div>
+    <div class="meta-pills">
+      <span class="pill">Version 1.5</span>
+      <span class="pill">Révisé 25 sept. 2026</span>
+      <span class="pill" style="color:var(--good)"><span class="dot"></span>1 webhook en ligne, à relier aux paiements</span>
+      <span class="pill" style="color:var(--pending)"><span class="dot"></span>1 échange en attente d'Evolia</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Sommaire">
+      <a href="#vue-ensemble">Vue d'ensemble</a>
+      <a href="#etape-1">1. Push d'inscription <span class="toc-status" style="color:var(--pending)">●</span></a>
+      <a href="#etape-2">2. Confirmation <span class="toc-status" style="color:var(--good)">●</span></a>
+    </nav>
+
+    <main>
+
+      <section id="vue-ensemble">
+        <div class="section-head"><h2>Vue d'ensemble</h2></div>
+        <p class="lede">
+          Pas de redirection, pas d'URL de retour à gérer. <strong>CEO Summit pousse les informations
+          d'inscription vers Evolia</strong> dès qu'une entreprise choisit une offre à payer via Evolia ;
+          <strong>Evolia encaisse</strong> ce paiement par le moyen de son choix, puis <strong>confirme à
+          CEO Summit</strong> une fois le paiement reçu.
+        </p>
+
+        <div class="flow" style="margin-top:1.5rem;">
+          <svg viewBox="0 0 640 150" role="img" aria-labelledby="flow-title">
+            <title id="flow-title">Schéma des deux échanges entre CEO Summit et Evolia</title>
+            <rect x="12" y="45" width="150" height="60" rx="10" fill="none" stroke="var(--navy)" stroke-width="1.6"/>
+            <text x="87" y="80" text-anchor="middle" font-family="Manrope" font-weight="700" font-size="15" fill="var(--ink)">CEO Summit</text>
+
+            <rect x="478" y="45" width="150" height="60" rx="10" fill="none" stroke="var(--navy)" stroke-width="1.6"/>
+            <text x="553" y="80" text-anchor="middle" font-family="Manrope" font-weight="700" font-size="15" fill="var(--ink)">Evolia</text>
+
+            <defs>
+              <marker id="arrowGold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--gold)"/>
+              </marker>
+              <marker id="arrowGood" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="var(--good)"/>
+              </marker>
+            </defs>
+
+            <line x1="165" y1="58" x2="475" y2="58" stroke="var(--gold)" stroke-width="1.8" marker-end="url(#arrowGold)"/>
+            <text x="320" y="42" text-anchor="middle" font-family="IBM Plex Mono" font-size="11.5" fill="var(--gold)" font-weight="600">1 · push d'inscription</text>
+
+            <line x1="475" y1="94" x2="165" y2="94" stroke="var(--good)" stroke-width="1.8" marker-end="url(#arrowGood)"/>
+            <text x="320" y="118" text-anchor="middle" font-family="IBM Plex Mono" font-size="11.5" fill="var(--good)" font-weight="600">2 · confirmation de paiement</text>
+          </svg>
+          <div class="flow-caption">
+            <span>Celui qui <strong style="color:var(--ink)">reçoit</strong> l'appel fournit l'endpoint.</span>
+            <span>Celui qui <strong style="color:var(--ink)">appelle</strong> l'implémente côté client.</span>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>Le virement bancaire ne passe pas par Evolia.</strong> C'est un second moyen de paiement,
+          en parallèle — sa preuve est validée directement et manuellement par un administrateur CEO Summit,
+          sans aucun appel à/depuis Evolia. Seule exception : le push d'inscription (étape 1) part quand même
+          dans ce cas, à titre informatif — Evolia doit connaître tout participant qui obtient l'accès, quel
+          que soit son mode de paiement.
+        </div>
+      </section>
+
+      <section id="etape-1">
+        <div class="section-head">
+          <span class="num">01</span>
+          <h2>Push d'inscription</h2>
+          <span class="status-tag pending">En attente d'Evolia</span>
+        </div>
+        <p class="lede">
+          CEO Summit → Evolia. <strong>Le seul appel que CEO Summit a besoin de faire.</strong> L'utilisateur
+          s'inscrit et choisit son offre sur l'interface CEO Summit ; ces informations sont ensuite poussées
+          vers Evolia en un seul appel. Evolia encaisse le paiement par le moyen de son choix (contact direct,
+          propre portail…) puis confirme via le webhook de l'étape 2.
+        </p>
+
+        <h3 style="font-size:1rem;margin-top:1.75rem;margin-bottom:.25rem;color:var(--ink-soft);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-family:Manrope;">Déclencheurs</h3>
+        <div class="triggers">
+          <div class="trigger">
+            <span class="badge">A</span>
+            <p><strong>Inscription initiale</strong> — l'entreprise vient d'être créée avec un seul participant, le gestionnaire, qui a choisi une offre à payer via Evolia. Ce push déclenche la collecte du paiement — envoyé <strong>avant</strong> toute confirmation, pas après. <strong>Important : le gestionnaire n'est pas automatiquement un participant à l'évènement</strong> — souvent juste la personne qui inscrit l'entreprise et paie (ex. une secrétaire). <strong>Evolia ne doit rien générer (badge, QR) à partir de ce seul push</strong> — voir le point d'attention plus bas.</p>
+          </div>
+          <div class="trigger">
+            <span class="badge">B</span>
+            <p><strong>Validation de la liste des participants</strong> — plus tard, parfois plusieurs jours après le paiement, le gestionnaire compose depuis son espace la liste réelle des personnes qui assisteront à l'évènement (lui-même s'il y assiste aussi, et/ou d'autres collaborateurs). <strong>C'est ce déclencheur, pas le premier, qui fait foi pour générer accès et badges/QR.</strong></p>
+          </div>
+          <div class="trigger">
+            <span class="badge">C</span>
+            <p><strong>Ajout au-delà du quota inclus</strong> — si l'offre n'inclut que 2 participants et que le gestionnaire veut en ajouter davantage, un supplément payant par personne (ex. 900 €) est d'abord collecté (via Evolia ou virement), puis la liste mise à jour est poussée une fois ce paiement validé.</p>
+          </div>
+        </div>
+
+        <p class="lede" style="margin-top:1.5rem;">
+          Même structure aux trois déclencheurs, mais <strong>deux valeurs distinctes du champ
+          <code>event</code></strong> — c'est ce champ, pas la présence d'un nom, qui indique à Evolia si la
+          liste est prête pour la génération de badges :
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Valeur de <code>event</code></th><th>Sens</th><th>Badge/QR ?</th></tr></thead>
+            <tbody>
+              <tr><td class="field-name">company.registration.pushed</td><td>Inscription (et paiement, initial ou supplément) en cours — <code>participants</code> n'est pas encore la liste confirmée.</td><td style="color:var(--pending);font-weight:700;">Non</td></tr>
+              <tr><td class="field-name">company.participants.confirmed</td><td>Le gestionnaire a validé la liste réelle des participants.</td><td style="color:var(--good);font-weight:700;">Oui</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="code-card" style="margin-top:1.25rem;">
+          <div class="code-label">1 — Inscription initiale (déclencheur A)</div>
+          <pre class="code">{
+  <span class="k">"event"</span>: <span class="s">"company.registration.pushed"</span>,
+  <span class="k">"companyId"</span>: <span class="s">"cmp_8f21ab"</span>,
+  <span class="k">"ceoSummitReference"</span>: <span class="s">"cmp_9f2ab3d8e1"</span>,
+  <span class="k">"paymentMethod"</span>: <span class="s">"MOBILE_MONEY"</span>,
+  <span class="k">"amountDue"</span>: <span class="n">2500000</span>,
+  <span class="k">"currency"</span>: <span class="s">"MGA"</span>,
+  <span class="k">"company"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Groupe Exemple SA"</span>,
+    <span class="k">"sector"</span>: <span class="s">"Fintech"</span>
+  },
+  <span class="k">"offer"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Executive corporate pass"</span>,
+    <span class="k">"description"</span>: <span class="s">"Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"</span>,
+    <span class="k">"includedParticipants"</span>: <span class="n">10</span>
+  },
+  <span class="k">"participants"</span>: [
+    { <span class="k">"fullName"</span>: <span class="s">"Fanja Rakoto"</span>, <span class="k">"email"</span>: <span class="s">"fanja@exemple.mg"</span>, <span class="k">"isInitiator"</span>: <span class="n">true</span> }
+  ]
+}</pre>
+        </div>
+
+        <div class="code-card">
+          <div class="code-label">2 — Quelques jours plus tard, validation de la liste des participants (déclencheur B)</div>
+          <pre class="code">{
+  <span class="k">"event"</span>: <span class="s">"company.participants.confirmed"</span>,
+  <span class="k">"companyId"</span>: <span class="s">"cmp_8f21ab"</span>,
+  <span class="k">"ceoSummitReference"</span>: <span class="s">"cmp_9f2ab3d8e1"</span>,
+  <span class="k">"company"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Groupe Exemple SA"</span>,
+    <span class="k">"sector"</span>: <span class="s">"Fintech"</span>
+  },
+  <span class="k">"offer"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Executive corporate pass"</span>,
+    <span class="k">"description"</span>: <span class="s">"Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"</span>,
+    <span class="k">"includedParticipants"</span>: <span class="n">10</span>
+  },
+  <span class="k">"participants"</span>: [
+    { <span class="k">"fullName"</span>: <span class="s">"Fanja Rakoto"</span>, <span class="k">"email"</span>: <span class="s">"fanja@exemple.mg"</span>, <span class="k">"isInitiator"</span>: <span class="n">true</span> },
+    { <span class="k">"fullName"</span>: <span class="s">"Hery Andria"</span>, <span class="k">"email"</span>: <span class="s">"hery@exemple.mg"</span>, <span class="k">"isInitiator"</span>: <span class="n">false</span> }
+  ]
+}</pre>
+        </div>
+
+        <div class="code-card">
+          <div class="code-label">3 — Ajout au-delà du quota inclus (déclencheur C) — supplément collecté d'abord</div>
+          <pre class="code">{
+  <span class="k">"event"</span>: <span class="s">"company.registration.pushed"</span>,
+  <span class="k">"companyId"</span>: <span class="s">"cmp_8f21ab"</span>,
+  <span class="k">"ceoSummitReference"</span>: <span class="s">"cmp_9f2ab3d8e1"</span>,
+  <span class="k">"paymentMethod"</span>: <span class="s">"CARTE_BANCAIRE"</span>,
+  <span class="k">"amountDue"</span>: <span class="n">4365000</span>,
+  <span class="k">"currency"</span>: <span class="s">"MGA"</span>,
+  <span class="k">"company"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Groupe Exemple SA"</span>,
+    <span class="k">"sector"</span>: <span class="s">"Fintech"</span>
+  },
+  <span class="k">"offer"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Supplément — 1 participant additionnel"</span>,
+    <span class="k">"description"</span>: <span class="s">"Ajout d'un participant au-delà du quota inclus dans l'offre initiale"</span>,
+    <span class="k">"includedParticipants"</span>: <span class="n">1</span>
+  },
+  <span class="k">"participants"</span>: [
+    { <span class="k">"fullName"</span>: <span class="s">"Mialy Rasoanaivo"</span>, <span class="k">"email"</span>: <span class="s">"mialy@exemple.mg"</span>, <span class="k">"isInitiator"</span>: <span class="n">false</span> }
+  ]
+}</pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Champ</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="field-name">ceoSummitReference</td><td>À renvoyer strictement tel quel dans le webhook de confirmation (étape 2, champ <code>reference</code>) — sans lui, aucun lien possible entre le paiement encaissé et l'inscription.</td></tr>
+              <tr><td class="field-name">paymentMethod</td><td>Moyen de paiement enregistré par CEO Summit : <code>"CARTE_BANCAIRE"</code> ou <code>"MOBILE_MONEY"</code> (paiement à encaisser par vos soins), <code>"VIREMENT"</code> ou <code>"CHEQUE"</code> (déjà réglé et validé manuellement côté CEO Summit — push informatif, rien à encaisser). Absent sur <code>company.participants.confirmed</code>.</td></tr>
+              <tr><td class="field-name">amountDue</td><td>Montant à encaisser pour <em>ce</em> push précisément (pas un cumulatif) — celui de l'offre initiale au déclencheur A, celui du seul supplément au déclencheur C. <strong>Toujours en Ariary</strong> (<code>currency</code> = <code>"MGA"</code>) : CEO Summit ne stocke les montants dus qu'en Ariary, une offre affichée en euros étant convertie au taux du jour lors de sa configuration. Absent sur <code>company.participants.confirmed</code>.</td></tr>
+              <tr><td class="field-name">participants[].fullName</td><td>Nom complet en un seul champ — voir le point d'attention ci-dessous.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>Point d'attention — ne pas générer de badge à partir d'un <code>company.registration.pushed</code>.</strong>
+          Le gestionnaire qui inscrit l'entreprise et paie n'est pas forcément quelqu'un qui assistera à
+          l'évènement (souvent une secrétaire ou un assistant). Générez badges/QR uniquement à réception
+          d'un <code>company.participants.confirmed</code> — jamais à partir du seul push d'inscription/paiement,
+          même s'il contient déjà un nom.
+        </div>
+
+        <div class="callout">
+          <strong>Point d'attention — la liste de participants se remplit dans le temps.</strong>
+          <code>includedParticipants</code> (nombre de sièges de l'offre) ne veut pas dire que
+          <code>participants</code> en contient déjà autant à l'inscription initiale. Le gestionnaire compose
+          sa liste réelle à son rythme, parfois plusieurs jours après le paiement — le premier appel ne
+          contient donc que lui (exemple 1), la liste confirmée arrive séparément (exemple 2), et peut encore
+          grandir plus tard moyennant un paiement complémentaire si elle dépasse le quota inclus (exemple 3).
+          Ce n'est pas une anomalie à signaler de votre côté.
+        </div>
+
+        <div class="callout">
+          <strong>Point d'attention — nom en un seul champ.</strong> L'identité d'un utilisateur est stockée
+          côté CEO Summit comme un nom complet unique (<code>fullName</code>), jamais séparé en prénom/nom.
+          Si votre encaissement ou vos badges nécessitent les deux séparément, signalez-le : soit vous
+          découpez <code>fullName</code> de votre côté, soit CEO Summit ajoute deux champs distincts à son
+          formulaire — un changement à anticiper avant l'intégration finale.
+        </div>
+
+        <div class="ask-box">
+          <div class="ask-title">Ce dont nous avons besoin de votre part</div>
+          <ol class="ask-list">
+            <li><span><b>URL et méthode de votre endpoint</b>, et authentification attendue de notre part (HMAC symétrique à ce qu'on applique nous-mêmes, ou autre mécanisme).</span></li>
+            <li><span><b>Confirmation du champ de référence</b> : que <code>ceoSummitReference</code> soit bien porté tel quel jusqu'à votre webhook de confirmation.</span></li>
+            <li><span><b>Cas d'échec/annulation</b> : un événement <code>payment.failed</code> séparé sur votre confirmation (déjà supporté par notre webhook), ou un comportement différent ?</span></li>
+            <li><span>Confirmation qu'un <b>instantané complet</b> à chaque appel convient (plutôt qu'un modèle incrémental).</span></li>
+            <li><span>Confirmation que <code>companyId</code> suffit à rattacher l'envoi à la bonne entreprise de votre côté.</span></li>
+            <li><span><code>fullName</code> unique, ou <b>prénom/nom séparés</b> requis de votre côté ?</span></li>
+            <li><span><b>Confirmation sur la distinction des deux <code>event</code></b> : que la génération de badge/QR n'a bien lieu que sur <code>company.participants.confirmed</code>, jamais sur <code>company.registration.pushed</code>.</span></li>
+            <li><span><b>Accès à un environnement sandbox</b> pour tester cet échange avant mise en production.</span></li>
+          </ol>
+        </div>
+      </section>
+
+      <section id="etape-2">
+        <div class="section-head">
+          <span class="num">02</span>
+          <h2>Confirmation de paiement</h2>
+          <span class="status-tag live">Route en ligne</span>
+        </div>
+        <p class="lede">
+          Evolia → CEO Summit. <strong>La route est en ligne</strong> côté CEO Summit — route générique
+          conçue pour n'importe quel prestataire de paiement externe : elle vérifie la signature, valide le
+          corps de la requête et confirme le paiement référencé. Ne concerne que les paiements initiés via
+          Evolia ; un virement bancaire suit un chemin séparé, sans appel de leur part.
+        </p>
+        <div class="callout">
+          <strong>Reste à construire côté CEO Summit avant les premiers appels réels :</strong> la création
+          d'un paiement « à encaisser par Evolia » (et donc de la <code>reference</code> à vous transmettre)
+          et le push d'inscription sortant (étape 1). Vous pouvez néanmoins tester votre calcul de signature
+          dès aujourd'hui : un appel correctement signé portant une référence inconnue renvoie
+          <code>409</code> (et non <code>401</code>).
+        </div>
+
+        <div class="endpoint">
+          <span class="verb">POST</span>
+          <span class="url">https://app.ceo-summit.mg/api/webhooks/payments</span>
+          <span class="hdr">X-Webhook-Signature: sha256=&lt;hex&gt;</span>
+          <span class="hdr">X-Webhook-Timestamp: &lt;secondes Unix&gt; (optionnel)</span>
+        </div>
+
+        <div class="code-card">
+          <div class="code-label">Corps de la requête</div>
+          <pre class="code">{
+  <span class="k">"event"</span>: <span class="s">"payment.confirmed"</span>,
+  <span class="k">"type"</span>: <span class="s">"company_payment"</span>,
+  <span class="k">"reference"</span>: <span class="s">"cmp_9f2ab3d8e1"</span>,
+  <span class="k">"amount"</span>: <span class="n">2500000</span>
+}</pre>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Champ</th><th>Requis</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td class="field-name">event</td><td>oui</td><td><code>"payment.confirmed"</code> ou <code>"payment.failed"</code>.</td></tr>
+              <tr><td class="field-name">type</td><td>oui</td><td>Toujours <code>"company_payment"</code> pour cette intégration.</td></tr>
+              <tr><td class="field-name">reference</td><td>oui</td><td>Le <code>ceoSummitReference</code> reçu à l'étape 1 — à renvoyer tel quel, sans le réinterpréter.</td></tr>
+              <tr><td class="field-name">amount</td><td>non</td><td>Montant confirmé, en Ariary. Informatif — CEO Summit ne recalcule rien à partir de ce champ.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="font-size:1rem;margin-top:2rem;margin-bottom:.25rem;color:var(--ink-soft);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-family:Manrope;">Authentification — HMAC-SHA256</h3>
+        <p class="lede" style="margin-top:.5rem;">
+          Secret partagé échangé hors bande (jamais dans le payload ni dans l'URL) — variable
+          <code>PAYMENT_WEBHOOK_SECRET</code> côté CEO Summit. Signature calculée sur le <strong>corps
+          brut</strong> de la requête : <code>HMAC-SHA256(corps_brut, secret)</code>, en hexadécimal, transmise
+          dans l'en-tête <code>X-Webhook-Signature</code> (avec ou sans préfixe <code>sha256=</code>). Toute
+          requête sans signature valide est rejetée en <code>401</code>, avant tout traitement.
+        </p>
+
+        <div class="callout">
+          <strong>Anti-rejeu — en-tête optionnel <code>X-Webhook-Timestamp</code></strong> (recommandé,
+          facultatif et rétro-compatible, ajouté le 25 sept. 2026). Sans cet en-tête, rien ne change. Avec
+          (<code>X-Webhook-Timestamp: 1790000000</code>, secondes Unix, UTC), la signature porte sur
+          <code>&lt;timestamp&gt;.&lt;corps_brut&gt;</code> — <code>HMAC-SHA256("&lt;timestamp&gt;.&lt;corps_brut&gt;", secret)</code>,
+          toujours en hexadécimal dans <code>X-Webhook-Signature</code> — et toute requête dont l'horodatage
+          s'écarte de plus de <strong>5 minutes</strong> de l'heure du serveur est rejetée en <code>401</code>.
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Code</th><th>Signification</th></tr></thead>
+            <tbody>
+              <tr><td class="field-name">200</td><td>Paiement traité — <code>{"data":{"received":true}}</code></td></tr>
+              <tr><td class="field-name">400</td><td>Corps de requête qui n'est pas du JSON valide</td></tr>
+              <tr><td class="field-name">401</td><td>Signature invalide ou absente (ou <code>X-Webhook-Timestamp</code> invalide / de plus de 5 minutes)</td></tr>
+              <tr><td class="field-name">409</td><td><code>reference</code> introuvable, ou paiement déjà confirmé (idempotent — pas une seconde confirmation)</td></tr>
+              <tr><td class="field-name">422</td><td>JSON valide mais contenu invalide (champ manquant ou mal typé)</td></tr>
+              <tr><td class="field-name">429</td><td>Trop de requêtes — limite de 60 requêtes par minute et par adresse IP ; réessayer après une courte attente</td></tr>
+              <tr><td class="field-name">500</td><td>Erreur interne CEO Summit</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>Idempotence.</strong> Un même <code>reference</code> ne peut être confirmé qu'une seule
+          fois (verrouillé en base). Un retry sur un paiement déjà confirmé renvoie <code>409</code>, sans
+          effet de bord — Evolia peut réessayer sans risque en cas de doute sur la réception d'un
+          <code>200</code>.
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>

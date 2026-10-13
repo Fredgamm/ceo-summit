@@ -20,3 +20,6 @@ coverage
 .docker-data
 .local-storage
 backups
+
+# Documentation de conception : inutile à l'image Docker.
+docs
