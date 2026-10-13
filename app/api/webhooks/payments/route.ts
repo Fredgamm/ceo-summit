@@ -6,6 +6,7 @@ import { paymentWebhookSchema, type PaymentWebhookPayload } from "@/lib/validati
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   confirmCompanyPaymentCore,
+  reviveCancelledEvoliaPayment,
   confirmEventRegistrationPaymentCore,
 } from "@/lib/payment-confirmations";
 
@@ -183,6 +184,23 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
         if (existing && existing.amount !== payload.amount) {
           warning = `Montant confirmé (${payload.amount}) différent du montant dû (${existing.amount}) pour ${payload.reference}.`;
         }
+      }
+      // Paiement annulé par le gérant (changement de mode de paiement) mais
+      // payé quand même chez Evolia : on l'honore plutôt que de le refuser.
+      const revival = await reviveCancelledEvoliaPayment(payload.reference);
+      if (revival === "already-paid") {
+        return {
+          success: true,
+          warning: `Paiement ${payload.reference} confirmé par Evolia après annulation par l'entreprise, alors que l'offre était déjà réglée — double paiement à rembourser.`,
+        };
+      }
+      if (revival === "revived") {
+        warning = [
+          warning,
+          `Paiement ${payload.reference} confirmé par Evolia après annulation par l'entreprise.`,
+        ]
+          .filter(Boolean)
+          .join(" ");
       }
       const result = await confirmCompanyPaymentCore(payload.reference, null);
       return result.success ? { success: true, warning } : result;

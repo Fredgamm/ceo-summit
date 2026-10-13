@@ -6,8 +6,9 @@ import type { RegistrationStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
-import { getActivePlans } from "@/lib/plans-query";
-import { getEurToArRate } from "@/lib/currency-conversion";
+import { cleanPlanName, getActivePlans } from "@/lib/plans-query";
+import { activeEventOf } from "@/lib/event-participation";
+import { seatCap } from "@/lib/company-seats";
 import { speakersToText } from "@/lib/event-content";
 import { attachmentKindLabel, formatFileSize } from "@/lib/event-attachments";
 import { countUnreadMessages } from "@/lib/conversations";
@@ -16,12 +17,13 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { CancelRegistrationButton } from "@/components/evenements/cancel-registration-button";
-import { formatAriary, formatDateFr, initials } from "@/lib/utils";
+import { EventAccessTicket } from "@/components/evenements/event-access-ticket";
+import { arToEur, formatDateFr, formatEuro, initials } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 import {
   formatDayKey,
-  formatTimeInZone,
   formatTimeRangeInZone,
   timezoneLabel,
   zonedDayKey,
@@ -67,9 +69,8 @@ export default async function EventDetailPage({ params }: { params: { id: string
    * configurées, elles remplacent l'ancien bouton simple d'inscription
    * (virement/mobile money, sans preuve) pour éviter un double mécanisme.
    */
-  const [eventOffers, liveEurToArRate, viewerRegistration] = await Promise.all([
+  const [eventOffers, viewerRegistration] = await Promise.all([
     getActivePlans({ selfServiceOnly: true, eventId: event.id }),
-    getEurToArRate(),
     // Lu à part : `event.registrations` n'est qu'un aperçu de 12 participants.
     prisma.eventRegistration.findUnique({
       where: { eventId_userId: { eventId: event.id, userId: viewer.id } },
@@ -84,6 +85,27 @@ export default async function EventDetailPage({ params }: { params: { id: string
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
   const isPast = event.date < new Date();
 
+  // Module 18 §4.9 — l'offre de l'entreprise donne-t-elle déjà accès à cet
+  // événement ? Dans ce cas, pas de pass à acheter : le gérant désigne les
+  // participants depuis l'espace de son entreprise.
+  const companySubscription = viewer.company?.subscription ?? null;
+  const accessViaOffer = activeEventOf(companySubscription)?.eventId === event.id;
+  const companyParticipants =
+    accessViaOffer && isCompanyAdmin && viewer.companyId
+      ? await prisma.eventRegistration.count({
+          where: { eventId: event.id, status: "CONFIRMED", user: { companyId: viewer.companyId } },
+        })
+      : 0;
+  const companySeats = accessViaOffer && companySubscription ? seatCap(companySubscription) : null;
+
+  const showPasses = eventOffers.length > 0 && !accessViaOffer && !isRegistered && !isPast;
+  // Module 21 D19 — dates et heures dans le fuseau de l'événement, pas celui du serveur.
+  const tz = event.timezone;
+  const eventPeriod = event.endDate
+    ? zonedDayKey(event.date, tz) === zonedDayKey(event.endDate, tz)
+      ? `${formatDateFr(event.date, tz)} · ${formatTimeRangeInZone(event.date, event.endDate, tz)}`
+      : `Du ${formatDateFr(event.date, tz)} au ${formatDateFr(event.endDate, tz)}`
+    : formatDateFr(event.date, tz);
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   // E10 — agenda dynamique multi-salles (5 août 2026) : sessions groupées
@@ -120,7 +142,7 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </Badge>
         <h1 className="text-2xl font-bold">{event.title}</h1>
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/70">
-          <span>📅 {formatDateFr(event.date, event.timezone)}</span>
+          <span>📅 {eventPeriod}</span>
           <span>{event.isOnline ? "🌐 En ligne" : `📍 ${event.location}`}</span>
           <span>
             👥 {event._count.registrations}/{event.capacity} inscrits
@@ -226,45 +248,73 @@ export default async function EventDetailPage({ params }: { params: { id: string
         </div>
 
         <aside className="flex flex-col gap-4">
-          {eventOffers.length > 0 && !isRegistered && !isPast ? (
-            <div className="flex flex-col gap-4">
-              <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5">
-                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-text-muted">
-                  Pass entreprise
+          {accessViaOffer && !isPast ? (
+            <EventAccessTicket
+              eyebrow="Inclus dans votre offre"
+              title={cleanPlanName(companySubscription!.plan.name)}
+              actions={
+                <>
+                  {isCompanyAdmin && (
+                    <Button asChild variant="gold" className="w-full justify-center">
+                      <Link href={`/entreprises/${viewer.companyId}?tab=gestion`}>
+                        {companyParticipants > 0
+                          ? "Gérer les participants"
+                          : "Désigner les participants"}
+                      </Link>
+                    </Button>
+                  )}
+                  {isRegistered && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full justify-center border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                    >
+                      <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
+                    </Button>
+                  )}
+                </>
+              }
+            >
+              {isCompanyAdmin ? (
+                <p>
+                  {companySeats != null
+                    ? `${companyParticipants} / ${companySeats} participants désignés.`
+                    : `${companyParticipants} participant${companyParticipants > 1 ? "s" : ""} désigné${companyParticipants > 1 ? "s" : ""}.`}{" "}
+                  Choisissez qui, dans votre entreprise, assiste à l&apos;événement.
                 </p>
-                {viewer.company ? (
-                  isCompanyAdmin ? (
-                    <PlanPicker
-                      companyId={viewer.company.id}
-                      plans={eventOffers}
-                      liveEurToArRate={liveEurToArRate}
-                    />
-                  ) : (
-                    <p className="text-sm text-text-muted">
-                      Seul l&apos;admin de votre entreprise peut choisir un pass entreprise.
-                    </p>
-                  )
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {eventOffers.map((plan) => (
-                      <Button key={plan.id} asChild variant="outline" className="justify-center">
-                        <Link href={`/entreprise/creer?offre=${plan.slug}`}>
-                          {plan.name} —{" "}
-                          {plan.pricingMode === "PER_PARTICIPANT"
-                            ? `${formatAriary(plan.priceAr)}/participant`
-                            : formatAriary(plan.priceAr)}
-                        </Link>
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+              ) : isRegistered ? (
+                <p>
+                  Vous êtes inscrit(e) par votre entreprise. Pour toute modification, adressez-vous
+                  à son gérant.
+                </p>
+              ) : (
+                <p>Le gérant de votre entreprise désigne les participants à cet événement.</p>
+              )}
+            </EventAccessTicket>
+          ) : showPasses ? (
+            <EventAccessTicket
+              eyebrow="Accès par offre entreprise"
+              title="Réservé aux offres qui l'incluent"
+              actions={
+                <Button asChild variant="gold" className="w-full justify-center">
+                  <a href="mailto:register@ceo-summit.mg">Contacter l&apos;équipe</a>
+                </Button>
+              }
+            >
+              <p>
+                Cet événement est accessible aux entreprises dont l&apos;offre CEO Summit
+                l&apos;inclut. Pour y participer, contactez l&apos;équipe des inscriptions :
+                register@ceo-summit.mg.
+              </p>
+            </EventAccessTicket>
           ) : (
             <div className="rounded-lg border-2 border-gold-light bg-gold-pale p-5 text-center">
               <p className="text-xl font-bold text-navy">
-                {event.price === 0 ? "Gratuit" : formatAriary(event.price)}
+                {event.price === 0
+                  ? "Gratuit"
+                  : formatEuro(arToEur(event.price, await getEurToArRate()))}
               </p>
+              {event.price > 0 && <AriaryHint amountAr={event.price} exact />}
               <p className="mt-1 text-xs text-text-muted">
                 {event.price === 0 ? "Inclus membership" : "par participant"}
               </p>
@@ -306,24 +356,16 @@ export default async function EventDetailPage({ params }: { params: { id: string
           <div className="rounded-lg border border-border bg-white p-5">
             <p className="mb-3 text-xs font-bold uppercase text-text-muted">Détails pratiques</p>
             <dl className="flex flex-col gap-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-text-muted">Date</dt>
-                <dd className="font-semibold text-navy">
-                  {formatDateFr(event.date, event.timezone)}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-muted">Horaires</dt>
+              <div className="flex justify-between gap-4">
+                <dt className="shrink-0 text-text-muted">Date</dt>
                 <dd className="text-right font-semibold text-navy">
-                  {event.endDate
-                    ? formatTimeRangeInZone(event.date, event.endDate, event.timezone)
-                    : formatTimeInZone(event.date, event.timezone)}
+                  {eventPeriod}
                   <span className="block text-xs font-normal text-text-muted">{tzLabel}</span>
                 </dd>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-text-muted">Lieu</dt>
-                <dd className="font-semibold text-navy">
+              <div className="flex justify-between gap-4">
+                <dt className="shrink-0 text-text-muted">Lieu</dt>
+                <dd className="text-right font-semibold text-navy">
                   {event.isOnline ? "En ligne" : event.location}
                 </dd>
               </div>

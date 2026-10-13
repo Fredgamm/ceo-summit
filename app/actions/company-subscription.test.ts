@@ -8,8 +8,20 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     company: { findUnique: vi.fn() },
     plan: { findUnique: vi.fn() },
-    companySubscription: { upsert: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    companyPayment: { create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findFirst: vi.fn() },
+    companySubscription: {
+      upsert: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    auditLog: { create: vi.fn() },
+    companyPayment: {
+      create: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+    },
     $transaction: vi.fn(),
     emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
   },
@@ -22,9 +34,15 @@ vi.mock("@/lib/evolia", () => ({
 }));
 
 import { requireViewer } from "@/lib/require-viewer";
+import { sendTransactionalEmail } from "@/lib/resend";
 import { prisma } from "@/lib/prisma";
 import { pushRegistrationToEvolia } from "@/lib/evolia";
-import { selectPlan, submitPaymentProof, purchaseUpsellSeats } from "./company-subscription";
+import {
+  selectPlan,
+  submitPaymentProof,
+  purchaseUpsellSeats,
+  cancelPendingEvoliaPayment,
+} from "./company-subscription";
 
 const SESSION = { success: true, viewer: { id: "admin_user_1" } } as never;
 
@@ -228,6 +246,34 @@ describe("submitPaymentProof", () => {
     );
   });
 
+  it("bills an offer quoted in euros at the day's rate", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: {
+        priceAr: 4_600_000,
+        priceEur: 950,
+        minParticipants: null,
+        pricingMode: "FIXED_BUNDLE",
+      },
+    } as never);
+
+    await submitPaymentProof("sub_1", {
+      method: VALID_INPUT.method,
+      proofFileKey: VALID_INPUT.proofFileKey,
+      comment: "",
+    });
+
+    // getEurToArRate est simulé à 5 000 Ar pour 1 €.
+    expect(prisma.companyPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ amount: 950 * 5000, eurToArRate: 5000 }),
+      })
+    );
+  });
+
   it("computes a flat amount for a FIXED_BUNDLE plan, no declared count required", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValue({
       id: "sub_1",
@@ -289,6 +335,22 @@ describe("submitPaymentProof", () => {
     const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "INVALID" });
     expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("tells the manager the payment is received and being checked", async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      success: true,
+      viewer: { id: "admin_user_1", name: "Marie", email: "marie@test.local" },
+    } as never);
+
+    await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "marie@test.local",
+        subject: "Paiement reçu — en cours de vérification",
+      })
+    );
   });
 
   it("requires a proof for a bank transfer", async () => {
@@ -546,5 +608,92 @@ describe("purchaseUpsellSeats", () => {
       data: { redirectUrl: "https://evolia.test/pay/payment_up" },
     });
     expect(prisma.companySubscription.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelPendingEvoliaPayment", () => {
+  const OLD = new Date(Date.now() - 20 * 60 * 1000);
+
+  function pending(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "payment_1",
+      status: "PENDING",
+      method: "CARTE_BANCAIRE",
+      upsellQuantity: null,
+      createdAt: OLD,
+      companySubscription: {
+        id: "sub_1",
+        companyId: "company_1",
+        company: { companyAdminId: "admin_user_1" },
+      },
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireViewer).mockResolvedValue(SESSION);
+    vi.mocked(prisma.$transaction).mockImplementation((async (fn: (tx: unknown) => unknown) =>
+      fn(prisma)) as never);
+    vi.mocked(prisma.companyPayment.updateMany).mockResolvedValue({ count: 1 } as never);
+  });
+
+  it("cancels an abandoned card payment and reopens the payment form", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(pending() as never);
+
+    const result = await cancelPendingEvoliaPayment("payment_1");
+
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.updateMany).toHaveBeenCalledWith({
+      where: { id: "payment_1", status: "PENDING" },
+      data: expect.objectContaining({ status: "REJECTED" }),
+    });
+    expect(prisma.companySubscription.updateMany).toHaveBeenCalledWith({
+      where: { id: "sub_1", status: "PENDING_REVIEW" },
+      data: { status: "PENDING_PAYMENT" },
+    });
+  });
+
+  it("keeps the subscription untouched for an upsell", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      pending({ upsellQuantity: 2 }) as never
+    );
+
+    await cancelPendingEvoliaPayment("payment_1");
+
+    expect(prisma.companySubscription.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("waits a quarter of an hour, in case the confirmation is on its way", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      pending({ createdAt: new Date() }) as never
+    );
+
+    const result = await cancelPendingEvoliaPayment("payment_1");
+
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses a bank transfer (reviewed by the admin)", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      pending({ method: "VIREMENT" }) as never
+    );
+
+    expect((await cancelPendingEvoliaPayment("payment_1")).success).toBe(false);
+  });
+
+  it("refuses a caller other than the manager", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      pending({
+        companySubscription: {
+          id: "sub_1",
+          companyId: "company_1",
+          company: { companyAdminId: "someone_else" },
+        },
+      }) as never
+    );
+
+    expect((await cancelPendingEvoliaPayment("payment_1")).success).toBe(false);
   });
 });

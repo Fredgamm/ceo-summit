@@ -4,6 +4,8 @@ import { AlertTriangle } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { AuthCard } from "@/components/auth/auth-card";
+import { INVITATION_STEPS, JourneyShell } from "@/components/onboarding/journey-shell";
+import { MembershipCard } from "@/components/onboarding/membership-card";
 import { AcceptInviteButton } from "@/components/entreprise/accept-invite-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -41,12 +43,39 @@ export default async function InvitationPage({ params }: { params: { token: stri
     );
   }
 
+  const inviter = await prisma.user.findUnique({
+    where: { id: invite.invitedById },
+    select: { name: true },
+  });
+  const inviterName = inviter?.name ?? "Votre gérant";
+
   return (
-    <AuthCard
-      title={`Rejoindre ${invite.company.name}`}
-      subtitle={`Invitation envoyée à ${invite.email}`}
+    <JourneyShell
+      steps={INVITATION_STEPS}
+      current="acces"
+      panelLabel="Rejoindre votre entreprise"
+      title={`Rejoignez ${invite.company.name}`}
+      subtitle={
+        <>
+          {inviterName} vous invite sur CEO Summit, le cercle des décideurs de l&apos;Océan Indien.
+          Choisissez votre mot de passe pour activer votre accès ({invite.email}).
+        </>
+      }
+      card={
+        <MembershipCard
+          planName={invite.name}
+          detail={`Invité(e) par ${inviterName}`}
+          companyName={invite.company.name}
+          status="invited"
+        />
+      }
+      headerAction={
+        <Link href="/login" className="text-sm font-semibold text-navy hover:underline">
+          Se connecter
+        </Link>
+      }
     >
       <AcceptInviteButton token={params.token} />
-    </AuthCard>
+    </JourneyShell>
   );
 }

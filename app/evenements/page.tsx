@@ -13,6 +13,8 @@ import {
 } from "@/lib/events-query";
 import { countUnreadMessages } from "@/lib/conversations";
 import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
+import { activeEventOf } from "@/lib/event-participation";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { AppShell } from "@/components/layout/app-shell";
 import { EventFilters } from "@/components/events/event-filters";
 import { EventCard } from "@/components/events/event-card";
@@ -57,7 +59,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
       },
     }),
   ]);
+  const eurToArRate = await getEurToArRate();
   const unreadMessages = await countUnreadMessages(viewer.id);
+  // Module 18 §4.9 — événement auquel l'offre de l'entreprise donne accès.
+  const offerEventId = activeEventOf(viewer.company?.subscription)?.eventId ?? null;
 
   return (
     <AppShell
@@ -92,8 +97,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
               location={event.location}
               isOnline={event.isOnline}
               price={event.price}
+              eurToArRate={eurToArRate}
               capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
               isRegistered={event.registrations.length > 0}
+              includedInOffer={offerEventId === event.id}
             />
           ))}
         </div>
@@ -115,8 +122,10 @@ export default async function EventsPage({ searchParams }: { searchParams: Event
                 location={event.location}
                 isOnline={event.isOnline}
                 price={event.price}
+                eurToArRate={eurToArRate}
                 capacityBadge={eventCapacityBadge(event.capacity, event._count.registrations)}
                 isRegistered={event.registrations.length > 0}
+                includedInOffer={offerEventId === event.id}
               />
             ))}
           </div>

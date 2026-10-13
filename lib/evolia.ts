@@ -59,6 +59,18 @@ function companyInfo(company: CompanyForPush) {
   return { name: company.name, sector: company.sector, country: company.country };
 }
 
+function managerOnly(company: CompanyForPush) {
+  return company.companyAdmin
+    ? [
+        {
+          fullName: company.companyAdmin.name,
+          email: company.companyAdmin.email,
+          isInitiator: true,
+        },
+      ]
+    : [];
+}
+
 async function confirmedParticipants(company: CompanyForPush) {
   const eventId = company.subscription?.plan.eventId;
   if (!eventId) return [];
@@ -97,23 +109,18 @@ export async function pushRegistrationToEvolia(companyPaymentId: string): Promis
 
     const collectsPayment = isEvoliaPaymentMethod(payment.method);
     const isUpsell = payment.upsellQuantity != null;
-    const participants = isUpsell
-      ? await confirmedParticipants(company)
-      : company.companyAdmin
-        ? [
-            {
-              fullName: company.companyAdmin.name,
-              email: company.companyAdmin.email,
-              isInitiator: true,
-            },
-          ]
-        : [];
+    // Evolia refuse une liste vide : pour un supplément acheté avant que la
+    // liste soit validée, on transmet le gérant, comme pour l'offre.
+    const confirmed = isUpsell ? await confirmedParticipants(company) : [];
+    const participants = confirmed.length > 0 ? confirmed : managerOnly(company);
 
     const payload = {
       event: "company.registration.pushed",
       companyId: company.id,
       ceoSummitReference: payment.id,
-      paymentMethod: payment.method,
+      // Valeurs attendues par Evolia : « evolia » (à encaisser par eux) ou
+      // « virement » (virement ou chèque, déjà validé par l'admin CEO Summit).
+      paymentMethod: collectsPayment ? "evolia" : "virement",
       ...(collectsPayment ? { amountDue: payment.amount, currency: "MGA" } : {}),
       company: companyInfo(company),
       offer: {
@@ -157,10 +164,20 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<void>
       select: { id: true },
     });
 
+    const participants = await confirmedParticipants(company);
+    if (participants.length === 0) {
+      // Evolia refuse une liste vide (la validation l'interdit déjà côté gérant).
+      console.warn(`[evolia] participants push skipped for ${company.id}: empty list`);
+      return;
+    }
+
+    const reference = offerPayment?.id ?? company.subscription.id;
+    if (!offerPayment) await ensurePaymentlessRegistration(company, reference);
+
     const payload = {
       event: "company.participants.confirmed",
       companyId: company.id,
-      ceoSummitReference: offerPayment?.id ?? company.subscription.id,
+      ceoSummitReference: reference,
       company: companyInfo(company),
       offer: {
         name: company.subscription.plan.name,
@@ -168,15 +185,64 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<void>
         includedParticipants: seatCap(company.subscription),
       },
       eventDetails: eventInfo(company),
-      participants: await confirmedParticipants(company),
+      participants,
     };
-    await sendToEvolia(company.id, payload.event, null, payload);
+    await sendToEvolia(company.id, payload.event, reference, payload);
   } catch (err) {
     console.error("[evolia] failed to build participants push", err);
   }
 }
 
+/**
+ * Offre sans paiement (partenaire institutionnel, module 20) : Evolia
+ * n'accepte une liste de participants que pour une inscription qu'il connaît.
+ * On lui transmet donc une fois l'inscription, comme réglée (« virement »,
+ * sans montant), sous la référence de l'abonnement.
+ */
+async function ensurePaymentlessRegistration(company: CompanyForPush, reference: string) {
+  const alreadySent = await prisma.evoliaPush.findFirst({
+    where: { reference, event: "company.registration.pushed", status: "SENT" },
+    select: { id: true },
+  });
+  if (alreadySent || !company.subscription) return;
+
+  const payload = {
+    event: "company.registration.pushed",
+    companyId: company.id,
+    ceoSummitReference: reference,
+    paymentMethod: "virement",
+    company: companyInfo(company),
+    offer: {
+      name: company.subscription.plan.name,
+      description: company.subscription.plan.description ?? null,
+      includedParticipants: seatCap(company.subscription),
+    },
+    eventDetails: eventInfo(company),
+    participants: managerOnly(company),
+  };
+  await sendToEvolia(company.id, payload.event, reference, payload);
+}
+
 // ─── Envoi et relance ─────────────────────────────────────────────────────
+
+/** Anciennes valeurs (avant le 8 oct. 2026) encore présentes dans des envois journalisés. */
+const LEGACY_PAYMENT_METHODS: Record<string, string> = {
+  CARTE_BANCAIRE: "evolia",
+  MOBILE_MONEY: "evolia",
+  VIREMENT: "virement",
+  CHEQUE: "virement",
+};
+
+/** Message lisible pour l'admin plutôt que la page HTML d'un pare-feu ou d'un proxy. */
+function describeFailure(status: number, text: string): string {
+  if (/just a moment|challenges\.cloudflare\.com/i.test(text)) {
+    return `HTTP ${status} — bloqué par le pare-feu Cloudflare d'Evolia (page de vérification anti-robots).`;
+  }
+  if (/^\s*</.test(text)) {
+    return `HTTP ${status} — réponse HTML inattendue : l'adresse ne semble pas être l'API d'Evolia.`;
+  }
+  return text.slice(0, 1000) || `HTTP ${status}`;
+}
 
 async function sendToEvolia(
   companyId: string,
@@ -208,13 +274,16 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
     return false;
   }
 
-  const body = JSON.stringify(push.payload);
+  const payload = push.payload as Record<string, unknown>;
+  const legacyMethod = LEGACY_PAYMENT_METHODS[String(payload.paymentMethod)];
+  const body = JSON.stringify(legacyMethod ? { ...payload, paymentMethod: legacyMethod } : payload);
   try {
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Webhook-Signature": signEvoliaBody(body, secret),
+        "User-Agent": "CEO-Summit-Platform/1.0 (+https://app.ceo-summit.mg)",
       },
       body,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -232,7 +301,7 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
     await record({
       status: "FAILED",
       httpStatus: response.status,
-      lastError: text.slice(0, 1000) || `HTTP ${response.status}`,
+      lastError: describeFailure(response.status, text),
     });
     return false;
   } catch (err) {

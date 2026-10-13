@@ -8,6 +8,7 @@ vi.mock("@/lib/prisma", () => ({
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
       create: vi.fn().mockResolvedValue({ id: "push_1" }),
+      findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn(),
       update: vi.fn(),
     },
@@ -117,7 +118,7 @@ describe("pushRegistrationToEvolia", () => {
     expect(data.payload).toMatchObject({
       event: "company.registration.pushed",
       ceoSummitReference: "payment_1",
-      paymentMethod: "CARTE_BANCAIRE",
+      paymentMethod: "evolia",
       amountDue: 12_500_000,
       currency: "MGA",
       company: { name: "Rakoto Holding", sector: "Banque", country: "Madagascar" },
@@ -141,6 +142,7 @@ describe("pushRegistrationToEvolia", () => {
     await pushRegistrationToEvolia("payment_1");
 
     expect(pushedPayload().payload).not.toHaveProperty("amountDue");
+    expect(pushedPayload().payload).toMatchObject({ paymentMethod: "virement" });
   });
 
   it("describes only the purchased seats for an upsell", async () => {
@@ -235,5 +237,104 @@ describe("deliverEvoliaPush", () => {
 
     expect(await deliverEvoliaPush("push_1")).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("Evolia constraints", () => {
+  function createdPayloads() {
+    return vi
+      .mocked(prisma.evoliaPush.create)
+      .mock.calls.map((c) => (c[0] as { data: { payload: Record<string, unknown> } }).data.payload);
+  }
+
+  it("falls back to the manager for an upsell paid before the list is validated", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      payment({
+        upsellQuantity: 1,
+        upsellPlan: { name: "Executive Pass", description: null },
+      }) as never
+    );
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([]);
+
+    await pushRegistrationToEvolia("payment_1");
+
+    expect(pushedPayload().payload).toMatchObject({
+      participants: [{ fullName: "Marie Dupont", isInitiator: true }],
+    });
+  });
+
+  it("never sends an empty participant list", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([]);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await pushParticipantsToEvolia("company_1");
+
+    expect(prisma.evoliaPush.create).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("registers a paymentless offer (partner) before its first participant list", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      ...COMPANY,
+      subscription: { ...COMPANY.subscription, id: "sub_1" },
+    } as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    const [registration, list] = createdPayloads();
+    expect(registration).toMatchObject({
+      event: "company.registration.pushed",
+      ceoSummitReference: "sub_1",
+      paymentMethod: "virement",
+    });
+    expect(registration).not.toHaveProperty("amountDue");
+    expect(list).toMatchObject({
+      event: "company.participants.confirmed",
+      ceoSummitReference: "sub_1",
+    });
+  });
+
+  it("does not register the partner twice", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      ...COMPANY,
+      subscription: { ...COMPANY.subscription, id: "sub_1" },
+    } as never);
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue({ id: "push_old" } as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    expect(createdPayloads().map((p) => p.event)).toEqual(["company.participants.confirmed"]);
+  });
+
+  it("converts a legacy payment method when resending an old push", async () => {
+    vi.mocked(prisma.evoliaPush.findUnique).mockResolvedValue({
+      id: "push_1",
+      payload: { event: "company.registration.pushed", paymentMethod: "CARTE_BANCAIRE" },
+    } as never);
+
+    await deliverEvoliaPush("push_1");
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ paymentMethod: "evolia" });
+  });
+
+  it("explains a Cloudflare challenge instead of storing its HTML page", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("<!DOCTYPE html><title>Just a moment...</title>", { status: 403 })
+    );
+
+    await deliverEvoliaPush("push_1");
+
+    expect(prisma.evoliaPush.update).toHaveBeenCalledWith({
+      where: { id: "push_1" },
+      data: expect.objectContaining({ lastError: expect.stringContaining("Cloudflare") }),
+    });
   });
 });

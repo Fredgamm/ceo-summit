@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 
 import { cleanPlanName, getActivePlans, getPlanBySlug } from "@/lib/plans-query";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { CompanySignupWizard } from "@/components/auth/company-signup-wizard";
-import { formatAriary } from "@/lib/utils";
+import { formatEuro, planPriceEur } from "@/lib/utils";
 
 type PageProps = { searchParams: { offre?: string } };
 
@@ -30,7 +29,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const title = plan.event ? `${name} — ${plan.event.title}` : name;
   const description =
     plan.description ??
-    `Rejoignez CEO Summit avec l'offre ${name} — ${formatAriary(plan.priceAr)}.`;
+    `Rejoignez CEO Summit avec l'offre ${name} — ${formatEuro(planPriceEur(plan, await getEurToArRate()))}.`;
 
   return { title, description };
 }
@@ -51,30 +50,12 @@ export default async function InscriptionPage({ searchParams }: PageProps) {
     : null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-[760px] rounded-lg border border-border bg-white p-8 shadow-card-md">
-        <div className="mb-6 text-center">
-          <Image
-            src="/logo/ceo-summit-logo.png"
-            alt="CEO Summit"
-            width={160}
-            height={77}
-            className="mx-auto mb-4"
-          />
-          <h1 className="text-xl font-bold text-navy">Créer mon compte</h1>
-          <p className="mt-1 text-sm text-text-muted">
-            Rejoignez CEO Summit — le paiement se fait à l&apos;étape suivante.
-          </p>
-        </div>
-
-        <CompanySignupWizard
-          plans={plans}
-          intendedPlan={intendedPlan}
-          sectors={sectors}
-          countries={countries}
-          liveEurToArRate={liveEurToArRate}
-        />
-      </div>
-    </div>
+    <CompanySignupWizard
+      plans={plans}
+      intendedPlan={intendedPlan}
+      sectors={sectors}
+      countries={countries}
+      liveEurToArRate={liveEurToArRate}
+    />
   );
 }

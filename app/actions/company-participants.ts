@@ -36,6 +36,13 @@ export async function validateEventParticipants(
   const parsedIds = participantIdsSchema.safeParse(participantIds);
   if (!parsedIds.success) return { success: false, error: "Liste de participants invalide." };
   const selectedIds = [...new Set(parsedIds.data)];
+  if (selectedIds.length === 0) {
+    return {
+      success: false,
+      error:
+        "Sélectionnez au moins un participant. Si personne de votre entreprise ne participe, contactez l'équipe CEO Summit.",
+    };
+  }
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },

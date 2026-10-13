@@ -11,13 +11,18 @@ import {
   purchaseUpsellSeatsSchema,
   MAX_PAYMENT_AMOUNT,
 } from "@/lib/validations/company-payment";
-import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
+import { computeDueAmount, meetsMinParticipants, unitPriceAr } from "@/lib/company-payment-amount";
 import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { getEurToArRate } from "@/lib/currency-conversion";
-import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import {
+  CANCELLED_BY_COMPANY_REASON,
+  EVOLIA_CANCEL_DELAY_MS,
+  isEvoliaPaymentMethod,
+} from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
+import { formatEuro } from "@/lib/utils";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -184,7 +189,9 @@ export async function submitPaymentProof(
       error: `Cette offre démarre à ${subscription.plan.minParticipants} participants — il en manque ${missing}.`,
     };
   }
-  const amount = computeDueAmount(subscription.plan, declaredParticipants);
+  // 12 oct. 2026 — montant au cours du jour pour une offre cotée en euros.
+  const eurToArRate = await getEurToArRate();
+  const amount = computeDueAmount(subscription.plan, declaredParticipants, eurToArRate);
   if (amount > MAX_PAYMENT_AMOUNT) {
     return {
       success: false,
@@ -193,8 +200,8 @@ export async function submitPaymentProof(
     };
   }
 
-  // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour, pour l'export en euros.
-  const eurToArRate = await getEurToArRate();
+  // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour enregistré avec le
+  // paiement, pour l'export en euros.
   const [payment] = await prisma.$transaction([
     prisma.companyPayment.create({
       data: {
@@ -237,6 +244,24 @@ export async function submitPaymentProof(
       // classe que celui corrigé sur signup() le 1er août 2026).
       console.error("[submitPaymentProof] failed to send admin alert email", err);
     }
+  }
+
+  // 12 oct. 2026 — le gérant est prévenu que son paiement est reçu et en cours
+  // de vérification ; l'e-mail « paiement confirmé » suivra la validation.
+  try {
+    const amountEur =
+      subscription.plan.priceEur != null
+        ? subscription.plan.priceEur * declaredParticipants
+        : Math.round(amount / eurToArRate);
+    const email = await resolveEmail("company-payment-received", {
+      adminName: viewer.name,
+      companyName: subscription.company.name,
+      amount: `${formatEuro(amountEur)} (soit ${formatPaymentAmountAr(amount)})`,
+      method: PAYMENT_METHOD_LABEL[f.method] ?? f.method,
+    });
+    if (email) await sendTransactionalEmail({ to: viewer.email, ...email });
+  } catch (err) {
+    console.error("[submitPaymentProof] failed to send payment received email", err);
   }
 
   revalidatePath(`/entreprises/${subscription.companyId}`);
@@ -365,7 +390,8 @@ export async function purchaseUpsellSeats(
     };
   }
 
-  const amount = upsellPlan.priceAr * f.quantity;
+  const eurToArRate = await getEurToArRate();
+  const amount = unitPriceAr(upsellPlan, eurToArRate) * f.quantity;
   // `CompanyPayment.amount` est un `Int` (int4 PostgreSQL) : au-delà, la
   // création échouait en 500.
   if (amount > MAX_PAYMENT_AMOUNT) {
@@ -380,7 +406,7 @@ export async function purchaseUpsellSeats(
     data: {
       companySubscriptionId,
       amount,
-      eurToArRate: await getEurToArRate(),
+      eurToArRate,
       method: f.method,
       proofFileKey: viaEvolia ? "" : f.proofFileKey,
       comment: f.comment || null,
@@ -411,4 +437,70 @@ export async function purchaseUpsellSeats(
 
   revalidatePath(`/entreprises/${subscription.companyId}`);
   return { success: true, data: { redirectUrl: null } };
+}
+
+/**
+ * 8 oct. 2026 — paiement carte / Mobile Money abandonné : le gérant l'annule
+ * pour choisir un autre mode de paiement, sans passer par l'équipe. Possible
+ * seulement après `EVOLIA_CANCEL_DELAY_MS`, le temps qu'une confirmation déjà
+ * en route arrive ; si Evolia confirme malgré tout plus tard, le paiement est
+ * honoré (`reviveCancelledEvoliaPayment`).
+ */
+export async function cancelPendingEvoliaPayment(companyPaymentId: string): Promise<ActionResult> {
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
+
+  const payment = await prisma.companyPayment.findUnique({
+    where: { id: companyPaymentId },
+    include: { companySubscription: { include: { company: true } } },
+  });
+  if (!payment) return { success: false, error: "Paiement introuvable." };
+  const subscription = payment.companySubscription;
+  if (subscription.company.companyAdminId !== viewer.id) {
+    return { success: false, error: "Seul le gérant de l'entreprise peut annuler ce paiement." };
+  }
+  if (payment.status !== "PENDING" || !isEvoliaPaymentMethod(payment.method)) {
+    return { success: false, error: "Ce paiement ne peut plus être annulé." };
+  }
+  if (Date.now() - payment.createdAt.getTime() < EVOLIA_CANCEL_DELAY_MS) {
+    return {
+      success: false,
+      error:
+        "Si vous venez de payer, la confirmation peut prendre quelques minutes. Réessayez dans un quart d'heure.",
+    };
+  }
+
+  const cancelled = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.companyPayment.updateMany({
+      where: { id: companyPaymentId, status: "PENDING" },
+      data: {
+        status: "REJECTED",
+        reviewedAt: new Date(),
+        rejectionReason: CANCELLED_BY_COMPANY_REASON,
+      },
+    });
+    if (count === 0) return false;
+    if (payment.upsellQuantity == null) {
+      await tx.companySubscription.updateMany({
+        where: { id: subscription.id, status: "PENDING_REVIEW" },
+        data: { status: "PENDING_PAYMENT" },
+      });
+    }
+    await tx.auditLog.create({
+      data: {
+        actorId: viewer.id,
+        action: "company_payment.cancel_by_company",
+        targetType: "CompanyPayment",
+        targetId: companyPaymentId,
+        metadata: { method: payment.method, upsell: payment.upsellQuantity != null },
+      },
+    });
+    return true;
+  });
+  if (!cancelled) return { success: false, error: "Ce paiement vient d'être traité." };
+
+  revalidatePath(`/entreprises/${subscription.companyId}`);
+  revalidatePath("/entreprise/paiement");
+  return { success: true, data: undefined };
 }

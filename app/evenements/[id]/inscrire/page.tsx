@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getActivePlans } from "@/lib/plans-query";
+import { getEurToArRate } from "@/lib/currency-conversion";
 import { RegistrationWizard } from "@/components/events/registration-wizard";
 
 export const metadata: Metadata = { title: "Inscription à l'événement" };
@@ -68,6 +69,7 @@ export default async function EventRegistrationPage({ params }: { params: { id: 
         eventLocation={event.location}
         isOnline={event.isOnline}
         price={event.price}
+        eurToArRate={await getEurToArRate()}
         viewer={{
           name: viewer.name,
           title: viewer.title ?? "",

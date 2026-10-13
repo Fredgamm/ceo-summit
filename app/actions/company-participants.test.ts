@@ -138,6 +138,12 @@ describe("validateEventParticipants", () => {
     expect(pushParticipantsToEvolia).not.toHaveBeenCalled();
   });
 
+  it("refuses an empty list (Evolia needs at least one participant)", async () => {
+    const result = await validateEventParticipants("company_1", []);
+    expect(result.success).toBe(false);
+    expect(registerCompanyMemberToEvent).not.toHaveBeenCalled();
+  });
+
   it("refuses someone who isn't an active member of the company", async () => {
     const result = await validateEventParticipants("company_1", ["outsider"]);
     expect(result.success).toBe(false);

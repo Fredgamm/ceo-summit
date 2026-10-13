@@ -5,7 +5,7 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
-import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { CANCELLED_BY_COMPANY_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
@@ -260,4 +260,64 @@ export async function confirmEventRegistrationPaymentCore(
   }
 
   return { success: true, data: undefined };
+}
+
+/**
+ * Evolia confirme un paiement que le gérant avait annulé pour changer de mode
+ * de paiement : il a bien payé, on ne doit pas le priver de son accès.
+ * - `revived` : le paiement redevient en attente, la confirmation normale suit ;
+ * - `already-paid` : l'offre avait entre-temps été réglée autrement (virement
+ *   validé) — le paiement est enregistré comme confirmé sans toucher à
+ *   l'abonnement, et signalé pour remboursement (double paiement) ;
+ * - `none` : paiement non concerné.
+ */
+export async function reviveCancelledEvoliaPayment(
+  companyPaymentId: string
+): Promise<"none" | "revived" | "already-paid"> {
+  const payment = await prisma.companyPayment.findUnique({
+    where: { id: companyPaymentId },
+    select: {
+      status: true,
+      rejectionReason: true,
+      upsellQuantity: true,
+      createdAt: true,
+      companySubscriptionId: true,
+    },
+  });
+  if (
+    !payment ||
+    payment.status !== "REJECTED" ||
+    payment.rejectionReason !== CANCELLED_BY_COMPANY_REASON
+  ) {
+    return "none";
+  }
+
+  if (payment.upsellQuantity == null) {
+    const paidOtherwise = await prisma.companyPayment.findFirst({
+      where: {
+        companySubscriptionId: payment.companySubscriptionId,
+        status: "CONFIRMED",
+        upsellQuantity: null,
+        createdAt: { gt: payment.createdAt },
+      },
+      select: { id: true },
+    });
+    if (paidOtherwise) {
+      await prisma.companyPayment.updateMany({
+        where: { id: companyPaymentId, status: "REJECTED" },
+        data: {
+          status: "CONFIRMED",
+          reviewedAt: new Date(),
+          rejectionReason: `Confirmé par Evolia après annulation, alors que l'offre était déjà réglée (paiement ${paidOtherwise.id}) — double paiement à rembourser.`,
+        },
+      });
+      return "already-paid";
+    }
+  }
+
+  await prisma.companyPayment.updateMany({
+    where: { id: companyPaymentId, status: "REJECTED" },
+    data: { status: "PENDING", reviewedAt: null, rejectionReason: null },
+  });
+  return "revived";
 }

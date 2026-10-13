@@ -4,29 +4,11 @@ import * as React from "react";
 import { Download, Share, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { promptPwaInstall, usePwaInstall } from "@/lib/pwa-install";
 
 const VISIT_COUNT_KEY = "ceo-summit-visit-count";
 const DISMISSED_KEY = "ceo-summit-install-dismissed";
 const MIN_VISITS_BEFORE_PROMPT = 2;
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
-function isStandalone() {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as Navigator & { standalone?: boolean }).standalone === true
-  );
-}
-
-function isIosSafari() {
-  const ua = window.navigator.userAgent;
-  const isIos = /iPad|iPhone|iPod/.test(ua);
-  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-  return isIos && isSafari;
-}
 
 /**
  * E9-T05 — "Ajouter à l'écran d'accueil". Android/Chrome gets the native
@@ -35,48 +17,42 @@ function isIosSafari() {
  * it gets a static guide instead ("Partager → Sur l'écran d'accueil").
  * Dismissal and visit count persist in localStorage — no PlatformSetting
  * needed, this is purely a client-side UX nudge.
+ *
+ * 10 oct. 2026 — l'événement d'installation est partagé avec l'entrée de
+ * menu « Installer l'application » (lib/pwa-install.ts) : le navigateur ne
+ * permet de l'utiliser qu'une fois.
  */
 export function InstallPrompt() {
-  const [deferredEvent, setDeferredEvent] = React.useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosGuide, setShowIosGuide] = React.useState(false);
-  const [dismissed, setDismissed] = React.useState(true);
+  const { installed, canPrompt, platform } = usePwaInstall();
+  const [eligible, setEligible] = React.useState(false);
 
   React.useEffect(() => {
-    if (isStandalone() || localStorage.getItem(DISMISSED_KEY) === "1") return;
-
-    const visits = Number(localStorage.getItem(VISIT_COUNT_KEY) ?? "0") + 1;
-    localStorage.setItem(VISIT_COUNT_KEY, String(visits));
-    if (visits < MIN_VISITS_BEFORE_PROMPT) return;
-
-    setDismissed(false);
-
-    if (isIosSafari()) {
-      setShowIosGuide(true);
-      return;
+    try {
+      if (localStorage.getItem(DISMISSED_KEY) === "1") return;
+      const visits = Number(localStorage.getItem(VISIT_COUNT_KEY) ?? "0") + 1;
+      localStorage.setItem(VISIT_COUNT_KEY, String(visits));
+      if (visits >= MIN_VISITS_BEFORE_PROMPT) setEligible(true);
+    } catch {
+      // Stockage indisponible (navigation privée stricte) : pas de bannière.
     }
-
-    function handleBeforeInstallPrompt(e: Event) {
-      e.preventDefault();
-      setDeferredEvent(e as BeforeInstallPromptEvent);
-    }
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
   }, []);
 
   function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, "1");
-    setDismissed(true);
+    try {
+      localStorage.setItem(DISMISSED_KEY, "1");
+    } catch {
+      // ignoré
+    }
+    setEligible(false);
   }
 
   async function handleInstall() {
-    if (!deferredEvent) return;
-    await deferredEvent.prompt();
-    const { outcome } = await deferredEvent.userChoice;
+    const outcome = await promptPwaInstall();
     if (outcome === "accepted") dismiss();
-    else setDeferredEvent(null);
   }
 
-  if (dismissed || (!deferredEvent && !showIosGuide)) return null;
+  const showIosGuide = platform === "ios";
+  if (installed || !eligible || (!canPrompt && !showIosGuide)) return null;
 
   return (
     <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+70px)] z-[190] rounded-lg bg-navy p-4 text-white shadow-card-md md:inset-x-auto md:bottom-4 md:left-[236px] md:w-80">

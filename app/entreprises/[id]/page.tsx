@@ -32,10 +32,13 @@ import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form
 import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
-import { initials, formatAriary, formatDateFr } from "@/lib/utils";
+import { initials, formatDateFr, formatEuro, planPriceEur } from "@/lib/utils";
 import { offerBadgeLabel } from "@/lib/offer-badge";
 import { evoliaPaymentUrl } from "@/lib/evolia";
+import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { AriaryHint } from "@/components/ui/ariary-hint";
+import { unitPriceAr } from "@/lib/company-payment-amount";
 
 const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   DRAFT: "Aucune offre choisie",
@@ -134,7 +137,7 @@ export default async function CompanyProfilePage({
             status: "PENDING",
             upsellQuantity: { not: null },
           },
-          select: { id: true, upsellQuantity: true, method: true },
+          select: { id: true, upsellQuantity: true, method: true, createdAt: true },
         })
       : null;
   // Rapport QA 1er oct. §2.2 — référentiels pour l'onglet "Modifier" (CompanyForm mode="edit").
@@ -286,9 +289,12 @@ export default async function CompanyProfilePage({
                 {company.subscription ? (
                   <p className="text-sm text-text-mid">
                     {company.subscription.plan.name} —{" "}
-                    {formatAriary(company.subscription.plan.priceAr)}
+                    {formatEuro(planPriceEur(company.subscription.plan, liveEurToArRate))}
                     {company.subscription.plan.pricingMode === "PER_PARTICIPANT" &&
                       " par participant"}
+                    <AriaryHint
+                      amountAr={unitPriceAr(company.subscription.plan, liveEurToArRate)}
+                    />
                   </p>
                 ) : (
                   <p className="text-sm text-text-muted">
@@ -375,15 +381,16 @@ export default async function CompanyProfilePage({
                       validation.
                     </p>
                     {isEvoliaPaymentMethod(pendingUpsellPayment.method) && (
-                      <p className="mt-2 text-sm text-text-mid">
-                        Paiement en cours chez Evolia, confirmé automatiquement.{" "}
-                        <a
-                          href={evoliaPaymentUrl(pendingUpsellPayment.id)}
-                          className="font-semibold text-navy underline"
-                        >
-                          Reprendre le paiement
-                        </a>
-                      </p>
+                      <div className="mt-2 flex flex-col gap-2">
+                        <p className="text-sm text-text-mid">
+                          Paiement en cours chez Evolia, confirmé automatiquement.
+                        </p>
+                        <EvoliaPendingPayment
+                          paymentId={pendingUpsellPayment.id}
+                          paymentUrl={evoliaPaymentUrl(pendingUpsellPayment.id)}
+                          startedAt={pendingUpsellPayment.createdAt.toISOString()}
+                        />
+                      </div>
                     )}
                   </div>
                 ) : (

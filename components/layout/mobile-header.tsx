@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutGrid, User, Building2 } from "lucide-react";
+import { Home, LayoutGrid, User, Building2, Download } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { InstallAppButton } from "@/components/layout/install-app-button";
 
 const ITEMS = [
   { href: "/dashboard", label: "Accueil", icon: Home },
@@ -28,7 +29,7 @@ export function MobileHeader() {
   return (
     <header className="fixed inset-x-0 top-0 z-[200] flex items-center justify-between border-b border-border bg-white px-4 pt-[env(safe-area-inset-top,6px)] md:hidden">
       <Image src="/logo/ceo-summit-logo.png" alt="CEO Summit" width={90} height={43} priority />
-      <nav className="flex items-center gap-1" aria-label="Navigation rapide">
+      <nav className="flex items-center" aria-label="Navigation rapide">
         {ITEMS.map((item) => {
           const active = pathname.startsWith(item.href);
           return (
@@ -37,7 +38,7 @@ export function MobileHeader() {
               href={item.href}
               aria-label={item.label}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-2 py-2 text-[9px] font-medium text-text-muted",
+                "flex flex-col items-center gap-0.5 px-1.5 py-2 text-[9px] font-medium text-text-muted",
                 active && "text-navy"
               )}
             >
@@ -49,6 +50,13 @@ export function MobileHeader() {
             </Link>
           );
         })}
+        <InstallAppButton
+          label="Installer l'application"
+          className="flex flex-col items-center gap-0.5 px-1.5 py-2 text-[9px] font-medium text-text-muted"
+        >
+          <Download className="h-[18px] w-[18px]" strokeWidth={2} />
+          Installer
+        </InstallAppButton>
       </nav>
     </header>
   );

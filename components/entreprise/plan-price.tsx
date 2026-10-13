@@ -1,4 +1,5 @@
-import { formatAriary, formatEuro } from "@/lib/utils";
+import { formatEuro, planPriceEur } from "@/lib/utils";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 /**
  * Rapport QA du 30 sept. 2026 — sur les cartes d'offre, l'euro doit être la
@@ -16,24 +17,16 @@ export function PlanPrice({
   liveEurToArRate: number;
   suffix?: string;
 }) {
-  if (plan.priceEur != null) {
-    const liveAr = Math.round(plan.priceEur * liveEurToArRate);
-    return (
-      <div>
-        <p className="text-lg font-bold text-navy">
-          {formatEuro(plan.priceEur)}
-          {suffix}
-        </p>
-        <p className="text-xs text-text-muted">
-          ≈ {formatAriary(liveAr)} — se référer au cours du jour
-        </p>
-      </div>
-    );
-  }
+  // 9 oct. 2026 — euros uniquement (plus d'estimation en Ariary).
+  const estimatedAr =
+    plan.priceEur != null ? Math.round(plan.priceEur * liveEurToArRate) : plan.priceAr;
   return (
-    <p className="text-lg font-bold text-navy">
-      {formatAriary(plan.priceAr)}
-      {suffix}
-    </p>
+    <div>
+      <p className="text-lg font-bold text-navy">
+        {formatEuro(planPriceEur(plan, liveEurToArRate))}
+        {suffix}
+      </p>
+      <AriaryHint amountAr={estimatedAr} />
+    </div>
   );
 }

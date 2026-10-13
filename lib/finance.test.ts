@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  officialOfferEur,
   companyPaymentToTransaction,
   computeMRRByPlan,
   mergeFinanceTransactions,
@@ -230,5 +231,13 @@ describe("toEuroAmount", () => {
 
   it("rounds to the cent", () => {
     expect(toEuroAmount(tx(1000, 3000), 3000).amountEur).toBe(0.33);
+  });
+});
+
+describe("officialOfferEur with the payment's rate", () => {
+  it("counts the participants paid at the rate recorded with the payment", () => {
+    const plan = { priceAr: 3_700_000, priceEur: 750, pricingMode: "PER_PARTICIPANT" };
+    const amountAr = Math.round(750 * 5062.93) * 12;
+    expect(officialOfferEur(plan, amountAr, 5062.93)).toBe(750 * 12);
   });
 });

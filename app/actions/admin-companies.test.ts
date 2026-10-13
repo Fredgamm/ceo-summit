@@ -25,6 +25,7 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn().mockResolvedValue(0),
     },
     auditLog: { create: vi.fn() },
+    evoliaPush: { findUnique: vi.fn() },
     emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
   },
@@ -43,6 +44,7 @@ vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/evolia", () => ({
   pushRegistrationToEvolia: vi.fn().mockResolvedValue(undefined),
   pushParticipantsToEvolia: vi.fn().mockResolvedValue(undefined),
+  deliverEvoliaPush: vi.fn().mockResolvedValue(true),
 }));
 
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
@@ -50,11 +52,12 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { sendSms } from "@/lib/sms";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { pushRegistrationToEvolia } from "@/lib/evolia";
+import { deliverEvoliaPush, pushRegistrationToEvolia } from "@/lib/evolia";
 import {
   confirmCompanyPayment,
   rejectCompanyPayment,
   reassignCompanyAdmin,
+  resendEvoliaPush,
 } from "./admin-companies";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
@@ -307,5 +310,37 @@ describe("reassignCompanyAdmin", () => {
     const result = await reassignCompanyAdmin("company_1", "user_2");
     expect(result.success).toBe(false);
     expect(prisma.company.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("resendEvoliaPush", () => {
+  it("refuses to resend the registration of a cancelled payment", async () => {
+    vi.mocked(prisma.evoliaPush.findUnique).mockResolvedValue({
+      id: "push_1",
+      companyId: "company_1",
+      event: "company.registration.pushed",
+      reference: "payment_1",
+    } as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ status: "REJECTED" } as never);
+
+    const result = await resendEvoliaPush("push_1");
+
+    expect(result.success).toBe(false);
+    expect(deliverEvoliaPush).not.toHaveBeenCalled();
+  });
+
+  it("resends a push whose payment is still pending", async () => {
+    vi.mocked(prisma.evoliaPush.findUnique).mockResolvedValue({
+      id: "push_1",
+      companyId: "company_1",
+      event: "company.registration.pushed",
+      reference: "payment_1",
+    } as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ status: "PENDING" } as never);
+
+    const result = await resendEvoliaPush("push_1");
+
+    expect(result.success).toBe(true);
+    expect(deliverEvoliaPush).toHaveBeenCalledWith("push_1");
   });
 });

@@ -21,8 +21,24 @@
 
 export interface PricingPlan {
   priceAr: number;
+  /** Prix officiel en euros, s'il existe : l'Ariary en est alors déduit au cours du jour. */
+  priceEur?: number | null;
   minParticipants: number | null;
   pricingMode?: "PER_PARTICIPANT" | "FIXED_BUNDLE" | null;
+}
+
+/**
+ * 12 oct. 2026 — prix unitaire en Ariary. Une offre cotée en euros suit le
+ * cours du jour (`priceEur` × taux) au lieu du `priceAr` figé à
+ * l'enregistrement de l'offre ; une offre saisie en Ariary garde son prix.
+ * Le montant d'un paiement est figé à sa création, avec le taux utilisé
+ * (`CompanyPayment.eurToArRate`).
+ */
+export function unitPriceAr(plan: PricingPlan, eurToArRate?: number | null): number {
+  if (plan.priceEur != null && eurToArRate != null && eurToArRate > 0) {
+    return Math.round(plan.priceEur * eurToArRate);
+  }
+  return plan.priceAr;
 }
 
 /**
@@ -31,9 +47,14 @@ export interface PricingPlan {
  * personne dans le dos de l'admin (c'était le comportement historique,
  * corrigé le 22 septembre — voir `conception/12` §2.1).
  */
-export function computeDueAmount(plan: PricingPlan, declaredParticipants: number): number {
-  if (plan.pricingMode === "PER_PARTICIPANT") return plan.priceAr * declaredParticipants;
-  return plan.priceAr;
+export function computeDueAmount(
+  plan: PricingPlan,
+  declaredParticipants: number,
+  eurToArRate?: number | null
+): number {
+  const unit = unitPriceAr(plan, eurToArRate);
+  if (plan.pricingMode === "PER_PARTICIPANT") return unit * declaredParticipants;
+  return unit;
 }
 
 /**

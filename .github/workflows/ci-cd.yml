@@ -1,11 +1,16 @@
 name: CI/CD
 
-# Deux jobs : `ci` valide chaque push/PR (lint, type-check, tests,
-# migrations sur une vraie base fraîche, build) ; `deploy` ne tourne que sur
-# push vers mvp-connect-simple — la branche de production — après succès de
-# `ci`, et déploie sur le VPS OVH via SSH (voir DEPLOY.md pour la mise en
-# place initiale du VPS et des secrets ci-dessous). `main` est en retard sur
-# la production : un push dessus est validé mais jamais déployé.
+# Trois jobs : `ci` valide chaque push/PR (lint, type-check, tests,
+# migrations sur une vraie base fraîche, build) ; sur push vers
+# mvp-connect-simple — la branche de production — et après succès de `ci`,
+# `image` compile l'image Docker et la publie sur GHCR, puis `deploy` la fait
+# télécharger et redémarrer par le VPS OVH via SSH (voir DEPLOY.md pour la
+# mise en place initiale du VPS et des secrets ci-dessous). `main` est en
+# retard sur la production : un push dessus est validé mais jamais déployé.
+#
+# 9 oct. 2026 — compiler sur le VPS saturait son processeur et sa mémoire
+# (3,7 Go) ~15 min à chaque déploiement, en pleine production : la
+# compilation se fait désormais ici, le VPS ne fait que télécharger l'image.
 
 on:
   push:
@@ -73,11 +78,53 @@ jobs:
       - name: Build
         run: npm run build
 
-  deploy:
+  image:
     needs: ci
     if: >-
       github.ref == 'refs/heads/mvp-connect-simple' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.name.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        id: name
+        # GHCR exige un nom en minuscules (le propriétaire du dépôt n'en est pas).
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.name.outputs.image }}:${{ github.sha }}
+            ${{ steps.name.outputs.image }}:latest
+          build-args: |
+            NEXT_PUBLIC_SOCKET_URL=${{ vars.NEXT_PUBLIC_SOCKET_URL || 'https://app.ceo-summit.mg' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [ci, image]
+    if: >-
+      github.ref == 'refs/heads/mvp-connect-simple' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Relocate Docker data-root out of the build context
         # 23 septembre 2026 — le data-root de Docker (`.docker-data`, voir
@@ -120,22 +167,25 @@ jobs:
 
       - name: Deploy to VPS
         # 14 septembre 2026 — checkout explicite de github.ref_name plutôt
-        # qu'un `git pull origin main` en dur : le VPS suit désormais
-        # mvp-connect-simple (le système d'offres/paiement à jour, dont la
-        # tarification par palier), main n'a plus ce modèle de données et ne
-        # doit pas être déployé tel quel avant reconciliation. Fonctionne
-        # aussi bien pour un futur retour à main une fois cette réconciliation
-        # faite.
+        # qu'un `git pull origin main` en dur : le VPS suit mvp-connect-simple.
+        # Le dépôt reste nécessaire sur le VPS pour docker-compose.prod.yml,
+        # les scripts de sauvegarde et .env, mais plus pour compiler.
+        #
+        # 9 oct. 2026 — le VPS télécharge l'image compilée par le job
+        # `image` (GHCR, étiquetée par commit) au lieu de la compiler : le
+        # jeton GitHub du job, valable le temps du job seulement, sert à se
+        # connecter au registre privé.
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          CEO_SUMMIT_IMAGE: ${{ needs.image.outputs.image }}
+          IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          # 30 septembre 2026 — le timeout par défaut d'appleboy/ssh-action
-          # (10 min) a déjà été atteint une fois alors que le script avait
-          # en réalité entièrement réussi (build + démarrage des conteneurs
-          # confirmés dans les logs), juste avant sa dernière ligne — le run
-          # est ressorti "failed" en CI malgré un déploiement réel réussi.
+          envs: GHCR_TOKEN,GHCR_USER,CEO_SUMMIT_IMAGE,IMAGE_TAG
           command_timeout: 20m
           script: |
             set -e
@@ -143,29 +193,17 @@ jobs:
             git fetch origin
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
-            # 23 septembre 2026 — incident déjà rencontré sur ce VPS (voir
-            # DEPLOY.md "Sur le VPS partagé actuel") : plusieurs builds
-            # consécutifs (dont des tentatives en échec, qui n'atteignent
-            # jamais le prune de fin de script) remplissent le disque et
-            # font planter l'app au démarrage. Nettoyage systématique en
-            # tout début de déploiement, avant de reconstruire quoi que ce
-            # soit, plutôt qu'en fin de script réussi seulement.
             df -h / || true
-            docker system prune -af || true
-            df -h / || true
-            # docker-compose.prod.yml build.network=ceo-summit-net (next
-            # build needs a live Postgres, see the file's own header
-            # comment) requires the network to exist first (created when
-            # postgres/redis start) and BuildKit doesn't support attaching a
-            # build to an arbitrary user network the way the classic
-            # builder does -- forcing the classic builder via
-            # DOCKER_BUILDKIT=0 sidesteps that entirely.
-            export DOCKER_BUILDKIT=0
-            export COMPOSE_DOCKER_CLI_BUILD=0
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            export CEO_SUMMIT_IMAGE IMAGE_TAG
             docker compose -f docker-compose.prod.yml up -d postgres redis
             timeout 60 sh -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" $(docker compose -f docker-compose.prod.yml ps -q postgres))" = "healthy" ]; do sleep 2; done'
-            docker compose -f docker-compose.prod.yml up -d --build
-            docker image prune -af
+            docker compose -f docker-compose.prod.yml pull app socket
+            docker compose -f docker-compose.prod.yml up -d --no-build
+            docker logout ghcr.io || true
+            # Anciennes images : seules celles des conteneurs en cours sont gardées.
+            docker image prune -af || true
+            df -h / || true
 
       - name: Health check
         # 14 septembre 2026 — nginx sur le VPS sert désormais un vrai domaine

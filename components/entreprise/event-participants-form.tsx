@@ -90,7 +90,7 @@ export function EventParticipantsForm({
             </span>
           )}
         </span>
-        <Button onClick={handleValidate} disabled={saving || overCap}>
+        <Button onClick={handleValidate} disabled={saving || overCap || selected.length === 0}>
           {saving ? "Validation…" : "Valider la liste des participants"}
         </Button>
       </div>

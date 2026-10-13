@@ -1,4 +1,4 @@
-import type { Tier } from "@prisma/client";
+import type { Prisma, Tier } from "@prisma/client";
 
 /**
  * Phase 1 offres dynamiques (30 juillet 2026) — single source of truth for
@@ -38,6 +38,17 @@ export function nearestLegacyTier(rank: number): Tier {
 
 /** Subset of CompanySubscription that still counts as "has an active platform benefit". */
 const TIER_ELIGIBLE_STATUSES = ["ACTIVE", "EXPIRED"] as const;
+
+/**
+ * 12 oct. 2026 — membre visible des autres membres (annuaire, « Nouveaux
+ * membres ») : compte actif ET entreprise dont le paiement est validé, même
+ * règle que l'accès à la plateforme (getViewerTierFromCompany). Un compte
+ * qui attend la validation de son paiement n'y apparaît pas encore.
+ */
+export const MEMBER_WITH_ACCESS_WHERE = {
+  status: "ACTIVE",
+  company: { subscription: { status: { in: [...TIER_ELIGIBLE_STATUSES] } } },
+} satisfies Prisma.UserWhereInput;
 
 export interface CompanyForTier {
   subscription?: {

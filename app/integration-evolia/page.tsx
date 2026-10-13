@@ -224,6 +224,18 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             <code>ceoSummitReference</code> tant qu&apos;elle n&apos;a pas été payée.
           </p>
 
+          <p>
+            <strong className="text-navy">Retour vers CEO Summit après paiement :</strong> une fois
+            le paiement finalisé sur votre page, redirigez le gestionnaire vers :
+          </p>
+          <Json>{`https://app.ceo-summit.mg/entreprise/paiement/confirmation?ref={ceoSummitReference}`}</Json>
+          <p>
+            Cette page attend que votre confirmation (§2) soit enregistrée, quelques secondes au
+            plus, puis ouvre l&apos;espace du gestionnaire sur la désignation des participants à
+            l&apos;événement. Elle fonctionne même si la redirection précède votre webhook. Cette
+            redirection ne remplace pas le webhook : c&apos;est lui seul qui active l&apos;accès.
+          </p>
+
           <SubHeading>Endpoint et authentification</SubHeading>
           <ul className="list-disc pl-5">
             <li>
@@ -319,7 +331,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
   "event": "company.registration.pushed",
   "companyId": "cmp_8f21ab",
   "ceoSummitReference": "cmp_9f2ab3d8e1",
-  "paymentMethod": "MOBILE_MONEY",
+  "paymentMethod": "evolia",
   "amountDue": 2500000,
   "currency": "MGA",
   "company": {
@@ -396,7 +408,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
   "event": "company.registration.pushed",
   "companyId": "cmp_8f21ab",
   "ceoSummitReference": "cmp_9f2ab3d8e1",
-  "paymentMethod": "CARTE_BANCAIRE",
+  "paymentMethod": "evolia",
   "amountDue": 4365000,
   "currency": "MGA",
   "company": {
@@ -432,7 +444,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               ],
               [
                 "paymentMethod",
-                `Moyen de paiement enregistré par CEO Summit : "CARTE_BANCAIRE" ou "MOBILE_MONEY" (à encaisser par vos soins), "VIREMENT" ou "CHEQUE" (déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
+                `"evolia" (carte bancaire ou Mobile Money, à encaisser par vos soins) ou "virement" (virement ou chèque, déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
               ],
               [
                 "eventDetails",
@@ -450,6 +462,29 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             l&apos;entreprise à cet instant (pas un delta) — l&apos;entreprise en entité racine, la
             liste intégrale et à jour de ses participants confirmés.
           </p>
+
+          <p>Règles communes aux deux valeurs de event, alignées sur vos contrôles :</p>
+          <ul className="list-disc pl-5">
+            <li>
+              <code>ceoSummitReference</code> est présent sur chaque appel ; sur
+              company.participants.confirmed, c&apos;est la référence du paiement de l&apos;offre,
+              déjà transmise avec l&apos;inscription.
+            </li>
+            <li>
+              <code>participants</code> n&apos;est jamais vide : pour un supplément acheté avant la
+              validation de la liste, il contient le gestionnaire.
+            </li>
+            <li>
+              Une liste de participants n&apos;est envoyée qu&apos;une fois l&apos;abonnement actif,
+              donc après l&apos;encaissement.
+            </li>
+            <li>
+              Offre sans paiement (partenaire institutionnel intégré par CEO Summit) : avant sa
+              première liste, un company.registration.pushed part avec{" "}
+              <code>paymentMethod: &quot;virement&quot;</code>, sans montant, et pour référence
+              l&apos;identifiant de son abonnement.
+            </li>
+          </ul>
 
           <Callout>
             <strong>Ne pas générer de badge à partir d&apos;un company.registration.pushed.</strong>{" "}

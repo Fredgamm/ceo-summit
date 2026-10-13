@@ -6,20 +6,24 @@ import type { PaymentMethod, Plan, PlanPricingMode } from "@prisma/client";
 
 import { selectPlan, submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
-import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
-import { formatAriary, formatEuro, pluralize } from "@/lib/utils";
+import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { arToEur, cn, formatEuro, planPriceEur, pluralize } from "@/lib/utils";
+import {
+  ArrowRight,
+  CheckCircle2,
+  CreditCard,
+  FileCheck2,
+  Landmark,
+  Lock,
+  Smartphone,
+  UploadCloud,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AriaryHint } from "@/components/ui/ariary-hint";
 
 /**
  * 22 septembre 2026 (`conception/12`) — deux cas, et deux seulement :
@@ -44,6 +48,7 @@ export function PaymentProofForm({
   pricingMode,
   maxTeamMembers,
   groupPlans,
+  liveEurToArRate,
 }: {
   companyId: string;
   companySubscriptionId: string;
@@ -68,6 +73,8 @@ export function PaymentProofForm({
    * faut y basculer automatiquement (voir handleDeclaredParticipantsBlur).
    */
   groupPlans: Plan[];
+  /** Cours du jour, pour afficher en euros une offre sans prix en €. */
+  liveEurToArRate: number;
 }) {
   const router = useRouter();
   const isGroupOffer = pricingMode === "PER_PARTICIPANT";
@@ -94,7 +101,7 @@ export function PaymentProofForm({
       : parseInt(declaredParticipants, 10)
     : 1;
   const meetsThreshold = meetsMinParticipants(plan, declaredCount);
-  const amount = computeDueAmount(plan, declaredCount);
+  const amount = computeDueAmount({ ...plan, priceEur }, declaredCount, liveEurToArRate);
   const amountEur = priceEur != null ? (isGroupOffer ? priceEur * declaredCount : priceEur) : null;
   const isEvoliaMethod = isEvoliaPaymentMethod(method);
 
@@ -200,119 +207,184 @@ export function PaymentProofForm({
 
   if (submitted) {
     return (
-      <Alert variant="success">
-        <AlertDescription>
-          Votre preuve de paiement a été transmise à l&apos;équipe CEO Summit — l&apos;accès de
-          votre équipe s&apos;activera dès validation.
-        </AlertDescription>
-      </Alert>
+      <div className="flex gap-4 rounded-lg border border-emerald-200 bg-emerald-50 p-5">
+        <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" />
+        <div>
+          <p className="font-semibold text-navy">Preuve de paiement envoyée</p>
+          <p className="mt-1 text-sm text-text-mid">
+            L&apos;équipe CEO Summit la vérifie, puis l&apos;accès de votre équipe s&apos;active :
+            vous recevrez un e-mail de confirmation.
+          </p>
+        </div>
+      </div>
     );
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      {isGroupOffer && (
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="declared-participants">Effectif de votre groupe *</Label>
-          <Input
-            id="declared-participants"
-            type="number"
-            inputMode="numeric"
-            min={minParticipants ?? 1}
-            step={1}
-            value={declaredParticipants}
-            onChange={(e) => handleDeclaredParticipantsChange(e.target.value)}
-            onBlur={handleDeclaredParticipantsBlur}
-            disabled={switchingPlan}
-            className={!meetsThreshold ? "border-red-500 focus-visible:ring-red-500" : undefined}
-          />
-          <p className="text-xs text-text-muted">
-            {switchingPlan
-              ? "Ajustement de l'offre selon l'effectif saisi…"
-              : "Cette offre se facture à la personne — indiquez combien de personnes vous engagez. Une autre offre Groupement peut se substituer automatiquement si l'effectif en atteint le seuil. Vous désignerez qui exactement depuis votre espace, après paiement."}
-          </p>
-        </div>
-      )}
+  const amountEurDisplay = amountEur ?? arToEur(amount, liveEurToArRate);
 
-      <div className="rounded-md border border-border bg-surface p-4">
-        {isGroupOffer ? (
-          <p className="text-sm text-text-mid">
-            {pluralize(declaredCount, "participant")} × {formatAriary(priceAr)}
-          </p>
-        ) : (
-          <p className="text-sm text-text-mid">
-            Forfait —{" "}
-            {maxTeamMembers != null
-              ? `${pluralize(maxTeamMembers, "participant")} inclus`
-              : "? participant inclus"}
-          </p>
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-8" noValidate>
+      <section>
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.1em] text-navy">
+          Votre commande
+        </h2>
+
+        {isGroupOffer && (
+          <div className="mb-4 flex flex-col gap-1.5">
+            <Label htmlFor="declared-participants">Nombre de participants</Label>
+            <Input
+              id="declared-participants"
+              type="number"
+              inputMode="numeric"
+              min={minParticipants ?? 1}
+              step={1}
+              value={declaredParticipants}
+              onChange={(e) => handleDeclaredParticipantsChange(e.target.value)}
+              onBlur={handleDeclaredParticipantsBlur}
+              disabled={switchingPlan}
+              className={cn(
+                "max-w-[160px]",
+                !meetsThreshold && "border-red-500 focus-visible:ring-red-500"
+              )}
+            />
+            <p className="text-xs text-text-muted">
+              {switchingPlan
+                ? "Ajustement de l'offre selon l'effectif saisi…"
+                : "Combien de personnes de votre entreprise participent. Au-delà d'un seuil de groupe, le tarif de groupe s'applique automatiquement ; vous désignerez les participants après le paiement."}
+            </p>
+          </div>
         )}
-        {amountEur != null ? (
-          <>
-            <p className="text-lg font-bold text-navy">Montant dû : {formatEuro(amountEur)}</p>
-            <p className="text-xs text-text-muted">≈ {formatAriary(amount)}</p>
-          </>
-        ) : (
-          <p className="text-lg font-bold text-navy">Montant dû : {formatAriary(amount)}</p>
-        )}
+
+        <dl className="rounded-lg border border-border">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+            <dt className="text-text-mid">
+              {isGroupOffer
+                ? `${pluralize(declaredCount, "participant")} × ${formatEuro(planPriceEur({ priceAr, priceEur }, liveEurToArRate))}`
+                : maxTeamMembers != null
+                  ? `Forfait · ${pluralize(maxTeamMembers, "participant")} inclus`
+                  : "Forfait entreprise"}
+            </dt>
+            <dd className="tabular-nums text-navy">{formatEuro(amountEurDisplay)}</dd>
+          </div>
+          <div className="flex items-end justify-between gap-4 border-t border-dashed border-border bg-surface px-4 py-4">
+            <dt className="text-sm font-semibold text-navy">Montant dû</dt>
+            <dd className="text-right">
+              <span className="block text-2xl font-bold tabular-nums text-navy">
+                {formatEuro(amountEurDisplay)}
+              </span>
+              <AriaryHint amountAr={amount} exact />
+            </dd>
+          </div>
+        </dl>
         {isGroupOffer && minParticipants && !meetsThreshold && (
-          <p className="mt-1 text-xs text-red-600">
+          <p className="mt-2 text-xs text-red-600">
             Cette offre démarre à {pluralize(minParticipants, "participant")} — il en manque{" "}
             {minParticipants - declaredCount}.
           </p>
         )}
-      </div>
+      </section>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>Mode de paiement *</Label>
-        <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAYMENT_METHOD_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <section>
+        <h2 className="mb-4 text-sm font-bold uppercase tracking-[0.1em] text-navy">
+          Mode de paiement
+        </h2>
+        <div
+          role="radiogroup"
+          aria-label="Mode de paiement"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+        >
+          {METHOD_TILES.map((tile) => {
+            const selected = method === tile.value;
+            return (
+              <button
+                key={tile.value}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setMethod(tile.value)}
+                className={cn(
+                  "flex items-start gap-3 rounded-lg border p-4 text-left transition",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2",
+                  selected
+                    ? "border-navy bg-navy-light/40 ring-1 ring-navy"
+                    : "border-border hover:border-navy-mid"
+                )}
+              >
+                <tile.icon
+                  className={cn(
+                    "mt-0.5 h-5 w-5 shrink-0",
+                    selected ? "text-navy" : "text-text-muted"
+                  )}
+                />
+                <span>
+                  <span className="block font-semibold text-navy">{tile.label}</span>
+                  <span className="mt-0.5 block text-xs text-text-muted">{tile.hint}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {isEvoliaMethod ? (
-        <Alert variant="gold">
-          <AlertDescription>
-            Vous allez être redirigé vers la page de paiement sécurisée d&apos;Evolia, notre
-            partenaire de paiement, pour régler par carte ou Mobile Money. Aucune preuve à fournir :
-            votre paiement est confirmé automatiquement.
-          </AlertDescription>
-        </Alert>
+        <div className="flex gap-3 rounded-lg border border-gold-light bg-gold-pale p-4 text-sm text-text-mid">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
+          <p>
+            Vous serez redirigé vers la page de paiement sécurisée d&apos;Evolia, notre partenaire
+            de paiement. Aucune preuve à fournir : l&apos;accès de votre équipe s&apos;active dès
+            que le paiement est confirmé.
+          </p>
+        </div>
       ) : (
-        <>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="payment-proof">Preuve de paiement (image ou PDF) *</Label>
-            <Input
+        <section className="flex flex-col gap-4">
+          <h2 className="text-sm font-bold uppercase tracking-[0.1em] text-navy">
+            Preuve de paiement
+          </h2>
+          <label
+            htmlFor="payment-proof"
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 text-center transition",
+              proof ? "border-emerald-300 bg-emerald-50" : "border-border hover:border-navy-mid"
+            )}
+          >
+            {proof ? (
+              <>
+                <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                <span className="text-sm font-semibold text-navy">{proof.name}</span>
+                <span className="text-xs text-text-muted">Cliquez pour remplacer le fichier</span>
+              </>
+            ) : (
+              <>
+                <UploadCloud className="h-6 w-6 text-text-muted" />
+                <span className="text-sm font-semibold text-navy">
+                  {uploading
+                    ? "Envoi en cours…"
+                    : "Ajouter le bordereau, l'ordre de virement ou le reçu"}
+                </span>
+                <span className="text-xs text-text-muted">Image ou PDF, 10 Mo maximum</span>
+              </>
+            )}
+            <input
               id="payment-proof"
               type="file"
               accept="image/*,application/pdf"
               onChange={handleFileChange}
               disabled={uploading}
+              className="sr-only"
             />
-            {uploading && <p className="text-xs text-text-muted">Envoi en cours…</p>}
-            {proof && <p className="text-xs text-emerald-700">✓ {proof.name}</p>}
-          </div>
-
+          </label>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="payment-comment">Commentaire (optionnel)</Label>
+            <Label htmlFor="payment-comment">Commentaire (facultatif)</Label>
             <Textarea
               id="payment-comment"
               rows={3}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               maxLength={1000}
+              placeholder="Référence du virement, date d'émission du chèque…"
             />
           </div>
-        </>
+        </section>
       )}
 
       {error && (
@@ -323,11 +395,47 @@ export function PaymentProofForm({
 
       <Button
         type="submit"
+        size="lg"
         disabled={submitting || uploading || switchingPlan || !meetsThreshold}
-        className="justify-center"
+        className="w-full justify-center gap-2"
       >
-        {submitting ? "Envoi…" : isEvoliaMethod ? "Payer avec Evolia" : "Soumettre pour validation"}
+        {submitting ? (
+          "Envoi…"
+        ) : isEvoliaMethod ? (
+          <>
+            Payer {formatEuro(amountEurDisplay)} avec Evolia <ArrowRight className="h-4 w-4" />
+          </>
+        ) : (
+          "Envoyer la preuve de paiement"
+        )}
       </Button>
     </form>
   );
 }
+
+const METHOD_TILES: {
+  value: PaymentMethod;
+  label: string;
+  hint: string;
+  icon: typeof CreditCard;
+}[] = [
+  {
+    value: "CARTE_BANCAIRE",
+    label: "Carte bancaire",
+    hint: "Paiement immédiat, via Evolia",
+    icon: CreditCard,
+  },
+  {
+    value: "MOBILE_MONEY",
+    label: "Mobile Money",
+    hint: "Paiement immédiat, via Evolia",
+    icon: Smartphone,
+  },
+  {
+    value: "VIREMENT",
+    label: "Virement bancaire",
+    hint: "Joindre la preuve de virement",
+    icon: Landmark,
+  },
+  { value: "CHEQUE", label: "Chèque", hint: "Joindre la photo du chèque", icon: FileCheck2 },
+];

@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { ArrowRight, Check } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getOnboardingStatus } from "@/lib/onboarding-status";
+import { cleanPlanName } from "@/lib/plans-query";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
 import { AccessGrantedRefresh } from "@/components/entreprise/access-granted-refresh";
+import { JourneyShell } from "@/components/onboarding/journey-shell";
+import { MembershipCard, type MembershipCardStatus } from "@/components/onboarding/membership-card";
 import { Button } from "@/components/ui/button";
-import { formatAriary } from "@/lib/utils";
+import { AriaryHint } from "@/components/ui/ariary-hint";
+import { unitPriceAr } from "@/lib/company-payment-amount";
+import { cn, formatEuro, planPriceEur } from "@/lib/utils";
+import { getEurToArRate } from "@/lib/currency-conversion";
 
 export const metadata: Metadata = { title: "Accès en attente" };
 
@@ -34,136 +39,206 @@ export default async function PaymentPendingPage() {
   const viewer = await prisma.user.findUnique({
     where: { id: session.user.id },
     include: {
-      company: {
-        include: { subscription: true, invites: { select: { id: true }, take: 1 } },
-      },
+      company: { include: { subscription: { include: { plan: true } } } },
       intendedPlan: true,
     },
   });
-  const hasCompany = Boolean(viewer?.companyId);
+  const eurToArRate = await getEurToArRate();
+  const company = viewer?.company ?? null;
+  const subscription = company?.subscription ?? null;
+  const status = subscription?.status;
+  const plan = subscription?.plan ?? viewer?.intendedPlan ?? null;
 
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-surface p-6 text-center">
-      <div className="w-full max-w-md rounded-lg border border-border bg-white p-8 shadow-card-md">
-        <h1 className="mb-3 text-xl font-bold text-navy">Accès en attente</h1>
-
-        {hasCompany ? (
-          <CompanyPath viewer={viewer!} />
-        ) : viewer?.intendedPlan ? (
-          <IntendedPlanPath plan={viewer.intendedPlan} />
-        ) : (
-          <NoCompanyPath />
-        )}
-
-        <div className="mb-6 mt-6 border-t border-border pt-4 text-xs text-text-muted">
-          <p className="mb-2">Une question ? Contactez l&apos;équipe CEO SUMMIT INDIAN OCEAN.</p>
-          <div className="flex flex-col gap-1">
-            <p>
-              <a href="tel:+261380913114" className="text-navy-mid hover:underline">
-                038 09 131 14
-              </a>{" "}
-              –{" "}
-              <a href="mailto:register@ceo-summit.mg" className="text-navy-mid hover:underline">
-                register@ceo-summit.mg
-              </a>{" "}
-              (inscriptions)
-            </p>
-            <p>
-              <a href="tel:+261380113114" className="text-navy-mid hover:underline">
-                038 01 131 14
-              </a>{" "}
-              –{" "}
-              <a href="mailto:team@ceo-summit.mg" className="text-navy-mid hover:underline">
-                team@ceo-summit.mg
-              </a>{" "}
-              (plateforme)
-            </p>
-          </div>
-        </div>
-        <SignOutButton className="mx-auto flex items-center justify-center gap-2 text-sm font-semibold text-navy-mid" />
-      </div>
-    </div>
+  const signOut = (
+    <SignOutButton className="flex items-center gap-1.5 text-sm font-semibold text-navy-mid hover:text-navy" />
   );
-}
+  const cardStatus: MembershipCardStatus =
+    status === "PENDING_REVIEW"
+      ? "review"
+      : status === "ACTIVE" || status === "EXPIRED"
+        ? "active"
+        : status === "PENDING_PAYMENT"
+          ? "payment"
+          : "draft";
+  const card = (
+    <MembershipCard
+      planName={plan ? cleanPlanName(plan.name) : null}
+      priceEur={plan ? planPriceEur(plan, eurToArRate) : null}
+      priceAr={
+        plan
+          ? plan.priceEur != null
+            ? Math.round(plan.priceEur * eurToArRate)
+            : plan.priceAr
+          : null
+      }
+      priceSuffix={plan?.pricingMode === "PER_PARTICIPANT" ? " / participant" : undefined}
+      companyName={company?.name ?? null}
+      status={cardStatus}
+    />
+  );
 
-interface CompanyPathViewer {
-  company: {
-    subscription: { status: string } | null;
-    invites: { id: string }[];
-  } | null;
-}
-
-/** Statuts qui donnent déjà accès à la plateforme (RG-12) — si on atterrit
- * quand même ici avec l'un de ces statuts, ce n'est pas l'entreprise qui
- * bloque : c'est la session (JWT) de ce navigateur qui date d'avant la
- * validation : AccessGrantedRefresh la met à jour sans reconnexion. */
-const ALREADY_GRANTED_STATUSES = ["ACTIVE", "EXPIRED"];
-
-function CompanyPath({ viewer }: { viewer: CompanyPathViewer }) {
-  const subscriptionStatus = viewer.company?.subscription?.status;
-  const statusItems = getOnboardingStatus({
-    hasCompany: true,
-    hasInvites: (viewer.company?.invites.length ?? 0) > 0,
-    subscriptionStatus: subscriptionStatus as never,
-  });
-
-  if (subscriptionStatus && ALREADY_GRANTED_STATUSES.includes(subscriptionStatus)) {
+  // Statuts qui donnent déjà accès (RG-12) : c'est alors la session de ce
+  // navigateur qui date d'avant la validation — AccessGrantedRefresh la met
+  // à jour sans reconnexion.
+  if (status === "ACTIVE" || status === "EXPIRED") {
     return (
-      <div className="mb-2">
+      <JourneyShell
+        current="activation"
+        title="Votre accès est prêt"
+        card={card}
+        headerAction={signOut}
+      >
         <AccessGrantedRefresh />
-      </div>
+      </JourneyShell>
     );
   }
 
-  return (
-    <>
-      <p className="mb-6 text-sm leading-relaxed text-text-mid">
-        Votre entreprise n&apos;a pas encore d&apos;abonnement actif — l&apos;accès complet à la
-        plateforme s&apos;active automatiquement dès la confirmation du paiement.
-      </p>
-      <div className="mb-6 text-left">
-        <OnboardingStatusList items={statusItems} />
-      </div>
-      {subscriptionStatus === "PENDING_PAYMENT" && (
-        <Button asChild className="mb-4 w-full justify-center">
-          <Link href="/entreprise/paiement">Soumettre le paiement</Link>
+  if (company && status === "PENDING_REVIEW") {
+    return (
+      <JourneyShell
+        current="activation"
+        title="Paiement en cours de vérification"
+        subtitle="L'accès complet à la plateforme s'active automatiquement dès que le paiement est confirmé. Vous recevrez un e-mail."
+        card={card}
+        headerAction={signOut}
+      >
+        <StatusTimeline
+          items={[
+            { label: "Compte et entreprise créés", state: "done" },
+            { label: "Paiement envoyé", state: "done" },
+            { label: "Vérification du paiement", state: "current" },
+            { label: "Accès ouvert à votre équipe", state: "todo" },
+          ]}
+        />
+        <ContactBlock />
+      </JourneyShell>
+    );
+  }
+
+  if (company) {
+    return (
+      <JourneyShell
+        current={subscription ? "paiement" : "offre"}
+        title={subscription ? "Il reste à régler votre adhésion" : "Choisissez votre offre"}
+        subtitle="L'accès complet à la plateforme s'active dès la confirmation du paiement."
+        card={card}
+        headerAction={signOut}
+      >
+        <Button asChild size="lg" className="w-full justify-center gap-2">
+          <Link href="/entreprise/paiement">
+            {subscription ? "Régler mon adhésion" : "Choisir une offre"}{" "}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </Button>
-      )}
-    </>
+        <ContactBlock />
+      </JourneyShell>
+    );
+  }
+
+  const intendedPlan = viewer?.intendedPlan ?? null;
+  return (
+    <JourneyShell
+      current="compte"
+      title="Créez la fiche de votre entreprise"
+      subtitle={
+        intendedPlan ? (
+          <>
+            Vous vous êtes inscrit pour l&apos;offre{" "}
+            <strong>{cleanPlanName(intendedPlan.name)}</strong> (
+            {formatEuro(planPriceEur(intendedPlan, eurToArRate))}
+            {intendedPlan.pricingMode === "PER_PARTICIPANT" && " par participant"}
+            <AriaryHint amountAr={unitPriceAr(intendedPlan, eurToArRate)} className="ml-1 inline" />
+            ). Il reste à créer la fiche de votre entreprise.
+          </>
+        ) : (
+          "Votre compte est confirmé, mais aucune entreprise n'y est encore rattachée."
+        )
+      }
+      card={card}
+      headerAction={signOut}
+    >
+      <Button asChild size="lg" className="w-full justify-center gap-2">
+        <Link
+          href={intendedPlan ? `/entreprise/creer?offre=${intendedPlan.slug}` : "/entreprise/creer"}
+        >
+          Créer mon entreprise <ArrowRight className="h-4 w-4" />
+        </Link>
+      </Button>
+      <ContactBlock />
+    </JourneyShell>
   );
 }
 
-function IntendedPlanPath({
-  plan,
+function StatusTimeline({
+  items,
 }: {
-  plan: { slug: string; name: string; priceAr: number; pricingMode: string | null };
+  items: { label: string; state: "done" | "current" | "todo" }[];
 }) {
   return (
-    <>
-      <p className="mb-6 text-sm leading-relaxed text-text-mid">
-        Vous vous êtes inscrit pour <strong>{plan.name}</strong> (
-        {plan.pricingMode === "PER_PARTICIPANT"
-          ? `${formatAriary(plan.priceAr)} par participant`
-          : formatAriary(plan.priceAr)}
-        ) — créez la fiche de votre entreprise pour continuer.
-      </p>
-      <Button asChild className="mb-4 w-full justify-center">
-        <Link href={`/entreprise/creer?offre=${plan.slug}`}>Créer mon entreprise</Link>
-      </Button>
-    </>
+    <ol className="flex flex-col">
+      {items.map((item, i) => (
+        <li key={item.label} className="relative flex gap-4 pb-6 last:pb-0">
+          {i < items.length - 1 && (
+            <span
+              aria-hidden="true"
+              className={cn(
+                "absolute left-[11px] top-6 h-[calc(100%-24px)] w-px",
+                item.state === "done" ? "bg-gold" : "bg-border"
+              )}
+            />
+          )}
+          <span
+            className={cn(
+              "relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+              item.state === "done" && "bg-gold text-navy",
+              item.state === "current" && "border-2 border-gold bg-white",
+              item.state === "todo" && "border border-border bg-white"
+            )}
+          >
+            {item.state === "done" && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+            {item.state === "current" && (
+              <span className="h-2 w-2 animate-pulse rounded-full bg-gold motion-reduce:animate-none" />
+            )}
+          </span>
+          <span
+            className={cn(
+              "text-sm",
+              item.state === "current" ? "font-semibold text-navy" : "text-text-mid",
+              item.state === "todo" && "text-text-muted"
+            )}
+          >
+            {item.label}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-function NoCompanyPath() {
+function ContactBlock() {
   return (
-    <>
-      <p className="mb-6 text-sm leading-relaxed text-text-mid">
-        Votre compte est confirmé, mais aucune entreprise n&apos;y est encore rattachée. Créez la
-        fiche de votre entreprise pour accéder à la plateforme.
+    <div className="mt-10 border-t border-border pt-6 text-sm text-text-mid">
+      <p className="mb-2 font-semibold text-navy">Une question ?</p>
+      <p>
+        Inscriptions :{" "}
+        <a href="mailto:register@ceo-summit.mg" className="text-navy-mid hover:underline">
+          register@ceo-summit.mg
+        </a>{" "}
+        ·{" "}
+        <a href="tel:+261380913114" className="text-navy-mid hover:underline">
+          038 09 131 14
+        </a>
       </p>
-      <Button asChild className="mb-4 w-full justify-center">
-        <Link href="/entreprise/creer">Créer mon entreprise</Link>
-      </Button>
-    </>
+      <p>
+        Plateforme :{" "}
+        <a href="mailto:team@ceo-summit.mg" className="text-navy-mid hover:underline">
+          team@ceo-summit.mg
+        </a>{" "}
+        ·{" "}
+        <a href="tel:+261380113114" className="text-navy-mid hover:underline">
+          038 01 131 14
+        </a>
+      </p>
+    </div>
   );
 }
