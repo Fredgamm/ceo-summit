@@ -1,11 +1,21 @@
 # Déploiement — VPS OVH (Debian)
 
-> VPS : `vps-283e97d0.vps.ovh.ca` · IPv4 `167.114.96.153` · utilisateur `debian`
-> **En production sur `https://app.ceo-summit.mg`** (HTTPS, certificat géré par
-> le nginx **de l'hôte**, VPS partagé avec d'autres projets). Les sections
-> ci-dessous qui parlent de « HTTP sur l'IP », d'un conteneur `nginx` ou de
-> `http://167.114.96.153` décrivent le tout premier déploiement de test —
-> mise à jour sommaire du 25 septembre 2026 : voir section 9 pour l'état réel.
+> **Serveur de production actuel (vérifié le 13 octobre 2026)**
+>
+> - VPS OVH `vps-cb631c3c.vps.ovh.net` · IPv4 `57.128.183.148` · Debian 12 (bookworm)
+> - Connexion : `ssh b2b-plateforme-prod` (alias de `~/.ssh/config`, utilisateur `root`)
+> - Projet dans `/opt/ceo-summit` ; conteneurs `ceo-summit-app-1`, `ceo-summit-socket-1`,
+>   `ceo-summit-postgres-1`, `ceo-summit-redis-1`
+> - **En production sur `https://app.ceo-summit.mg`** (HTTPS, certificat géré par le
+>   nginx **de l'hôte**, VPS partagé avec d'autres projets), déployé par GitHub
+>   Actions depuis `mvp-connect-simple` (section 12).
+>
+> **Historique :** le tout premier déploiement de test tournait sur
+> `vps-283e97d0.vps.ovh.ca` (`167.114.96.153`, utilisateur `debian`). Les sections
+> ci-dessous qui citent cette IP, l'utilisateur `debian`, « HTTP sur l'IP » ou un
+> conteneur `nginx` décrivent cette installation initiale : les commandes restent
+> valables en remplaçant l'hôte par `b2b-plateforme-prod`. Voir section 9 pour
+> l'état réel du reverse proxy.
 
 ## 0. Vue d'ensemble
 
@@ -321,6 +331,34 @@ ls -la backups/
 
 Rétention : 14 jours glissants, purge automatique dans le script.
 
+**Le service lance le script via `/bin/bash`** (`ExecStart=/bin/bash
+/opt/ceo-summit/deploy/backup.sh`), pas directement. Ainsi, le bit
+d'exécution du fichier ne compte pas.
+
+> **Incident du 14 septembre au 13 octobre 2026 — aucune sauvegarde pendant un mois.**
+>
+> - **Cause.** `backup.sh` était enregistré dans git sans bit d'exécution
+>   (`100644`). Une mise à jour du dépôt sur le VPS, le 14 septembre, l'a réécrit
+>   en `-rw-r--r--`. Depuis, chaque nuit, systemd échouait avec
+>   `status=203/EXEC` (« Permission denied »), sans alerte.
+> - **Corrigé le 13 octobre :**
+>   - `chmod +x` sur le serveur ;
+>   - `ExecStart` passé par `/bin/bash` ;
+>   - copie de l'ancien fichier de service en `.bak-2026-10-13` ;
+>   - sauvegarde immédiate vérifiée ;
+>   - bit d'exécution enregistré dans git (`100755`).
+> - **Perte.** Les sauvegardes du 11 au 14 septembre ont été purgées par la
+>   rétention de 14 jours lors de la relance.
+
+**Contrôle après chaque déploiement**, ou au moins une fois par semaine :
+
+```bash
+ssh b2b-plateforme-prod
+systemctl show ceo-summit-backup.service -p Result -p ExecMainStatus   # attendu : success / 0
+ls -lt /opt/ceo-summit/backups | head -3                               # fichiers de la nuit
+zcat /opt/ceo-summit/backups/db-<date>.sql.gz | grep -c "database dump complete"   # attendu : 1
+```
+
 **Limite connue** : les sauvegardes atterrissent sur le même disque que les
 données qu'elles protègent (`/opt/ceo-summit/backups`, partition dédiée
 CEO Summit sur ce VPS) — ça protège contre une suppression accidentelle ou
@@ -332,6 +370,7 @@ manager OVH (hors de portée de ce dépôt).
 
 > **Mise à jour du 9 octobre 2026.** La branche déployée est
 > `mvp-connect-simple`, et l'image n'est plus compilée sur le VPS :
+>
 > - le job `image` compile l'image Docker dans GitHub Actions et la publie
 >   sur GHCR (`ghcr.io/fredgamm/ceo-summit:<commit>` et `:latest`) ;
 > - le job `deploy` se connecte au VPS, met à jour le dépôt (pour
@@ -381,11 +420,11 @@ ssh -i ceo-summit-deploy-key debian@167.114.96.153 "echo ok"
 Dans le dépôt GitHub → **Settings → Secrets and variables → Actions → New
 repository secret**, ajouter les 3 secrets suivants :
 
-| Nom           | Valeur                                                         |
-| ------------- | -------------------------------------------------------------- |
-| `VPS_HOST`    | `167.114.96.153`                                               |
-| `VPS_USER`    | `debian`                                                       |
-| `VPS_SSH_KEY` | contenu complet de `ceo-summit-deploy-key` (la clé **privée**) |
+| Nom           | Valeur                                                           |
+| ------------- | ---------------------------------------------------------------- |
+| `VPS_HOST`    | `57.128.183.148` (serveur actuel ; `167.114.96.153` à l'origine) |
+| `VPS_USER`    | utilisateur SSH autorisé pour la clé de déploiement              |
+| `VPS_SSH_KEY` | contenu complet de `ceo-summit-deploy-key` (la clé **privée**)   |
 
 Une fois fait, **supprime la clé privée de ta machine locale**
 (`rm ceo-summit-deploy-key ceo-summit-deploy-key.pub`) — elle est en
@@ -438,7 +477,9 @@ Secret HMAC : `PAYMENT_WEBHOOK_SECRET` (voir `.env.example`).
 
 - **CI/CD en place** (`E0-T04`) mais nécessite la configuration manuelle
   ponctuelle de la section 12 (clé SSH + secrets GitHub) pour être actif.
-- **Pas de sauvegarde automatique** — voir section 11.
+- **Sauvegardes sur le même disque que les données** : base et fichiers
+  téléversés, chaque nuit, gardés 14 jours (section 11). Aucune copie hors
+  du serveur ni snapshot OVH à ce jour.
 - **Rate limiting** : en place sur les points sensibles (connexion,
   webhooks — 60 requêtes/min/IP sur `/api/webhooks/payments`, etc.), adossé
   à Redis.
