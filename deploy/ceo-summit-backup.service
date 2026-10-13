@@ -4,4 +4,4 @@ After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/ceo-summit/deploy/backup.sh
+ExecStart=/bin/bash /opt/ceo-summit/deploy/backup.sh
