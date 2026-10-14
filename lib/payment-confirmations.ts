@@ -167,6 +167,10 @@ export async function confirmCompanyPaymentCore(
       const email = await resolveEmail("company-payment-confirmed", {
         adminName: companyAdmin.name,
         companyName: payment.companySubscription.company.name,
+        // Après connexion, le gérant arrive directement sur la liste des participants.
+        loginUrl: `${process.env.NEXTAUTH_URL}/login?callbackUrl=${encodeURIComponent(
+          `/entreprises/${payment.companySubscription.companyId}?tab=gestion`
+        )}`,
       });
       if (email) await sendTransactionalEmail({ to: companyAdmin.email, ...email });
     } catch (err) {

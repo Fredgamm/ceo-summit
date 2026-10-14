@@ -126,6 +126,11 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
     variables: [
       { key: "adminName", label: "Nom de l'administrateur", example: "Jean-Pierre Rakoto" },
       { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
+      {
+        key: "loginUrl",
+        label: "Lien de connexion (ouvre la gestion de l'entreprise)",
+        example: "https://app.ceo-summit.mg/login?callbackUrl=%2Fentreprises%2Fabc%3Ftab%3Dgestion",
+      },
     ],
     defaultSubject: "Paiement confirmé — {{companyName}}",
     defaultBlocks: [
@@ -135,6 +140,12 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
         type: "paragraph",
         text: "Le paiement de **{{companyName}}** a été validé — l'accès à la plateforme est maintenant actif pour vous et tous vos collaborateurs.",
       },
+      {
+        id: "3",
+        type: "paragraph",
+        text: "Connectez-vous pour désigner les participants à l'événement et inviter vos collaborateurs.",
+      },
+      { id: "4", type: "button", label: "Me connecter", url: "{{loginUrl}}" },
     ],
   },
   {
