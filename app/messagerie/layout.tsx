@@ -73,19 +73,10 @@ export default async function MessagerieLayout({ children }: { children: React.R
       }}
       badges={{ messages: totalUnread || undefined }}
     >
-      {/* Audit mobile 22 sept. 2026 (conception/14 §2) — 100dvh (dynamic
-          viewport height) s'ajuste à la barre d'adresse mobile qui
-          apparaît/disparaît au scroll, contrairement à 100vh (statique) qui
-          cassait la mise en page sur mobile ; même correctif déjà appliqué à
-          components/rooms/room-chat.tsx pour le même type d'écran (fil de
-          discussion plein écran). 100vh classique à partir de md: (desktop,
-          où dvh n'apporte rien).
-          188px (conception/14 §1) = padding haut du conteneur AppShell côté
-          mobile (pt-16, 64px, réservé pour MobileHeader) + padding bas
-          (pb-24, 96px, réservé pour MobileBottomNav) + 28px de marge (même
-          méthode que l'ancien 140px = 16+96+28 avant l'ajout du header
-          mobile). Desktop (md:) inchangé. */}
-      <div className="flex h-[calc(100dvh-188px)] overflow-hidden rounded-lg border border-border bg-white md:h-[calc(100vh-140px)]">
+      {/* 14 oct. 2026 — mobile : pleine largeur et pleine hauteur entre l'en-tête et la
+          barre du bas (comme components/rooms/room-chat.tsx), marges négatives pour
+          annuler le padding d'AppShell : seule la conversation défile. */}
+      <div className="-mx-4 -mb-24 -mt-3 flex h-[calc(100dvh-106px-env(safe-area-inset-bottom,0px))] overflow-hidden bg-white md:m-0 md:h-[calc(100vh-140px)] md:rounded-lg md:border md:border-border">
         <SplitPane
           variant="list"
           className="flex w-full shrink-0 flex-col border-r border-border md:w-[300px]"

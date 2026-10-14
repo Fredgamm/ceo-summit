@@ -55,6 +55,15 @@ export function ConversationThread({
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const lastTypingEmitRef = React.useRef(0);
   const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  // 14 oct. 2026 — zone de saisie qui grandit avec le texte (jusqu'à ~5 lignes),
+  // comme Messenger.
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  React.useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [text]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -161,13 +170,13 @@ export function ConversationThread({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b border-border px-5 py-3.5">
+      <div className="flex items-center gap-2.5 border-b border-border px-2 py-2.5 md:gap-3 md:px-5 md:py-3.5">
         <Link
           href="/messagerie"
           aria-label="Retour aux conversations"
-          className="-ml-1.5 rounded p-1.5 text-text-muted hover:bg-surface md:hidden"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-navy hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-5 w-5" />
         </Link>
         <Avatar className="h-9 w-9">
           <AvatarImage src={otherUser.avatarUrl ?? undefined} alt={otherUser.name} />
@@ -187,7 +196,7 @@ export function ConversationThread({
         role="log"
         aria-live="polite"
         aria-relevant="additions"
-        className="flex-1 overflow-y-auto px-5 py-4"
+        className="flex-1 overflow-y-auto px-3 py-3 md:px-5 md:py-4"
       >
         {hasMore && (
           <div className="mb-3 text-center">
@@ -195,6 +204,12 @@ export function ConversationThread({
               {loadingMore ? "Chargement…" : "Charger les messages précédents"}
             </Button>
           </div>
+        )}
+
+        {messages.length === 0 && (
+          <p className="mt-10 text-center text-sm text-text-muted">
+            Démarrez la conversation avec {otherUser.name}.
+          </p>
         )}
 
         <div className="flex flex-col gap-4">
@@ -224,9 +239,10 @@ export function ConversationThread({
         </div>
       </div>
 
-      <div className="border-t border-border p-4">
-        <div className="flex items-end gap-2">
+      <div className="border-t border-border bg-white px-2 py-2 md:p-4">
+        <div className="flex items-end gap-1.5 md:gap-2">
           <Textarea
+            ref={textareaRef}
             value={text}
             maxLength={CHAT_MESSAGE_MAX_LENGTH}
             onChange={(e) => {
@@ -239,9 +255,10 @@ export function ConversationThread({
                 sendMessage();
               }
             }}
-            placeholder={`Écrire un message à ${otherUser.name}…`}
+            placeholder="Votre message…"
+            aria-label={`Écrire un message à ${otherUser.name}`}
             rows={1}
-            className="min-h-[40px] flex-1 resize-none"
+            className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl px-4 py-2.5 text-[15px] leading-snug"
             disabled={!joined}
           />
           <Button
@@ -249,6 +266,7 @@ export function ConversationThread({
             disabled={!joined || sending || !text.trim()}
             size="icon"
             aria-label="Envoyer le message"
+            className="h-11 w-11 shrink-0 rounded-full"
           >
             <Send className="h-4 w-4" />
           </Button>
