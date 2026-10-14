@@ -63,7 +63,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "paymentUrl",
         label: "Lien de paiement",
-        example: "https://app.ceo-summit.mg/entreprise/paiement",
+        example: "https://b2b.ceo-summit.mg/entreprise/paiement",
       },
     ],
     defaultSubject: "Votre compte CEO Summit est créé — {{companyName}}",
@@ -94,6 +94,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
       { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
       { key: "amount", label: "Montant (déjà formaté)", example: "50 000 € (soit 248 200 000 Ar)" },
       { key: "method", label: "Mode de paiement", example: "Virement bancaire" },
+      { key: "appUrl", label: "Adresse de la plateforme", example: "https://b2b.ceo-summit.mg" },
     ],
     defaultSubject: "Paiement reçu — en cours de vérification",
     defaultBlocks: [
@@ -112,7 +113,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
         id: "4",
         type: "button",
         label: "Suivre mon paiement",
-        url: "https://app.ceo-summit.mg/paiement-en-attente",
+        url: "{{appUrl}}/paiement-en-attente",
       },
     ],
   },
@@ -129,7 +130,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "loginUrl",
         label: "Lien de connexion (ouvre la gestion de l'entreprise)",
-        example: "https://app.ceo-summit.mg/login?callbackUrl=%2Fentreprises%2Fabc%3Ftab%3Dgestion",
+        example: "https://b2b.ceo-summit.mg/login?callbackUrl=%2Fentreprises%2Fabc%3Ftab%3Dgestion",
       },
     ],
     defaultSubject: "Paiement confirmé — {{companyName}}",
@@ -159,6 +160,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
       { key: "adminName", label: "Nom de l'administrateur", example: "Jean-Pierre Rakoto" },
       { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
       { key: "reason", label: "Motif du refus", example: "Preuve illisible" },
+      { key: "appUrl", label: "Adresse de la plateforme", example: "https://b2b.ceo-summit.mg" },
     ],
     defaultSubject: "Paiement à corriger — {{companyName}}",
     defaultBlocks: [
@@ -173,7 +175,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
         id: "4",
         type: "button",
         label: "Soumettre un nouveau paiement",
-        url: "https://app.ceo-summit.mg/entreprise/paiement",
+        url: "{{appUrl}}/entreprise/paiement",
       },
     ],
   },

@@ -9,6 +9,7 @@ import {
   type TemplateVariables,
 } from "@/lib/email-blocks";
 import { DynamicEmail } from "@/emails/dynamic-email";
+import { appUrl } from "@/lib/app-url";
 
 export type ResolvedEmail = { subject: string; react: ReactElement };
 
@@ -35,8 +36,11 @@ export async function resolveEmail(
   const subjectTemplate = override?.subject ?? definition.defaultSubject;
   const blocksTemplate = (override?.blocks as EmailBlock[] | null) ?? definition.defaultBlocks;
 
-  const subject = substituteVariables(subjectTemplate, variables);
-  const blocks = substituteBlocks(blocksTemplate, variables);
+  // `{{appUrl}}` (14 oct. 2026) : adresse de l'instance, disponible dans
+  // tous les e-mails sans que chaque appelant ait à la fournir.
+  const allVariables = { appUrl: appUrl(), ...variables };
+  const subject = substituteVariables(subjectTemplate, allVariables);
+  const blocks = substituteBlocks(blocksTemplate, allVariables);
 
   return { subject, react: DynamicEmail({ preview: subject, blocks }) };
 }

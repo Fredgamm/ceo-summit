@@ -26,7 +26,12 @@ export function getSocketClient(): Promise<Socket> {
     socketPromise = fetchSocketToken()
       .then((initialToken) => {
         let pendingToken: string | null = initialToken;
-        const url = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001";
+        // 14 oct. 2026 — sans NEXT_PUBLIC_SOCKET_URL (images de prod et de
+        // préprod), le temps réel passe par le domaine de la page : nginx
+        // relaie /socket.io/ vers le serveur temps réel de chaque instance.
+        const url =
+          process.env.NEXT_PUBLIC_SOCKET_URL ||
+          (typeof window !== "undefined" ? window.location.origin : "http://localhost:3001");
         return io(url, {
           auth: (cb) => {
             if (pendingToken) {

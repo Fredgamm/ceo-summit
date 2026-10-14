@@ -25,7 +25,7 @@ export const TEAM_COLLABORATORS_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "inviteUrl",
         label: "Lien d'inscription",
-        example: "https://app.ceo-summit.mg/partenaire/token",
+        example: "https://b2b.ceo-summit.mg/partenaire/token",
       },
     ],
     defaultSubject: "Votre accès partenaire CEO Summit",
@@ -62,7 +62,7 @@ export const TEAM_COLLABORATORS_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "inviteUrl",
         label: "Lien d'invitation",
-        example: "https://app.ceo-summit.mg/invitation/token",
+        example: "https://b2b.ceo-summit.mg/invitation/token",
       },
     ],
     defaultSubject: "{{companyName}} vous invite à rejoindre CEO Summit",
@@ -100,7 +100,7 @@ export const TEAM_COLLABORATORS_TEMPLATES: EmailTemplateDefinition[] = [
     variables: [
       { key: "memberFirstName", label: "Prénom du membre", example: "Jean-Pierre" },
       { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
-      { key: "loginUrl", label: "Lien de connexion", example: "https://app.ceo-summit.mg/login" },
+      { key: "loginUrl", label: "Lien de connexion", example: "https://b2b.ceo-summit.mg/login" },
     ],
     defaultSubject: "Bienvenue sur CEO Summit — {{companyName}}",
     defaultBlocks: [

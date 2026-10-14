@@ -23,9 +23,16 @@
 # `app`/`socket` publish to 127.0.0.1-only ports that the host's own nginx
 # (one vhost per project, /etc/nginx/conf.d/ceo-summit.conf) reverse-proxies
 # to.
+#
+# 14 oct. 2026 — deux instances sur ce VPS, chacune dans son dossier (le nom
+# du dossier sert de nom de projet Compose : conteneurs et volumes séparés) :
+#   /opt/ceo-summit       préprod  app.ceo-summit.mg  ports 3020/3021
+#   /opt/ceo-summit-prod  prod     b2b.ceo-summit.mg  ports 3030/3031
+# Réseau et ports se règlent dans le .env de chaque instance (COMPOSE_NETWORK,
+# APP_PORT, SOCKET_PORT) ; sans réglage, valeurs de la préprod.
 networks:
   default:
-    name: ceo-summit-net
+    name: ${COMPOSE_NETWORK:-ceo-summit-net}
 
 services:
   postgres:
@@ -91,7 +98,7 @@ services:
     # relever si la mémoire du serveur augmente).
     command: sh -c "npx prisma migrate deploy && node server/web-cluster.js"
     ports:
-      - "127.0.0.1:3020:3000"
+      - "127.0.0.1:${APP_PORT:-3020}:3000"
     volumes:
       # Interim disk-based file storage while R2 isn't configured yet (see
       # lib/r2.ts) — without this, every `up -d --build` (a fresh container)
@@ -117,7 +124,7 @@ services:
         condition: service_healthy
     command: npx tsx server/socket-server.ts
     ports:
-      - "127.0.0.1:3021:3001"
+      - "127.0.0.1:${SOCKET_PORT:-3021}:3001"
 
 volumes:
   ceo_summit_pg_data:

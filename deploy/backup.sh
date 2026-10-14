@@ -14,7 +14,9 @@
 # manager, not from here).
 set -euo pipefail
 
-PROJECT_DIR="/opt/ceo-summit"
+# 14 oct. 2026 — dossier de l'instance déduit de l'emplacement du script
+# (/opt/ceo-summit = préprod, /opt/ceo-summit-prod = prod).
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKUP_DIR="$PROJECT_DIR/backups"
 RETENTION_DAYS=14
 DATE=$(date +%Y%m%d-%H%M%S)

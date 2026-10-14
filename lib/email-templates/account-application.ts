@@ -16,7 +16,7 @@ export const ACCOUNT_APPLICATION_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "resetUrl",
         label: "Lien de réinitialisation",
-        example: "https://app.ceo-summit.mg/reinitialiser/token",
+        example: "https://b2b.ceo-summit.mg/reinitialiser/token",
       },
     ],
     defaultSubject: "Réinitialisez votre mot de passe CEO Summit",

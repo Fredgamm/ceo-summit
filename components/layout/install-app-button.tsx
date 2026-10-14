@@ -102,7 +102,7 @@ export function InstallAppButton({
                 <Step n={3} />
                 <span>
                   Avec Firefox ou un autre navigateur, l&apos;installation n&apos;est pas proposée :
-                  ouvrez app.ceo-summit.mg dans Chrome, Edge ou Safari.
+                  ouvrez cette adresse dans Chrome, Edge ou Safari.
                 </span>
               </li>
             </ol>

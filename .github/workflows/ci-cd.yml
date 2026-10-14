@@ -11,12 +11,18 @@ name: CI/CD
 # 9 oct. 2026 — compiler sur le VPS saturait son processeur et sa mémoire
 # (3,7 Go) ~15 min à chaque déploiement, en pleine production : la
 # compilation se fait désormais ici, le VPS ne fait que télécharger l'image.
+#
+# 14 oct. 2026 — deux instances sur le même VPS, une seule image :
+#   production          → /opt/ceo-summit-prod, https://b2b.ceo-summit.mg (prod)
+#   mvp-connect-simple  → /opt/ceo-summit,      https://app.ceo-summit.mg (préprod)
+# L'image ne contient plus d'adresse : le navigateur joint le temps réel sur
+# le domaine de la page (lib/socket-client.ts), le serveur lit NEXTAUTH_URL.
 
 on:
   push:
-    branches: [main, mvp-connect-simple]
+    branches: [main, mvp-connect-simple, production]
   pull_request:
-    branches: [main, mvp-connect-simple]
+    branches: [main, mvp-connect-simple, production]
 
 jobs:
   ci:
@@ -81,7 +87,8 @@ jobs:
   image:
     needs: ci
     if: >-
-      github.ref == 'refs/heads/mvp-connect-simple' && github.event_name == 'push'
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/mvp-connect-simple' || github.ref == 'refs/heads/production')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -112,16 +119,23 @@ jobs:
           tags: |
             ${{ steps.name.outputs.image }}:${{ github.sha }}
             ${{ steps.name.outputs.image }}:latest
-          build-args: |
-            NEXT_PUBLIC_SOCKET_URL=${{ vars.NEXT_PUBLIC_SOCKET_URL || 'https://app.ceo-summit.mg' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   deploy:
     needs: [ci, image]
     if: >-
-      github.ref == 'refs/heads/mvp-connect-simple' && github.event_name == 'push'
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/mvp-connect-simple' || github.ref == 'refs/heads/production')
     runs-on: ubuntu-latest
+    # Un seul déploiement à la fois sur le VPS : le `docker image prune` de
+    # l'un ne doit pas retirer l'image que l'autre vient de télécharger.
+    concurrency:
+      group: vps-deploy
+      cancel-in-progress: false
+    env:
+      DEPLOY_DIR: ${{ github.ref_name == 'production' && '/opt/ceo-summit-prod' || '/opt/ceo-summit' }}
+      HEALTH_URL: ${{ github.ref_name == 'production' && 'https://b2b.ceo-summit.mg/login' || 'https://app.ceo-summit.mg/login' }}
     permissions:
       contents: read
       packages: read
@@ -181,15 +195,16 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           CEO_SUMMIT_IMAGE: ${{ needs.image.outputs.image }}
           IMAGE_TAG: ${{ github.sha }}
+          DEPLOY_DIR: ${{ env.DEPLOY_DIR }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GHCR_TOKEN,GHCR_USER,CEO_SUMMIT_IMAGE,IMAGE_TAG
+          envs: GHCR_TOKEN,GHCR_USER,CEO_SUMMIT_IMAGE,IMAGE_TAG,DEPLOY_DIR
           command_timeout: 20m
           script: |
             set -e
-            cd /opt/ceo-summit
+            cd "$DEPLOY_DIR"
             git fetch origin
             git checkout ${{ github.ref_name }}
             git reset --hard origin/${{ github.ref_name }}
@@ -213,6 +228,6 @@ jobs:
         # (HTTP sur l'IP seule) est resté périmé après cette bascule HTTPS.
         run: |
           sleep 10
-          curl -sf -o /dev/null "https://app.ceo-summit.mg/login" \
-            && echo "OK — /login répond." \
+          curl -sf -o /dev/null "$HEALTH_URL" \
+            && echo "OK — $HEALTH_URL répond." \
             || (echo "Échec du health check post-déploiement." && exit 1)

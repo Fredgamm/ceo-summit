@@ -23,7 +23,7 @@ export const DEAL_ROOM_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "opportunityUrl",
         label: "Lien vers l'opportunité",
-        example: "https://app.ceo-summit.mg/deal-room/opp_1",
+        example: "https://b2b.ceo-summit.mg/deal-room/opp_1",
       },
     ],
     defaultSubject: 'Votre opportunité "{{opportunityTitle}}" est publiée',
@@ -84,7 +84,7 @@ export const DEAL_ROOM_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "conversationUrl",
         label: "Lien vers la conversation",
-        example: "https://app.ceo-summit.mg/messagerie/conv_1",
+        example: "https://b2b.ceo-summit.mg/messagerie/conv_1",
       },
     ],
     defaultSubject: "Demande de contact acceptée — {{opportunityTitle}}",
@@ -115,7 +115,7 @@ export const DEAL_ROOM_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "opportunityUrl",
         label: "Lien vers l'opportunité",
-        example: "https://app.ceo-summit.mg/deal-room/opp_1",
+        example: "https://b2b.ceo-summit.mg/deal-room/opp_1",
       },
     ],
     defaultSubject: "Nouvelle demande de contact — {{opportunityTitle}}",

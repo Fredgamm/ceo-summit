@@ -1,0 +1,7 @@
+[Unit]
+Description=CEO Summit PROD (b2b.ceo-summit.mg) — nightly Postgres + uploads backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/ceo-summit-prod/deploy/backup.sh

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { seatCap } from "@/lib/company-seats";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { toZonedIso } from "@/lib/event-timezone";
+import { appUrl } from "@/lib/app-url";
 
 /**
  * Intégration Evolia — échange 1 (conception/11 §3) : CEO Summit pousse les
@@ -283,7 +284,7 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
       headers: {
         "Content-Type": "application/json",
         "X-Webhook-Signature": signEvoliaBody(body, secret),
-        "User-Agent": "CEO-Summit-Platform/1.0 (+https://app.ceo-summit.mg)",
+        "User-Agent": `CEO-Summit-Platform/1.0 (+${appUrl()})`,
       },
       body,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

@@ -24,7 +24,7 @@ export const MESSAGING_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "conversationUrl",
         label: "Lien vers la conversation",
-        example: "https://app.ceo-summit.mg/messagerie/conv_1",
+        example: "https://b2b.ceo-summit.mg/messagerie/conv_1",
       },
     ],
     defaultSubject: "Nouveau message de {{senderName}}",

@@ -52,7 +52,7 @@ export const ROOM_MODERATION_TEMPLATES: EmailTemplateDefinition[] = [
     triggerHint: "app/actions/members.ts::setMemberStatus (reactivateMember)",
     variables: [
       { key: "memberFirstName", label: "Prénom du membre", example: "Jean-Pierre" },
-      { key: "loginUrl", label: "Lien de connexion", example: "https://app.ceo-summit.mg/login" },
+      { key: "loginUrl", label: "Lien de connexion", example: "https://b2b.ceo-summit.mg/login" },
     ],
     defaultSubject: "Votre compte CEO Summit a été réactivé",
     defaultBlocks: [

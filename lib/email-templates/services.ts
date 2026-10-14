@@ -23,7 +23,7 @@ export const SERVICES_TEMPLATES: EmailTemplateDefinition[] = [
       {
         key: "serviceUrl",
         label: "Lien vers la fiche publiée",
-        example: "https://app.ceo-summit.mg/catalogue/services/svc_1",
+        example: "https://b2b.ceo-summit.mg/catalogue/services/svc_1",
       },
     ],
     defaultSubject: 'Votre fiche "{{serviceTitle}}" est publiée',

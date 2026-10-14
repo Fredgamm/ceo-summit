@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { appUrl } from "@/lib/app-url";
+
 export const metadata: Metadata = { title: "Intégration API — Evolia" };
 
 /**
@@ -11,7 +13,12 @@ export const metadata: Metadata = { title: "Intégration API — Evolia" };
  * ce document source ; toute modification doit être répercutée des deux
  * côtés.
  */
+// 14 oct. 2026 — rendue à la demande : les adresses affichées sont celles
+// de l'instance consultée (prod ou préprod), pas celles de la compilation.
+export const dynamic = "force-dynamic";
+
 export default function EvoliaIntegrationPage() {
+  const baseUrl = appUrl();
   return (
     <div className="mx-auto max-w-3xl px-6 py-12">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
@@ -109,7 +116,7 @@ export default function EvoliaIntegrationPage() {
           </Callout>
 
           <SubHeading>Requête attendue</SubHeading>
-          <Json>{`POST https://app.ceo-summit.mg/api/webhooks/payments
+          <Json>{`POST ${baseUrl}/api/webhooks/payments
 Content-Type: application/json
 X-Webhook-Signature: sha256=<signature hex>
 X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</Json>
@@ -228,7 +235,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             <strong className="text-navy">Retour vers CEO Summit après paiement :</strong> une fois
             le paiement finalisé sur votre page, redirigez le gestionnaire vers :
           </p>
-          <Json>{`https://app.ceo-summit.mg/entreprise/paiement/confirmation?ref={ceoSummitReference}`}</Json>
+          <Json>{`${baseUrl}/entreprise/paiement/confirmation?ref={ceoSummitReference}`}</Json>
           <p>
             Cette page attend que votre confirmation (§2) soit enregistrée, quelques secondes au
             plus, puis ouvre l&apos;espace du gestionnaire sur la désignation des participants à
