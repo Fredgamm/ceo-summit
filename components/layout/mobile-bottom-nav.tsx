@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Diamond, CalendarDays, Mail, MessagesSquare, LogOut } from "lucide-react";
+import { Home, LayoutGrid, Mail, MessagesSquare, Building2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { SignOutButton } from "@/components/auth/sign-out-button";
 
 const ITEMS = [
-  { href: "/evenements", label: "Événements", icon: CalendarDays },
-  { href: "/deal-room", label: "Deal Room", icon: Diamond },
+  { href: "/dashboard", label: "Accueil", icon: Home },
+  { href: "/catalogue", label: "Membres", icon: LayoutGrid },
   { href: "/salles", label: "Salles", icon: MessagesSquare, badgeKey: "rooms" as const },
   { href: "/messagerie", label: "Messages", icon: Mail, badgeKey: "messages" as const },
+  { href: "/entreprise", label: "Entreprise", icon: Building2 },
 ];
 
 const ITEM_CLASSNAME =
@@ -26,6 +26,10 @@ const ITEM_CLASSNAME =
  * découpage header/footer attendu ; Salles et Déconnexion (absents
  * jusqu'ici) les remplacent ici. Complète, avec MobileHeader, le repli
  * mobile de la sidebar desktop (components/layout/member-sidebar.tsx).
+ *
+ * 14 oct. 2026 — navigation du quotidien en bas, à portée de pouce :
+ * Accueil, Membres, Salles, Messages, Mon Entreprise. Événements et Deal
+ * Room passent en haut ; la déconnexion se fait depuis « Mon profil ».
  */
 export function MobileBottomNav({
   badges = {},
@@ -59,10 +63,6 @@ export function MobileBottomNav({
             </Link>
           );
         })}
-        <SignOutButton className={ITEM_CLASSNAME}>
-          <LogOut className="h-[18px] w-[18px]" strokeWidth={2} />
-          Déconnexion
-        </SignOutButton>
       </div>
     </nav>
   );

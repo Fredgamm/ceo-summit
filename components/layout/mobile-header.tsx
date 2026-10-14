@@ -3,16 +3,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutGrid, User, Building2, Download } from "lucide-react";
+import { CalendarDays, Diamond, User, Download } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { InstallAppButton } from "@/components/layout/install-app-button";
 
 const ITEMS = [
-  { href: "/dashboard", label: "Accueil", icon: Home },
-  { href: "/catalogue", label: "Membres", icon: LayoutGrid },
+  // 14 oct. 2026 — Accueil, Membres et Mon Entreprise sont passés dans la
+  // barre du bas (MobileBottomNav) ; Événements et Deal Room remontent ici.
+  { href: "/evenements", label: "Événements", icon: CalendarDays },
+  { href: "/deal-room", label: "Deal Room", icon: Diamond },
   { href: "/profil", label: "Profil", icon: User },
-  { href: "/entreprise", label: "Mon Entreprise", icon: Building2 },
 ];
 
 /**
