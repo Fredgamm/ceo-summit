@@ -25,7 +25,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** E8-T06 — fiche d'examen : contenu, checklist, décision, navigation dans la file. */
-export default async function AdminOpportunityDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminOpportunityDetailPage(props: {
+  params: Promise<{ id: string }>;
+}) {
+  const params = await props.params;
   try {
     await requireAdmin("deal-room");
   } catch (err) {

@@ -19,7 +19,8 @@ export const metadata: Metadata = { title: "Mon badge" };
  * Evolia, en devient responsable) : ce badge reste une confirmation
  * d'inscription imprimable/consultable, sans QR ni mention d'accueil.
  */
-export default async function EventBadgePage({ params }: { params: { id: string } }) {
+export default async function EventBadgePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

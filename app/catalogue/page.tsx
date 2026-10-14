@@ -27,11 +27,10 @@ export const metadata: Metadata = { title: "Liste des membres" };
  * (statut ACTIVE requis sur toute route non publique) — pas de vérification
  * supplémentaire nécessaire ici.
  */
-export default async function CataloguePage({
-  searchParams,
-}: {
-  searchParams: CatalogueSearchParams;
+export default async function CataloguePage(props: {
+  searchParams: Promise<CatalogueSearchParams>;
 }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

@@ -9,7 +9,8 @@ import { timezoneLabel } from "@/lib/event-timezone";
 
 export const metadata: Metadata = { title: "Admin — Nouvelle session" };
 
-export default async function NewEventSessionPage({ params }: { params: { id: string } }) {
+export default async function NewEventSessionPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

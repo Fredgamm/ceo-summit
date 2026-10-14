@@ -74,9 +74,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  experimental: {
-    serverComponentsExternalPackages: ["@prisma/client", "bcryptjs"],
-  },
+  // Next 15 (14 oct. 2026) — anciennement experimental.serverComponentsExternalPackages.
+  serverExternalPackages: ["@prisma/client", "bcryptjs"],
   poweredByHeader: false,
   async headers() {
     return [

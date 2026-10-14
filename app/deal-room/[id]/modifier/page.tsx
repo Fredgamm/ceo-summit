@@ -17,7 +17,8 @@ export const metadata: Metadata = { title: "Modifier une opportunité" };
  * Réservé à l'auteur, et seulement dans ces deux statuts — une opportunité
  * publiée/en attente/dépubliée ne passe pas par ce formulaire.
  */
-export default async function EditOpportunityPage({ params }: { params: { id: string } }) {
+export default async function EditOpportunityPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

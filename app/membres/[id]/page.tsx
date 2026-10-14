@@ -60,13 +60,12 @@ const OPPORTUNITY_STATUS_LABEL: Record<string, string> = {
  * n'a de créneaux publiés). `?onglet=creneaux` l'ouvre directement (lien des
  * emails).
  */
-export default async function MemberProfilePage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { onglet?: string };
+export default async function MemberProfilePage(props: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ onglet?: string }>;
 }) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

@@ -104,13 +104,21 @@ serveur → 700/600, `umask 077` dans `deploy/backup.sh` ;
 
 ## Reste à faire
 
-1. **Migration Next 15.5+** — corrige la majorité des avis Next restants ;
-   y faire **M1** (CSP à nonces, sans `unsafe-inline` en `script-src`) : les
-   nonces sous Next 14 sont eux-mêmes concernés par un avis XSS
-   (GHSA-ffhc-5mcf-pf4q).
-2. **M2 inscription** : seul un parcours avec vérification d'e-mail avant
+1. ~~Migration Next 15.5+~~ **Faite le 14 oct.** : Next 15.5.27, React 19.
+   Codemod officiel `next-async-request-api` (params/searchParams/headers
+   asynchrones, 49 fichiers), `getClientIp()` asynchrone, actions serveur
+   toutes `async`, `serverExternalPackages`. Plus aucun avis de sécurité
+   propre à Next (`npm audit` : 0 critique ; `next` n'est plus signalé que
+   via PostCSS, outil de compilation). Vérifié : compilation de production,
+   1048 tests, connexion réelle et 40 pages membres/admin rendues, action
+   serveur appelée de bout en bout.
+2. **M1 — CSP à nonces** : désormais possible (Next 15.5 corrige l'avis XSS
+   des nonces), mais impose le rendu dynamique de toutes les pages, y compris
+   les pages statiques (`/~offline` du mode hors-ligne, `/cgu`…) : à faire
+   comme chantier à part, avec le service worker.
+3. **M2 inscription** : seul un parcours avec vérification d'e-mail avant
    paiement rendrait le message neutre (le checkout connecte le gestionnaire
    juste après la création). Risque borné par la limite de 5 inscriptions /
    heure / IP. À rediscuter si l'abus devient réel.
-3. Hors périmètre de l'audit, recommandé : test dynamique (DAST), revue
+4. Hors périmètre de l'audit, recommandé : test dynamique (DAST), revue
    PostgreSQL/Redis/Docker et des secrets CI.

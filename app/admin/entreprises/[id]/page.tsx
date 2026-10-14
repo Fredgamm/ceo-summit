@@ -37,7 +37,8 @@ const EVOLIA_STATUS: Record<string, { label: string; variant: "pending" | "activ
   };
 
 /** Phase 2 offres/paiement (30 juillet 2026) — détail entreprise + revue paiement. */
-export default async function AdminCompanyDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminCompanyDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("entreprises");
   } catch (err) {

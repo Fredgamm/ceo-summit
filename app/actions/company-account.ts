@@ -35,7 +35,7 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   // Même anti-abus que l'ancien signup() — rien n'empêche sinon de créer
   // des comptes/entreprises en boucle, aucune vérification d'email requise
   // dans ce parcours self-service.
-  const rateLimit = await checkRateLimit(`signup:${getClientIp()}`, 5, 60 * 60);
+  const rateLimit = await checkRateLimit(`signup:${await getClientIp()}`, 5, 60 * 60);
   if (!rateLimit.allowed) {
     return { success: false, error: RATE_LIMITED_ERROR };
   }

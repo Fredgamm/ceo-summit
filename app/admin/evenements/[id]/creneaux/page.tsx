@@ -36,7 +36,8 @@ const SLOT_BADGE = {
  * événement (conception/21 §3.0 étape 4, P1). Option distincte du
  * Programme (agenda multi-salles). Heures dans le fuseau de l'événement.
  */
-export default async function EventMeetingSlotsPage({ params }: { params: { id: string } }) {
+export default async function EventMeetingSlotsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

@@ -17,11 +17,10 @@ const TABS = [
   { key: "historique", label: "Historique" },
 ];
 
-export default async function AdminCommunicationsPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string };
+export default async function AdminCommunicationsPage(props: {
+  searchParams: Promise<{ tab?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   try {
     await requireAdmin("communications");
   } catch (err) {

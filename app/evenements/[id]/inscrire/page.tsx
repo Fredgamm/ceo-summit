@@ -19,7 +19,8 @@ const TAKEN_STATUSES: RegistrationStatus[] = ["CONFIRMED", "PENDING_PAYMENT"];
  * CTA already encodes (platform access, capacity, already registered, event
  * date) — the disabled button there is a UX hint, not the actual gate.
  */
-export default async function EventRegistrationPage({ params }: { params: { id: string } }) {
+export default async function EventRegistrationPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

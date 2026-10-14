@@ -27,7 +27,7 @@ export async function acceptPartnerInvite(
   token: string,
   input: unknown
 ): Promise<ActionResult<{ email: string }>> {
-  const rateLimit = await checkRateLimit(`partner-invite:${getClientIp()}`, 10, 60 * 60);
+  const rateLimit = await checkRateLimit(`partner-invite:${await getClientIp()}`, 10, 60 * 60);
   if (!rateLimit.allowed) {
     return { success: false, error: "Trop de tentatives. Réessayez plus tard." };
   }

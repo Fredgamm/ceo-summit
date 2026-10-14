@@ -36,11 +36,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** E8-T04 — liste membres (wireframe bo-membres.html, réduite aux filtres/pagination du backlog). */
-export default async function AdminMembresPage({
-  searchParams,
-}: {
-  searchParams: AdminMembersSearchParams;
+export default async function AdminMembresPage(props: {
+  searchParams: Promise<AdminMembersSearchParams>;
 }) {
+  const searchParams = await props.searchParams;
   try {
     await requireAdmin("membres");
   } catch (err) {

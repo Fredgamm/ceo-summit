@@ -6,7 +6,8 @@ import { toExcelCsv } from "@/lib/csv";
 import { formatDateFr } from "@/lib/utils";
 
 /** E3-T04 — "Export liste inscrits CSV". */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

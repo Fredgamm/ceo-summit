@@ -15,7 +15,8 @@ import { formatDateFr, initials } from "@/lib/utils";
 export const metadata: Metadata = { title: "Fiche service" };
 
 /** E5-T02 — description, tarifs, galerie, contact contextuel vers la messagerie. */
-export default async function ServiceDetailPage({ params }: { params: { id: string } }) {
+export default async function ServiceDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

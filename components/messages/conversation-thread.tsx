@@ -54,7 +54,7 @@ export function ConversationThread({
   const socketRef = React.useRef<Socket | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const lastTypingEmitRef = React.useRef(0);
-  const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
   React.useEffect(() => {
     let cancelled = false;

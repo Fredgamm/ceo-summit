@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = { title: "Invitation partenaire" };
 
 /** Module 20 — page publique reçue par e-mail par le gérant d'un partenaire. */
-export default async function PartnerInvitationPage({ params }: { params: { token: string } }) {
+export default async function PartnerInvitationPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const invite = await prisma.partnerInvite.findUnique({
     where: { token: params.token },
     include: { plan: { select: { name: true } } },

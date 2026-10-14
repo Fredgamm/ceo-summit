@@ -24,7 +24,8 @@ export const metadata: Metadata = { title: "Événements" };
 
 const TAKEN_STATUSES: RegistrationStatus[] = ["CONFIRMED", "PENDING_PAYMENT"];
 
-export default async function EventsPage({ searchParams }: { searchParams: EventsSearchParams }) {
+export default async function EventsPage(props: { searchParams: Promise<EventsSearchParams> }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

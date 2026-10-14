@@ -8,7 +8,8 @@ import { RoomForm } from "@/components/admin/rooms/room-form";
 
 export const metadata: Metadata = { title: "Admin — Éditer une salle" };
 
-export default async function EditRoomPage({ params }: { params: { id: string } }) {
+export default async function EditRoomPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("salles");
   } catch (err) {

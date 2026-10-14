@@ -18,7 +18,8 @@ const PAYMENT_LABEL: Record<string, string> = {
 };
 
 /** E3-T04/E3-T05 — liste des inscrits (wireframe bo-evenement-inscrits.html réduit). */
-export default async function EventRegistrationsPage({ params }: { params: { id: string } }) {
+export default async function EventRegistrationsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

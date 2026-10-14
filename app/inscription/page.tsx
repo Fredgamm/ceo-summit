@@ -6,7 +6,7 @@ import { getEurToArRate } from "@/lib/currency-conversion";
 import { CompanySignupWizard } from "@/components/auth/company-signup-wizard";
 import { formatEuro, planPriceEur } from "@/lib/utils";
 
-type PageProps = { searchParams: { offre?: string } };
+type PageProps = { searchParams: Promise<{ offre?: string }> };
 
 /**
  * Checkout hybride Evolia (conception/07/09, 3 septembre 2026) — page
@@ -21,7 +21,8 @@ type PageProps = { searchParams: { offre?: string } };
  * inconnu/désactivé/sponsoring retombe simplement sur le catalogue complet,
  * pas une erreur bloquante.
  */
-export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
+  const searchParams = await props.searchParams;
   const plan = searchParams.offre ? await getPlanBySlug(searchParams.offre) : null;
   if (!plan) return { title: "Créer mon compte" };
 
@@ -34,7 +35,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   return { title, description };
 }
 
-export default async function InscriptionPage({ searchParams }: PageProps) {
+export default async function InscriptionPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const [rawIntendedPlan, rawPlans, sectors, countries, liveEurToArRate] = await Promise.all([
     searchParams.offre ? getPlanBySlug(searchParams.offre) : null,
     getActivePlans({ selfServiceOnly: true }),

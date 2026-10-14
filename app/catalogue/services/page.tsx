@@ -23,11 +23,10 @@ import { AddButton } from "@/components/ui/add-button";
 export const metadata: Metadata = { title: "Catalogue de services" };
 
 /** E5-T01 — liste des fiches services, filtrées par catégorie/pays du prestataire. */
-export default async function ServicesCataloguePage({
-  searchParams,
-}: {
-  searchParams: ServicesSearchParams;
+export default async function ServicesCataloguePage(props: {
+  searchParams: Promise<ServicesSearchParams>;
 }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

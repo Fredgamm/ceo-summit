@@ -18,7 +18,8 @@ export const metadata: Metadata = { title: "Salle" };
 const MESSAGE_PAGE_SIZE = 50;
 
 /** E4-T03 — chat de salle, historique initial + composant temps réel côté client. */
-export default async function RoomPage({ params }: { params: { id: string } }) {
+export default async function RoomPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

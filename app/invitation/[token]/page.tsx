@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = { title: "Invitation" };
 
 /** Phase 2 offres/paiement (30 juillet 2026) — page publique reçue par email. */
-export default async function InvitationPage({ params }: { params: { token: string } }) {
+export default async function InvitationPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const invite = await prisma.companyInvite.findUnique({
     where: { token: params.token },
     include: { company: { select: { name: true } } },

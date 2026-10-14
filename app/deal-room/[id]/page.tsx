@@ -19,7 +19,8 @@ import { formatAriary, formatEuro, formatDateFr, initials } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Détail opportunité" };
 
-export default async function OpportunityDetailPage({ params }: { params: { id: string } }) {
+export default async function OpportunityDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

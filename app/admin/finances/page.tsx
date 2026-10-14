@@ -32,11 +32,10 @@ const TABS = [
   { key: "en-attente", label: "En attente" },
 ];
 
-export default async function AdminFinancesPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string };
+export default async function AdminFinancesPage(props: {
+  searchParams: Promise<{ tab?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   try {
     await requireAdmin("finances");
   } catch (err) {

@@ -10,7 +10,8 @@ import { EmailTemplateEditor } from "@/components/admin/emails/email-template-ed
 
 export const metadata: Metadata = { title: "Admin — Éditer un email" };
 
-export default async function EditEmailTemplatePage({ params }: { params: { key: string } }) {
+export default async function EditEmailTemplatePage(props: { params: Promise<{ key: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("emails");
   } catch (err) {

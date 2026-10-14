@@ -26,7 +26,8 @@ const LOCAL_STORAGE_DIR = path.join(process.cwd(), ".local-storage");
  * désormais (lib/local-storage-access.ts), refus par défaut ; le statut du
  * compte est relu en base (lib/require-viewer.ts).
  */
-export async function GET(req: Request, { params }: { params: { segments: string[] } }) {
+export async function GET(req: Request, props: { params: Promise<{ segments: string[] }> }) {
+  const params = await props.params;
   if (isR2Configured()) {
     return NextResponse.json({ error: "Not found." }, { status: 404 });
   }

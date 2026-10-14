@@ -24,11 +24,10 @@ export const metadata: Metadata = { title: "Créer mon entreprise" };
  * l'URL de redirection post-création vers `/entreprise/paiement?offre=...`
  * — la résolution/validation du slug se fait là-bas, pas ici.
  */
-export default async function CreateCompanyPage({
-  searchParams,
-}: {
-  searchParams: { offre?: string };
+export default async function CreateCompanyPage(props: {
+  searchParams: Promise<{ offre?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

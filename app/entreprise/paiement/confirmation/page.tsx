@@ -21,11 +21,10 @@ export const metadata: Metadata = { title: "Confirmation du paiement" };
  * jusqu'à ce qu'elle soit enregistrée, puis on ouvre l'espace du gérant sur
  * la désignation des participants à l'événement.
  */
-export default async function PaymentConfirmationPage({
-  searchParams,
-}: {
-  searchParams: { ref?: string };
+export default async function PaymentConfirmationPage(props: {
+  searchParams: Promise<{ ref?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

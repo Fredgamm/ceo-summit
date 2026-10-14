@@ -10,11 +10,10 @@ import { EventSessionForm } from "@/components/admin/events/event-session-form";
 
 export const metadata: Metadata = { title: "Admin — Éditer une session" };
 
-export default async function EditEventSessionPage({
-  params,
-}: {
-  params: { id: string; sessionId: string };
+export default async function EditEventSessionPage(props: {
+  params: Promise<{ id: string; sessionId: string }>;
 }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

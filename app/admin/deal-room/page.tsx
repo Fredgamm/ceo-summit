@@ -41,11 +41,10 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** E8-T06 — file de modération Deal Room : à valider / actives / archivées. */
-export default async function AdminDealRoomPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string; q?: string; type?: string; sector?: string };
+export default async function AdminDealRoomPage(props: {
+  searchParams: Promise<{ tab?: string; q?: string; type?: string; sector?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   try {
     await requireAdmin("deal-room");
   } catch (err) {

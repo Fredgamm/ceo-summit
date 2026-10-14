@@ -26,11 +26,8 @@ import { AddButton } from "@/components/ui/add-button";
 export const metadata: Metadata = { title: "Deal Room" };
 
 /** E6-T01 — liste des opportunités publiées, visible par tout membre actif. */
-export default async function DealRoomPage({
-  searchParams,
-}: {
-  searchParams: DealRoomSearchParams;
-}) {
+export default async function DealRoomPage(props: { searchParams: Promise<DealRoomSearchParams> }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

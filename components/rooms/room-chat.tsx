@@ -50,7 +50,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const lastTypingEmitRef = React.useRef(0);
-  const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const typingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>(undefined);
 
   React.useEffect(() => {
     let cancelled = false;

@@ -29,11 +29,10 @@ export const metadata: Metadata = { title: "Paiement" };
  * fait que présélectionner visuellement l'offre dans `PlanPicker`, aucune
  * écriture avant que l'utilisateur ne confirme son choix.
  */
-export default async function CompanyPaymentPage({
-  searchParams,
-}: {
-  searchParams: { offre?: string };
+export default async function CompanyPaymentPage(props: {
+  searchParams: Promise<{ offre?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

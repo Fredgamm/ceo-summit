@@ -48,7 +48,7 @@ describe("GET /api/messagerie/[id]/messages", () => {
 
   it("rejects an unauthenticated request", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
-    const res = await GET(makeRequest(), { params: { id: "conv_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "conv_1" }) });
     expect(res.status).toBe(401);
   });
 
@@ -58,12 +58,12 @@ describe("GET /api/messagerie/[id]/messages", () => {
       member1Id: "user_2",
       member2Id: "user_3",
     } as never);
-    const res = await GET(makeRequest(), { params: { id: "conv_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "conv_1" }) });
     expect(res.status).toBe(403);
   });
 
   it("returns decrypted messages in chronological order", async () => {
-    const res = await GET(makeRequest(), { params: { id: "conv_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "conv_1" }) });
     const json = await res.json();
     expect(res.status).toBe(200);
     expect(json.data).toEqual([
@@ -78,7 +78,7 @@ describe("GET /api/messagerie/[id]/messages", () => {
       createdAt: new Date("2026-01-02"),
     } as never);
 
-    await GET(makeRequest("msg_2"), { params: { id: "conv_1" } });
+    await GET(makeRequest("msg_2"), { params: Promise.resolve({ id: "conv_1" }) });
 
     expect(prisma.message.findFirst).toHaveBeenCalledWith({
       where: { id: "msg_2", conversationId: "conv_1" },

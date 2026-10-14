@@ -21,11 +21,10 @@ export const metadata: Metadata = { title: "Admin — Offres" };
  * l'admin. `?eventId=` (Phase 2quater, 1er août 2026) filtre aux offres
  * d'un évènement précis, arrivée depuis sa fiche admin.
  */
-export default async function AdminPlansPage({
-  searchParams,
-}: {
-  searchParams: { eventId?: string };
+export default async function AdminPlansPage(props: {
+  searchParams: Promise<{ eventId?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   try {
     await requireAdmin("plans");
   } catch (err) {

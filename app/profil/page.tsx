@@ -11,13 +11,15 @@ export const metadata: Metadata = { title: "Mon profil" };
  * connecté, tel que les autres le voient, avec en plus sa complétion, ses
  * coordonnées et ses contenus non publiés. L'édition reste sur /profil/editer.
  */
-export default async function MyProfilePage({
-  searchParams,
-}: {
-  searchParams?: { onglet?: string };
-}) {
+export default async function MyProfilePage(props: { searchParams: Promise<{ onglet?: string }> }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  return <MemberProfilePage params={{ id: session.user.id }} searchParams={searchParams} />;
+  // Next 15 — la page membre attend des `params`/`searchParams` asynchrones.
+  return (
+    <MemberProfilePage
+      params={Promise.resolve({ id: session.user.id })}
+      searchParams={props.searchParams}
+    />
+  );
 }

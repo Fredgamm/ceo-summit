@@ -13,7 +13,8 @@ export const metadata: Metadata = { title: "Conversation" };
 const MESSAGE_PAGE_SIZE = 50;
 
 /** E7-T02/T04 — thread + bandeau de contexte Deal Room si la conversation en vient. */
-export default async function ConversationPage({ params }: { params: { id: string } }) {
+export default async function ConversationPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

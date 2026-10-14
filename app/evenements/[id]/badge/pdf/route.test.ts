@@ -48,7 +48,7 @@ describe("GET /evenements/[id]/badge/pdf", () => {
 
   it("rejects an unauthenticated request", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
-    const res = await GET(makeRequest(), { params: { id: "event_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "event_1" }) });
     expect(res.status).toBe(401);
   });
 
@@ -58,7 +58,7 @@ describe("GET /evenements/[id]/badge/pdf", () => {
       badgeQrCode: "qr_1",
     } as never);
 
-    const res = await GET(makeRequest(), { params: { id: "event_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "event_1" }) });
 
     expect(res.status).toBe(403);
     expect(renderEventBadgePdf).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("GET /evenements/[id]/badge/pdf", () => {
 
   it("rejects when there is no registration at all", async () => {
     vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue(null);
-    const res = await GET(makeRequest(), { params: { id: "event_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "event_1" }) });
     expect(res.status).toBe(403);
   });
 
@@ -77,7 +77,7 @@ describe("GET /evenements/[id]/badge/pdf", () => {
       plan: null,
     } as never);
 
-    const res = await GET(makeRequest(), { params: { id: "event_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "event_1" }) });
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/pdf");
@@ -98,7 +98,7 @@ describe("GET /evenements/[id]/badge/pdf", () => {
       plan: { name: "Executive pass" },
     } as never);
 
-    await GET(makeRequest(), { params: { id: "event_1" } });
+    await GET(makeRequest(), { params: Promise.resolve({ id: "event_1" }) });
 
     expect(renderEventBadgePdf).toHaveBeenCalledWith(
       expect.objectContaining({ accessLabel: "Executive pass" })

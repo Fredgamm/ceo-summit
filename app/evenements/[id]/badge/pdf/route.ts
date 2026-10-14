@@ -14,7 +14,8 @@ import { formatDateFr } from "@/lib/utils";
  * JSX, cette route un buffer PDF, peu de logique commune au-delà des
  * requêtes Prisma elles-mêmes.
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Non authentifié." }, { status: 401 });

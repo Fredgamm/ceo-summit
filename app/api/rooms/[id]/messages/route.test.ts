@@ -48,7 +48,7 @@ describe("GET /api/rooms/[id]/messages", () => {
 
   it("rejects an unauthenticated request", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
-    const res = await GET(makeRequest(), { params: { id: "room_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "room_1" }) });
     expect(res.status).toBe(401);
   });
 
@@ -63,12 +63,12 @@ describe("GET /api/rooms/[id]/messages", () => {
       status: "ACTIVE",
       minTier: "CHAIRMAN_ONLY",
     } as never);
-    const res = await GET(makeRequest(), { params: { id: "room_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "room_1" }) });
     expect(res.status).toBe(200);
   });
 
   it("returns the most recent page in chronological order", async () => {
-    const res = await GET(makeRequest(), { params: { id: "room_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "room_1" }) });
     const json = await res.json();
     expect(res.status).toBe(200);
     expect(json.data.map((m: { id: string }) => m.id)).toEqual(["msg_1", "msg_2"]);
@@ -80,7 +80,7 @@ describe("GET /api/rooms/[id]/messages", () => {
       createdAt: new Date("2026-01-02"),
     } as never);
 
-    await GET(makeRequest("msg_2"), { params: { id: "room_1" } });
+    await GET(makeRequest("msg_2"), { params: Promise.resolve({ id: "room_1" }) });
 
     expect(prisma.roomMessage.findFirst).toHaveBeenCalledWith({
       where: { id: "msg_2", roomId: "room_1" },
@@ -97,7 +97,7 @@ describe("GET /api/rooms/[id]/messages", () => {
       { id: "msg_1", createdAt: new Date("2026-01-01"), attachmentKey: "salles/room_1/doc.pdf" },
     ] as never);
 
-    const res = await GET(makeRequest(), { params: { id: "room_1" } });
+    const res = await GET(makeRequest(), { params: Promise.resolve({ id: "room_1" }) });
     const json = await res.json();
 
     expect(json.data[0].attachmentUrl).not.toBe("salles/room_1/doc.pdf");

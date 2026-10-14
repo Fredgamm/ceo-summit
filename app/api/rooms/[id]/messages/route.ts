@@ -14,7 +14,8 @@ const PAGE_SIZE = 50;
  * server-side by the page itself; this route only serves older pages as the
  * member scrolls up.
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // Audit sécurité (25 septembre 2026) — relit `User.status` (et la date de
   // changement de mot de passe) en base plutôt que de se fier au seul JWT.
   const viewerResult = await requireViewer();

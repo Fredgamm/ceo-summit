@@ -34,7 +34,8 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** E8-T04 — détail membre (4 onglets, wireframe bo-membre-detail.html réduit au périmètre backlog). */
-export default async function AdminMemberDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminMemberDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("membres");
   } catch (err) {

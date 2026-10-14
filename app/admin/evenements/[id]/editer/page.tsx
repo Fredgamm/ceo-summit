@@ -10,7 +10,8 @@ import { EventStatusActions } from "@/components/admin/event-status-actions";
 
 export const metadata: Metadata = { title: "Admin — Éditer l'événement" };
 
-export default async function EditEventPage({ params }: { params: { id: string } }) {
+export default async function EditEventPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

@@ -39,7 +39,8 @@ const TAKEN_STATUSES: RegistrationStatus[] = ["CONFIRMED", "PENDING_PAYMENT"];
  * publiquement ici (même logique que le wireframe : "Lien envoyé par
  * email") — seuls les inscrits confirmés le reçoivent par email.
  */
-export default async function EventDetailPage({ params }: { params: { id: string } }) {
+export default async function EventDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

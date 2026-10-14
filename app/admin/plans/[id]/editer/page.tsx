@@ -10,7 +10,8 @@ import { PlanShareButton } from "@/components/admin/plans/plan-share-button";
 
 export const metadata: Metadata = { title: "Admin — Éditer une offre" };
 
-export default async function EditPlanPage({ params }: { params: { id: string } }) {
+export default async function EditPlanPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("plans");
   } catch (err) {

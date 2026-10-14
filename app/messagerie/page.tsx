@@ -9,7 +9,8 @@ import { EmptyState } from "@/components/ui/empty-state";
  * retrouve ou crée le fil (startConversation) puis redirige dessus, pour
  * qu'aucune page d'origine n'ait sa propre logique de création.
  */
-export default async function MessageriePage({ searchParams }: { searchParams: { new?: string } }) {
+export default async function MessageriePage(props: { searchParams: Promise<{ new?: string }> }) {
+  const searchParams = await props.searchParams;
   if (searchParams.new) {
     const result = await startConversation(searchParams.new);
     if (result.success) redirect(`/messagerie/${result.data.id}`);

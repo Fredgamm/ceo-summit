@@ -28,7 +28,7 @@ export async function requestPasswordReset(email: string): Promise<ActionResult>
   // Sprint de correction (5 août 2026, EX-T01) — anti-spam par IP : sans
   // ça, un même visiteur pouvait déclencher un envoi Resend illimité vers
   // n'importe quel email existant.
-  const rateLimit = await checkRateLimit(`password-reset:${getClientIp()}`, 5, 60 * 60);
+  const rateLimit = await checkRateLimit(`password-reset:${await getClientIp()}`, 5, 60 * 60);
   if (!rateLimit.allowed) {
     return { success: false, error: RATE_LIMITED_ERROR };
   }

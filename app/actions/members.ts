@@ -79,11 +79,11 @@ async function setMemberStatus(
   return { success: true, data: undefined };
 }
 
-export const suspendMember = (userId: string) =>
+export const suspendMember = async (userId: string) =>
   setMemberStatus(userId, "SUSPENDED", "member.suspend");
-export const excludeMember = (userId: string) =>
+export const excludeMember = async (userId: string) =>
   setMemberStatus(userId, "CANCELLED", "member.exclude");
-export const reactivateMember = (userId: string) =>
+export const reactivateMember = async (userId: string) =>
   setMemberStatus(userId, "ACTIVE", "member.reactivate");
 
 export async function saveMemberNote(userId: string, note: string): Promise<ActionResult> {

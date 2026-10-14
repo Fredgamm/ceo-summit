@@ -16,7 +16,8 @@ export const metadata: Metadata = { title: "Réinitialiser mon mot de passe" };
  * (PASSWORD_RESET_TOKEN_TTL_MS), shorter than activation's 72h since it
  * gates an already-active account.
  */
-export default async function ResetPasswordPage({ params }: { params: { token: string } }) {
+export default async function ResetPasswordPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const result = await checkResetToken(params.token);
 
   if (!result.valid) {

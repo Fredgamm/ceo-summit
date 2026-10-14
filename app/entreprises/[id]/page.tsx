@@ -72,13 +72,12 @@ const TAB_VALUES = ["apercu", "membres", "deal-room", "services", "gestion", "mo
 /** Onglets réservés au gérant de l'entreprise — rapport QA du 1er oct. §2.2. */
 const ADMIN_ONLY_TABS: readonly string[] = ["gestion", "modifier"];
 
-export default async function CompanyProfilePage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { tab?: string };
+export default async function CompanyProfilePage(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

@@ -24,11 +24,10 @@ const TABS = [
  * Accès restreint à SUPER_ADMIN (voir lib/admin-rbac.ts — "parametres"
  * n'apparaît dans aucune autre liste de sections).
  */
-export default async function AdminParametresPage({
-  searchParams,
-}: {
-  searchParams: { tab?: string };
+export default async function AdminParametresPage(props: {
+  searchParams: Promise<{ tab?: string }>;
 }) {
+  const searchParams = await props.searchParams;
   let userId: string;
   try {
     ({ userId } = await requireAdmin("parametres"));

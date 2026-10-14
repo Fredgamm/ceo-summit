@@ -27,7 +27,8 @@ export const metadata: Metadata = { title: "Admin — Agenda de l'évènement" }
  * simple ; une vraie grille multi-colonnes serait une itération séparée
  * si le nombre de salles en parallèle le justifie).
  */
-export default async function EventAgendaPage({ params }: { params: { id: string } }) {
+export default async function EventAgendaPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     await requireAdmin("evenements");
   } catch (err) {

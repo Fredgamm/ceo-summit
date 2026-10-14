@@ -16,7 +16,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 export const metadata: Metadata = { title: "Salles thématiques" };
 
 /** E4-T02 — liste des salles, badge "nouveau message". */
-export default async function RoomsPage({ searchParams }: { searchParams: RoomsSearchParams }) {
+export default async function RoomsPage(props: { searchParams: Promise<RoomsSearchParams> }) {
+  const searchParams = await props.searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 

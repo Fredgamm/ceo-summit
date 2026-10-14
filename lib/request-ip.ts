@@ -20,8 +20,9 @@ import { headers } from "next/headers";
  * (Nginx écrase toute valeur envoyée par celui-ci) — c'est donc la seule
  * source fiable, et elle passe en premier désormais.
  */
-export function getClientIp(): string {
-  const headerList = headers();
+export async function getClientIp(): Promise<string> {
+  // Next 15 (14 oct. 2026) — `headers()` est asynchrone.
+  const headerList = await headers();
   const realIp = headerList.get("x-real-ip");
   if (realIp) return realIp.trim();
   const forwardedFor = headerList.get("x-forwarded-for");
