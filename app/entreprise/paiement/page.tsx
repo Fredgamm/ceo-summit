@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { CreditCard, Landmark } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,6 +14,19 @@ import { SignOutButton } from "@/components/auth/sign-out-button";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
 import { planPriceEur, pluralize } from "@/lib/utils";
+
+const PAYMENT_MODES = [
+  {
+    icon: CreditCard,
+    label: "Carte bancaire ou Mobile Money",
+    detail: "Paiement immédiat via Evolia, notre partenaire de paiement.",
+  },
+  {
+    icon: Landmark,
+    label: "Virement ou chèque",
+    detail: "Joignez la preuve de paiement : notre équipe la valide.",
+  },
+];
 
 export const metadata: Metadata = { title: "Paiement" };
 
@@ -186,7 +200,23 @@ export default async function CompanyPaymentPage(props: {
     <JourneyShell
       current="paiement"
       title="Procédez au paiement"
-      subtitle="Carte bancaire ou Mobile Money : paiement immédiat via Evolia, notre partenaire de paiement. Virement ou chèque : joignez la preuve, notre équipe la valide."
+      subtitle={
+        // 14 oct. 2026 — deux modes de paiement, deux lignes distinctes
+        // (une seule phrase les mélangeait).
+        <ul className="mt-1 flex flex-col gap-2.5">
+          {PAYMENT_MODES.map(({ icon: Icon, label, detail }) => (
+            <li key={label} className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-pale text-navy">
+                <Icon className="h-4 w-4" aria-hidden />
+              </span>
+              <span>
+                <strong className="font-semibold text-navy">{label}</strong>
+                <span className="block text-sm text-text-mid">{detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      }
       card={card}
       headerAction={signOut}
     >
