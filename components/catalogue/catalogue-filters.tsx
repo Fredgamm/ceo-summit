@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Search } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
+import { FILTER_CHIP_CLASS, FilterChipRow } from "@/components/ui/filter-chip-row";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { ReferentialSelect } from "@/components/referentials/referential-select";
@@ -20,11 +20,6 @@ const SORTS = [
   { value: "recent", short: "Récents", label: "Activité récente" },
   { value: "alpha", short: "A → Z", label: "Alphabétique" },
 ];
-
-const CHIP =
-  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const CHIP_ON = "border-navy bg-navy text-white";
-const CHIP_OFF = "border-border bg-white text-text-mid hover:border-navy-light";
 
 /**
  * E2-T03 — filters/sort/search drive the URL's query string (server
@@ -65,16 +60,6 @@ export function CatalogueFilters({
   const activeSort = searchParams.get("tri") || "offre";
   const hasFilters = Boolean(activeSector || activeCountry || searchParams.get("q"));
 
-  // Sur mobile, la ligne des secteurs défile : on y ramène le secteur choisi,
-  // sinon il peut rester caché hors de l'écran (sans faire défiler la page).
-  const sectorRowRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    const row = sectorRowRef.current;
-    const chip = row?.querySelector<HTMLElement>("[aria-pressed=true]");
-    if (!row || !chip || row.scrollWidth <= row.clientWidth) return;
-    row.scrollTo({ left: chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2 });
-  }, [activeSector]);
-
   function clearFilters() {
     setQ("");
     const params = new URLSearchParams(searchParams.toString());
@@ -86,58 +71,33 @@ export function CatalogueFilters({
     // 14 oct. 2026 — mobile : secteurs sur une seule ligne qui défile (ils
     // occupaient six lignes), pays et tri côte à côte à largeur égale.
     <div className="mb-5 flex flex-col gap-3">
-      <div className="relative sm:max-w-[360px]">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-        <Input
-          type="search"
-          placeholder="Nom, entreprise, secteur…"
-          aria-label="Rechercher un membre"
-          className="pl-9"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
+      <SearchField
+        value={q}
+        onChange={setQ}
+        placeholder="Nom, entreprise, secteur…"
+        label="Rechercher un membre"
+        className="sm:max-w-[360px]"
+      />
 
-      <div
-        ref={sectorRowRef}
-        role="group"
-        aria-label="Secteur"
-        className={cn(
-          "relative -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          "[mask-image:linear-gradient(to_right,#000_88%,transparent)]",
-          "sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:[mask-image:none]"
-        )}
-      >
-        <button
-          type="button"
-          aria-pressed={!activeSector}
-          onClick={() => updateParam("secteur", "")}
-          className={cn(CHIP, !activeSector ? CHIP_ON : CHIP_OFF)}
-        >
-          Tous les secteurs
-        </button>
-        {visibleReferentialOptions(sectors, [activeSector]).map((sector) => (
-          <button
-            key={sector}
-            type="button"
-            aria-pressed={activeSector === sector}
-            onClick={() => updateParam("secteur", sector)}
-            className={cn(CHIP, activeSector === sector ? CHIP_ON : CHIP_OFF)}
-          >
-            {sector}
-          </button>
-        ))}
-        <ReferentialSearchButton
-          options={sectors}
-          title="Rechercher un secteur"
-          selected={activeSector ? [activeSector] : []}
-          onPick={(sector) => updateParam("secteur", sector)}
-          className={cn(
-            CHIP,
-            "border-dashed border-border bg-white text-navy-mid hover:border-navy-light"
-          )}
-        />
-      </div>
+      <FilterChipRow
+        label="Secteur"
+        allLabel="Tous les secteurs"
+        options={visibleReferentialOptions(sectors, [activeSector])}
+        value={activeSector}
+        onChange={(sector) => updateParam("secteur", sector)}
+        trailing={
+          <ReferentialSearchButton
+            options={sectors}
+            title="Rechercher un secteur"
+            selected={activeSector ? [activeSector] : []}
+            onPick={(sector) => updateParam("secteur", sector)}
+            className={cn(
+              FILTER_CHIP_CLASS,
+              "border-dashed border-border bg-white text-navy-mid hover:border-navy-light"
+            )}
+          />
+        }
+      />
 
       <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
         <ReferentialSelect

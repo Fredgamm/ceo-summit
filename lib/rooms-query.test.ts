@@ -39,4 +39,15 @@ describe("buildRoomsWhere", () => {
   it("ignores an unknown sector", () => {
     expect(buildRoomsWhere({ secteur: "Bidon" }, VALID_SECTORS).sector).toBeUndefined();
   });
+
+  it("searches the room name and description, case-insensitively", () => {
+    expect(buildRoomsWhere({ q: "  btp " }, VALID_SECTORS).OR).toEqual([
+      { name: { contains: "btp", mode: "insensitive" } },
+      { description: { contains: "btp", mode: "insensitive" } },
+    ]);
+  });
+
+  it("ignores a blank search", () => {
+    expect(buildRoomsWhere({ q: "   " }, VALID_SECTORS).OR).toBeUndefined();
+  });
 });

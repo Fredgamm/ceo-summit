@@ -3,7 +3,8 @@
 import * as React from "react";
 import type { Socket } from "socket.io-client";
 import { toast } from "sonner";
-import { Paperclip, Send } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, FileText, Lock, Paperclip, Send } from "lucide-react";
 
 import { getSocketClient, onSocketReconnect } from "@/lib/socket-client";
 import { reportRoomMessage } from "@/app/actions/rooms";
@@ -11,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CHAT_MESSAGE_MAX_LENGTH } from "@/lib/validations/message";
-import { cn, formatDateFr, initials } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 
 export interface RoomMessageData {
   id: string;
@@ -25,13 +26,42 @@ export interface RoomMessageData {
 }
 
 interface RoomChatProps {
-  room: { id: string; name: string };
+  room: { id: string; name: string; sector: string };
   initialMessages: RoomMessageData[];
   hasMoreOlder: boolean;
   viewer: { id: string };
 }
 
 const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * 14 oct. 2026 — lecture mobile : séparateur par jour, heure sur chaque
+ * message, messages consécutifs d'un même auteur regroupés (avatar et nom
+ * une seule fois). Fuseau de la plateforme, comme lib/utils.ts::formatDateFr.
+ */
+const TIME_ZONE = "Indian/Antananarivo";
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+const dayKeyFormat = new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE });
+const timeFormat = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const dayFormat = new Intl.DateTimeFormat("fr-FR", {
+  timeZone: TIME_ZONE,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+
+function dayLabel(date: Date): string {
+  const key = dayKeyFormat.format(date);
+  const today = new Date();
+  if (key === dayKeyFormat.format(today)) return "Aujourd'hui";
+  if (key === dayKeyFormat.format(new Date(today.getTime() - 86_400_000))) return "Hier";
+  const label = dayFormat.format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
 const TYPING_EMIT_THROTTLE_MS = 2000;
 const TYPING_INDICATOR_TIMEOUT_MS = 3000;
 
@@ -104,6 +134,15 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages.length]);
+
+  // Zone de saisie qui grandit avec le texte (jusqu'à ~5 lignes).
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  React.useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [text]);
 
   async function loadOlder() {
     if (messages.length === 0 || loadingMore) return;
@@ -184,18 +223,35 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
   }
 
   return (
-    // Audit mobile 22 sept. 2026 (conception/14 §1) — 188px = padding haut du
-    // conteneur AppShell côté mobile (pt-16, 64px, réservé pour MobileHeader)
-    // + padding bas (pb-24, 96px, réservé pour MobileBottomNav) + 28px de
-    // marge (même méthode que l'ancien 140px = 16+96+28 avant l'ajout du
-    // header mobile). Desktop (md:) inchangé, AppShell n'y réserve que p-7.
-    <div className="flex h-[calc(100dvh-188px)] flex-col rounded-lg border border-border bg-white md:h-[calc(100vh-140px)]">
-      <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-        <div>
-          <h2 className="text-sm font-bold text-navy">{room.name}</h2>
-          <p className="text-xs text-text-muted">
-            {onlineCount != null ? `${onlineCount} en ligne` : "Connexion…"}
-            {typing && " · un membre est en train d'écrire…"}
+    // 14 oct. 2026 — mobile : pleine largeur et pleine hauteur entre l'en-tête
+    // (52 px) et la barre du bas (54 px + zone de sécurité) ; les marges
+    // négatives annulent le padding d'AppShell pour que la page ne défile pas
+    // (seule la conversation défile). Lien retour et secteur dans l'en-tête.
+    <div className="-mx-4 -mb-24 -mt-3 flex h-[calc(100dvh-106px-env(safe-area-inset-bottom,0px))] flex-col bg-white md:m-0 md:h-[calc(100vh-56px)] md:rounded-lg md:border md:border-border">
+      <div className="flex items-center gap-2 border-b border-border px-2 py-2.5 md:px-4">
+        <Link
+          href="/salles"
+          aria-label="Retour aux salles"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-navy hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div className="min-w-0">
+          <h1 className="truncate text-[15px] font-bold leading-tight text-navy">{room.name}</h1>
+          <p className="truncate text-xs text-text-muted">
+            {typing ? (
+              <span className="text-navy-mid">Un membre est en train d&apos;écrire…</span>
+            ) : (
+              <>
+                {room.sector}
+                {onlineCount != null && (
+                  <>
+                    {" · "}
+                    <span className="text-emerald-700">{onlineCount} en ligne</span>
+                  </>
+                )}
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -205,87 +261,132 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
         role="log"
         aria-live="polite"
         aria-relevant="additions"
-        className="flex-1 overflow-y-auto px-5 py-4"
+        className="flex-1 overflow-y-auto px-3 py-3 md:px-5"
       >
+        <p className="mx-auto mb-3 flex max-w-xs items-center justify-center gap-1.5 text-center text-[11px] text-text-muted">
+          <Lock className="h-3 w-3 shrink-0" aria-hidden />
+          Échanges confidentiels entre membres.
+        </p>
+
         {hasMore && (
           <div className="mb-3 text-center">
             <Button variant="outline" size="sm" onClick={loadOlder} disabled={loadingMore}>
-              {loadingMore ? "Chargement…" : "Charger les messages précédents"}
+              {loadingMore ? "Chargement…" : "Messages précédents"}
             </Button>
           </div>
         )}
 
-        <div className="flex flex-col gap-4">
-          {messages.map((message) => {
+        {messages.length === 0 && (
+          <p className="mt-10 text-center text-sm text-text-muted">
+            Aucun message pour l&apos;instant. Lancez la discussion !
+          </p>
+        )}
+
+        <ol className="flex flex-col">
+          {messages.map((message, index) => {
             const mine = message.authorId === viewer.id;
+            const at = new Date(message.createdAt);
+            const previous = messages[index - 1];
+            const previousAt = previous ? new Date(previous.createdAt) : null;
+            const newDay =
+              !previousAt || dayKeyFormat.format(previousAt) !== dayKeyFormat.format(at);
+            const grouped =
+              !newDay &&
+              previous?.authorId === message.authorId &&
+              previousAt != null &&
+              at.getTime() - previousAt.getTime() < GROUP_WINDOW_MS;
+
             return (
-              <div
-                key={message.id}
-                className={cn("group flex gap-2.5", mine && "flex-row-reverse")}
-              >
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarImage
-                    src={message.author.avatarUrl ?? undefined}
-                    alt={message.author.name}
-                  />
-                  <AvatarFallback>{initials(message.author.name)}</AvatarFallback>
-                </Avatar>
-                <div className={cn("max-w-[75%]", mine && "text-right")}>
-                  <p className="mb-1 text-xs font-semibold text-navy">
-                    {mine ? "Moi" : message.author.name}
-                  </p>
-                  <div
-                    className={cn(
-                      "inline-block rounded-2xl px-4 py-2.5 text-sm",
-                      mine
-                        ? "rounded-tr-sm bg-navy text-white"
-                        : "rounded-tl-sm border border-border bg-surface text-text-dark"
-                    )}
-                  >
-                    {message.deletedAt ? (
-                      <span className="italic text-text-muted">[Message supprimé]</span>
-                    ) : (
-                      <>
-                        {message.content && (
-                          <p className="whitespace-pre-line">{message.content}</p>
-                        )}
-                        {message.attachmentUrl && (
-                          <a
-                            href={message.attachmentUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={cn(
-                              "mt-1 block underline",
-                              mine ? "text-white" : "text-navy-mid"
-                            )}
-                          >
-                            📎 Pièce jointe
-                          </a>
-                        )}
-                      </>
-                    )}
+              <li key={message.id} className={cn(grouped ? "mt-1" : "mt-4 first:mt-0")}>
+                {newDay && (
+                  <div className="my-3 flex items-center gap-3">
+                    <span className="h-px flex-1 bg-border" aria-hidden />
+                    <span
+                      className="rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-medium text-text-muted"
+                      suppressHydrationWarning
+                    >
+                      {dayLabel(at)}
+                    </span>
+                    <span className="h-px flex-1 bg-border" aria-hidden />
                   </div>
-                  <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-text-muted">
-                    <span>{formatDateFr(message.createdAt)}</span>
-                    {!mine && !message.deletedAt && (
-                      <button
-                        type="button"
-                        onClick={() => handleReport(message.id)}
-                        className="opacity-0 transition-opacity hover:underline focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy group-hover:opacity-100 group-focus-within:opacity-100"
-                      >
-                        Signaler
-                      </button>
+                )}
+                <div className={cn("group flex items-end gap-2", mine && "flex-row-reverse")}>
+                  {mine ? null : grouped ? (
+                    <span className="w-8 shrink-0" aria-hidden />
+                  ) : (
+                    <Avatar className="h-8 w-8 shrink-0 self-start">
+                      <AvatarImage src={message.author.avatarUrl ?? undefined} alt="" />
+                      <AvatarFallback className="text-[11px]">
+                        {initials(message.author.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div
+                    className={cn("flex max-w-[80%] flex-col", mine ? "items-end" : "items-start")}
+                  >
+                    {!mine && !grouped && (
+                      <p className="mb-1 px-1 text-xs font-semibold text-navy">
+                        {message.author.name}
+                      </p>
                     )}
+                    <div
+                      className={cn(
+                        "rounded-2xl px-3.5 py-2 text-[15px] leading-snug",
+                        mine
+                          ? "bg-navy text-white"
+                          : "border border-border bg-surface text-text-dark",
+                        !grouped && (mine ? "rounded-tr-md" : "rounded-tl-md")
+                      )}
+                    >
+                      {message.deletedAt ? (
+                        <span className="italic text-text-muted">Message supprimé</span>
+                      ) : (
+                        <>
+                          {message.content && (
+                            <p className="whitespace-pre-line break-words">{message.content}</p>
+                          )}
+                          {message.attachmentUrl && (
+                            <a
+                              href={message.attachmentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={cn(
+                                "flex items-center gap-1.5 font-medium underline-offset-4 hover:underline",
+                                message.content && "mt-1.5",
+                                mine ? "text-white" : "text-navy-mid"
+                              )}
+                            >
+                              <FileText className="h-4 w-4 shrink-0" aria-hidden />
+                              Pièce jointe
+                            </a>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 px-1 text-[11px] text-text-muted">
+                      <time dateTime={at.toISOString()} suppressHydrationWarning>
+                        {timeFormat.format(at)}
+                      </time>
+                      {!mine && !message.deletedAt && (
+                        <button
+                          type="button"
+                          onClick={() => handleReport(message.id)}
+                          className="hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy md:opacity-0 md:transition-opacity md:focus-visible:opacity-100 md:group-hover:opacity-100"
+                        >
+                          Signaler
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ol>
       </div>
 
-      <div className="sticky bottom-0 border-t border-border bg-white p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] md:pb-4">
-        <div className="flex items-end gap-2">
+      <div className="border-t border-border bg-white px-2 py-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] md:px-4 md:py-3">
+        <div className="flex items-end gap-1.5">
           <input
             ref={fileInputRef}
             type="file"
@@ -299,11 +400,13 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
             size="icon"
             onClick={() => fileInputRef.current?.click()}
             disabled={!joined || sending}
-            title="Joindre un fichier"
+            aria-label="Joindre un fichier (image ou PDF, 5 Mo max)"
+            className="shrink-0 rounded-full"
           >
-            <Paperclip className="h-4 w-4" />
+            <Paperclip className="h-5 w-5" />
           </Button>
           <Textarea
+            ref={textareaRef}
             value={text}
             maxLength={CHAT_MESSAGE_MAX_LENGTH}
             onChange={(e) => {
@@ -316,9 +419,10 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
                 sendMessage();
               }
             }}
-            placeholder={`Écrire un message dans ${room.name}…`}
+            placeholder="Votre message…"
+            aria-label={`Écrire un message dans ${room.name}`}
             rows={1}
-            className="min-h-[40px] flex-1 resize-none"
+            className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl py-2.5 text-[15px] leading-snug"
             disabled={!joined}
           />
           <Button
@@ -326,13 +430,11 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
             disabled={!joined || sending || !text.trim()}
             size="icon"
             aria-label="Envoyer le message"
+            className="shrink-0 rounded-full"
           >
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="mt-2 text-center text-[11px] text-text-muted">
-          Les échanges sont confidentiels et accessibles aux membres de CEO Summit uniquement.
-        </p>
       </div>
     </div>
   );

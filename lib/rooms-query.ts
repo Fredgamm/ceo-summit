@@ -22,6 +22,8 @@ export function meetsRoomAccess(
 
 export interface RoomsSearchParams {
   secteur?: string;
+  /** 14 oct. 2026 — recherche sur le nom et la description de la salle. */
+  q?: string;
 }
 
 /** Always scoped to ACTIVE rooms — archived rooms never appear in the member-facing list. */
@@ -33,6 +35,14 @@ export function buildRoomsWhere(
 
   if (params.secteur && validSectors.includes(params.secteur)) {
     where.sector = params.secteur;
+  }
+
+  const q = params.q?.trim().slice(0, 100);
+  if (q) {
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      { description: { contains: q, mode: "insensitive" } },
+    ];
   }
 
   return where;

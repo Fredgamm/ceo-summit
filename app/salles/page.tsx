@@ -30,7 +30,15 @@ export default async function RoomsPage(props: { searchParams: Promise<RoomsSear
   const validSectors = await getReferentialLabels("sector");
   const where = buildRoomsWhere(searchParams, validSectors);
 
-  const rooms = await prisma.room.findMany({ where, orderBy: { name: "asc" } });
+  const [rooms, sectorGroups] = await Promise.all([
+    prisma.room.findMany({ where, orderBy: { name: "asc" } }),
+    // 14 oct. 2026 — puces de filtre : seulement les secteurs qui ont une salle.
+    prisma.room.groupBy({ by: ["sector"], where: { status: "ACTIVE" } }),
+  ]);
+  const roomSectors = sectorGroups
+    .map((g) => g.sector)
+    .filter((sector) => validSectors.includes(sector))
+    .sort((a, b) => a.localeCompare(b, "fr"));
   const roomIds = rooms.map((r) => r.id);
 
   const [reads, latestMessages] = await Promise.all([
@@ -77,13 +85,13 @@ export default async function RoomsPage(props: { searchParams: Promise<RoomsSear
         </p>
       </div>
 
-      <RoomsFilters sectors={validSectors} />
+      <RoomsFilters sectors={roomSectors} />
 
       {roomCards.length === 0 ? (
         <EmptyState
           icon={MessagesSquare}
           title="Aucune salle trouvée"
-          description="Essayez d'autres filtres."
+          description="Essayez un autre secteur ou une autre recherche."
         />
       ) : (
         <RoomsGrid rooms={roomCards} />

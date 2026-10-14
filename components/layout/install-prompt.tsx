@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 import { Download, Share, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,8 @@ import { promptPwaInstall, usePwaInstall } from "@/lib/pwa-install";
 const VISIT_COUNT_KEY = "ceo-summit-visit-count";
 const DISMISSED_KEY = "ceo-summit-install-dismissed";
 const MIN_VISITS_BEFORE_PROMPT = 2;
+/** 14 oct. 2026 — dans une conversation (salle, messagerie), la bannière masquait la zone de saisie. */
+const CONVERSATION_PATH = /^\/(salles|messagerie)\/[^/]+/;
 
 /**
  * E9-T05 — "Ajouter à l'écran d'accueil". Android/Chrome gets the native
@@ -24,6 +27,7 @@ const MIN_VISITS_BEFORE_PROMPT = 2;
  */
 export function InstallPrompt() {
   const { installed, canPrompt, platform } = usePwaInstall();
+  const pathname = usePathname();
   const [eligible, setEligible] = React.useState(false);
 
   React.useEffect(() => {
@@ -53,6 +57,7 @@ export function InstallPrompt() {
 
   const showIosGuide = platform === "ios";
   if (installed || !eligible || (!canPrompt && !showIosGuide)) return null;
+  if (CONVERSATION_PATH.test(pathname)) return null;
 
   return (
     <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+70px)] z-[190] rounded-lg bg-navy p-4 text-white shadow-card-md md:inset-x-auto md:bottom-4 md:left-[236px] md:w-80">

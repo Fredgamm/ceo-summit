@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -11,7 +10,6 @@ import { toClientRoomMessage } from "@/lib/room-messages";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { AppShell } from "@/components/layout/app-shell";
 import { RoomChat } from "@/components/rooms/room-chat";
-import { Badge } from "@/components/ui/badge";
 
 export const metadata: Metadata = { title: "Salle" };
 
@@ -58,16 +56,9 @@ export default async function RoomPage(props: { params: Promise<{ id: string }> 
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      <Link href="/salles" className="mb-3 inline-block text-sm text-text-muted">
-        ← Salles thématiques
-      </Link>
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge variant="secondary">{room.sector}</Badge>
-      </div>
-
+      {/* 14 oct. 2026 — retour et secteur dans l'en-tête de la conversation. */}
       <RoomChat
-        room={{ id: room.id, name: room.name }}
+        room={{ id: room.id, name: room.name, sector: room.sector }}
         initialMessages={messagesWithUrls.reverse()}
         hasMoreOlder={messages.length === MESSAGE_PAGE_SIZE}
         viewer={{ id: viewer.id }}
