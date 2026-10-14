@@ -54,8 +54,9 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
     category: "COMPANY_BILLING",
     label: "Bienvenue gestionnaire entreprise",
     description:
-      "Envoyé au gestionnaire à la création de son compte et de la fiche entreprise (avant tout paiement), pour lui rappeler l'étape suivante : payer.",
-    triggerHint: "app/actions/company-account.ts::createCompanyAccount",
+      "Envoyé au gestionnaire une fois son adresse e-mail confirmée (après l'inscription, avant tout paiement), pour lui rappeler l'étape suivante : payer.",
+    triggerHint:
+      "lib/email-verification.ts::sendCompanyAdminWelcome (après confirmation de l'adresse)",
     variables: [
       { key: "adminName", label: "Nom du gestionnaire", example: "Jean-Pierre Rakoto" },
       { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },

@@ -33,7 +33,8 @@ const PUBLIC_ROUTES = [
   "/",
   "/~offline",
 ];
-const PUBLIC_PREFIXES = ["/reinitialiser/", "/invitation/", "/partenaire/"];
+// "/verifier-email/" (14 oct. 2026) : lien de confirmation d'adresse, ouvrable sans session.
+const PUBLIC_PREFIXES = ["/reinitialiser/", "/invitation/", "/partenaire/", "/verifier-email/"];
 
 function isPublicRoute(pathname: string) {
   if (PUBLIC_ROUTES.includes(pathname)) return true;

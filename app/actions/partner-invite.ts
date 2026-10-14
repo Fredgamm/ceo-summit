@@ -84,7 +84,14 @@ export async function acceptPartnerInvite(
       if (count === 0) throw new InviteAlreadyConsumedError();
 
       const user = await tx.user.create({
-        data: { name: invite.name, email: invite.email, passwordHash, status: "ACTIVE" },
+        // Le lien d'invitation, reçu à cette adresse, la confirme.
+        data: {
+          name: invite.name,
+          email: invite.email,
+          passwordHash,
+          status: "ACTIVE",
+          emailVerifiedAt: now,
+        },
       });
       const company = await tx.company.create({
         data: {

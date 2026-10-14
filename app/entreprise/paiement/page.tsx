@@ -10,6 +10,7 @@ import { PaymentProofForm } from "@/components/entreprise/payment-proof-form";
 import { PlanPicker } from "@/components/entreprise/plan-picker";
 import { JourneyShell } from "@/components/onboarding/journey-shell";
 import { MembershipCard } from "@/components/onboarding/membership-card";
+import { EmailVerificationPanel } from "@/components/onboarding/email-verification-panel";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
@@ -133,6 +134,24 @@ export default async function CompanyPaymentPage(props: {
   const signOut = (
     <SignOutButton className="flex items-center gap-1.5 text-sm font-semibold text-navy-mid hover:text-navy" />
   );
+
+  // 14 oct. 2026 — pas de paiement tant que l'adresse e-mail n'est pas
+  // confirmée (lien envoyé à l'inscription, lib/email-verification.ts) ; le
+  // choix de l'offre reste possible avant. Même règle côté serveur dans
+  // submitPaymentProof.
+  if (subscription && !viewer.emailVerifiedAt) {
+    return (
+      <JourneyShell
+        current="compte"
+        title="Confirmez votre adresse e-mail"
+        subtitle="Cliquez sur le lien reçu par e-mail pour continuer vers le paiement. C'est par cette adresse que vous recevrez les confirmations et les accès de votre équipe."
+        card={card}
+        headerAction={signOut}
+      >
+        <EmailVerificationPanel email={viewer.email} />
+      </JourneyShell>
+    );
+  }
 
   if (!subscription) {
     return (

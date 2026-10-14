@@ -25,6 +25,10 @@ import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 import { formatEuro } from "@/lib/utils";
 import { PLATFORM_ADMIN_NO_PURCHASE_MESSAGE } from "@/lib/platform-admin-purchase";
 
+/** 14 oct. 2026 — pas de paiement sans adresse confirmée (lib/email-verification.ts). */
+const EMAIL_NOT_VERIFIED_MESSAGE =
+  "Confirmez d'abord votre adresse e-mail avec le lien reçu après l'inscription.";
+
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
 /**
@@ -140,6 +144,7 @@ export async function submitPaymentProof(
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
   if (viewer.isPlatformAdmin) return { success: false, error: PLATFORM_ADMIN_NO_PURCHASE_MESSAGE };
+  if (!viewer.emailVerifiedAt) return { success: false, error: EMAIL_NOT_VERIFIED_MESSAGE };
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
@@ -337,6 +342,7 @@ export async function purchaseUpsellSeats(
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
   if (viewer.isPlatformAdmin) return { success: false, error: PLATFORM_ADMIN_NO_PURCHASE_MESSAGE };
+  if (!viewer.emailVerifiedAt) return { success: false, error: EMAIL_NOT_VERIFIED_MESSAGE };
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },

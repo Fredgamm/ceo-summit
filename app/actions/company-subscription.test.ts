@@ -44,7 +44,10 @@ import {
   cancelPendingEvoliaPayment,
 } from "./company-subscription";
 
-const SESSION = { success: true, viewer: { id: "admin_user_1" } } as never;
+const SESSION = {
+  success: true,
+  viewer: { id: "admin_user_1", emailVerifiedAt: new Date("2026-10-01") },
+} as never;
 
 describe("selectPlan", () => {
   beforeEach(() => {
@@ -198,6 +201,19 @@ describe("submitPaymentProof", () => {
     vi.mocked(prisma.$transaction).mockResolvedValue([{ id: "payment_1" }, {}] as never);
   });
 
+  it("refuses any payment while the manager's address is unconfirmed (14 oct. 2026)", async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      success: true,
+      viewer: { id: "admin_user_1", emailVerifiedAt: null },
+    } as never);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/Confirmez d'abord votre adresse/);
+    expect(prisma.companySubscription.findUnique).not.toHaveBeenCalled();
+  });
+
   it("creates the payment (amount computed from the declared count × unit price) and flips the subscription to PENDING_REVIEW", async () => {
     const result = await submitPaymentProof("sub_1", VALID_INPUT);
     expect(result.success).toBe(true);
@@ -340,7 +356,12 @@ describe("submitPaymentProof", () => {
   it("tells the manager the payment is received and being checked", async () => {
     vi.mocked(requireViewer).mockResolvedValue({
       success: true,
-      viewer: { id: "admin_user_1", name: "Marie", email: "marie@test.local" },
+      viewer: {
+        id: "admin_user_1",
+        name: "Marie",
+        email: "marie@test.local",
+        emailVerifiedAt: new Date("2026-10-01"),
+      },
     } as never);
 
     await submitPaymentProof("sub_1", VALID_INPUT);

@@ -19,12 +19,12 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("@/lib/request-ip", () => ({ getClientIp: vi.fn(() => "127.0.0.1") }));
 vi.mock("@/app/actions/company", () => ({ validateSectorAndCountry: vi.fn() }));
-vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
+vi.mock("@/lib/email-verification", () => ({ sendEmailVerification: vi.fn() }));
 
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { validateSectorAndCountry } from "@/app/actions/company";
-import { sendTransactionalEmail } from "@/lib/resend";
+import { sendEmailVerification } from "@/lib/email-verification";
 import { createCompanyAccount } from "./company-account";
 
 const VALID_INPUT = {
@@ -49,7 +49,7 @@ describe("createCompanyAccount", () => {
       isActive: true,
       isSelfService: true,
     } as never);
-    vi.mocked(sendTransactionalEmail).mockResolvedValue({} as never);
+    vi.mocked(sendEmailVerification).mockResolvedValue(true);
     process.env.NEXTAUTH_URL = "https://app.ceo-summit.mg";
     vi.mocked(validateSectorAndCountry).mockResolvedValue(null);
     txMock.user.create.mockResolvedValue({ id: "user_1" } as never);
@@ -88,26 +88,22 @@ describe("createCompanyAccount", () => {
     });
   });
 
-  it("emails the new company admin a welcome pointing to the payment step", async () => {
+  it("sends the address confirmation link first (welcome email only after confirmation)", async () => {
     await createCompanyAccount(VALID_INPUT);
 
-    expect(sendTransactionalEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "jp.rakoto@example.mg" })
-    );
+    expect(sendEmailVerification).toHaveBeenCalledWith({
+      id: "user_1",
+      name: "Jean-Pierre Rakoto",
+      email: "jp.rakoto@example.mg",
+    });
   });
 
-  it("still succeeds (and logs) when the welcome email fails to send", async () => {
-    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("smtp down"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("still succeeds when the confirmation email cannot be sent (it can be resent)", async () => {
+    vi.mocked(sendEmailVerification).mockResolvedValueOnce(false);
 
     const result = await createCompanyAccount(VALID_INPUT);
 
     expect(result.success).toBe(true);
-    expect(errorSpy).toHaveBeenCalledWith(
-      "[createCompanyAccount] failed to send admin welcome email",
-      expect.any(Error)
-    );
-    errorSpy.mockRestore();
   });
 
   it("only looks up self-service, non-upsell active plans", async () => {
@@ -173,7 +169,7 @@ describe("createCompanyAccount", () => {
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/existe déjà/);
-    expect(sendTransactionalEmail).not.toHaveBeenCalled();
+    expect(sendEmailVerification).not.toHaveBeenCalled();
   });
 
   it("rejects a plan that isn't active/self-service", async () => {

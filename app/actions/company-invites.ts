@@ -333,6 +333,8 @@ export async function acceptCompanyInvite(
           companyId: invite.companyId,
           passwordHash,
           status: "ACTIVE",
+          // Le lien d'invitation, reçu à cette adresse, la confirme.
+          emailVerifiedAt: new Date(),
         },
       });
     });

@@ -1,9 +1,41 @@
 import type { EmailTemplateDefinition } from "./types";
 
 /**
- * Catégorie « Compte » : réinitialisation et changement de mot de passe.
+ * Catégorie « Compte » : confirmation d'adresse, réinitialisation et
+ * changement de mot de passe.
  */
 export const ACCOUNT_APPLICATION_TEMPLATES: EmailTemplateDefinition[] = [
+  {
+    key: "email-verification",
+    category: "ACCOUNT_APPLICATION",
+    label: "Confirmation de l'adresse e-mail",
+    description:
+      "Envoyé au gestionnaire juste après son inscription (et à chaque renvoi) : le paiement n'est possible qu'une fois l'adresse confirmée par ce lien.",
+    triggerHint: "lib/email-verification.ts::sendEmailVerification",
+    variables: [
+      { key: "memberName", label: "Nom du gestionnaire", example: "Jean-Pierre Rakoto" },
+      {
+        key: "verifyUrl",
+        label: "Lien de confirmation",
+        example: "https://b2b.ceo-summit.mg/verifier-email/token",
+      },
+    ],
+    defaultSubject: "Confirmez votre adresse e-mail — CEO Summit",
+    defaultBlocks: [
+      { id: "1", type: "heading", text: "Confirmez votre adresse e-mail" },
+      {
+        id: "2",
+        type: "paragraph",
+        text: "Bonjour {{memberName}}, merci pour votre inscription sur CEO Summit. Pour continuer vers le paiement, confirmez que cette adresse est bien la vôtre.",
+      },
+      { id: "3", type: "button", label: "Confirmer mon adresse e-mail", url: "{{verifyUrl}}" },
+      {
+        id: "4",
+        type: "paragraph",
+        text: "Ce lien est valable 72 heures. Si vous n'êtes pas à l'origine de cette inscription, ignorez simplement cet e-mail.",
+      },
+    ],
+  },
   {
     key: "reset-password",
     category: "ACCOUNT_APPLICATION",

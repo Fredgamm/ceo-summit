@@ -9,8 +9,7 @@ import { validateSectorAndCountry } from "@/app/actions/company";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 import { BCRYPT_ROUNDS } from "@/lib/password";
-import { sendTransactionalEmail } from "@/lib/resend";
-import { resolveEmail } from "@/lib/email-template-resolver";
+import { sendEmailVerification } from "@/lib/email-verification";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -67,8 +66,9 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   // La vérification ci-dessus ne suffit pas pour deux envois simultanés (double
   // clic) : le second échoue sur l'unicité de l'email, à traduire en message
   // plutôt qu'en erreur 500.
+  let createdUser: { id: string };
   try {
-    await prisma.$transaction(async (tx) => {
+    createdUser = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: { name: f.name, email: normalizedEmail, passwordHash, status: "ACTIVE" },
       });
@@ -84,6 +84,7 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
       await tx.companySubscription.create({
         data: { companyId: company.id, planId: plan.id, status: "PENDING_PAYMENT" },
       });
+      return user;
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
@@ -93,22 +94,14 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   }
 
   /**
-   * Audit (25 septembre 2026) — aucun email ne confirmait l'inscription du
-   * gestionnaire ni ne rappelait la prochaine étape (le paiement). Envoyé
-   * après la transaction ; un échec d'envoi est loggué mais ne fait jamais
-   * échouer l'inscription, déjà enregistrée à ce stade.
+   * 14 oct. 2026 — d'abord la confirmation de l'adresse : le paiement n'est
+   * possible qu'après (app/entreprise/paiement/page.tsx). L'e-mail de
+   * bienvenue (« company-admin-welcome », prochaine étape : le paiement) part
+   * une fois l'adresse confirmée (app/verifier-email/[token]/page.tsx). Un
+   * échec d'envoi ne fait pas échouer l'inscription : l'écran de
+   * confirmation propose de renvoyer le lien.
    */
-  try {
-    const email = await resolveEmail("company-admin-welcome", {
-      adminName: f.name,
-      companyName: f.companyName,
-      planName: plan.name,
-      paymentUrl: `${process.env.NEXTAUTH_URL}/entreprise/paiement`,
-    });
-    if (email) await sendTransactionalEmail({ to: normalizedEmail, ...email });
-  } catch (err) {
-    console.error("[createCompanyAccount] failed to send admin welcome email", err);
-  }
+  await sendEmailVerification({ id: createdUser.id, name: f.name, email: normalizedEmail });
 
   return { success: true, data: undefined };
 }
