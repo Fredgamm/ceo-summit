@@ -9,6 +9,7 @@ import {
   COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES,
   COMPANY_PAYMENT_PROOF_MAX_BYTES,
 } from "@/lib/validations/company-payment";
+import { verifiedMimeType } from "@/lib/file-signature";
 
 /**
  * POST /api/company/payment-proof — Phase 2 offres/paiement (30 juillet
@@ -40,12 +41,18 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  // Audit sécurité du 14 oct. 2026 (M3) — type vérifié sur le contenu, pas
+  // sur le Content-Type annoncé par le navigateur ; c'est lui qui est stocké.
+  const mimeType = verifiedMimeType(buffer, COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES);
+  if (!mimeType) {
+    return NextResponse.json({ error: "Format non supporté (image ou PDF)." }, { status: 422 });
+  }
   const key = `company-payments/${viewer.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
   await uploadPrivateObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,
     body: buffer,
-    contentType: file.type,
+    contentType: mimeType,
   });
 
   return NextResponse.json({ data: { key, name: file.name } }, { status: 200 });

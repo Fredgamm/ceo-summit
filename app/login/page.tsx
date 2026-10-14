@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { Diamond, CalendarDays, Mail } from "lucide-react";
 
+import { auth } from "@/auth";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = { title: "Connexion" };
@@ -13,7 +15,11 @@ const FEATURES = [
   { icon: Mail, label: "Messagerie privée entre dirigeants" },
 ];
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  // Déjà connecté avec une session valide en base (voir middleware.ts) → accueil.
+  const session = await auth();
+  if (session?.user) redirect("/dashboard");
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Left brand panel — hidden on mobile (wireframe .login-left) */}

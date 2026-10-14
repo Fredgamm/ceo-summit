@@ -15,7 +15,7 @@ vi.mock("@/lib/plan-access", () => ({
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { authorizeCredentials } from "./auth";
+import { authorizeCredentials, refreshSessionToken } from "./auth";
 
 const CREDENTIALS = { email: "JP@example.mg", password: "Password1" };
 const request = new Request("https://ceo-summit.test/api/auth/callback/credentials", {
@@ -112,5 +112,50 @@ describe("authorizeCredentials", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(makeUser({ status }));
 
     await expect(authorizeCredentials(CREDENTIALS, request)).rejects.toThrow(code);
+  });
+});
+
+describe("refreshSessionToken (audit sécurité du 14 oct. 2026, H1)", () => {
+  const LOGIN_AT = Date.UTC(2026, 9, 14, 8, 0);
+  const token = () =>
+    ({
+      id: "user_1",
+      role: "MEMBER",
+      isPlatformAdmin: true,
+      hasCompanyAccess: false,
+      status: "ACTIVE",
+      loginAt: LOGIN_AT,
+    }) as never;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("refreshes rights from the database (a demoted admin loses them at once)", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeUser({ isPlatformAdmin: false }));
+
+    const refreshed = await refreshSessionToken(token());
+
+    expect(refreshed).toMatchObject({ isPlatformAdmin: false, hasCompanyAccess: true });
+  });
+
+  it("invalidates the session of a suspended account", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(makeUser({ status: "SUSPENDED" }));
+
+    expect(await refreshSessionToken(token())).toBeNull();
+  });
+
+  it("invalidates a session opened before the last password change", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(
+      makeUser({ passwordChangedAt: new Date(LOGIN_AT + 60_000) })
+    );
+
+    expect(await refreshSessionToken(token())).toBeNull();
+  });
+
+  it("invalidates the session of a deleted account", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+
+    expect(await refreshSessionToken(token())).toBeNull();
   });
 });

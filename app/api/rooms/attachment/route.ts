@@ -12,6 +12,7 @@ import {
   ROOM_ATTACHMENT_MAX_BYTES,
   ROOM_ATTACHMENT_ALLOWED_MIME_TYPES,
 } from "@/lib/validations/room";
+import { verifiedMimeType } from "@/lib/file-signature";
 
 /**
  * POST /api/rooms/attachment — E4-T03 "Upload fichier dans le chat (R2, 5 Mo max)".
@@ -59,12 +60,21 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  // Audit sécurité du 14 oct. 2026 (M3) — type vérifié sur le contenu, pas
+  // sur le Content-Type annoncé par le navigateur ; c'est lui qui est stocké.
+  const mimeType = verifiedMimeType(buffer, ROOM_ATTACHMENT_ALLOWED_MIME_TYPES);
+  if (!mimeType) {
+    return NextResponse.json(
+      { error: "Format non supporté (image ou PDF uniquement)." },
+      { status: 422 }
+    );
+  }
   const key = `salles/${roomId}/${randomUUID()}-${sanitizeFilename(file.name)}`;
   await uploadPrivateObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,
     body: buffer,
-    contentType: file.type,
+    contentType: mimeType,
   });
 
   return NextResponse.json({ data: { key, name: file.name } }, { status: 200 });

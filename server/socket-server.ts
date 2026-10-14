@@ -30,6 +30,29 @@ import { scheduleOfflineEmailCheck } from "./offline-message-notifier";
 const RATE_LIMIT_MS = 1000;
 
 /**
+ * Audit sécurité du 14 oct. 2026 (L2) — le délai entre deux messages est
+ * compté par membre, plus par connexion : ouvrir plusieurs onglets ou
+ * sockets ne permet plus de le contourner. En mémoire, ce qui suffit au
+ * conteneur `socket` unique ; à porter dans Redis si on en lance plusieurs.
+ */
+const lastMessageAtByUser = new Map<string, number>();
+
+function isSendingTooFast(userId: string): boolean {
+  return Date.now() - (lastMessageAtByUser.get(userId) ?? 0) < RATE_LIMIT_MS;
+}
+
+/** Appelé une fois le message réellement enregistré, comme avant (un refus ne compte pas). */
+function recordMessageSent(userId: string) {
+  const now = Date.now();
+  lastMessageAtByUser.set(userId, now);
+  if (lastMessageAtByUser.size > 10_000) {
+    for (const [id, at] of lastMessageAtByUser) {
+      if (now - at > RATE_LIMIT_MS) lastMessageAtByUser.delete(id);
+    }
+  }
+}
+
+/**
  * Audit sécurité (25 septembre 2026) — bornes des requêtes de présence :
  * `users:presence`/`rooms:presence` acceptaient une liste d'ids de taille
  * arbitraire (sondage massif de qui est en ligne, coût mémoire/CPU).
@@ -144,9 +167,7 @@ async function handleMessage(
     return { ok: false, error: "invalid_attachment" };
   }
 
-  const now = Date.now();
-  const last = (socket.data.lastMessageAt as number | undefined) ?? 0;
-  if (now - last < RATE_LIMIT_MS) return { ok: false, error: "rate_limited" };
+  if (isSendingTooFast(socket.data.userId as string)) return { ok: false, error: "rate_limited" };
 
   const userId = socket.data.userId as string;
   if (!(await isActiveUser(userId))) return { ok: false, error: "forbidden" };
@@ -164,8 +185,8 @@ async function handleMessage(
     },
     include: { author: { select: { id: true, name: true, avatarUrl: true } } },
   });
+  recordMessageSent(userId);
 
-  socket.data.lastMessageAt = now;
   // B4 — the DB only ever stores the private R2 key; broadcast a
   // short-lived signed URL instead so clients can render `href` directly
   // without needing their own signing round-trip.
@@ -230,9 +251,7 @@ async function handleConversationMessage(
   if (!trimmed) return { ok: false, error: "empty" };
   if (content.length > CHAT_MESSAGE_MAX_LENGTH) return { ok: false, error: "too_long" };
 
-  const now = Date.now();
-  const last = (socket.data.lastMessageAt as number | undefined) ?? 0;
-  if (now - last < RATE_LIMIT_MS) return { ok: false, error: "rate_limited" };
+  if (isSendingTooFast(socket.data.userId as string)) return { ok: false, error: "rate_limited" };
 
   const conversation = await prisma.conversation.findUnique({ where: { id: conversationId } });
   if (!conversation) return { ok: false, error: "not_joined" };
@@ -256,8 +275,7 @@ async function handleConversationMessage(
     where: { id: conversationId },
     data: { lastMessageAt: message.createdAt },
   });
-
-  socket.data.lastMessageAt = now;
+  recordMessageSent(senderId);
 
   io.to(roomName).emit("conversation:message", {
     id: message.id,
@@ -331,6 +349,7 @@ async function handleRoomsPresence(
 }
 
 export function createSocketServer() {
+  lastMessageAtByUser.clear();
   const httpServer = http.createServer();
   const io = new Server(httpServer, {
     cors: { origin: process.env.NEXTAUTH_URL ?? "http://localhost:3000", credentials: true },
@@ -353,7 +372,8 @@ export function createSocketServer() {
     const secret = process.env.NEXTAUTH_SECRET;
     if (!token || !secret) return next(new Error("unauthorized"));
     try {
-      const decoded = jwt.verify(token, secret) as { sub: string };
+      // Audit sécurité du 14 oct. 2026 (L1) — algorithme imposé, jamais lu dans le jeton.
+      const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] }) as { sub: string };
       socket.data.userId = decoded.sub;
       next();
     } catch {

@@ -9,6 +9,7 @@ import {
   BROADCAST_ATTACHMENT_ALLOWED_MIME_TYPES,
   BROADCAST_ATTACHMENT_MAX_BYTES,
 } from "@/lib/validations/broadcast";
+import { verifiedMimeType } from "@/lib/file-signature";
 
 /**
  * POST /api/broadcasts/attachment — rapport QA du 1er oct. 2026 (§3.2a).
@@ -42,12 +43,21 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  // Audit sécurité du 14 oct. 2026 (M3) — type vérifié sur le contenu, pas
+  // sur le Content-Type annoncé par le navigateur ; c'est lui qui est stocké.
+  const mimeType = verifiedMimeType(buffer, BROADCAST_ATTACHMENT_ALLOWED_MIME_TYPES);
+  if (!mimeType) {
+    return NextResponse.json(
+      { error: "Format non supporté (image ou PDF uniquement)." },
+      { status: 422 }
+    );
+  }
   const key = `broadcasts/${randomUUID()}-${sanitizeFilename(file.name)}`;
   await uploadPrivateObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,
     body: buffer,
-    contentType: file.type,
+    contentType: mimeType,
   });
 
   return NextResponse.json({ data: { key, name: file.name } }, { status: 200 });

@@ -9,6 +9,7 @@ import {
   OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES,
   OPPORTUNITY_ATTACHMENT_MAX_BYTES,
 } from "@/lib/validations/opportunity";
+import { verifiedMimeType } from "@/lib/file-signature";
 
 /**
  * POST /api/deal-room/attachment — E6-T03 "documents joints (R2, PDF 10Mo
@@ -44,12 +45,18 @@ export async function POST(req: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  // Audit sécurité du 14 oct. 2026 (M3) — type vérifié sur le contenu, pas
+  // sur le Content-Type annoncé par le navigateur ; c'est lui qui est stocké.
+  const mimeType = verifiedMimeType(buffer, OPPORTUNITY_ATTACHMENT_ALLOWED_MIME_TYPES);
+  if (!mimeType) {
+    return NextResponse.json({ error: "Format non supporté (PDF uniquement)." }, { status: 422 });
+  }
   const key = `deal-room/${viewer.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
   await uploadPrivateObject({
     bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
     key,
     body: buffer,
-    contentType: file.type,
+    contentType: mimeType,
   });
 
   return NextResponse.json({ data: { key, name: file.name } }, { status: 200 });

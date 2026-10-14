@@ -42,7 +42,7 @@ describe("POST /api/rooms/attachment", () => {
 
   it("rejects an unauthenticated request", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
-    const file = new File(["bytes"], "doc.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" });
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(401);
   });
@@ -73,13 +73,13 @@ describe("POST /api/rooms/attachment", () => {
       status: "ACTIVE",
       minTier: "CHAIRMAN_ONLY",
     } as never);
-    const file = new File(["bytes"], "doc.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" });
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(200);
   });
 
   it("uploads a valid file to the documents bucket and returns its key, not a public URL", async () => {
-    const file = new File(["bytes"], "etude.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "etude.pdf", { type: "application/pdf" });
     const res = await POST(makeRequest(file));
     const json = await res.json();
 
@@ -92,7 +92,7 @@ describe("POST /api/rooms/attachment", () => {
   });
 
   it("sanitizes a filename containing path traversal characters", async () => {
-    const file = new File(["bytes"], "../../etc/passwd.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "../../etc/passwd.pdf", { type: "application/pdf" });
     await POST(makeRequest(file));
 
     const call = vi.mocked(uploadPrivateObject).mock.calls[0][0];

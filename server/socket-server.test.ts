@@ -435,6 +435,32 @@ describe("conversation:message", () => {
     expect(result).toEqual({ ok: false, error: "not_joined" });
   });
 
+  it("throttles per member, not per connection (audit 14 oct. 2026, L2)", async () => {
+    const firstTab = await connect("user_1");
+    const secondTab = await connect("user_1");
+    await joinConversation(firstTab);
+    await joinConversation(secondTab);
+    vi.mocked(prisma.message.create).mockResolvedValue({
+      id: "msg_1",
+      conversationId: "conv_1",
+      senderId: "user_1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_1",
+      name: "Jean-Pierre",
+      avatarUrl: null,
+      status: "ACTIVE",
+    } as never);
+    const send = (client: ClientSocket) =>
+      new Promise((resolve) =>
+        client.emit("conversation:message", { conversationId: "conv_1", content: "hello" }, resolve)
+      );
+
+    expect(await send(firstTab)).toEqual({ ok: true });
+    expect(await send(secondTab)).toEqual({ ok: false, error: "rate_limited" });
+  });
+
   it("encrypts, persists, and broadcasts the plaintext to both participants", async () => {
     const sender = await connect("user_1");
     const recipient = await connect("user_2");

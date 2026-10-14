@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import type { JWT } from "next-auth/jwt";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -7,6 +8,7 @@ import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isViewerSessionValid } from "@/lib/session-validity";
 
 const LOGIN_RATE_LIMIT = 10;
 const LOGIN_RATE_WINDOW_SEC = 15 * 60;
@@ -154,32 +156,45 @@ export async function authorizeCredentials(rawCredentials: unknown, request?: Re
   };
 }
 
+/**
+ * Relit le compte du jeton en base (voir le callback `jwt` ci-dessous).
+ * `null` = session à invalider. Exporté pour les tests.
+ */
+export async function refreshSessionToken(token: JWT): Promise<JWT | null> {
+  if (typeof token.id !== "string") return null;
+  const user = await prisma.user.findUnique({
+    where: { id: token.id },
+    include: VIEWER_TIER_INCLUDE,
+  });
+  const loginAt = typeof token.loginAt === "number" ? token.loginAt : null;
+  if (!user || !isViewerSessionValid(user, loginAt)) return null;
+
+  token.role = user.role;
+  token.isPlatformAdmin = user.isPlatformAdmin;
+  token.hasCompanyAccess = getViewerTierFromCompany(user.company) !== null;
+  token.status = user.status;
+  return token;
+}
+
 export const { handlers, signIn, signOut, auth, unstable_update } = NextAuth({
   ...authConfig,
   callbacks: {
     ...authConfig.callbacks,
     /**
-     * L'accès entreprise et le statut du compte sont figés dans le JWT à la
-     * connexion. Une mise à jour de session (`unstable_update()`, trigger
-     * "update") les relit en base : c'est ce qui ouvre l'accès dès la
-     * validation du paiement, sans reconnexion. Les données envoyées avec la
-     * mise à jour sont ignorées, un client ne peut donc pas s'attribuer
-     * l'accès lui-même. Ce callback ne tourne que côté Node (le middleware
-     * edge utilise authConfig seul).
+     * Audit sécurité du 14 oct. 2026 (H1) — à chaque lecture de session côté
+     * serveur (`auth()` dans une page, une route ou une action), le compte
+     * est relu en base : un compte suspendu, exclu ou dont le mot de passe a
+     * changé depuis la connexion perd sa session immédiatement (`null`), et
+     * rôle, droits admin et accès entreprise sont ceux de la base, plus ceux
+     * figés à la connexion (24 h). Remplace l'ancienne relecture limitée au
+     * trigger "update" (ouverture de l'accès après paiement), désormais
+     * couverte par ce cas général. Côté Node seulement : le middleware edge
+     * utilise authConfig seul et ne fait que le tri grossier.
      */
     async jwt(params) {
       const token = await authConfig.callbacks.jwt(params);
-      if (params.trigger === "update" && typeof token.id === "string") {
-        const user = await prisma.user.findUnique({
-          where: { id: token.id },
-          include: VIEWER_TIER_INCLUDE,
-        });
-        if (user) {
-          token.hasCompanyAccess = getViewerTierFromCompany(user.company) !== null;
-          token.status = user.status;
-        }
-      }
-      return token;
+      if (params.user) return token; // connexion : déjà vérifié par authorize()
+      return refreshSessionToken(token);
     },
   },
   // Déploiement auto-hébergé derrière Nginx (pas Vercel, qui définit ça

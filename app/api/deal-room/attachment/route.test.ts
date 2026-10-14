@@ -38,16 +38,26 @@ describe("POST /api/deal-room/attachment", () => {
       id: "user_1",
       status: "SUSPENDED",
     } as never);
-    const file = new File(["%PDF"], "doc.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" });
 
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(401);
     expect(uploadPrivateObject).not.toHaveBeenCalled();
   });
 
+  it("rejects a file announced as PDF whose content is not a PDF (audit 14 oct. 2026, M3)", async () => {
+    const spoofed = new File(["<html><script>alert(1)</script>"], "doc.pdf", {
+      type: "application/pdf",
+    });
+
+    const res = await POST(makeRequest(spoofed));
+    expect(res.status).toBe(422);
+    expect(uploadPrivateObject).not.toHaveBeenCalled();
+  });
+
   it("rejects an unauthenticated request", async () => {
     vi.mocked(auth).mockResolvedValue(null as never);
-    const file = new File(["%PDF"], "doc.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "doc.pdf", { type: "application/pdf" });
 
     const res = await POST(makeRequest(file));
     expect(res.status).toBe(401);
@@ -72,7 +82,7 @@ describe("POST /api/deal-room/attachment", () => {
   });
 
   it("uploads a valid PDF to the documents bucket and returns its key, not a public URL", async () => {
-    const file = new File(["%PDF"], "cahier-des-charges.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "cahier-des-charges.pdf", { type: "application/pdf" });
 
     const res = await POST(makeRequest(file));
     const json = await res.json();
@@ -86,7 +96,7 @@ describe("POST /api/deal-room/attachment", () => {
   });
 
   it("sanitizes a filename containing path traversal characters", async () => {
-    const file = new File(["%PDF"], "../../etc/passwd.pdf", { type: "application/pdf" });
+    const file = new File(["%PDF-1.7"], "../../etc/passwd.pdf", { type: "application/pdf" });
     await POST(makeRequest(file));
 
     const call = vi.mocked(uploadPrivateObject).mock.calls[0][0];

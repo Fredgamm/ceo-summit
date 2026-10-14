@@ -85,10 +85,11 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated but hitting /login or similar → send to dashboard instead.
-  if (isPublic && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
-  }
+  // Audit sécurité du 14 oct. 2026 (H1) — plus de renvoi /login → /dashboard
+  // ici : le jeton peut être encore valide alors que le compte a été
+  // suspendu ou son mot de passe changé (auth.ts relit la base côté Node, pas
+  // ce middleware edge). La page /login fait ce renvoi elle-même, d'après la
+  // session vérifiée en base ; sinon /dashboard ⇄ /login bouclerait.
 
   // Admin space requires isPlatformAdmin specifically (not just an active tier).
   if (isAdminRoute && !session.user.isPlatformAdmin) {
