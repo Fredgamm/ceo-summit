@@ -1,6 +1,8 @@
-import { render } from "@react-email/render";
+import { render, toPlainText } from "@react-email/render";
 import nodemailer from "nodemailer";
 import type { ReactElement } from "react";
+
+import { CEO_SUMMIT_CONTACT } from "@/lib/ceo-summit-contact";
 
 /**
  * 22 septembre 2026 — remplace l'envoi via l'API Resend par un envoi SMTP
@@ -106,10 +108,15 @@ export async function sendTransactionalEmail({ to, subject, react }: SendTransac
   }
 
   const html = await render(react);
+  // 14 oct. 2026 (délivrabilité) — un e-mail HTML seul, sans version texte,
+  // est un signal de spam classique ; les réponses vont à l'adresse de
+  // contact de CEO Summit plutôt qu'à l'expéditeur automatique.
+  const text = toPlainText(html);
+  const replyTo = CEO_SUMMIT_CONTACT.email;
 
   if (isMailDevMode()) {
     try {
-      await getDevTransport().sendMail({ from, to, subject, html });
+      await getDevTransport().sendMail({ from, to, replyTo, subject, html, text });
     } catch (err) {
       console.error(
         "[mail] MAIL_DEV_MODE actif mais Maildev est injoignable sur " +
@@ -123,7 +130,7 @@ export async function sendTransactionalEmail({ to, subject, react }: SendTransac
   }
 
   try {
-    const info = await getSmtpTransport().sendMail({ from, to, subject, html });
+    const info = await getSmtpTransport().sendMail({ from, to, replyTo, subject, html, text });
     return { id: info.messageId };
   } catch (err) {
     // Caller decides whether to throw/retry; we always log for the audit trail.

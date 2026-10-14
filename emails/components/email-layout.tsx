@@ -5,10 +5,14 @@ import {
   Hr,
   Html,
   Img,
+  Link,
   Preview,
   Section,
   Text,
 } from "@react-email/components";
+
+import { appUrl } from "@/lib/app-url";
+import { CEO_SUMMIT_CONTACT } from "@/lib/ceo-summit-contact";
 
 const COLORS = {
   navy: "#1A2B5F",
@@ -16,6 +20,11 @@ const COLORS = {
   surface: "#F7F7F5",
   textMuted: "#8A8A8A",
   border: "#E4E4E4",
+};
+
+const footerLinkStyle: React.CSSProperties = {
+  color: COLORS.textMuted,
+  textDecoration: "underline",
 };
 
 interface EmailLayoutProps {
@@ -67,7 +76,7 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
              * n'est pas garanti stable et beaucoup de clients mail
              * bloquent les images externes par défaut. */}
             <Img
-              src={`${process.env.NEXTAUTH_URL ?? "https://app.ceo-summit.mg"}/logo/ceo-summit-logo.png`}
+              src={`${appUrl()}/logo/ceo-summit-logo.png`}
               alt="CEO Summit Indian Ocean"
               width="150"
               height="72"
@@ -90,7 +99,34 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
 
           <Hr style={{ borderColor: COLORS.border, margin: 0 }} />
           <Section style={{ padding: "20px 32px" }}>
-            <Text style={{ margin: 0, fontSize: 11, color: COLORS.textMuted }}>
+            <Text style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: COLORS.navy }}>
+              {CEO_SUMMIT_CONTACT.name}
+            </Text>
+            <Text style={{ margin: 0, fontSize: 11, lineHeight: "16px", color: COLORS.textMuted }}>
+              {CEO_SUMMIT_CONTACT.addressLines[0]}
+              <br />
+              {CEO_SUMMIT_CONTACT.addressLines[1]}
+              <br />
+              <Link href={CEO_SUMMIT_CONTACT.phoneHref} style={footerLinkStyle}>
+                {CEO_SUMMIT_CONTACT.phone}
+              </Link>
+              {" · "}
+              <Link href={`mailto:${CEO_SUMMIT_CONTACT.email}`} style={footerLinkStyle}>
+                {CEO_SUMMIT_CONTACT.email}
+              </Link>
+              {" · "}
+              <Link href={CEO_SUMMIT_CONTACT.websiteHref} style={footerLinkStyle}>
+                {CEO_SUMMIT_CONTACT.website}
+              </Link>
+            </Text>
+            <Text
+              style={{
+                margin: "12px 0 0",
+                fontSize: 11,
+                lineHeight: "16px",
+                color: COLORS.textMuted,
+              }}
+            >
               CEO Summit © 2026 — Plateforme réservée aux membres. Vous recevez cet email car une
               action a été effectuée sur votre compte CEO Summit.
             </Text>

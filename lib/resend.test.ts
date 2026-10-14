@@ -4,7 +4,10 @@ const sendMail = vi.fn();
 const createTransport = vi.fn(() => ({ sendMail }));
 
 vi.mock("nodemailer", () => ({ default: { createTransport } }));
-vi.mock("@react-email/render", () => ({ render: vi.fn().mockResolvedValue("<p>hello</p>") }));
+vi.mock("@react-email/render", () => ({
+  render: vi.fn().mockResolvedValue("<p>hello</p>"),
+  toPlainText: vi.fn().mockReturnValue("hello"),
+}));
 
 const ENV_KEYS = [
   "NODE_ENV",
@@ -81,7 +84,11 @@ describe("sendTransactionalEmail — production", () => {
       expect.objectContaining({ host: "mail.ceo-summit.mg", port: 465, secure: true })
     );
     expect(sendMail).toHaveBeenCalledWith(
-      expect.objectContaining({ from: "noreply@ceo-summit.mg", to: "jean@example.mg" })
+      expect.objectContaining({
+        from: "noreply@ceo-summit.mg",
+        to: "jean@example.mg",
+        replyTo: "rp@ceo-summit.mg",
+      })
     );
   });
 
