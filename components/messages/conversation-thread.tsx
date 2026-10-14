@@ -255,7 +255,7 @@ export function ConversationThread({
                 sendMessage();
               }
             }}
-            placeholder="Votre message…"
+            placeholder={joined ? "Votre message…" : "Connexion…"}
             aria-label={`Écrire un message à ${otherUser.name}`}
             rows={1}
             className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl px-4 py-2.5 text-[15px] leading-snug"

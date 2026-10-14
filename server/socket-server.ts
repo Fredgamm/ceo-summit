@@ -348,11 +348,22 @@ async function handleRoomsPresence(
   return counts;
 }
 
+/**
+ * Origines autorisées : celle de l'instance (NEXTAUTH_URL). 14 oct. 2026 — en
+ * développement, aussi http://localhost:3000 : avec NEXTAUTH_URL sur l'adresse du
+ * réseau local, ouvrir l'app par localhost bloquait le temps réel sans message.
+ */
+function allowedOrigins(): string[] {
+  const own = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  if (process.env.NODE_ENV === "production") return [own];
+  return [...new Set([own, "http://localhost:3000"])];
+}
+
 export function createSocketServer() {
   lastMessageAtByUser.clear();
   const httpServer = http.createServer();
   const io = new Server(httpServer, {
-    cors: { origin: process.env.NEXTAUTH_URL ?? "http://localhost:3000", credentials: true },
+    cors: { origin: allowedOrigins(), credentials: true },
   });
 
   if (process.env.REDIS_URL) {

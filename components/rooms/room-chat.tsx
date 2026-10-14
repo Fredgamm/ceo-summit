@@ -244,7 +244,8 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
             ) : (
               <>
                 {room.sector}
-                {onlineCount != null && (
+                {!joined && " · Connexion…"}
+                {joined && onlineCount != null && (
                   <>
                     {" · "}
                     <span className="text-emerald-700">{onlineCount} en ligne</span>
@@ -419,7 +420,7 @@ export function RoomChat({ room, initialMessages, hasMoreOlder, viewer }: RoomCh
                 sendMessage();
               }
             }}
-            placeholder="Votre message…"
+            placeholder={joined ? "Votre message…" : "Connexion à la salle…"}
             aria-label={`Écrire un message dans ${room.name}`}
             rows={1}
             className="max-h-32 min-h-[40px] flex-1 resize-none rounded-2xl py-2.5 text-[15px] leading-snug"
