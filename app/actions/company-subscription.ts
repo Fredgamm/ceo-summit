@@ -23,6 +23,7 @@ import {
 } from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 import { formatEuro } from "@/lib/utils";
+import { PLATFORM_ADMIN_NO_PURCHASE_MESSAGE } from "@/lib/platform-admin-purchase";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -57,6 +58,7 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
+  if (viewer.isPlatformAdmin) return { success: false, error: PLATFORM_ADMIN_NO_PURCHASE_MESSAGE };
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -114,7 +116,13 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
    */
   await prisma.companySubscription.upsert({
     where: { companyId },
-    update: { planId, status: "PENDING_PAYMENT", declaredParticipants: null, extraSeats: 0 },
+    update: {
+      planId,
+      status: "PENDING_PAYMENT",
+      declaredParticipants: null,
+      extraSeats: 0,
+      unlimitedSeats: false,
+    },
     create: { companyId, planId, status: "PENDING_PAYMENT" },
   });
 
@@ -131,6 +139,7 @@ export async function submitPaymentProof(
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
+  if (viewer.isPlatformAdmin) return { success: false, error: PLATFORM_ADMIN_NO_PURCHASE_MESSAGE };
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },
@@ -327,6 +336,7 @@ export async function purchaseUpsellSeats(
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
   const { viewer } = viewerResult;
+  if (viewer.isPlatformAdmin) return { success: false, error: PLATFORM_ADMIN_NO_PURCHASE_MESSAGE };
 
   const subscription = await prisma.companySubscription.findUnique({
     where: { id: companySubscriptionId },

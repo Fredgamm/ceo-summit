@@ -33,6 +33,10 @@ export default async function PaymentConfirmationPage({
     where: { id: session.user.id },
     include: { company: { include: { subscription: { include: { plan: true } } } } },
   });
+  // 14 oct. 2026 — pas de parcours d'achat pour un administrateur de la plateforme.
+  if (viewer?.isPlatformAdmin) {
+    redirect(viewer.companyId ? `/entreprises/${viewer.companyId}?tab=gestion` : "/entreprise");
+  }
   if (!viewer?.company?.subscription) redirect("/entreprise/paiement");
   const { company } = viewer;
   const subscription = company.subscription!;

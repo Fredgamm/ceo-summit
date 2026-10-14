@@ -44,16 +44,31 @@ export default async function MyCompanyPage() {
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      <EmptyState
-        icon={Building2}
-        title="Aucune entreprise associée à votre compte"
-        description="Créez la fiche de votre entreprise pour inviter vos collaborateurs et choisir une offre."
-        action={
-          <Button asChild>
-            <Link href="/entreprise/creer">Créer mon entreprise</Link>
-          </Button>
-        }
-      />
+      {viewer.isPlatformAdmin ? (
+        // 14 oct. 2026 — facultatif pour un administrateur : la fiche ne sert
+        // qu'à inscrire le staff à un événement (badges Evolia), sans paiement.
+        <EmptyState
+          icon={Building2}
+          title="Aucune organisation pour votre staff"
+          description="En tant qu'administrateur, vous n'avez rien à acheter. Créez une fiche seulement si vous devez inscrire votre équipe à un événement pour ses badges."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/entreprise/creer">Créer la fiche du staff</Link>
+            </Button>
+          }
+        />
+      ) : (
+        <EmptyState
+          icon={Building2}
+          title="Aucune entreprise associée à votre compte"
+          description="Créez la fiche de votre entreprise pour inviter vos collaborateurs et choisir une offre."
+          action={
+            <Button asChild>
+              <Link href="/entreprise/creer">Créer mon entreprise</Link>
+            </Button>
+          }
+        />
+      )}
     </AppShell>
   );
 }

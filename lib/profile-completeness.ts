@@ -15,6 +15,8 @@ export interface ProfileCompletenessInput {
   country: string | null;
   companyId: string | null;
   sectors: string[];
+  /** Un administrateur n'a pas à être rattaché à une entreprise (14 oct. 2026). */
+  isPlatformAdmin?: boolean;
 }
 
 const TRACKED_FIELDS = 9;
@@ -30,5 +32,7 @@ export function profileCompleteness(user: ProfileCompletenessInput): number {
   if (user.country) filled++;
   if (user.companyId) filled++;
   if (user.sectors.length > 0) filled++;
-  return Math.round((filled / TRACKED_FIELDS) * 100);
+  // Entreprise non comptée pour un administrateur qui n'en a pas.
+  const tracked = user.isPlatformAdmin && !user.companyId ? TRACKED_FIELDS - 1 : TRACKED_FIELDS;
+  return Math.round((filled / tracked) * 100);
 }

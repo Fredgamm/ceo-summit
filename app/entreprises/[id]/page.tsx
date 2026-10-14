@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Globe, Handshake } from "lucide-react";
+import { ChevronDown, Globe, Handshake } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/company-seats";
 import { safeHref } from "@/lib/normalize-url";
 import { UPSELL_ELIGIBLE_WHERE } from "@/lib/upsell-plans";
+import { PARTNER_OFFER_WHERE } from "@/lib/partner-offers";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AppShell } from "@/components/layout/app-shell";
@@ -29,6 +30,7 @@ import { MemberCard } from "@/components/catalogue/member-card";
 import { InviteTeammateForm } from "@/components/entreprise/invite-teammate-form";
 import { EventParticipantsForm } from "@/components/entreprise/event-participants-form";
 import { UpsellPurchaseForm } from "@/components/entreprise/upsell-purchase-form";
+import { StaffOfferPicker } from "@/components/entreprise/staff-offer-picker";
 import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
@@ -176,6 +178,31 @@ export default async function CompanyProfilePage({
     ? computeEffectiveStatus(company.subscription.status, company.subscription.plan.event?.date)
     : undefined;
 
+  const participantsReady = subscriptionStatus === "ACTIVE" && linkedEvent != null;
+  // 14 oct. 2026 — organisation d'un administrateur de la plateforme : pas
+  // d'achat, mais une offre « Staff » gratuite (offre partenaire liée à un
+  // événement à venir) pour inscrire son équipe (app/actions/staff-offer.ts).
+  const isStaffOrganisation = isCompanyAdmin && viewer.isPlatformAdmin;
+  const staffOffers = isStaffOrganisation
+    ? await prisma.plan.findMany({
+        where: { ...PARTNER_OFFER_WHERE, event: { date: { gte: new Date() } } },
+        include: { event: { select: { title: true, date: true, timezone: true } } },
+        orderBy: { event: { date: "asc" } },
+      })
+    : [];
+  const activeStaffPlanId =
+    isStaffOrganisation &&
+    participantsReady &&
+    staffOffers.some((o) => o.id === company.subscription?.planId)
+      ? company.subscription!.planId
+      : null;
+  const onboardingItems = getOnboardingStatus({
+    hasCompany: true,
+    hasInvites: company._count.invites > 0,
+    subscriptionStatus,
+  });
+  const onboardingDone = onboardingItems.filter((i) => i.done).length;
+
   return (
     <AppShell
       user={{
@@ -268,108 +295,158 @@ export default async function CompanyProfilePage({
         {isCompanyAdmin && (
           <TabsContent value="gestion">
             <div className="flex flex-col gap-4">
-              <div className="rounded-lg border border-border bg-white p-5">
-                <h2 className="mb-3 text-sm font-bold text-navy">Statut du dossier</h2>
-                <OnboardingStatusList
-                  items={getOnboardingStatus({
-                    hasCompany: true,
-                    hasInvites: company._count.invites > 0,
-                    subscriptionStatus,
-                  })}
-                />
-              </div>
+              {/* Refonte UX (14 oct. 2026) — écran d'arrivée après paiement :
+                  une fois l'offre active, la liste des participants passe en
+                  tête, le reste du dossier se replie en dessous. */}
+              {participantsReady && company.subscription && linkedEvent ? (
+                <EventParticipantsForm
+                  companyId={company.id}
+                  candidates={company.users.map((u) => ({
+                    id: u.id,
+                    name: u.name,
+                    title: u.title,
+                    isManager: u.id === company.companyAdminId,
+                  }))}
+                  initialSelected={eventParticipantIds}
+                  cap={applicableCap}
+                  validatedAtLabel={
+                    company.subscription.participantsValidatedAt
+                      ? formatDateFr(company.subscription.participantsValidatedAt)
+                      : null
+                  }
+                  event={{
+                    title: linkedEvent.title,
+                    dateLabel: formatDateFr(linkedEvent.date, linkedEvent.timezone),
+                    location: linkedEvent.isOnline ? "En ligne" : linkedEvent.location || null,
+                  }}
+                >
+                  {/* Audit (25 septembre 2026) — collaborateurs rassemblés après
+                      paiement (BACKLOG_MVP §3), comme `inviteTeammate`. */}
+                  <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
+                </EventParticipantsForm>
+              ) : viewer.isPlatformAdmin ? null : (
+                <div className="rounded-lg border border-border bg-white p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm font-bold text-navy">Collaborateurs</h2>
+                    {applicableCap != null && (
+                      <span className="text-xs font-semibold text-text-muted">
+                        {usedSeats} / {applicableCap} place(s)
+                      </span>
+                    )}
+                  </div>
+                  {subscriptionStatus === "ACTIVE" ? (
+                    <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        {INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
 
-              <div className="rounded-lg border border-border bg-white p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-navy">Abonnement</h2>
-                  <Badge variant={SUBSCRIPTION_STATUS_BADGE[subscriptionStatus ?? "DRAFT"]}>
-                    {SUBSCRIPTION_STATUS_LABEL[subscriptionStatus ?? "DRAFT"]}
-                  </Badge>
-                </div>
-                {company.subscription ? (
-                  <p className="text-sm text-text-mid">
-                    {company.subscription.plan.name} —{" "}
-                    {formatEuro(planPriceEur(company.subscription.plan, liveEurToArRate))}
-                    {company.subscription.plan.pricingMode === "PER_PARTICIPANT" &&
-                      " par participant"}
-                    <AriaryHint
-                      amountAr={unitPriceAr(company.subscription.plan, liveEurToArRate)}
-                    />
+              {isStaffOrganisation && (
+                // 14 oct. 2026 — pas de parcours d'achat pour un administrateur
+                // de la plateforme : son staff est inscrit par une offre gratuite.
+                <div className="rounded-lg border border-border bg-white p-5">
+                  <h2 className="mb-1 text-sm font-bold text-navy">Staff de l&apos;événement</h2>
+                  <p className="mb-3 text-sm text-text-mid">
+                    {activeStaffPlanId
+                      ? "Votre staff est inscrit gratuitement. Pour un autre événement, choisissez-le ci-dessous."
+                      : "En tant qu'administrateur, vous n'avez rien à payer. Choisissez l'événement auquel inscrire votre staff : chacun recevra son badge via Evolia."}
                   </p>
-                ) : (
-                  <p className="text-sm text-text-muted">
-                    Aucune offre choisie pour l&apos;instant.
-                  </p>
-                )}
-                <div className="mt-3">
-                  {!company.subscription && (
-                    <Button asChild size="sm">
-                      <Link href="/entreprise/paiement">Choisir une offre</Link>
-                    </Button>
-                  )}
-                  {company.subscription && subscriptionStatus !== "ACTIVE" && (
-                    <Button asChild size="sm">
-                      <Link href="/entreprise/paiement">
-                        {company.subscription.status === "PENDING_PAYMENT"
-                          ? "Soumettre le paiement"
-                          : subscriptionStatus === "EXPIRED"
-                            ? "Renouveler pour la prochaine édition"
-                            : "Voir / changer d'offre"}
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-border bg-white p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-navy">Participants à l&apos;évènement</h2>
-                  {applicableCap != null && (
-                    <span className="text-xs font-semibold text-text-muted">
-                      {usedSeats} / {applicableCap} place(s)
-                    </span>
-                  )}
-                </div>
-                {linkedEvent && subscriptionStatus === "ACTIVE" && company.subscription && (
-                  <div className="mb-5">
-                    <p className="mb-1 text-sm font-semibold text-navy">{linkedEvent.title}</p>
-                    <p className="mb-3 text-xs text-text-muted">
-                      Cochez les personnes qui participeront à l&apos;événement, puis validez.
-                      Chaque nouveau participant reçoit une confirmation, et la liste est transmise
-                      pour les badges.
-                    </p>
-                    <EventParticipantsForm
+                  {staffOffers.length > 0 ? (
+                    <StaffOfferPicker
                       companyId={company.id}
-                      candidates={company.users.map((u) => ({
-                        id: u.id,
-                        name: u.name,
-                        title: u.title,
-                        isManager: u.id === company.companyAdminId,
+                      offers={staffOffers.map((o) => ({
+                        id: o.id,
+                        label: `${o.event!.title} — ${formatDateFr(o.event!.date, o.event!.timezone)} (${o.name})`,
                       }))}
-                      initialSelected={eventParticipantIds}
-                      cap={applicableCap}
-                      validatedAtLabel={
-                        company.subscription.participantsValidatedAt
-                          ? formatDateFr(company.subscription.participantsValidatedAt)
-                          : null
+                      currentPlanId={activeStaffPlanId}
+                      needsUnlimitedSeats={
+                        activeStaffPlanId != null && !company.subscription?.unlimitedSeats
                       }
                     />
-                  </div>
-                )}
-                {/* Audit (25 septembre 2026) — collaborateurs rassemblés après
-                    paiement (BACKLOG_MVP §3), comme `inviteTeammate`. */}
-                {subscriptionStatus === "ACTIVE" ? (
-                  <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
-                ) : (
-                  <Alert>
-                    <AlertDescription>
-                      {INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE}
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
+                  ) : (
+                    <p className="text-sm text-text-muted">
+                      Aucune offre Staff disponible. Créez dans{" "}
+                      <Link href="/admin/plans" className="font-semibold text-navy-mid">
+                        Offres
+                      </Link>{" "}
+                      une offre à 0 €, non proposée à l&apos;inscription, rattachée à
+                      l&apos;événement.
+                    </p>
+                  )}
+                </div>
+              )}
 
-              {company.subscription &&
+              {!viewer.isPlatformAdmin && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="rounded-lg border border-border bg-white p-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-sm font-bold text-navy">Abonnement</h2>
+                      <Badge variant={SUBSCRIPTION_STATUS_BADGE[subscriptionStatus ?? "DRAFT"]}>
+                        {SUBSCRIPTION_STATUS_LABEL[subscriptionStatus ?? "DRAFT"]}
+                      </Badge>
+                    </div>
+                    {company.subscription ? (
+                      <p className="text-sm text-text-mid">
+                        {company.subscription.plan.name} —{" "}
+                        {formatEuro(planPriceEur(company.subscription.plan, liveEurToArRate))}
+                        {company.subscription.plan.pricingMode === "PER_PARTICIPANT" &&
+                          " par participant"}
+                        <AriaryHint
+                          amountAr={unitPriceAr(company.subscription.plan, liveEurToArRate)}
+                        />
+                      </p>
+                    ) : (
+                      <p className="text-sm text-text-muted">
+                        Aucune offre choisie pour l&apos;instant.
+                      </p>
+                    )}
+                    <div className="mt-3">
+                      {!company.subscription && (
+                        <Button asChild size="sm">
+                          <Link href="/entreprise/paiement">Choisir une offre</Link>
+                        </Button>
+                      )}
+                      {company.subscription && subscriptionStatus !== "ACTIVE" && (
+                        <Button asChild size="sm">
+                          <Link href="/entreprise/paiement">
+                            {company.subscription.status === "PENDING_PAYMENT"
+                              ? "Soumettre le paiement"
+                              : subscriptionStatus === "EXPIRED"
+                                ? "Renouveler pour la prochaine édition"
+                                : "Voir / changer d'offre"}
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Replié une fois l'offre active : la checklist n'est plus
+                    l'information principale, elle reste consultable. */}
+                  <details
+                    className="group rounded-lg border border-border bg-white p-5"
+                    open={subscriptionStatus !== "ACTIVE"}
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                      <h2 className="text-sm font-bold text-navy">Statut du dossier</h2>
+                      <span className="flex items-center gap-2 text-xs font-semibold text-text-muted">
+                        {onboardingDone} / {onboardingItems.length} étapes
+                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                      </span>
+                    </summary>
+                    <div className="mt-3">
+                      <OnboardingStatusList items={onboardingItems} />
+                    </div>
+                  </details>
+                </div>
+              )}
+
+              {!viewer.isPlatformAdmin &&
+                company.subscription &&
                 subscriptionStatus === "ACTIVE" &&
                 (pendingUpsellPayment ? (
                   <div className="rounded-lg border border-border bg-white p-5">

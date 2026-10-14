@@ -39,6 +39,11 @@ export default async function CompanyPaymentPage({
 
   const viewer = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!viewer) redirect("/login");
+  // 14 oct. 2026 — pas de parcours d'achat pour un administrateur de la
+  // plateforme : son organisation reçoit une offre Staff gratuite depuis
+  // l'onglet « Gestion compte » (app/actions/staff-offer.ts).
+  if (viewer.isPlatformAdmin)
+    redirect(viewer.companyId ? `/entreprises/${viewer.companyId}?tab=gestion` : "/entreprise");
   if (!viewer.companyId) redirect("/entreprise/creer");
 
   const [company, plans, deepLinkedPlan, liveEurToArRate] = await Promise.all([

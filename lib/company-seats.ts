@@ -15,7 +15,10 @@ export function seatCap(subscription: {
   extraSeats: number;
   /** Module 20 — nombre de membres fixé par l'admin pour cette entreprise (offres partenaires). */
   memberLimit?: number | null;
+  /** 14 oct. 2026 — offre « Staff » d'un administrateur de la plateforme : pas de plafond. */
+  unlimitedSeats?: boolean;
 }): number | null {
+  if (subscription.unlimitedSeats) return null;
   const base =
     subscription.memberLimit != null
       ? subscription.memberLimit

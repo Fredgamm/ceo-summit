@@ -500,6 +500,9 @@ model CompanySubscription {
   counterpart             String?                   @db.Text
   /// Module 18 §4.9 — dernière validation de la liste des participants par le gérant.
   participantsValidatedAt DateTime?
+  /// 14 oct. 2026 — offre « Staff » d'un administrateur de la plateforme
+  /// (app/actions/staff-offer.ts) : aucun plafond de participants.
+  unlimitedSeats          Boolean                   @default(false)
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 

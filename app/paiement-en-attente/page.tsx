@@ -43,6 +43,9 @@ export default async function PaymentPendingPage() {
       intendedPlan: true,
     },
   });
+  // Un administrateur de la plateforme n'a pas à créer d'entreprise (14 oct. 2026) :
+  // aucun paiement ne le concerne, il n'a rien à faire sur cette page.
+  if (viewer?.isPlatformAdmin) redirect("/dashboard");
   const eurToArRate = await getEurToArRate();
   const company = viewer?.company ?? null;
   const subscription = company?.subscription ?? null;
