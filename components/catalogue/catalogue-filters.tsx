@@ -15,10 +15,13 @@ const ALL = "__all__";
 
 // `short` : libellé affiché dans le menu fermé, qui doit tenir sur une ligne
 // à côté du filtre pays sur mobile (14 oct. 2026) ; `label` dans la liste.
+// 14 oct. 2026 — « En vedette » plutôt que « Offre (plus chère d'abord) » :
+// côté membre, on ne parle ni de prix ni du nom des offres. La valeur
+// d'URL (`offre`) ne change pas, pour garder les liens existants.
 const SORTS = [
-  { value: "offre", short: "Offre", label: "Offre (plus chère d'abord)" },
-  { value: "recent", short: "Récents", label: "Activité récente" },
-  { value: "alpha", short: "A → Z", label: "Alphabétique" },
+  { value: "offre", short: "En vedette", label: "En vedette" },
+  { value: "recent", short: "Récents", label: "Récemment actifs" },
+  { value: "alpha", short: "A → Z", label: "Nom (A → Z)" },
 ];
 
 /**
@@ -114,7 +117,7 @@ export function CatalogueFilters({
           <SelectTrigger className="w-full sm:w-[200px]" aria-label="Trier les membres">
             <span className="truncate">
               <span className="text-text-muted">Tri : </span>
-              {SORTS.find((s) => s.value === activeSort)?.short ?? "Offre"}
+              {SORTS.find((s) => s.value === activeSort)?.short ?? "En vedette"}
             </span>
           </SelectTrigger>
           <SelectContent>
