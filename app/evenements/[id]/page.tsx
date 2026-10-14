@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ChevronRight } from "lucide-react";
 import type { RegistrationStatus } from "@prisma/client";
 
 import { auth } from "@/auth";
@@ -53,7 +54,18 @@ export default async function EventDetailPage({ params }: { params: { id: string
     include: {
       registrations: {
         where: { status: { in: TAKEN_STATUSES } },
-        include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+              title: true,
+              company: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "asc" },
         take: 12,
       },
       sessions: { orderBy: { startTime: "asc" } },
@@ -235,14 +247,55 @@ export default async function EventDetailPage({ params }: { params: { id: string
               <h2 className="mb-3 text-base font-bold text-navy">
                 Participants inscrits ({event._count.registrations}/{event.capacity})
               </h2>
-              <div className="flex flex-wrap gap-2">
-                {event.registrations.map((r) => (
-                  <Avatar key={r.id} className="h-9 w-9" title={r.user.name}>
-                    <AvatarImage src={r.user.avatarUrl ?? undefined} alt={r.user.name} />
-                    <AvatarFallback>{initials(r.user.name)}</AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
+              {/* 14 oct. 2026 — cartes cliquables vers le profil du membre
+                  (nom, fonction, entreprise) au lieu de simples initiales. */}
+              <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                {event.registrations.map((r) => {
+                  const details = [r.user.title, r.user.company?.name].filter(Boolean).join(" · ");
+                  return (
+                    <li key={r.id}>
+                      <Link
+                        href={`/membres/${r.user.id}`}
+                        className="group flex items-center gap-3 rounded-lg border border-border bg-white px-3 py-2.5 transition-colors hover:border-navy-light hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Avatar className="h-10 w-10 shrink-0">
+                          <AvatarImage src={r.user.avatarUrl ?? undefined} alt="" />
+                          <AvatarFallback className="text-xs">
+                            {initials(r.user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold text-navy">
+                              {r.user.name}
+                            </span>
+                            {r.user.id === viewer.id && (
+                              <span className="shrink-0 rounded-full bg-navy-light px-2 py-0.5 text-[10px] font-semibold text-navy">
+                                Vous
+                              </span>
+                            )}
+                          </span>
+                          {details && (
+                            <span className="block truncate text-xs text-text-muted">
+                              {details}
+                            </span>
+                          )}
+                        </span>
+                        <ChevronRight
+                          className="h-4 w-4 shrink-0 text-text-muted transition-transform group-hover:translate-x-0.5"
+                          aria-hidden
+                        />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              {event._count.registrations > event.registrations.length && (
+                <p className="mt-3 text-xs text-text-muted">
+                  et {event._count.registrations - event.registrations.length} autre(s)
+                  participant(s)
+                </p>
+              )}
             </div>
           )}
         </div>
