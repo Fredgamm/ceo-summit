@@ -13,6 +13,9 @@
 # use an OVH snapshot/backup of the whole VPS (configured from the OVH
 # manager, not from here).
 set -euo pipefail
+# 14 oct. 2026 (revue d'infrastructure) — dumps et archives lisibles par le
+# seul propriétaire : ils contiennent toute la base et les preuves de paiement.
+umask 077
 
 # 14 oct. 2026 — dossier de l'instance déduit de l'emplacement du script
 # (/opt/ceo-summit = préprod, /opt/ceo-summit-prod = prod).

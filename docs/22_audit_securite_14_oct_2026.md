@@ -58,6 +58,42 @@ du conteneur `socket` unique.
 (`ssl_reject_handshake`, `return 444`). Vérifié : domaine inconnu refusé,
 b2b/app/www.b2b et les sites viesaine inchangés.
 
+## Revue complémentaire : infrastructure, CI et test dynamique (14 oct.)
+
+Faite en lecture seule sur le VPS et contre les deux sites (tests non
+destructifs).
+
+**Sain** : Debian 12 à jour (`unattended-upgrades` actif, aucune mise à jour
+de sécurité en attente) ; TLS 1.2/1.3 seulement, suites modernes, HSTS
+preload ; `server_tokens off` ; conteneurs applicatifs en utilisateur `node`,
+non privilégiés, ports publiés sur 127.0.0.1 seulement (Postgres/Redis des
+deux instances jamais publiés) ; `.env` en 600 ; fichiers sensibles du dépôt,
+`.git`, cartes de sources, API et fichiers déposés inaccessibles sans
+session ; traversée de chemin bloquée ; webhooks non signés refusés (401) ;
+`callbackUrl` externe ignoré.
+
+**Corrigé** : sauvegardes et fichiers déposés lisibles par tout compte du
+serveur → 700/600, `umask 077` dans `deploy/backup.sh` ;
+`appleboy/ssh-action` (reçoit la clé SSH du VPS) épinglé sur son commit.
+
+**À décider (serveur partagé avec d'autres projets)** :
+
+- **SSH** : ~7 100 échecs de mot de passe en 24 h ; authentification par mot
+  de passe active, `debian` a un mot de passe utilisable, aucun pare-feu,
+  pas de fail2ban. Toutes les connexions réussies sont par clé.
+  Recommandé : `PasswordAuthentication no`, fail2ban, pare-feu n'ouvrant
+  que 22/80/443 (+ ports voulus des autres projets).
+- Ports publics d'autres projets : 8001 (`/home/debian/mcp-healthy`, API
+  Python, `.env` en 644), 1935 (RTMP nginx), 5355 (LLMNR, à couper).
+- Postgres : l'application se connecte en **superutilisateur** (rôle par
+  défaut de l'image) → créer un rôle propriétaire sans superutilisateur.
+- **R2 non configuré** : fichiers déposés (preuves de paiement…) sur le
+  disque du VPS, comme les sauvegardes → une panne disque perd les deux.
+  Configurer R2 et/ou les sauvegardes OVH du VPS.
+- Redis sans mot de passe : acceptable (réseau Docker interne uniquement).
+- Le compte de déploiement `debian` est dans le groupe `docker`
+  (équivalent root) : à garder en tête pour la clé SSH de la CI.
+
 ## Reste à faire
 
 1. **Migration Next 15.5+** — corrige la majorité des avis Next restants ;

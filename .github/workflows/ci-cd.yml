@@ -154,7 +154,7 @@ jobs:
         # /opt/docker-data (dossier voisin, même partition dédiée, donc même
         # bénéfice espace disque qu'avant — voir DEPLOY.md §2). Étape
         # idempotente : ne fait rien une fois la migration faite.
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3 (épinglé : reçoit la clé SSH du VPS)
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -189,7 +189,7 @@ jobs:
         # `image` (GHCR, étiquetée par commit) au lieu de la compiler : le
         # jeton GitHub du job, valable le temps du job seulement, sert à se
         # connecter au registre privé.
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3 (épinglé : reçoit la clé SSH du VPS)
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
