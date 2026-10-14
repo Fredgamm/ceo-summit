@@ -27,7 +27,8 @@
 # 14 oct. 2026 — deux instances sur ce VPS, chacune dans son dossier (le nom
 # du dossier sert de nom de projet Compose : conteneurs et volumes séparés) :
 #   /opt/ceo-summit       préprod  app.ceo-summit.mg  ports 3020/3021
-#   /opt/ceo-summit-prod  prod     b2b.ceo-summit.mg  ports 3030/3031
+#   /opt/ceo-summit-prod  prod     b2b.ceo-summit.mg  ports 3040/3041
+#   (3030 est réservé au streaming RTMP viesaine/livespark, voir nginx.conf)
 # Réseau et ports se règlent dans le .env de chaque instance (COMPOSE_NETWORK,
 # HOST_APP_PORT, HOST_SOCKET_PORT) ; sans réglage, valeurs de la préprod.
 networks:

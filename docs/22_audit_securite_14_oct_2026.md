@@ -72,19 +72,27 @@ deux instances jamais publiés) ; `.env` en 600 ; fichiers sensibles du dépôt,
 session ; traversée de chemin bloquée ; webhooks non signés refusés (401) ;
 `callbackUrl` externe ignoré.
 
+**Corrigé sur le VPS (14 oct., après accord)** : SSH par clé uniquement
+(`/etc/ssh/sshd_config.d/00-hardening.conf`, lu avant `50-cloud-init.conf`
+qui réactivait les mots de passe), X11 coupé, `MaxAuthTries 3` ; fail2ban
+(jails `sshd` + `recidive`, journal systemd) ; LLMNR/mDNS coupés (port 5355).
+Ports de la prod déplacés de 3030/3031 vers **3040/3041** : 3030 est appelé
+par le module RTMP de nginx (`on_publish`/`on_done`) pour le streaming de
+l'autre projet.
+
 **Corrigé** : sauvegardes et fichiers déposés lisibles par tout compte du
 serveur → 700/600, `umask 077` dans `deploy/backup.sh` ;
 `appleboy/ssh-action` (reçoit la clé SSH du VPS) épinglé sur son commit.
 
 **À décider (serveur partagé avec d'autres projets)** :
 
-- **SSH** : ~7 100 échecs de mot de passe en 24 h ; authentification par mot
-  de passe active, `debian` a un mot de passe utilisable, aucun pare-feu,
-  pas de fail2ban. Toutes les connexions réussies sont par clé.
-  Recommandé : `PasswordAuthentication no`, fail2ban, pare-feu n'ouvrant
-  que 22/80/443 (+ ports voulus des autres projets).
-- Ports publics d'autres projets : 8001 (`/home/debian/mcp-healthy`, API
-  Python, `.env` en 644), 1935 (RTMP nginx), 5355 (LLMNR, à couper).
+- **Pare-feu** : aucun (politique INPUT ACCEPT). À poser une fois connus
+  les besoins des autres projets.
+- Ports publics d'autres projets : **8001** (`/home/debian/mcp-healthy`,
+  « Healthy MCP », FastAPI + Claude, servi aussi par nginx sous
+  api.viesaine.ovh ; documentation `/docs` et `/status/*` ouverts sans
+  authentification, `.env` en 644) → le lier à 127.0.0.1 ; **1935** (RTMP,
+  publication contrôlée par `on_publish`).
 - Postgres : l'application se connecte en **superutilisateur** (rôle par
   défaut de l'image) → créer un rôle propriétaire sans superutilisateur.
 - **R2 non configuré** : fichiers déposés (preuves de paiement…) sur le
