@@ -13,17 +13,23 @@
 ### Ajouté
 
 - **Fonction et ticket de chaque participant** dans les envois à Evolia (`company.registration.pushed` et `company.participants.confirmed`) :
-  - `title` : la fonction du participant (`null` seulement pour un compte ancien sans fonction, dans l'envoi au paiement) ;
+  - `title` : la fonction du participant. Celle du gérant part dès le paiement (il est alors le seul participant envoyé), puis à nouveau avec la liste validée ;
   - `ticket` : `{ type, description }` de l'offre liée à l'inscription du participant, à défaut celle de son entreprise.
 - **Fonction demandée à chaque arrivée** sur la plateforme :
   - invitation d'un collaborateur : le gérant saisit sa fonction, que le collaborateur confirme ou corrige en acceptant ;
   - inscription d'une entreprise et d'un partenaire institutionnel : champ « Fonction » obligatoire ;
   - validation de la liste des participants : un participant coché sans fonction (compte ancien) fait apparaître un champ à remplir ; la liste ne part pas vers Evolia tant qu'il est vide.
+  - la fonction saisie à cette étape est enregistrée sur le compte du participant.
+- Nouvelle colonne `CompanyInvite.title` (migration `20261020120000_company_invite_title`).
 - Documentation d'intégration (`docs/11`) et page publique `/integration-evolia` mises à jour.
 
 ### Décidé
 
 - **La photo de profil n'est pas transmise** à Evolia : elle est facultative, et l'exiger bloquerait des participants.
+
+### À savoir
+
+- Un gérant inscrit **avant le 20 octobre** qui n'a jamais renseigné sa fonction dans son profil est envoyé avec `title: null` au paiement : la fonction n'existe pas en base. Elle lui est demandée à la validation de la liste des participants, qui la renvoie à Evolia. Les gérants inscrits depuis ce changement ont toujours une fonction.
 
 ---
 
