@@ -6,6 +6,105 @@
 
 ---
 
+## 2026-10-20 — Evolia : fonction et ticket des participants
+
+À la demande d'Evolia, pour les badges. Pas encore déployé à la date de cette entrée.
+
+### Ajouté
+
+- **Fonction et ticket de chaque participant** dans les envois à Evolia (`company.registration.pushed` et `company.participants.confirmed`) :
+  - `title` : la fonction saisie dans le profil, ou `null` si elle n'est pas renseignée (elle est facultative à l'inscription) ;
+  - `ticket` : `{ type, description }` de l'offre liée à l'inscription du participant, à défaut celle de son entreprise.
+- Documentation d'intégration (`docs/11`) et page publique `/integration-evolia` mises à jour.
+
+### Décidé
+
+- **La photo de profil n'est pas transmise** à Evolia : elle est facultative, et l'exiger bloquerait des participants.
+
+---
+
+## 2026-10-14 — deux environnements, audit de sécurité, Next 15, ergonomie mobile
+
+### Ajouté
+
+- **Deux instances sur le serveur** : production sur `b2b.ceo-summit.mg` (branche `production`), préproduction sur `app.ceo-summit.mg` (branche `mvp-connect-simple`). Une seule image Docker sert les deux, et plus aucune adresse n'est écrite en dur (e-mails, page d'intégration Evolia, temps réel).
+- **Confirmation de l'adresse e-mail avant le paiement** : un lien à usage unique (72 h) est envoyé à l'inscription. La page de paiement attend la confirmation, avec la possibilité de renvoyer le lien ou de corriger l'adresse. Une adresse inventée ne peut plus aller jusqu'au paiement.
+- **Offre « Staff » gratuite** pour l'organisation de l'administrateur de la plateforme : son équipe est inscrite à l'événement et transmise à Evolia, sans parcours d'achat.
+- **E-mails** : coordonnées de CEO Summit en pied de page, version texte jointe au HTML et réponses dirigées vers rp@ceo-summit.mg, pour limiter le classement en spam. L'e-mail « Paiement confirmé » a un bouton « Me connecter », qui mène à la désignation des participants.
+
+### Modifié
+
+- **Migration vers Next 15.5.27 et React 19** : la version 14 n'est plus corrigée.
+- **Gestion compte** : après paiement, la carte des participants à l'événement passe en premier.
+- **Page événement** : les participants inscrits s'affichent en cartes cliquables vers leur profil.
+- **Paiement (étape 3)** : les deux familles de paiement sont présentées sur deux lignes distinctes (carte / Mobile Money via Evolia ; virement / chèque avec preuve).
+- **Mobile** :
+  - menu du bas avec les écrans du quotidien (Accueil, Membres, Salles, Messages, Entreprise) ; déconnexion depuis « Mon profil » ;
+  - liste des membres : filtres compacts sur une ligne, tri « En vedette » au lieu de « Offre (plus chère d'abord) » ;
+  - salles et messagerie : conversation en plein écran, zone de saisie qui s'agrandit, état « Connexion… » visible.
+
+### Sécurité
+
+- **Audit du 14 octobre** :
+  - chaque requête relit le compte en base : un compte suspendu, exclu ou dont le mot de passe a changé perd sa session immédiatement ;
+  - le type des pièces jointes et des preuves de paiement est vérifié sur le contenu du fichier ;
+  - le jeton du temps réel n'accepte que l'algorithme HS256 ;
+  - dépendances corrigées (sharp, source-map-js).
+- **Infrastructure** : sauvegardes lisibles par leur seul propriétaire, action de déploiement épinglée, durcissement du serveur (voir `docs/22`).
+
+---
+
+## 2026-10-10 au 13 — paiement au cours du jour, sauvegardes
+
+### Ajouté
+
+- **Bouton « Installer l'application »** dans les menus : il ouvre l'installation du navigateur, ou à défaut des instructions selon l'appareil.
+- **E-mail « Paiement reçu — en cours de vérification »**, envoyé au gérant quand il envoie sa preuve de virement ou de chèque.
+
+### Modifié
+
+- **Montants en Ariary au cours du jour**, y compris le **montant facturé** des offres cotées en euros. Il était auparavant figé au jour d'enregistrement de l'offre. Le taux est enregistré avec chaque paiement.
+- **Taux de secours** : en cas de panne de la source du cours, le dernier taux reçu (celui de la veille, conservé en base) est utilisé, et non plus un taux fixe.
+- Un membre dont le paiement n'est pas encore validé n'apparaît plus dans « Nouveaux membres » ni dans l'annuaire.
+- Textes des étapes 2, 3 et 4 du parcours d'adhésion reformulés.
+- La documentation de conception est désormais dans `docs/` du dépôt de l'application.
+
+### Corrigé
+
+- **Sauvegardes nocturnes** : elles échouaient depuis le 14 septembre (script devenu non exécutable). Corrigé le 13 octobre, sauvegarde vérifiée.
+
+---
+
+## 2026-10-08 et 09 — rendez-vous B2B (module 21), intégration Evolia finalisée, parcours d'adhésion
+
+### Ajouté
+
+- **Rendez-vous B2B en événement** (module 21) :
+  - fuseau horaire par événement (Madagascar, La Réunion, Maurice…), transmis à Evolia ;
+  - admin : génération et publication des créneaux de rendez-vous d'un événement ;
+  - membre : onglet « Mes créneaux » pour activer ses disponibilités, et demande de rendez-vous depuis le profil d'un autre participant ;
+  - réservés aux événements « Summit annuel » sur place et aux membres inscrits par une offre liée.
+- **Pièces jointes d'événement** (PDF, images, documents) à la place des intervenants.
+- **Inscription automatique** des membres d'une entreprise à l'événement de son offre, dans la limite des places (le gérant d'abord, puis par date d'arrivée).
+- **Paiement abandonné** : bouton « Changer de mode de paiement », 15 minutes après le début d'un paiement par carte ou Mobile Money. Une confirmation tardive d'Evolia est honorée, et un double paiement est signalé.
+- **Page de retour après paiement Evolia** (`/entreprise/paiement/confirmation`) : elle attend la confirmation, puis ouvre la désignation des participants.
+- **Refonte du parcours d'adhésion** : étapes visibles (offre, compte, paiement, activation), carte de membre qui se complète au fil du parcours, modes de paiement en tuiles.
+- **Déploiement** : l'image est compilée dans GitHub Actions et non plus sur le serveur, et le site tourne en plusieurs processus.
+
+### Modifié
+
+- **Intégration Evolia mise en conformité avec leur API** :
+  - nouvelle adresse `api-event.aiolia.us` (l'ancienne menait à leur site web, bloqué par Cloudflare) ;
+  - `paymentMethod` au format attendu (`evolia` / `virement`) ;
+  - `ceoSummitReference` sur chaque envoi, liste de participants jamais vide ;
+  - partenaires institutionnels inscrits avant leur première liste ;
+  - message lisible dans l'admin en cas d'échec d'un envoi.
+- **Page événement** : carte d'accès « Inclus dans votre offre », plus aucun prix d'entrée affiché ; bannière du tableau de bord adaptée quand l'offre donne accès à l'événement.
+- **Prix** : l'euro est le montant principal, l'Ariary s'affiche en petit en dessous.
+- **Accueil** : un membre d'entreprise ne choisit plus de secteur ; il reprend celui de son entreprise.
+
+---
+
 ## 2026-10-07 — intégration Evolia, offres partenaires, rapport QA (module 19), nettoyage (module 17)
 
 Tout ce qui suit est déployé en production.
