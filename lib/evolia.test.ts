@@ -338,3 +338,100 @@ describe("Evolia constraints", () => {
     });
   });
 });
+
+describe("participant fields for the badges (20 oct. 2026)", () => {
+  it("sends each participant's job title and ticket (offer of the registration)", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      {
+        user: {
+          id: "manager_1",
+          name: "Marie Dupont",
+          email: "marie@example.mg",
+          title: "Directrice générale",
+        },
+        plan: { name: "Executive", description: "Accès complet" },
+      },
+      {
+        user: { id: "user_2", name: "Jean Rabe", email: "jean@example.mg", title: null },
+        plan: { name: "Executive Pass", description: null },
+      },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    expect(pushedPayload().payload).toMatchObject({
+      participants: [
+        {
+          fullName: "Marie Dupont",
+          title: "Directrice générale",
+          ticket: { type: "Executive", description: "Accès complet" },
+        },
+        {
+          fullName: "Jean Rabe",
+          title: null,
+          ticket: { type: "Executive Pass", description: null },
+        },
+      ],
+    });
+  });
+
+  it("falls back to the company's offer when the registration has none", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      {
+        user: { id: "user_2", name: "Jean Rabe", email: "jean@example.mg", title: "DAF" },
+        plan: null,
+      },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    expect(pushedPayload().payload).toMatchObject({
+      participants: [{ title: "DAF", ticket: { type: "Executive", description: "Accès complet" } }],
+    });
+  });
+
+  it("gives the manager a title and ticket on the registration push too", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      payment({
+        companySubscription: {
+          company: { ...COMPANY, companyAdmin: { ...COMPANY.companyAdmin, title: "CEO" } },
+        },
+      }) as never
+    );
+
+    await pushRegistrationToEvolia("payment_1");
+
+    expect(pushedPayload().payload).toMatchObject({
+      participants: [
+        {
+          fullName: "Marie Dupont",
+          title: "CEO",
+          ticket: { type: "Executive", description: "Accès complet" },
+        },
+      ],
+    });
+  });
+
+  it("does not send a profile photo", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      {
+        user: { id: "user_2", name: "Jean Rabe", email: "jean@example.mg", title: null },
+        plan: null,
+      },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    const [participant] = (pushedPayload().payload as { participants: Record<string, unknown>[] })
+      .participants;
+    expect(Object.keys(participant).sort()).toEqual(
+      ["email", "fullName", "isInitiator", "ticket", "title"].sort()
+    );
+  });
+});

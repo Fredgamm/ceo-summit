@@ -36,7 +36,7 @@ export function signEvoliaBody(body: string, secret: string): string {
 
 const COMPANY_INCLUDE = {
   subscription: { include: { plan: { include: { event: true } } } },
-  companyAdmin: { select: { id: true, name: true, email: true } },
+  companyAdmin: { select: { id: true, name: true, email: true, title: true } },
 } satisfies Prisma.CompanyInclude;
 
 type CompanyForPush = Prisma.CompanyGetPayload<{ include: typeof COMPANY_INCLUDE }>;
@@ -60,6 +60,16 @@ function companyInfo(company: CompanyForPush) {
   return { name: company.name, sector: company.sector, country: company.country };
 }
 
+/**
+ * 20 oct. 2026 — « ticket » d'un participant (demande d'Evolia, pour le
+ * badge) : l'offre qui lui donne accès à l'événement. La photo de profil
+ * n'est volontairement pas transmise : facultative, la rendre nécessaire
+ * bloquerait des participants.
+ */
+function ticketOf(plan: { name: string; description: string | null } | null | undefined) {
+  return plan ? { type: plan.name, description: plan.description ?? null } : null;
+}
+
 function managerOnly(company: CompanyForPush) {
   return company.companyAdmin
     ? [
@@ -67,6 +77,8 @@ function managerOnly(company: CompanyForPush) {
           fullName: company.companyAdmin.name,
           email: company.companyAdmin.email,
           isInitiator: true,
+          title: company.companyAdmin.title ?? null,
+          ticket: ticketOf(company.subscription?.plan),
         },
       ]
     : [];
@@ -77,13 +89,20 @@ async function confirmedParticipants(company: CompanyForPush) {
   if (!eventId) return [];
   const registrations = await prisma.eventRegistration.findMany({
     where: { eventId, status: "CONFIRMED", user: { companyId: company.id } },
-    include: { user: { select: { id: true, name: true, email: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true, title: true } },
+      plan: { select: { name: true, description: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
   return registrations.map((r) => ({
     fullName: r.user.name,
     email: r.user.email,
     isInitiator: r.user.id === company.companyAdminId,
+    // Fonction : facultative à l'inscription, donc parfois absente.
+    title: r.user.title ?? null,
+    // Offre de l'inscription, à défaut celle de l'entreprise.
+    ticket: ticketOf(r.plan ?? company.subscription?.plan),
   }));
 }
 

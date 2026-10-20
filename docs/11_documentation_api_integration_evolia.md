@@ -174,7 +174,18 @@ Même structure aux trois déclencheurs, mais **deux valeurs distinctes du champ
     "timezone": "Indian/Antananarivo",
     "location": "Carlton Anosy, Antananarivo"
   },
-  "participants": [{ "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true }]
+  "participants": [
+    {
+      "fullName": "Fanja Rakoto",
+      "email": "fanja@exemple.mg",
+      "isInitiator": true,
+      "title": "Directrice générale",
+      "ticket": {
+        "type": "Executive corporate pass",
+        "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"
+      }
+    }
+  ]
 }
 ```
 
@@ -204,8 +215,26 @@ Même structure aux trois déclencheurs, mais **deux valeurs distinctes du champ
     "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
-    { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true },
-    { "fullName": "Hery Andria", "email": "hery@exemple.mg", "isInitiator": false }
+    {
+      "fullName": "Fanja Rakoto",
+      "email": "fanja@exemple.mg",
+      "isInitiator": true,
+      "title": "Directrice générale",
+      "ticket": {
+        "type": "Executive corporate pass",
+        "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"
+      }
+    },
+    {
+      "fullName": "Hery Andria",
+      "email": "hery@exemple.mg",
+      "isInitiator": false,
+      "title": null,
+      "ticket": {
+        "type": "Executive corporate pass",
+        "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"
+      }
+    }
   ]
 }
 ```
@@ -239,18 +268,38 @@ Même structure aux trois déclencheurs, mais **deux valeurs distinctes du champ
     "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
-    { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true },
-    { "fullName": "Hery Andria", "email": "hery@exemple.mg", "isInitiator": false }
+    {
+      "fullName": "Fanja Rakoto",
+      "email": "fanja@exemple.mg",
+      "isInitiator": true,
+      "title": "Directrice générale",
+      "ticket": {
+        "type": "Executive corporate pass",
+        "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"
+      }
+    },
+    {
+      "fullName": "Hery Andria",
+      "email": "hery@exemple.mg",
+      "isInitiator": false,
+      "title": null,
+      "ticket": {
+        "type": "Executive corporate pass",
+        "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026"
+      }
+    }
   ]
 }
 ```
 
-| Champ                | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ceoSummitReference` | **À renvoyer strictement tel quel dans le webhook de confirmation** (§2, champ `reference`) — absent de ce champ, aucun lien possible entre le paiement encaissé et l'inscription.                                                                                                                                                                                                                                                                                       |
-| `paymentMethod`      | `"evolia"` (carte bancaire ou Mobile Money, paiement à encaisser par vos soins) ou `"virement"` (virement ou chèque, déjà réglé et validé manuellement côté CEO Summit — push informatif seulement, rien à encaisser). Absent sur `company.participants.confirmed` — rien à encaisser à ce déclencheur, tout paiement le précède déjà.                                                                                                                                   |
-| `eventDetails`       | Événement auquel l'offre donne accès : `startsAt` et `endsAt` (début et fin, date et heure) en ISO 8601 avec le décalage de Madagascar (`+03:00`), `timezone` toujours `"Indian/Antananarivo"`, `location` (`"En ligne"` pour un événement en ligne). `null` si l'offre ne donne accès à aucun événement.                                                                                                                                                                |
-| `amountDue`          | Montant à encaisser pour **ce** push précisément (pas un cumulatif) — le montant de l'offre initiale au déclencheur 1, celui du seul supplément au déclencheur 3. **Toujours en Ariary** : CEO Summit ne stocke les montants dus qu'en Ariary (une offre affichée en euros est convertie au taux du jour lors de sa configuration), d'où `currency` toujours égal à `"MGA"`. Absent sur `company.participants.confirmed` et sur `paymentMethod` `"VIREMENT"`/`"CHEQUE"`. |
+| Champ                   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ceoSummitReference`    | **À renvoyer strictement tel quel dans le webhook de confirmation** (§2, champ `reference`) — absent de ce champ, aucun lien possible entre le paiement encaissé et l'inscription.                                                                                                                                                                                                                                                                                       |
+| `paymentMethod`         | `"evolia"` (carte bancaire ou Mobile Money, paiement à encaisser par vos soins) ou `"virement"` (virement ou chèque, déjà réglé et validé manuellement côté CEO Summit — push informatif seulement, rien à encaisser). Absent sur `company.participants.confirmed` — rien à encaisser à ce déclencheur, tout paiement le précède déjà.                                                                                                                                   |
+| `eventDetails`          | Événement auquel l'offre donne accès : `startsAt` et `endsAt` (début et fin, date et heure) en ISO 8601 avec le décalage de Madagascar (`+03:00`), `timezone` toujours `"Indian/Antananarivo"`, `location` (`"En ligne"` pour un événement en ligne). `null` si l'offre ne donne accès à aucun événement.                                                                                                                                                                |
+| `participants[].title`  | Fonction du participant (« Directrice générale »), telle que saisie dans son profil CEO Summit. **Peut valoir `null`** : la fonction est facultative à l'inscription.                                                                                                                                                                                                                                                                                                    |
+| `participants[].ticket` | Offre qui donne accès à l'événement au participant : `type` = nom de l'offre (ex. « Executive corporate pass », « Platinum », « Partenaire institutionnel »), `description` = description de l'offre, **ou `null`**. Les noms d'offres sont configurés par l'équipe CEO Summit et peuvent évoluer : ne les figez pas dans votre code. La **photo de profil n'est pas transmise**.                                                                                        |
+| `amountDue`             | Montant à encaisser pour **ce** push précisément (pas un cumulatif) — le montant de l'offre initiale au déclencheur 1, celui du seul supplément au déclencheur 3. **Toujours en Ariary** : CEO Summit ne stocke les montants dus qu'en Ariary (une offre affichée en euros est convertie au taux du jour lors de sa configuration), d'où `currency` toujours égal à `"MGA"`. Absent sur `company.participants.confirmed` et sur `paymentMethod` `"VIREMENT"`/`"CHEQUE"`. |
 
 Chaque appel transmet un **instantané complet** de l'entreprise à cet instant (pas un delta) — l'entreprise en entité racine, la liste intégrale et à jour de ses participants confirmés (gestionnaire inclus seulement s'il s'est lui-même ajouté, marqué `isInitiator`).
 

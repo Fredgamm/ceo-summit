@@ -360,7 +360,13 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
     "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
-    { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true }
+    {
+      "fullName": "Fanja Rakoto",
+      "email": "fanja@exemple.mg",
+      "isInitiator": true,
+      "title": "Directrice générale",
+      "ticket": { "type": "Executive corporate pass", "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026" }
+    }
   ]
 }`}</Json>
 
@@ -392,8 +398,20 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
     "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
-    { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true },
-    { "fullName": "Hery Andria", "email": "hery@exemple.mg", "isInitiator": false }
+    {
+      "fullName": "Fanja Rakoto",
+      "email": "fanja@exemple.mg",
+      "isInitiator": true,
+      "title": "Directrice générale",
+      "ticket": { "type": "Executive corporate pass", "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026" }
+    },
+    {
+      "fullName": "Hery Andria",
+      "email": "hery@exemple.mg",
+      "isInitiator": false,
+      "title": null,
+      "ticket": { "type": "Executive corporate pass", "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026" }
+    }
   ]
 }`}</Json>
 
@@ -437,8 +455,20 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
     "location": "Carlton Anosy, Antananarivo"
   },
   "participants": [
-    { "fullName": "Fanja Rakoto", "email": "fanja@exemple.mg", "isInitiator": true },
-    { "fullName": "Hery Andria", "email": "hery@exemple.mg", "isInitiator": false }
+    {
+      "fullName": "Fanja Rakoto",
+      "email": "fanja@exemple.mg",
+      "isInitiator": true,
+      "title": "Directrice générale",
+      "ticket": { "type": "Executive corporate pass", "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026" }
+    },
+    {
+      "fullName": "Hery Andria",
+      "email": "hery@exemple.mg",
+      "isInitiator": false,
+      "title": null,
+      "ticket": { "type": "Executive corporate pass", "description": "Accès entreprise incluant 10 participants à l'édition CEO Summit 2026" }
+    }
   ]
 }`}</Json>
 
@@ -452,6 +482,14 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               [
                 "paymentMethod",
                 `"evolia" (carte bancaire ou Mobile Money, à encaisser par vos soins) ou "virement" (virement ou chèque, déjà réglé et validé manuellement côté CEO Summit — push informatif). Absent sur company.participants.confirmed.`,
+              ],
+              [
+                "participants[].title",
+                "Fonction du participant (« Directrice générale »), telle que saisie dans son profil CEO Summit. Peut valoir null : la fonction est facultative à l'inscription.",
+              ],
+              [
+                "participants[].ticket",
+                "Offre qui donne accès à l'événement au participant : type = nom de l'offre (ex. « Platinum », « Partenaire institutionnel »), description = description de l'offre, ou null. Les noms d'offres sont configurés par l'équipe CEO Summit et peuvent évoluer : ne les figez pas dans votre code. La photo de profil n'est pas transmise.",
               ],
               [
                 "eventDetails",
