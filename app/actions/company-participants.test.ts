@@ -15,6 +15,7 @@ vi.mock("@/lib/event-participation", async (importOriginal) => {
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     company: { findUnique: vi.fn(), update: vi.fn() },
+    user: { update: vi.fn() },
     companySubscription: { update: vi.fn() },
     eventRegistration: { findMany: vi.fn(), updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
@@ -43,9 +44,9 @@ function company(overrides: Record<string, unknown> = {}) {
     id: "company_1",
     companyAdminId: "manager_1",
     users: [
-      { id: "manager_1", name: "Marie", email: "marie@test.local" },
-      { id: "user_2", name: "Jean", email: "jean@test.local" },
-      { id: "user_3", name: "Paul", email: "paul@test.local" },
+      { id: "manager_1", name: "Marie", email: "marie@test.local", title: "Directrice générale" },
+      { id: "user_2", name: "Jean", email: "jean@test.local", title: "Directeur financier" },
+      { id: "user_3", name: "Paul", email: "paul@test.local", title: "Responsable achats" },
     ],
     subscription: {
       id: "sub_1",
@@ -147,6 +148,58 @@ describe("validateEventParticipants", () => {
   it("refuses someone who isn't an active member of the company", async () => {
     const result = await validateEventParticipants("company_1", ["outsider"]);
     expect(result.success).toBe(false);
+  });
+
+  it("refuses a selected member without a job title (Evolia badge)", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(
+      company({
+        users: [
+          { id: "manager_1", name: "Marie", email: "marie@test.local", title: "Directrice générale" },
+          { id: "user_2", name: "Jean", email: "jean@test.local", title: null },
+        ],
+      }) as never
+    );
+
+    const result = await validateEventParticipants("company_1", ["manager_1", "user_2"]);
+
+    expect(result).toEqual({ success: false, error: expect.stringContaining("Jean") });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(registerCompanyMemberToEvent).not.toHaveBeenCalled();
+    expect(pushParticipantsToEvolia).not.toHaveBeenCalled();
+  });
+
+  it("saves the job title typed by the manager before pushing to Evolia", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(
+      company({
+        users: [
+          { id: "manager_1", name: "Marie", email: "marie@test.local", title: "Directrice générale" },
+          { id: "user_2", name: "Jean", email: "jean@test.local", title: "" },
+        ],
+      }) as never
+    );
+
+    const result = await validateEventParticipants("company_1", ["manager_1", "user_2"], {
+      user_2: "  Directeur financier ",
+    });
+
+    expect(result.success).toBe(true);
+    expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user_2" },
+      data: { title: "Directeur financier" },
+    });
+    expect(pushParticipantsToEvolia).toHaveBeenCalledWith("company_1");
+  });
+
+  it("keeps the existing job title of a member", async () => {
+    await validateEventParticipants("company_1", ["user_2"], { user_2: "Autre fonction" });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a job title that is too short", async () => {
+    const result = await validateEventParticipants("company_1", ["user_2"], { user_2: "x" });
+    expect(result.success).toBe(false);
+    expect(registerCompanyMemberToEvent).not.toHaveBeenCalled();
   });
 
   it("refuses a caller who isn't the manager", async () => {

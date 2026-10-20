@@ -37,7 +37,19 @@ export const companyFormSchema = z.object({
 
 export type CompanyFormInput = z.input<typeof companyFormSchema>;
 
+/**
+ * 20 oct. 2026 — fonction d'un participant (ex. « Directrice générale »),
+ * demandée à chaque arrivée sur la plateforme et transmise à Evolia pour les
+ * badges.
+ */
+export const jobTitleSchema = z
+  .string()
+  .trim()
+  .min(2, "La fonction est requise (ex. Directeur général)")
+  .max(120, "La fonction ne doit pas dépasser 120 caractères");
+
 export const inviteTeammateSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(100),
   email: z.string().trim().min(1, "L'email est requis").email("Adresse email invalide"),
+  title: jobTitleSchema,
 });

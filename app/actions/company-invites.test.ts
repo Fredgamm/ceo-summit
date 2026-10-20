@@ -109,6 +109,7 @@ describe("inviteTeammate", () => {
     const result = await inviteTeammate("company_1", {
       name: "Marie Dupont",
       email: "marie@example.mg",
+      title: "Directrice financière",
     });
     expect(result).toEqual({ success: true, data: undefined });
     expect(prisma.companyInvite.create).toHaveBeenCalledWith(
@@ -118,10 +119,33 @@ describe("inviteTeammate", () => {
     );
   });
 
+  it("stores the teammate's job title on the invite", async () => {
+    await inviteTeammate("company_1", {
+      name: "Marie Dupont",
+      email: "marie@example.mg",
+      title: "Directrice financière",
+    });
+    expect(prisma.companyInvite.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ title: "Directrice financière" }),
+      })
+    );
+  });
+
+  it("requires the teammate's job title", async () => {
+    const result = await inviteTeammate("company_1", {
+      name: "Marie Dupont",
+      email: "marie@example.mg",
+      title: "",
+    });
+    expect(result.success).toBe(false);
+    expect(prisma.companyInvite.create).not.toHaveBeenCalled();
+  });
+
   it("rejects a caller whose account is no longer active (requireViewer)", async () => {
     vi.mocked(requireViewer).mockResolvedValue({ success: false, error: "Non authentifié." });
 
-    const result = await inviteTeammate("company_1", { name: "Marie", email: "m@example.mg" });
+    const result = await inviteTeammate("company_1", { name: "Marie", email: "m@example.mg", title: "Directrice financière" });
     expect(result).toEqual({ success: false, error: "Non authentifié." });
     expect(prisma.companyInvite.create).not.toHaveBeenCalled();
   });
@@ -134,6 +158,7 @@ describe("inviteTeammate", () => {
     const result = await inviteTeammate("company_1", {
       name: "Marie Dupont",
       email: "marie@example.mg",
+      title: "Directrice financière",
     });
     expect(result.success).toBe(false);
     expect(prisma.companyInvite.create).not.toHaveBeenCalled();
@@ -149,6 +174,7 @@ describe("inviteTeammate", () => {
     const result = await inviteTeammate("company_1", {
       name: "Marie Dupont",
       email: "marie@example.mg",
+      title: "Directrice financière",
     });
     expect(result).toEqual({
       success: false,
@@ -164,6 +190,7 @@ describe("inviteTeammate", () => {
     const result = await inviteTeammate("company_1", {
       name: "Marie Dupont",
       email: "marie@example.mg",
+      title: "Directrice financière",
     });
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -186,6 +213,7 @@ describe("inviteTeammate", () => {
     const result = await inviteTeammate("company_1", {
       name: "Marie Dupont",
       email: "marie@example.mg",
+      title: "Directrice financière",
     });
     expect(result.success).toBe(false);
   });
@@ -196,6 +224,7 @@ describe("inviteTeammate", () => {
     const result = await inviteTeammate("company_1", {
       name: "Marie Dupont",
       email: "marie@example.mg",
+      title: "Directrice financière",
     });
     expect(result).toEqual({
       success: true,
@@ -337,6 +366,7 @@ describe("acceptCompanyInvite", () => {
       companyId: "company_1",
       email: "marie@example.mg",
       name: "Marie Dupont",
+      title: "Directrice financière",
       status: "PENDING",
       expiresAt: FUTURE,
       company: {
@@ -361,6 +391,37 @@ describe("acceptCompanyInvite", () => {
     expect(prisma.user.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ companyId: "company_1", status: "ACTIVE" }),
     });
+  });
+
+  it("gives the account the job title entered by the manager", async () => {
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD);
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ title: "Directrice financière" }),
+    });
+  });
+
+  it("lets the collaborator correct the job title", async () => {
+    await acceptCompanyInvite("token_1", PASSWORD, PASSWORD, "Directrice administrative");
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ title: "Directrice administrative" }),
+    });
+  });
+
+  it("requires a job title when the invite has none", async () => {
+    vi.mocked(prisma.companyInvite.findUnique).mockResolvedValue({
+      id: "invite_1",
+      companyId: "company_1",
+      email: "marie@example.mg",
+      name: "Marie Dupont",
+      title: null,
+      status: "PENDING",
+      expiresAt: FUTURE,
+      company: { id: "company_1", name: "Rakoto Holding", companyAdminId: "admin_user_1" },
+    } as never);
+
+    const result = await acceptCompanyInvite("token_1", PASSWORD, PASSWORD, " ");
+    expect(result.success).toBe(false);
+    expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it("consumes the invite only while it is still PENDING, inside the transaction", async () => {

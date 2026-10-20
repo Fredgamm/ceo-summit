@@ -30,6 +30,7 @@ import { createCompanyAccount } from "./company-account";
 const VALID_INPUT = {
   planId: "plan_1",
   name: "Jean-Pierre Rakoto",
+  title: "Directeur général",
   email: "jp.rakoto@example.mg",
   password: "Password1",
   confirmPassword: "Password1",
@@ -188,5 +189,12 @@ describe("createCompanyAccount", () => {
 
     expect(result.success).toBe(false);
     expect(txMock.user.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("job title (Evolia badge)", () => {
+  it("is required", async () => {
+    const result = await createCompanyAccount({ ...VALID_INPUT, title: "" });
+    expect(result.success).toBe(false);
   });
 });

@@ -27,6 +27,7 @@ export function InviteTeammateForm({
   const router = useRouter();
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [title, setTitle] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [resendingId, setResendingId] = React.useState<string | null>(null);
@@ -37,7 +38,7 @@ export function InviteTeammateForm({
     setError(null);
     setLoading(true);
     try {
-      const result = await inviteTeammate(companyId, { name, email });
+      const result = await inviteTeammate(companyId, { name, email, title });
       if (!result.success) {
         setError(result.error);
         return;
@@ -48,6 +49,7 @@ export function InviteTeammateForm({
       else toast.success("Invitation envoyée.");
       setName("");
       setEmail("");
+      setTitle("");
       router.refresh();
     } finally {
       setLoading(false);
@@ -78,10 +80,20 @@ export function InviteTeammateForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <form onSubmit={handleInvite} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <form onSubmit={handleInvite} className="flex flex-col gap-3 lg:flex-row lg:items-end">
         <div className="flex flex-1 flex-col gap-1.5">
           <Label htmlFor="invite-name">Nom</Label>
           <Input id="invite-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label htmlFor="invite-title">Fonction</Label>
+          <Input
+            id="invite-title"
+            placeholder="ex. Directeur financier"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={120}
+          />
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
           <Label htmlFor="invite-email">Email</Label>

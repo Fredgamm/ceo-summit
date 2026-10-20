@@ -47,6 +47,7 @@ const INVITE = {
   plan: { isActive: true, isSelfService: false, isUpsell: false, priceAr: 0 },
 };
 const INPUT = {
+  title: "Directeur des partenariats",
   companyName: "Ministère du Commerce",
   sector: "Administration publique & Secteur public",
   country: "Madagascar",
@@ -121,5 +122,12 @@ describe("acceptPartnerInvite", () => {
     expect(
       (await acceptPartnerInvite("tok", { ...INPUT, confirmPassword: "Autre1234" })).success
     ).toBe(false);
+  });
+});
+
+describe("job title (Evolia badge)", () => {
+  it("is required", async () => {
+    const result = await acceptPartnerInvite("tok", { ...INPUT, title: "" });
+    expect(result.success).toBe(false);
   });
 });

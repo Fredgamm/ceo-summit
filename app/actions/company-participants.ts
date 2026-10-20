@@ -12,11 +12,13 @@ import {
   sendEventRegistrationEmail,
 } from "@/lib/event-participation";
 import { pushParticipantsToEvolia } from "@/lib/evolia";
+import { jobTitleSchema } from "@/lib/validations/company";
 
 type ActionResult<T = undefined> =
   { success: true; data: T; warning?: string } | { success: false; error: string };
 
 const participantIdsSchema = z.array(z.string().min(1)).max(500);
+const participantTitlesSchema = z.record(z.string(), jobTitleSchema);
 
 /**
  * Module 18 §4.9 — le gérant désigne, parmi les comptes actifs de son
@@ -27,7 +29,9 @@ const participantIdsSchema = z.array(z.string().min(1)).max(500);
  */
 export async function validateEventParticipants(
   companyId: string,
-  participantIds: unknown
+  participantIds: unknown,
+  /** Fonctions saisies par le gérant pour des participants qui n'en avaient pas. */
+  titles?: unknown
 ): Promise<ActionResult<{ registered: number; removed: number }>> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return viewerResult;
@@ -48,7 +52,10 @@ export async function validateEventParticipants(
     where: { id: companyId },
     include: {
       subscription: { include: { plan: { include: { event: true } } } },
-      users: { where: { status: "ACTIVE" }, select: { id: true, name: true, email: true } },
+      users: {
+        where: { status: "ACTIVE" },
+        select: { id: true, name: true, email: true, title: true },
+      },
     },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
@@ -69,12 +76,41 @@ export async function validateEventParticipants(
     return { success: false, error: "Un des participants ne fait pas partie de votre entreprise." };
   }
 
+  // 20 oct. 2026 — chaque participant transmis à Evolia a une fonction (badge) :
+  // celle de son compte, sinon celle saisie ici par le gérant.
+  const parsedTitles = participantTitlesSchema.safeParse(titles ?? {});
+  if (!parsedTitles.success) {
+    return {
+      success: false,
+      error: parsedTitles.error.issues[0]?.message ?? "Fonction invalide.",
+    };
+  }
+  const newTitles = new Map<string, string>();
+  const missingTitle: string[] = [];
+  for (const id of selectedIds) {
+    const member = members.get(id)!;
+    if (member.title?.trim()) continue;
+    const provided = parsedTitles.data[id];
+    if (provided) newTitles.set(id, provided);
+    else missingTitle.push(member.name);
+  }
+  if (missingTitle.length > 0) {
+    return {
+      success: false,
+      error: `Indiquez la fonction de ${missingTitle.join(", ")} : elle figure sur le badge de l'événement.`,
+    };
+  }
+
   const cap = seatCap(company.subscription);
   if (cap != null && selectedIds.length > cap) {
     return {
       success: false,
       error: `Votre offre compte ${cap} place(s) : retirez des participants, ou achetez des places supplémentaires.`,
     };
+  }
+
+  for (const [userId, title] of newTitles) {
+    await prisma.user.update({ where: { id: userId }, data: { title } });
   }
 
   // Comptes de l'entreprise déjà inscrits, pour savoir qui retirer.

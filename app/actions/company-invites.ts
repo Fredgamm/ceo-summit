@@ -13,7 +13,7 @@ import {
   INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE,
 } from "@/lib/company-seats";
 import { sendTransactionalEmail } from "@/lib/resend";
-import { inviteTeammateSchema } from "@/lib/validations/company";
+import { inviteTeammateSchema, jobTitleSchema } from "@/lib/validations/company";
 import { setPasswordSchema } from "@/lib/validations/auth";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { BCRYPT_ROUNDS } from "@/lib/password";
@@ -106,6 +106,7 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
       companyId,
       email,
       name: parsed.data.name,
+      title: parsed.data.title,
       invitedById: viewer.id,
       token,
       expiresAt: new Date(Date.now() + COMPANY_INVITE_TTL_MS),
@@ -244,7 +245,8 @@ export async function resendInvite(inviteId: string): Promise<ActionResult> {
 export async function acceptCompanyInvite(
   token: string,
   password: string,
-  confirmPassword: string
+  confirmPassword: string,
+  title?: string
 ): Promise<ActionResult<{ email: string }>> {
   const invite = await prisma.companyInvite.findUnique({
     where: { token },
@@ -264,6 +266,13 @@ export async function acceptCompanyInvite(
       error:
         "Cette invitation a expiré — demandez à l'admin de l'entreprise de vous en renvoyer une.",
     };
+  }
+
+  // 20 oct. 2026 — fonction : celle saisie par le gérant, confirmée ou corrigée
+  // par le collaborateur (transmise à Evolia).
+  const parsedTitle = jobTitleSchema.safeParse(title ?? invite?.title ?? "");
+  if (!parsedTitle.success) {
+    return { success: false, error: parsedTitle.error.issues[0]?.message ?? "Fonction invalide" };
   }
 
   const parsedPassword = setPasswordSchema.safeParse({ password, confirmPassword });
@@ -330,6 +339,7 @@ export async function acceptCompanyInvite(
         data: {
           name: invite.name,
           email: invite.email,
+          title: parsedTitle.data,
           companyId: invite.companyId,
           passwordHash,
           status: "ACTIVE",

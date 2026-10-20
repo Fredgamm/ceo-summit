@@ -61,6 +61,7 @@ export function CompanySignupWizard({
   const [planId, setPlanId] = React.useState<string | null>(intendedPlan?.id ?? null);
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [title, setTitle] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
@@ -157,6 +158,7 @@ export function CompanySignupWizard({
       const result = await createCompanyAccount({
         planId,
         name,
+        title,
         email,
         password,
         confirmPassword,
@@ -226,6 +228,17 @@ export function CompanySignupWizard({
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoComplete="name"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="signup-title">Fonction</Label>
+            <Input
+              id="signup-title"
+              placeholder="ex. Directeur général"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={120}
+              autoComplete="organization-title"
             />
           </div>
           <div className="flex flex-col gap-1.5">

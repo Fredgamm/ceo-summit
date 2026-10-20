@@ -9,6 +9,7 @@ import { validateEventParticipants } from "@/app/actions/company-participants";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export interface ParticipantCandidate {
@@ -51,13 +52,19 @@ export function EventParticipantsForm({
 }) {
   const router = useRouter();
   const [selected, setSelected] = React.useState<string[]>(initialSelected);
+  // Fonction à saisir pour un participant coché qui n'en a pas (badge Evolia).
+  const [titles, setTitles] = React.useState<Record<string, string>>({});
   const [error, setError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const overCap = cap != null && selected.length > cap;
   const isValidated = validatedAtLabel != null;
+  const missingTitles = candidates.filter(
+    (c) => selected.includes(c.id) && !c.title?.trim() && (titles[c.id] ?? "").trim().length < 2
+  );
   const isDirty =
     selected.length !== initialSelected.length ||
-    selected.some((id) => !initialSelected.includes(id));
+    selected.some((id) => !initialSelected.includes(id)) ||
+    Object.values(titles).some((t) => t.trim().length > 0);
 
   function toggle(id: string) {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -67,7 +74,12 @@ export function EventParticipantsForm({
     setError(null);
     setSaving(true);
     try {
-      const result = await validateEventParticipants(companyId, selected);
+      const newTitles = Object.fromEntries(
+        Object.entries(titles)
+          .filter(([id, t]) => selected.includes(id) && t.trim().length > 0)
+          .map(([id, t]) => [id, t.trim()])
+      );
+      const result = await validateEventParticipants(companyId, selected, newTitles);
       if (!result.success) {
         setError(result.error);
         return;
@@ -180,11 +192,35 @@ export function EventParticipantsForm({
                   </span>
                   {checked && <span className="text-xs font-semibold text-navy">Participe</span>}
                 </label>
+                {checked && !c.title?.trim() && (
+                  <div className="bg-gold-pale px-4 pb-3 pl-11">
+                    <label
+                      htmlFor={`participant-title-${c.id}`}
+                      className="mb-1 block text-xs font-semibold text-navy"
+                    >
+                      Fonction (figure sur le badge)
+                    </label>
+                    <Input
+                      id={`participant-title-${c.id}`}
+                      placeholder="ex. Directeur financier"
+                      value={titles[c.id] ?? ""}
+                      onChange={(e) => setTitles((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                      maxLength={120}
+                      className="h-9 bg-white"
+                    />
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
 
+        {missingTitles.length > 0 && (
+          <p className="text-sm font-medium text-text-mid">
+            Indiquez la fonction de {missingTitles.map((c) => c.name).join(", ")} pour valider :
+            elle figure sur le badge de l&apos;événement.
+          </p>
+        )}
         {overCap && (
           <p className="text-sm font-medium text-red-600">
             Votre offre compte {cap} place(s). Décochez {selected.length - (cap ?? 0)} personne(s),
@@ -209,7 +245,13 @@ export function EventParticipantsForm({
             size="lg"
             className="w-full sm:w-auto"
             onClick={handleValidate}
-            disabled={saving || overCap || selected.length === 0 || (isValidated && !isDirty)}
+            disabled={
+              saving ||
+              overCap ||
+              selected.length === 0 ||
+              missingTitles.length > 0 ||
+              (isValidated && !isDirty)
+            }
           >
             {saving
               ? "Validation…"

@@ -603,6 +603,9 @@ model CompanyInvite {
   company     Company             @relation(fields: [companyId], references: [id])
   email       String
   name        String
+  /// 20 oct. 2026 — fonction du collaborateur, saisie par le gérant à
+  /// l'invitation et reprise sur son compte (transmise à Evolia).
+  title       String?
   invitedById String
   token       String              @unique
   status      CompanyInviteStatus @default(PENDING)

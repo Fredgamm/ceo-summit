@@ -88,6 +88,7 @@ export async function acceptPartnerInvite(
         data: {
           name: invite.name,
           email: invite.email,
+          title: f.title,
           passwordHash,
           status: "ACTIVE",
           emailVerifiedAt: now,

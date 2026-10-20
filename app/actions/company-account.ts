@@ -70,7 +70,13 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   try {
     createdUser = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
-        data: { name: f.name, email: normalizedEmail, passwordHash, status: "ACTIVE" },
+        data: {
+          name: f.name,
+          title: f.title,
+          email: normalizedEmail,
+          passwordHash,
+          status: "ACTIVE",
+        },
       });
       const company = await tx.company.create({
         data: {

@@ -485,7 +485,7 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               ],
               [
                 "participants[].title",
-                "Fonction du participant (« Directrice générale »), telle que saisie dans son profil CEO Summit. Peut valoir null : la fonction est facultative à l'inscription.",
+                "Fonction du participant (« Directrice générale »), telle que saisie dans son profil CEO Summit. Demandée à chaque arrivée sur la plateforme et obligatoire pour valider la liste des participants : toujours renseignée dans company.participants.confirmed. Peut valoir null dans company.registration.pushed pour un compte créé avant le 20 octobre 2026.",
               ],
               [
                 "participants[].ticket",

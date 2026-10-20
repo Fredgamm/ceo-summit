@@ -76,7 +76,7 @@ export default async function InvitationPage(props: { params: Promise<{ token: s
         </Link>
       }
     >
-      <AcceptInviteButton token={params.token} />
+      <AcceptInviteButton token={params.token} initialTitle={invite.title} />
     </JourneyShell>
   );
 }

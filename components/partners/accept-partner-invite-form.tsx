@@ -28,6 +28,7 @@ export function AcceptPartnerInviteForm({
   countries: string[];
 }) {
   const router = useRouter();
+  const [title, setTitle] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
   const [sector, setSector] = React.useState("");
   const [country, setCountry] = React.useState("");
@@ -42,6 +43,7 @@ export function AcceptPartnerInviteForm({
     setLoading(true);
     try {
       const result = await acceptPartnerInvite(token, {
+        title,
         companyName,
         sector,
         country,
@@ -73,6 +75,18 @@ export function AcceptPartnerInviteForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="partner-title">Votre fonction *</Label>
+        <Input
+          id="partner-title"
+          placeholder="ex. Directeur général"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={120}
+          autoComplete="organization-title"
+        />
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="partner-company">Nom de votre entreprise *</Label>
         <Input

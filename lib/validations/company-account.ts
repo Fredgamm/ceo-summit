@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { jobTitleSchema } from "@/lib/validations/company";
+
 import { passwordSchema, emailSchema } from "@/lib/validations/auth";
 
 /**
@@ -14,6 +16,7 @@ export const companyAccountSchema = z
   .object({
     planId: z.string().min(1, "Choisissez une offre."),
     name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),
+    title: jobTitleSchema,
     email: emailSchema,
     password: passwordSchema,
     confirmPassword: z.string(),

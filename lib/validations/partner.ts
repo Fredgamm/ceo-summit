@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { jobTitleSchema } from "@/lib/validations/company";
+
 import { emailSchema, passwordSchema } from "@/lib/validations/auth";
 
 /** Module 20 — invitation d'un gérant partenaire par l'admin : nom, e-mail et offre obligatoires. */
@@ -24,6 +26,7 @@ export const partnerSettingsSchema = invitePartnerSchema.pick({
 /** Module 20 — inscription du gérant depuis le lien reçu par e-mail. */
 export const acceptPartnerInviteSchema = z
   .object({
+    title: jobTitleSchema,
     password: passwordSchema,
     confirmPassword: z.string(),
     companyName: z.string().trim().min(2, "Le nom de l'entreprise est requis").max(120),

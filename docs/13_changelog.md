@@ -13,8 +13,12 @@
 ### Ajouté
 
 - **Fonction et ticket de chaque participant** dans les envois à Evolia (`company.registration.pushed` et `company.participants.confirmed`) :
-  - `title` : la fonction saisie dans le profil, ou `null` si elle n'est pas renseignée (elle est facultative à l'inscription) ;
+  - `title` : la fonction du participant (`null` seulement pour un compte ancien sans fonction, dans l'envoi au paiement) ;
   - `ticket` : `{ type, description }` de l'offre liée à l'inscription du participant, à défaut celle de son entreprise.
+- **Fonction demandée à chaque arrivée** sur la plateforme :
+  - invitation d'un collaborateur : le gérant saisit sa fonction, que le collaborateur confirme ou corrige en acceptant ;
+  - inscription d'une entreprise et d'un partenaire institutionnel : champ « Fonction » obligatoire ;
+  - validation de la liste des participants : un participant coché sans fonction (compte ancien) fait apparaître un champ à remplir ; la liste ne part pas vers Evolia tant qu'il est vide.
 - Documentation d'intégration (`docs/11`) et page publique `/integration-evolia` mises à jour.
 
 ### Décidé
