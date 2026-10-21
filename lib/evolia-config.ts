@@ -34,8 +34,7 @@ export type EvoliaUrlField = "registrationUrl" | "paymentUrl";
 
 export const DEFAULT_REGISTRATION_URL =
   "https://api-event.aiolia.us/integration/ceosummit/registrations";
-export const DEFAULT_PAYMENT_URL =
-  "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
+export const DEFAULT_PAYMENT_URL = "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
 export const PAYMENT_URL_PLACEHOLDER = "{ceoSummitReference}";
 
 // ─── Chiffrement ──────────────────────────────────────────────────────────
@@ -90,7 +89,9 @@ async function loadSettings() {
   };
 
   const secretRow = byKey.get(EVOLIA_SETTING_KEYS.secret);
-  const adminSecret = secretRow ? decryptSetting(secretRow.value, EVOLIA_SETTING_KEYS.secret) : null;
+  const adminSecret = secretRow
+    ? decryptSetting(secretRow.value, EVOLIA_SETTING_KEYS.secret)
+    : null;
   if (secretRow && !adminSecret) {
     console.error("[evolia-config] clé Evolia enregistrée illisible — repli sur l'environnement");
   }

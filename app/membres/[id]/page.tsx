@@ -167,20 +167,25 @@ export default async function MemberProfilePage(props: {
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
+      {/* Mobile (21 oct. 2026) : photo à cheval sur la bannière, nom en dessous et
+          boutons sur toute la largeur — côte à côte, le nom n'avait plus la place
+          et la photo décrochait de la bannière. */}
       <div className="mb-4 overflow-hidden rounded-lg border border-border bg-white">
-        <div className="h-24 bg-navy" />
-        <div className="flex flex-wrap items-end justify-between gap-4 p-6 pt-0">
-          <div className="flex min-w-0 items-end gap-4">
-            <Avatar className="-mt-10 h-24 w-24 shrink-0 border-4 border-white">
+        <div className="h-16 bg-navy sm:h-24" />
+        <div className="flex flex-col gap-4 p-4 pt-0 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:p-6 sm:pt-0">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+            <Avatar className="-mt-10 h-20 w-20 shrink-0 border-4 border-white sm:h-24 sm:w-24">
               <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
               <AvatarFallback className="text-lg">{initials(user.name)}</AvatarFallback>
             </Avatar>
-            <div className="min-w-0 pb-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-bold text-navy">{user.name}</h1>
+            <div className="min-w-0 sm:pb-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <h1 className="text-lg font-bold leading-tight text-navy sm:text-xl">
+                  {user.name}
+                </h1>
                 {offerBadge && <Badge variant="chairman">{offerBadge}</Badge>}
               </div>
-              <p className="text-sm text-text-muted">
+              <p className="mt-1 text-sm text-text-muted">
                 {[user.title, user.company?.name, user.country].filter(Boolean).join(" · ")}
               </p>
               <p className="mt-1.5 text-xs text-text-muted">
@@ -189,7 +194,11 @@ export default async function MemberProfilePage(props: {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 pb-1">
+          <div
+            className={`gap-2 sm:flex sm:flex-wrap sm:pb-1 ${
+              isSelf ? "grid grid-cols-2" : "flex flex-col"
+            }`}
+          >
             {isSelf ? (
               <>
                 <Button asChild variant="outline">
@@ -197,7 +206,7 @@ export default async function MemberProfilePage(props: {
                 </Button>
                 {/* 14 oct. 2026 — sur mobile, la déconnexion n'est plus dans la
                     barre du bas : elle se fait ici (la sidebar desktop l'a déjà). */}
-                <SignOutButton className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-semibold text-red-600 hover:bg-red-50 md:hidden" />
+                <SignOutButton className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-semibold text-red-600 hover:bg-red-50 md:hidden" />
               </>
             ) : (
               <>
@@ -215,7 +224,8 @@ export default async function MemberProfilePage(props: {
       </div>
 
       <Tabs defaultValue={defaultTab}>
-        <TabsList>
+        {/* Mobile : la ligne d'onglets défile bord à bord de l'écran. */}
+        <TabsList className="-mx-4 px-4 md:mx-0 md:px-0">
           <TabsTrigger value="profil">Profil</TabsTrigger>
           <TabsTrigger value="entreprise">Entreprise</TabsTrigger>
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>

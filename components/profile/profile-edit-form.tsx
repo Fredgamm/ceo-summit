@@ -9,14 +9,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { initials } from "@/lib/utils";
 import { ReferentialSelect } from "@/components/referentials/referential-select";
-import { ReferentialSearchButton } from "@/components/referentials/referential-search-button";
-import { visibleReferentialOptions } from "@/lib/referential-options";
+import { SectorPicker } from "@/components/referentials/sector-picker";
 
 interface ProfileEditFormProps {
   userId: string;
@@ -247,29 +245,7 @@ export function ProfileEditForm({
           <CardTitle>Secteurs d&apos;intérêt</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3">
-            {visibleReferentialOptions(availableSectors, sectors).map((sector) => (
-              <label
-                key={sector}
-                className="flex items-center gap-2 rounded-md border border-border p-2.5 text-sm"
-              >
-                <Checkbox
-                  checked={sectors.includes(sector)}
-                  onCheckedChange={() => toggleSector(sector)}
-                />
-                {sector}
-              </label>
-            ))}
-            <ReferentialSearchButton
-              options={availableSectors}
-              title="Rechercher un secteur"
-              selected={sectors}
-              onPick={(sector) => {
-                if (!sectors.includes(sector)) toggleSector(sector);
-              }}
-              className="flex items-center justify-center rounded-md border border-dashed border-border p-2.5 text-sm font-semibold text-navy-mid hover:border-navy-light"
-            />
-          </div>
+          <SectorPicker available={availableSectors} selected={sectors} onToggle={toggleSector} />
         </CardContent>
       </Card>
 

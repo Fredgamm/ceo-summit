@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { ImageUp } from "lucide-react";
 
 import { createCompany, updateCompany } from "@/app/actions/company";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -73,6 +74,7 @@ export function CompanyForm({
     ...initialValues,
   });
   const [uploadingLogo, setUploadingLogo] = React.useState(false);
+  const logoInputRef = React.useRef<HTMLInputElement>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -123,7 +125,9 @@ export function CompanyForm({
   }
 
   return (
-    <div className="max-w-[560px] rounded-lg border border-border bg-white p-6">
+    // Mobile (21 oct. 2026) : champs empilés sous 640 px — les grilles à 2 et 3
+    // colonnes ne laissaient que ~90 px par champ sur un téléphone.
+    <div className="max-w-[560px] rounded-lg border border-border bg-white p-4 sm:p-6">
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-4">
           <Avatar className="h-16 w-16 shrink-0 rounded-lg">
@@ -132,16 +136,33 @@ export function CompanyForm({
               {values.name ? values.name.slice(0, 2).toUpperCase() : "?"}
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col items-start gap-1.5">
             <Label htmlFor="company-logo">Logo (optionnel)</Label>
-            <Input
+            {/* Sélecteur natif masqué : son rendu (« Choisir un fichier · Aucun
+                fichier choisi ») varie selon le navigateur et déborde sur mobile. */}
+            <input
+              ref={logoInputRef}
               id="company-logo"
               type="file"
               accept="image/*"
               onChange={handleLogoChange}
               disabled={uploadingLogo}
+              className="sr-only"
             />
-            {uploadingLogo && <p className="text-xs text-text-muted">Envoi en cours…</p>}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={uploadingLogo}
+            >
+              <ImageUp />
+              {uploadingLogo
+                ? "Envoi en cours…"
+                : values.logoUrl
+                  ? "Changer le logo"
+                  : "Choisir un logo"}
+            </Button>
           </div>
         </div>
 
@@ -156,7 +177,7 @@ export function CompanyForm({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label>Secteur *</Label>
             <ReferentialSelect
@@ -179,11 +200,14 @@ export function CompanyForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="company-website">Site web</Label>
             <Input
               id="company-website"
+              type="url"
+              inputMode="url"
+              autoComplete="url"
               placeholder="https://..."
               value={values.website}
               onChange={(e) => set("website", e.target.value)}
@@ -194,6 +218,8 @@ export function CompanyForm({
             <Label htmlFor="company-phone">Téléphone</Label>
             <Input
               id="company-phone"
+              type="tel"
+              autoComplete="tel"
               placeholder="+261 34 00 000 00"
               value={values.phone}
               onChange={(e) => set("phone", e.target.value)}
@@ -213,11 +239,13 @@ export function CompanyForm({
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="company-linkedin">LinkedIn</Label>
             <Input
               id="company-linkedin"
+              type="url"
+              inputMode="url"
               placeholder="https://linkedin.com/…"
               value={values.linkedinUrl}
               onChange={(e) => set("linkedinUrl", e.target.value)}
@@ -228,6 +256,8 @@ export function CompanyForm({
             <Label htmlFor="company-facebook">Facebook</Label>
             <Input
               id="company-facebook"
+              type="url"
+              inputMode="url"
               placeholder="https://facebook.com/…"
               value={values.facebookUrl}
               onChange={(e) => set("facebookUrl", e.target.value)}
@@ -238,6 +268,8 @@ export function CompanyForm({
             <Label htmlFor="company-instagram">Instagram</Label>
             <Input
               id="company-instagram"
+              type="url"
+              inputMode="url"
               placeholder="https://instagram.com/…"
               value={values.instagramUrl}
               onChange={(e) => set("instagramUrl", e.target.value)}
@@ -250,7 +282,7 @@ export function CompanyForm({
           <Label htmlFor="company-desc">Description</Label>
           <Textarea
             id="company-desc"
-            rows={3}
+            rows={4}
             value={values.description}
             onChange={(e) => set("description", e.target.value)}
             maxLength={1000}

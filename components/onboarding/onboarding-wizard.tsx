@@ -11,11 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ReferentialSearchButton } from "@/components/referentials/referential-search-button";
-import { visibleReferentialOptions } from "@/lib/referential-options";
+import { SectorPicker } from "@/components/referentials/sector-picker";
 
 type StepKey = "welcome" | "profile" | "sectors" | "closing";
 
@@ -257,29 +255,7 @@ function SectorsStep({
         Sélectionnez les secteurs qui vous intéressent — cela affine ce qui vous est montré dans le
         Deal Room et le Catalogue.
       </p>
-      <div className="grid grid-cols-2 gap-3">
-        {visibleReferentialOptions(available, selected).map((sector) => (
-          <label
-            key={sector}
-            className="flex items-center gap-2 rounded-md border border-border p-2.5 text-sm"
-          >
-            <Checkbox
-              checked={selected.includes(sector)}
-              onCheckedChange={() => onToggle(sector)}
-            />
-            {sector}
-          </label>
-        ))}
-        <ReferentialSearchButton
-          options={available}
-          title="Rechercher un secteur"
-          selected={selected}
-          onPick={(sector) => {
-            if (!selected.includes(sector)) onToggle(sector);
-          }}
-          className="flex items-center justify-center rounded-md border border-dashed border-border p-2.5 text-sm font-semibold text-navy-mid hover:border-navy-light"
-        />
-      </div>
+      <SectorPicker available={available} selected={selected} onToggle={onToggle} />
     </div>
   );
 }

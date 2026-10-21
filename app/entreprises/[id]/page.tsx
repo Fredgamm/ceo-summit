@@ -211,19 +211,19 @@ export default async function CompanyProfilePage(props: {
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      <div className="mb-4 flex items-start gap-4 rounded-lg border border-border bg-white p-6">
-        <Avatar className="h-16 w-16 shrink-0 rounded-xl">
+      <div className="mb-4 flex items-start gap-3 rounded-lg border border-border bg-white p-4 sm:gap-4 sm:p-6">
+        <Avatar className="h-14 w-14 shrink-0 rounded-xl sm:h-16 sm:w-16">
           <AvatarImage src={company.logoUrl ?? undefined} alt={company.name} />
           <AvatarFallback className="rounded-xl">{initials(company.name)}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold text-navy">{company.name}</h1>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <h1 className="text-lg font-bold leading-tight text-navy sm:text-xl">{company.name}</h1>
             {offerBadgeLabel(company.subscription) && (
               <Badge variant="chairman">{offerBadgeLabel(company.subscription)}</Badge>
             )}
           </div>
-          <p className="text-sm text-text-muted">
+          <p className="mt-1 text-sm text-text-muted">
             {[company.sector, company.country].filter(Boolean).join(" · ")}
           </p>
           {websiteHref && (
@@ -239,8 +239,11 @@ export default async function CompanyProfilePage(props: {
         </div>
       </div>
 
-      <Tabs defaultValue={defaultTab}>
-        <TabsList>
+      {/* key : un lien interne vers ?tab=… (ex. « Ajouter une description ») remonte
+          les onglets sur le bon, defaultValue n'étant lu qu'au premier rendu. */}
+      <Tabs key={defaultTab} defaultValue={defaultTab}>
+        {/* Mobile : la ligne d'onglets défile bord à bord de l'écran. */}
+        <TabsList className="-mx-4 px-4 md:mx-0 md:px-0">
           <TabsTrigger value="apercu">Aperçu</TabsTrigger>
           <TabsTrigger value="membres">Membres ({company.users.length})</TabsTrigger>
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
@@ -250,11 +253,22 @@ export default async function CompanyProfilePage(props: {
         </TabsList>
 
         <TabsContent value="apercu">
-          <div className="rounded-lg border border-border bg-white p-6">
+          <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
             {company.description ? (
-              <p className="text-sm leading-relaxed text-text">{company.description}</p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-text">
+                {company.description}
+              </p>
             ) : (
-              <p className="text-sm text-text-muted">Aucune description renseignée.</p>
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-text-muted">Aucune description renseignée.</p>
+                {isCompanyAdmin && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/entreprises/${company.id}?tab=modifier`}>
+                      Ajouter une description
+                    </Link>
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </TabsContent>

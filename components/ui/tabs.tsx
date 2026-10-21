@@ -14,9 +14,12 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      // Rapport QA du 7 oct. 2026 (§3.6) — les onglets passent à la ligne au lieu
-      // d'élargir la page sur mobile.
-      "flex flex-wrap items-center border-b-2 border-border",
+      // Rapport QA du 7 oct. 2026 (§3.6) — les onglets ne doivent pas élargir la
+      // page sur mobile. 21 oct. 2026 : une seule ligne qui défile (barre masquée)
+      // plutôt qu'un passage à la ligne, retour à la ligne à partir de md.
+      // Ligne de base en ombre intérieure, pas en bordure : avec le défilement,
+      // le -mb-0.5 des onglets (soulignement posé sur la bordure) serait rogné.
+      "flex flex-nowrap items-center overflow-x-auto shadow-[inset_0_-2px_0_0_hsl(var(--border))] [scrollbar-width:none] md:flex-wrap [&::-webkit-scrollbar]:hidden",
       className
     )}
     {...props}
@@ -31,7 +34,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "-mb-0.5 shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm sm:px-5 font-semibold text-muted-foreground transition-colors data-[state=active]:border-navy data-[state=active]:text-navy",
+      "shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm sm:px-5 font-semibold text-muted-foreground transition-colors data-[state=active]:border-navy data-[state=active]:text-navy",
       className
     )}
     {...props}

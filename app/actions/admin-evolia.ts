@@ -25,7 +25,8 @@ const RATE_WINDOW_SEC = 15 * 60;
 /** Adresses internes refusées en production : l'adresse d'inscription est appelée par notre serveur. */
 function isInternalHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) return true;
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal"))
+    return true;
   if (host.includes(":")) return host === "::1" || /^(fc|fd|fe80)/.test(host);
   const ipv4 = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
   if (!ipv4) return false;
@@ -157,10 +158,7 @@ export async function updateEvoliaSettings(
       })
     );
     changed.push("secret");
-  } else if (
-    data.clearSecret &&
-    (current.secret.source === "admin" || current.secret.unreadable)
-  ) {
+  } else if (data.clearSecret && (current.secret.source === "admin" || current.secret.unreadable)) {
     writes.push(prisma.platformSetting.deleteMany({ where: { key: secretKey } }));
     changed.push("secret");
   }

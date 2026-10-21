@@ -11,6 +11,7 @@ interface ReferentialSearchButtonProps {
   selected?: readonly string[];
   onPick: (value: string) => void;
   className?: string;
+  label?: string;
 }
 
 /**
@@ -23,6 +24,7 @@ export function ReferentialSearchButton({
   selected,
   onPick,
   className,
+  label = "Rechercher…",
 }: ReferentialSearchButtonProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -30,7 +32,7 @@ export function ReferentialSearchButton({
     <>
       <button type="button" onClick={() => setOpen(true)} className={className}>
         <Search className="mr-1 inline h-3 w-3" />
-        Rechercher…
+        {label}
       </button>
       <ReferentialSearchDialog
         open={open}

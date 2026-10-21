@@ -105,9 +105,17 @@ export default async function DealRoomPage(props: { searchParams: Promise<DealRo
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-navy">Deal Room</h1>
-        <AddButton href="/deal-room/publier">Publier une opportunité</AddButton>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-navy sm:text-2xl">Deal Room</h1>
+          <p className="text-sm text-text-muted">
+            {total} opportunité{total > 1 ? "s" : ""}
+          </p>
+        </div>
+        <AddButton href="/deal-room/publier" className="shrink-0 rounded-full sm:rounded-md">
+          <span className="sm:hidden">Publier</span>
+          <span className="hidden sm:inline">Publier une opportunité</span>
+        </AddButton>
       </div>
 
       <DealRoomFilters types={validTypes} sectors={validSectors} countries={validCountries} />
