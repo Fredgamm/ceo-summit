@@ -169,6 +169,15 @@ const withPWA = withPWAInit({
         urlPattern: ({ url, request }) => request.mode === "navigate" && url.pathname === "/login",
         handler: "NetworkOnly",
       },
+      // 21 oct. 2026 (déconnexion bloquée) — le cache « apis » par défaut de
+      // next-pwa (NetworkFirst, 10 s, 24 h) couvrait aussi /api/auth/csrf et
+      // /api/auth/session : sur un réseau lent, signOut() attendait 10 s puis
+      // envoyait un jeton CSRF périmé, refusé — on restait sur la page. Rien
+      // de l'authentification ne doit jamais venir d'un cache.
+      {
+        urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith("/api/auth/"),
+        handler: "NetworkOnly",
+      },
       {
         urlPattern: ({ url, request }) =>
           request.mode === "navigate" && matchesNavigationTo(url.pathname, CRITICAL_PAGES),
@@ -182,9 +191,14 @@ const withPWA = withPWAInit({
       {
         urlPattern: ({ url, request }) =>
           request.mode === "navigate" && matchesNavigationTo(url.pathname, MEMBER_PAGE_PREFIXES),
-        handler: "StaleWhileRevalidate",
+        // 21 oct. 2026 — NetworkFirst plutôt que StaleWhileRevalidate : ce
+        // dernier affichait d'abord la version en cache (jusqu'à 24 h), la page
+        // semblait ne jamais se mettre à jour. Le cache ne sert plus que hors
+        // connexion ou si le serveur ne répond pas en 4 s.
+        handler: "NetworkFirst",
         options: {
           cacheName: "ceo-summit-member-pages",
+          networkTimeoutSeconds: 4,
           expiration: { maxEntries: 40, maxAgeSeconds: 24 * 60 * 60 },
         },
       },

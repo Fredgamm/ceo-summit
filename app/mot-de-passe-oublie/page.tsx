@@ -12,10 +12,9 @@ export const metadata: Metadata = { title: "Mot de passe oublié" };
  */
 export default function ForgotPasswordPage() {
   return (
-    <AuthCard
-      title="Mot de passe oublié"
-      subtitle="Indiquez votre email pour recevoir un lien de réinitialisation."
-    >
+    // Pas de sous-titre ici : l'introduction est dans ForgotPasswordForm, qui
+    // la remplace par la confirmation une fois le lien envoyé.
+    <AuthCard title="Mot de passe oublié">
       <ForgotPasswordForm />
 
       <p className="mt-6 text-center text-sm text-text-muted">

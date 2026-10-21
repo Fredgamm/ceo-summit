@@ -39,6 +39,12 @@ Pas encore déployé à la date de cette entrée.
 - Paiement : nouvelle aide sous « Nombre de participants » ; message vers l'offre de groupe dès son seuil atteint ; nouveaux textes pour Evolia et pour la vérification d'un virement.
 - E-mails : logo Becom et signature « Conquérir de nouveaux possibles – The power to go beyond » dans l'en-tête ; téléphone 038 09 131 14 et nouveau texte de pied de page ; mail de bienvenue du gestionnaire réécrit ; confirmation d'inscription reformulée.
 
+### Déconnexion, actualisation et mot de passe oublié
+
+- **Déconnexion qui ne faisait rien** : le service worker mettait en cache les appels d'authentification (`/api/auth/csrf`, `/api/auth/session`) ; sur un réseau lent, la déconnexion attendait 10 s puis envoyait un jeton périmé, refusé. Ces appels ne passent plus par le cache ; le bouton affiche « Déconnexion… », vide les pages du compte gardées en cache et, en cas d'échec, bascule sur la page de déconnexion de NextAuth.
+- **Pages qui ne s'actualisaient pas** : les pages membres venaient d'abord du cache (jusqu'à 24 h). Elles viennent maintenant du serveur ; le cache ne sert que hors connexion ou au-delà de 4 s sans réponse.
+- **Mot de passe oublié** : une erreur imprévue n'affichait rien ; elle s'affiche. Écran de confirmation « Vérifiez votre boîte mail » avec renvoi du lien (après 60 s) et changement d'adresse.
+
 ### Sécurité
 
 - Clé **chiffrée en base** (AES-256-GCM, clé dérivée de `NEXTAUTH_SECRET`), jamais renvoyée au navigateur : l'écran n'affiche que ses 4 derniers caractères.
