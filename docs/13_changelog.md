@@ -6,7 +6,7 @@
 
 ---
 
-## 2026-10-21 — Evolia configurable depuis l'admin, navigation plus réactive
+## 2026-10-21 — Evolia configurable depuis l'admin, navigation et mobile
 
 Pas encore déployé à la date de cette entrée.
 
@@ -19,6 +19,12 @@ Pas encore déployé à la date de cette entrée.
   - Priorité : valeur saisie dans l'admin, puis variable d'environnement, puis valeur par défaut. Tant que rien n'est saisi, rien ne change.
 - **Barre de progression** en haut de l'écran à chaque clic sur un lien, et indicateur de chargement dans le back-office : avant, rien ne bougeait pendant le rendu de la page suivante.
 - **Favicon CEO Summit** à la place de celui de Next.js par défaut.
+- **Mobile** :
+  - onglets sur une seule ligne qui défile (fiche entreprise, profil, fiche membre admin) au lieu de passer à la ligne ;
+  - en-têtes de la fiche entreprise et du profil recomposés ; bouton « Ajouter une description » pour le gérant ;
+  - formulaire entreprise (création et modification) : un champ par ligne, bouton « Choisir un logo » ;
+  - secteurs d'intérêt (profil, onboarding) en liste à cocher ;
+  - Deal Room : bouton « Filtres » avec le nombre de filtres actifs, tri à côté, filtres en grille ; cartes d'opportunité avec budget et échéance (jours restants) mis en avant.
 
 ### Sécurité
 
