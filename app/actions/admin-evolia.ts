@@ -1,13 +1,12 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { confirmAdminPassword } from "@/lib/admin-reauth";
 import {
   EVOLIA_SETTING_KEYS,
   PAYMENT_URL_PLACEHOLDER,
@@ -17,10 +16,6 @@ import {
 } from "@/lib/evolia-config";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
-
-// Toute tentative compte, mot de passe faux compris : freine un essai de mots de passe.
-const RATE_LIMIT = 5;
-const RATE_WINDOW_SEC = 15 * 60;
 
 /** Adresses internes refusées en production : l'adresse d'inscription est appelée par notre serveur. */
 function isInternalHost(hostname: string): boolean {
@@ -100,31 +95,14 @@ export async function updateEvoliaSettings(
 ): Promise<ActionResult<{ changed: string[] }>> {
   const { userId } = await requireAdmin("parametres");
 
-  const rateLimit = await checkRateLimit(
-    `admin:evolia-settings:${userId}`,
-    RATE_LIMIT,
-    RATE_WINDOW_SEC
-  );
-  if (!rateLimit.allowed) {
-    return {
-      success: false,
-      error: `Trop de tentatives. Réessayez dans ${Math.ceil(rateLimit.retryAfterSec / 60)} min.`,
-    };
-  }
-
   const parsed = evoliaSettingsSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
   }
   const data = parsed.data;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { passwordHash: true },
-  });
-  if (!user?.passwordHash || !(await bcrypt.compare(data.currentPassword, user.passwordHash))) {
-    return { success: false, error: "Mot de passe incorrect." };
-  }
+  const passwordError = await confirmAdminPassword(userId, "evolia-settings", data.currentPassword);
+  if (passwordError) return { success: false, error: passwordError };
 
   const current = await getEvoliaSettingsStatus();
   const writes: Prisma.PrismaPromise<unknown>[] = [];

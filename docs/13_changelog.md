@@ -39,6 +39,13 @@ Pas encore déployé à la date de cette entrée.
 - Paiement : nouvelle aide sous « Nombre de participants » ; message vers l'offre de groupe dès son seuil atteint ; nouveaux textes pour Evolia et pour la vérification d'un virement.
 - E-mails : logo Becom et signature « Conquérir de nouveaux possibles – The power to go beyond » dans l'en-tête ; téléphone 038 09 131 14 et nouveau texte de pied de page ; mail de bienvenue du gestionnaire réécrit ; confirmation d'inscription reformulée.
 
+### Brevo pour les communications
+
+- Les diffusions d'Admin › Communications partent par **Brevo** quand une clé d'API est enregistrée (Paramètres › Intégrations : clé chiffrée, adresse et nom d'expéditeur, bouton « Tester la connexion » avec les crédits restants). Un appel Brevo par tranche de 1000 destinataires ; prénom, nom et entreprise passés en paramètres. Une diffusion de test passe par le même canal.
+- Sans Brevo, les diffusions partent par la boîte ceo-summit.mg **par paquets de 5** (elles partaient toutes en même temps).
+- Les e-mails automatiques (mot de passe, paiements…) restent sur la boîte ceo-summit.mg.
+- En cas d'échec, la raison donnée par Brevo s'affiche (clé refusée, crédits épuisés, expéditeur non validé).
+
 ### Déconnexion, actualisation et mot de passe oublié
 
 - **Déconnexion qui ne faisait rien** : le service worker mettait en cache les appels d'authentification (`/api/auth/csrf`, `/api/auth/session`) ; sur un réseau lent, la déconnexion attendait 10 s puis envoyait un jeton périmé, refusé. Ces appels ne passent plus par le cache ; le bouton affiche « Déconnexion… », vide les pages du compte gardées en cache et, en cas d'échec, bascule sur la page de déconnexion de NextAuth.

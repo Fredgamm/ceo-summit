@@ -8,6 +8,8 @@ import { isSmtpConfigured } from "@/lib/resend";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { EvoliaSettings } from "@/components/admin/settings/evolia-settings";
+import { BrevoSettings } from "@/components/admin/settings/brevo-settings";
+import { getBrevoConfig, isBrevoReady } from "@/lib/brevo";
 import { getEvoliaConfig, getEvoliaSettingsStatus } from "@/lib/evolia-config";
 import { appUrl } from "@/lib/app-url";
 import { Badge } from "@/components/ui/badge";
@@ -94,6 +96,17 @@ export default async function AdminParametresPage(props: {
     tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
   } else if (activeTab === "integrations") {
     const evoliaStatus = await getEvoliaSettingsStatus();
+    const brevo = await getBrevoConfig();
+    // Jamais la clé elle-même vers le navigateur : ses 4 derniers caractères.
+    const brevoStatus = {
+      source: brevo.source,
+      keyHint: brevo.apiKey && brevo.apiKey.length >= 16 ? `…${brevo.apiKey.slice(-4)}` : null,
+      unreadable: brevo.unreadable,
+      updatedAt: brevo.updatedAt?.toISOString() ?? null,
+      senderEmail: brevo.senderEmail ?? "",
+      senderName: brevo.senderName,
+      ready: isBrevoReady(brevo),
+    };
     const paymentWebhookConfigured = Boolean((await getEvoliaConfig()).inboundSecret);
     const smtpConfigured = isSmtpConfigured();
     const r2Configured = Boolean(
@@ -106,6 +119,7 @@ export default async function AdminParametresPage(props: {
     tabContent = (
       <div className="flex flex-col gap-4">
         <EvoliaSettings status={evoliaStatus} />
+        <BrevoSettings status={brevoStatus} />
         <IntegrationCard
           title="Confirmation de paiement — webhook entrant"
           configured={paymentWebhookConfigured}

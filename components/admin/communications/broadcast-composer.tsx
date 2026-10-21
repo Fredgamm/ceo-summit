@@ -145,10 +145,15 @@ export function BroadcastComposer({
       setError(result.error);
       return;
     }
-    const { recipientCount, failedCount } = result.data;
+    const { recipientCount, failedCount, channel, failureReason } = result.data;
     if (failedCount > 0) {
       setError(
-        `${failedCount} envoi${failedCount > 1 ? "s" : ""} sur ${recipientCount} en échec — vérifier la configuration email du serveur.`
+        `${failedCount} envoi${failedCount > 1 ? "s" : ""} sur ${recipientCount} en échec — ${
+          failureReason ??
+          (channel === "brevo"
+            ? "vérifier le compte Brevo (Paramètres › Intégrations)."
+            : "vérifier la configuration email du serveur.")
+        }`
       );
     }
     const deliveredCount = recipientCount - failedCount;

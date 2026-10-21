@@ -13,6 +13,17 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
+// Brevo non configuré par défaut : envoi par le SMTP (lib/resend.ts).
+vi.mock("@/lib/brevo", () => ({
+  getBrevoConfig: vi.fn(async () => ({ apiKey: null, senderEmail: null })),
+  isBrevoReady: (config: { apiKey: string | null; senderEmail: string | null }) =>
+    Boolean(config.apiKey && config.senderEmail),
+  sendBrevoBatch: vi.fn(),
+}));
+vi.mock("@react-email/render", () => ({
+  render: vi.fn(async () => "<p>Bonjour {{ params.prenom }}</p>"),
+  toPlainText: vi.fn(() => "Bonjour {{ params.prenom }}"),
+}));
 vi.mock("@/emails/broadcast-email", () => ({ default: vi.fn(() => null) }));
 vi.mock("@/lib/r2", () => ({
   getSignedDownloadUrl: vi.fn(),
@@ -24,6 +35,7 @@ import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { getSignedDownloadUrl, isKeyUnderPrefix } from "@/lib/r2";
 import BroadcastEmail from "@/emails/broadcast-email";
+import { getBrevoConfig, sendBrevoBatch } from "@/lib/brevo";
 import {
   getSegmentCounts,
   getCustomSegmentCount,
@@ -201,7 +213,13 @@ describe("sendBroadcast", () => {
 
     expect(result).toEqual({
       success: true,
-      data: { id: "broadcast_1", recipientCount: 2, failedCount: 1 },
+      data: {
+        id: "broadcast_1",
+        recipientCount: 2,
+        failedCount: 1,
+        channel: "smtp",
+        failureReason: null,
+      },
     });
   });
 
@@ -229,7 +247,13 @@ describe("sendBroadcast", () => {
 
     expect(result).toEqual({
       success: true,
-      data: { id: "broadcast_1", recipientCount: 2, failedCount: 0 },
+      data: {
+        id: "broadcast_1",
+        recipientCount: 2,
+        failedCount: 0,
+        channel: "smtp",
+        failureReason: null,
+      },
     });
     expect(prisma.broadcast.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -303,6 +327,74 @@ describe("sendBroadcast", () => {
     expect(result.success).toBe(true);
     expect(prisma.broadcastRecipient.createMany).toHaveBeenCalledWith({
       data: [expect.objectContaining({ userId: "user_1", resendMessageId: null })],
+    });
+  });
+
+  describe("with Brevo configured", () => {
+    beforeEach(() => {
+      vi.mocked(getBrevoConfig).mockResolvedValue({
+        apiKey: "xkeysib-test",
+        senderEmail: "hello@ceo-summit.mg",
+        senderName: "CEO Summit Indian Ocean",
+      } as never);
+      vi.mocked(prisma.broadcast.create).mockResolvedValue({ id: "broadcast_1" } as never);
+    });
+
+    it("sends one batch through Brevo with each recipient's own values", async () => {
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        makeUser({ id: "user_1", email: "jp@example.com" }),
+        makeUser({ id: "user_2", email: "sarah@example.com", name: "Sarah Razanamahery" }),
+      ] as never);
+      vi.mocked(sendBrevoBatch).mockResolvedValue({
+        results: [
+          { delivered: true, messageId: "<m1>" },
+          { delivered: true, messageId: "<m2>" },
+        ],
+        errors: [],
+      });
+
+      const result = await sendBroadcast("Sujet", "Bonjour {{prénom}}", "ALL_ACTIVE");
+
+      expect(sendTransactionalEmail).not.toHaveBeenCalled();
+      expect(sendBrevoBatch).toHaveBeenCalledTimes(1);
+      const [, message, recipients] = vi.mocked(sendBrevoBatch).mock.calls[0];
+      expect(message).toMatchObject({ subject: "Sujet", tag: "broadcast-broadcast_1" });
+      expect(recipients).toEqual([
+        {
+          email: "jp@example.com",
+          name: "Jean-Pierre Rakoto",
+          params: { prenom: "Jean-Pierre", nom: "Rakoto", entreprise: "TechOcean" },
+        },
+        expect.objectContaining({ email: "sarah@example.com" }),
+      ]);
+      expect(result).toMatchObject({
+        success: true,
+        data: { recipientCount: 2, failedCount: 0, channel: "brevo", failureReason: null },
+      });
+      expect(prisma.broadcastRecipient.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ userId: "user_1", resendMessageId: "<m1>" }),
+          expect.objectContaining({ userId: "user_2", resendMessageId: "<m2>" }),
+        ],
+      });
+    });
+
+    it("passes Brevo's refusal on to the admin", async () => {
+      vi.mocked(prisma.user.findMany).mockResolvedValue([makeUser()] as never);
+      vi.mocked(sendBrevoBatch).mockResolvedValue({
+        results: [{ delivered: false, messageId: null }],
+        errors: ["Crédits d'envoi Brevo épuisés : rechargez le compte Brevo."],
+      });
+
+      const result = await sendBroadcast("Sujet", "Corps", "ALL_ACTIVE");
+
+      expect(result).toMatchObject({
+        success: true,
+        data: {
+          failedCount: 1,
+          failureReason: "Crédits d'envoi Brevo épuisés : rechargez le compte Brevo.",
+        },
+      });
     });
   });
 });

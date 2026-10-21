@@ -13,6 +13,33 @@ import { VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
 import { getSignedDownloadUrl, isKeyUnderPrefix } from "@/lib/r2";
 import { BROADCAST_ATTACHMENT_LINK_TTL_SECONDS } from "@/lib/validations/broadcast";
 import BroadcastEmail from "@/emails/broadcast-email";
+import { render, toPlainText } from "@react-email/render";
+import { getBrevoConfig, isBrevoReady, sendBrevoBatch } from "@/lib/brevo";
+import { CEO_SUMMIT_CONTACT } from "@/lib/ceo-summit-contact";
+
+/**
+ * Sans Brevo, envois SMTP par petits paquets : 1000 connexions simultanées
+ * à la boîte mail de ceo-summit.mg (hébergement mutualisé, envois limités)
+ * se faisaient refuser ou classer en spam.
+ */
+const SMTP_CONCURRENCY = 5;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -106,12 +133,28 @@ export async function sendTestBroadcast(
   });
   const resolvedAttachments = await resolveAttachmentLinks(attachments);
 
-  await sendTransactionalEmail({
-    to: viewer.email,
-    subject: `[TEST] ${subject}`,
-    react: BroadcastEmail({ subject, body: renderedBody, attachments: resolvedAttachments }),
-  });
+  const react = BroadcastEmail({ subject, body: renderedBody, attachments: resolvedAttachments });
 
+  // Même canal que l'envoi réel : le test vérifie aussi la configuration Brevo.
+  const brevo = await getBrevoConfig();
+  if (isBrevoReady(brevo)) {
+    const html = await render(react);
+    const { errors } = await sendBrevoBatch(
+      brevo,
+      {
+        subject: `[TEST] ${subject}`,
+        htmlContent: html,
+        textContent: toPlainText(html),
+        replyTo: CEO_SUMMIT_CONTACT.email,
+        tag: "broadcast-test",
+      },
+      [{ email: viewer.email, name: viewer.name }]
+    );
+    if (errors.length > 0) return { success: false, error: errors[0] };
+    return { success: true, data: undefined };
+  }
+
+  await sendTransactionalEmail({ to: viewer.email, subject: `[TEST] ${subject}`, react });
   return { success: true, data: undefined };
 }
 
@@ -124,7 +167,15 @@ export async function sendBroadcast(
   sector?: string,
   planIds?: string[],
   attachments?: BroadcastAttachmentInput[]
-): Promise<ActionResult<{ id: string; recipientCount: number; failedCount: number }>> {
+): Promise<
+  ActionResult<{
+    id: string;
+    recipientCount: number;
+    failedCount: number;
+    channel: "brevo" | "smtp";
+    failureReason: string | null;
+  }>
+> {
   const { userId: adminId } = await requireAdmin("communications");
 
   const parsedContent = broadcastContentSchema.safeParse({ subject, body });
@@ -167,8 +218,52 @@ export async function sendBroadcast(
     },
   });
 
-  const sends = await Promise.all(
-    recipients.map(async (recipient) => {
+  // 21 oct. 2026 — par Brevo quand il est configuré (Paramètres ›
+  // Intégrations) : un appel par tranche de 1000 destinataires, le prénom,
+  // le nom et l'entreprise passés en paramètres Brevo ({{ params.prenom }}).
+  const brevo = await getBrevoConfig();
+  let sends: { userId: string; resendMessageId: string | null; delivered: boolean }[];
+  let failureReason: string | null = null;
+  const channel = isBrevoReady(brevo) ? "brevo" : "smtp";
+
+  if (isBrevoReady(brevo)) {
+    const html = await render(
+      BroadcastEmail({
+        subject,
+        body: renderBroadcastBody(body, {
+          prenom: "{{ params.prenom }}",
+          nom: "{{ params.nom }}",
+          entreprise: "{{ params.entreprise }}",
+        }),
+        attachments: resolvedAttachments,
+      })
+    );
+    const { results, errors } = await sendBrevoBatch(
+      brevo,
+      {
+        subject,
+        htmlContent: html,
+        textContent: toPlainText(html),
+        replyTo: CEO_SUMMIT_CONTACT.email,
+        tag: `broadcast-${broadcast.id}`,
+      },
+      recipients.map((recipient) => {
+        const { prenom, nom } = splitName(recipient.name);
+        return {
+          email: recipient.email,
+          name: recipient.name,
+          params: { prenom, nom, entreprise: recipient.company?.name ?? "—" },
+        };
+      })
+    );
+    failureReason = errors[0] ?? null;
+    sends = recipients.map((recipient, i) => ({
+      userId: recipient.id,
+      resendMessageId: results[i]?.messageId ?? null,
+      delivered: results[i]?.delivered ?? false,
+    }));
+  } else {
+    sends = await mapWithConcurrency(recipients, SMTP_CONCURRENCY, async (recipient) => {
       const { prenom, nom } = splitName(recipient.name);
       const renderedBody = renderBroadcastBody(body, {
         prenom,
@@ -187,8 +282,8 @@ export async function sendBroadcast(
         console.error("[broadcast] failed to send to", recipient.email, err);
         return { userId: recipient.id, resendMessageId: null, delivered: false };
       }
-    })
-  );
+    });
+  }
 
   await prisma.broadcastRecipient.createMany({
     data: sends.map((s) => ({
@@ -204,6 +299,12 @@ export async function sendBroadcast(
   const failedCount = sends.filter((s) => !s.delivered).length;
   return {
     success: true,
-    data: { id: broadcast.id, recipientCount: recipients.length, failedCount },
+    data: {
+      id: broadcast.id,
+      recipientCount: recipients.length,
+      failedCount,
+      channel,
+      failureReason,
+    },
   };
 }
