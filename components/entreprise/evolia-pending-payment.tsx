@@ -7,12 +7,13 @@ import { toast } from "sonner";
 import { cancelPendingEvoliaPayment } from "@/app/actions/company-subscription";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { EVOLIA_CANCEL_DELAY_MS } from "@/lib/payment-methods";
 
 /**
  * Paiement carte / Mobile Money en attente chez Evolia : reprendre le
- * paiement, ou (après un délai, le temps qu'une confirmation en route
- * arrive) l'annuler pour choisir un autre mode de paiement.
+ * paiement, ou l'annuler pour choisir un autre mode de paiement.
+ * 21 oct. 2026 — annulation possible tout de suite (elle n'apparaissait
+ * qu'après 15 minutes : un client revenu d'une annulation chez Evolia
+ * restait bloqué sur cet écran).
  */
 export function EvoliaPendingPayment({
   paymentId,
@@ -29,11 +30,19 @@ export function EvoliaPendingPayment({
 
   React.useEffect(() => {
     setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
   }, []);
 
-  const canCancel = now != null && now - new Date(startedAt).getTime() >= EVOLIA_CANCEL_DELAY_MS;
+  // Paiement lancé il y a peu : la confirmation d'Evolia peut encore arriver.
+  const recentlyStarted = now != null && now - new Date(startedAt).getTime() < 15 * 60 * 1000;
+  // La page de paiement d'Evolia est sur leur domaine (aiolia.us) : on le
+  // nomme, pour qu'un client ne s'inquiète pas d'une adresse inattendue.
+  const paymentHost = (() => {
+    try {
+      return new URL(paymentUrl).hostname;
+    } catch {
+      return null;
+    }
+  })();
 
   async function handleCancel() {
     const result = await cancelPendingEvoliaPayment(paymentId);
@@ -51,13 +60,16 @@ export function EvoliaPendingPayment({
         <Button asChild size="sm">
           <a href={paymentUrl}>Reprendre le paiement</a>
         </Button>
-        {canCancel && (
-          <Button type="button" variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>
-            Changer de mode de paiement
-          </Button>
-        )}
+        <Button type="button" variant="outline" size="sm" onClick={() => setConfirmOpen(true)}>
+          Changer de mode de paiement
+        </Button>
       </div>
-      {!canCancel && (
+      {paymentHost && (
+        <p className="text-xs text-text-muted">
+          Paiement sécurisé par Evolia, sur leur site {paymentHost}.
+        </p>
+      )}
+      {recentlyStarted && (
         <p className="text-xs text-text-muted">
           Si vous venez de payer, la confirmation peut prendre quelques minutes.
         </p>
@@ -66,7 +78,7 @@ export function EvoliaPendingPayment({
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Changer de mode de paiement ?"
-        description="Ce paiement par carte ou Mobile Money sera annulé, et vous pourrez en choisir un autre. Si vous avez déjà payé chez Evolia, ne l'annulez pas : la confirmation arrivera d'elle-même."
+        description="Ce paiement par carte ou Mobile Money sera annulé et vous reviendrez à l'étape Paiement pour en choisir un autre. Si vous avez déjà payé chez Evolia, ne l'annulez pas : la confirmation arrivera d'elle-même."
         confirmLabel="Annuler ce paiement"
         variant="destructive"
         onConfirm={handleCancel}

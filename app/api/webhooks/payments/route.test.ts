@@ -26,6 +26,7 @@ vi.mock("@/lib/payment-confirmations", () => ({
     .fn()
     .mockResolvedValue({ success: true, data: undefined }),
   reviveCancelledEvoliaPayment: vi.fn().mockResolvedValue("none"),
+  cancelPendingEvoliaPaymentCore: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -35,11 +36,13 @@ vi.mock("@/lib/rate-limit", () => ({
 import { POST } from "./route";
 import { prisma } from "@/lib/prisma";
 import {
+  cancelPendingEvoliaPaymentCore,
   confirmCompanyPaymentCore,
   confirmEventRegistrationPaymentCore,
   reviveCancelledEvoliaPayment,
 } from "@/lib/payment-confirmations";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { FAILED_AT_EVOLIA_REASON } from "@/lib/payment-methods";
 
 const SECRET = "test-payment-secret";
 
@@ -234,7 +237,15 @@ describe("POST /api/webhooks/payments", () => {
     expect(res.status).toBe(409);
   });
 
-  it("accepts payment.failed for company_payment without a dedicated status (no enum value exists)", async () => {
+  it("cancels a pending card payment on payment.failed, giving the payment step back", async () => {
+    const pendingPayment = {
+      id: "payment_1",
+      status: "PENDING",
+      method: "CARTE_BANCAIRE",
+      upsellQuantity: null,
+      companySubscriptionId: "sub_1",
+    };
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValueOnce(pendingPayment as never);
     const body = JSON.stringify({
       event: "payment.failed",
       type: "company_payment",
@@ -243,7 +254,24 @@ describe("POST /api/webhooks/payments", () => {
     const res = await POST(makeRequest(body, sign(body)));
 
     expect(res.status).toBe(200);
+    expect(cancelPendingEvoliaPaymentCore).toHaveBeenCalledWith(
+      pendingPayment,
+      FAILED_AT_EVOLIA_REASON,
+      null
+    );
     expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+  });
+
+  it("returns 409 when payment.failed targets an unknown or already-resolved company payment", async () => {
+    const body = JSON.stringify({
+      event: "payment.failed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(409);
+    expect(cancelPendingEvoliaPaymentCore).not.toHaveBeenCalled();
   });
 
   it("rejects with 429 when the per-IP rate limit is exceeded, before touching the database", async () => {

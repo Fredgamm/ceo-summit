@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyHmacSignature } from "@/lib/hmac";
 import { getEvoliaConfig } from "@/lib/evolia-config";
+import { FAILED_AT_EVOLIA_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { paymentWebhookSchema, type PaymentWebhookPayload } from "@/lib/validations/webhooks";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   confirmCompanyPaymentCore,
   reviveCancelledEvoliaPayment,
+  cancelPendingEvoliaPaymentCore,
   confirmEventRegistrationPaymentCore,
 } from "@/lib/payment-confirmations";
 
@@ -142,12 +144,11 @@ export async function POST(req: Request) {
 }
 
 /**
- * `payment.failed` n'a un statut dédié que côté `EventRegistration`
- * (`PaymentStatus.FAILED`) — `CompanyPayment` n'a que
- * PENDING/CONFIRMED/REJECTED (pas de valeur "échoué" distincte). Plutôt que
- * d'étendre cet enum pour ce cas encore hypothétique (aucun prestataire
- * branché), on se contente de laisser l'échec dans `WebhookLog` pour ce
- * type — l'admin garde la main via le refus manuel existant.
+ * `payment.failed` : une inscription à un évènement passe en échec
+ * (`PaymentStatus.FAILED`) ; un paiement d'entreprise carte / Mobile Money
+ * encore en attente est annulé (21 oct. 2026), ce qui rend à l'entreprise
+ * l'étape Paiement pour choisir un autre mode — voir
+ * `cancelPendingEvoliaPaymentCore`. Une confirmation tardive reste honorée.
  */
 type DispatchResult = { success: true; warning?: string } | { success: false; error: string };
 
@@ -161,6 +162,21 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
       if (count === 0) {
         return { success: false, error: "Inscription introuvable ou déjà traitée." };
       }
+    } else if (payload.type === "company_payment") {
+      const payment = await prisma.companyPayment.findUnique({
+        where: { id: payload.reference },
+        select: {
+          id: true,
+          status: true,
+          method: true,
+          upsellQuantity: true,
+          companySubscriptionId: true,
+        },
+      });
+      if (!payment || payment.status !== "PENDING" || !isEvoliaPaymentMethod(payment.method)) {
+        return { success: false, error: "Paiement introuvable ou déjà traité." };
+      }
+      await cancelPendingEvoliaPaymentCore(payment, FAILED_AT_EVOLIA_REASON, null);
     }
     return { success: true };
   }

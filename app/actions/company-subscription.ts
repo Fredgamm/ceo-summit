@@ -16,12 +16,9 @@ import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { getEurToArRate } from "@/lib/currency-conversion";
-import {
-  CANCELLED_BY_COMPANY_REASON,
-  EVOLIA_CANCEL_DELAY_MS,
-  isEvoliaPaymentMethod,
-} from "@/lib/payment-methods";
+import { CANCELLED_BY_COMPANY_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
+import { cancelPendingEvoliaPaymentCore } from "@/lib/payment-confirmations";
 import { formatEuro } from "@/lib/utils";
 import { PLATFORM_ADMIN_NO_PURCHASE_MESSAGE } from "@/lib/platform-admin-purchase";
 
@@ -457,10 +454,11 @@ export async function purchaseUpsellSeats(
 
 /**
  * 8 oct. 2026 — paiement carte / Mobile Money abandonné : le gérant l'annule
- * pour choisir un autre mode de paiement, sans passer par l'équipe. Possible
- * seulement après `EVOLIA_CANCEL_DELAY_MS`, le temps qu'une confirmation déjà
- * en route arrive ; si Evolia confirme malgré tout plus tard, le paiement est
- * honoré (`reviveCancelledEvoliaPayment`).
+ * pour choisir un autre mode de paiement, sans passer par l'équipe.
+ * 21 oct. 2026 : possible tout de suite (il fallait attendre 15 minutes, et
+ * un client revenu d'une annulation chez Evolia restait bloqué). Si Evolia
+ * confirme malgré tout plus tard, le paiement est honoré
+ * (`reviveCancelledEvoliaPayment`, qui signale aussi un double paiement).
  */
 export async function cancelPendingEvoliaPayment(companyPaymentId: string): Promise<ActionResult> {
   const viewerResult = await requireViewer();
@@ -479,41 +477,12 @@ export async function cancelPendingEvoliaPayment(companyPaymentId: string): Prom
   if (payment.status !== "PENDING" || !isEvoliaPaymentMethod(payment.method)) {
     return { success: false, error: "Ce paiement ne peut plus être annulé." };
   }
-  if (Date.now() - payment.createdAt.getTime() < EVOLIA_CANCEL_DELAY_MS) {
-    return {
-      success: false,
-      error:
-        "Si vous venez de payer, la confirmation peut prendre quelques minutes. Réessayez dans un quart d'heure.",
-    };
-  }
 
-  const cancelled = await prisma.$transaction(async (tx) => {
-    const { count } = await tx.companyPayment.updateMany({
-      where: { id: companyPaymentId, status: "PENDING" },
-      data: {
-        status: "REJECTED",
-        reviewedAt: new Date(),
-        rejectionReason: CANCELLED_BY_COMPANY_REASON,
-      },
-    });
-    if (count === 0) return false;
-    if (payment.upsellQuantity == null) {
-      await tx.companySubscription.updateMany({
-        where: { id: subscription.id, status: "PENDING_REVIEW" },
-        data: { status: "PENDING_PAYMENT" },
-      });
-    }
-    await tx.auditLog.create({
-      data: {
-        actorId: viewer.id,
-        action: "company_payment.cancel_by_company",
-        targetType: "CompanyPayment",
-        targetId: companyPaymentId,
-        metadata: { method: payment.method, upsell: payment.upsellQuantity != null },
-      },
-    });
-    return true;
-  });
+  const cancelled = await cancelPendingEvoliaPaymentCore(
+    payment,
+    CANCELLED_BY_COMPANY_REASON,
+    viewer.id
+  );
   if (!cancelled) return { success: false, error: "Ce paiement vient d'être traité." };
 
   revalidatePath(`/entreprises/${subscription.companyId}`);

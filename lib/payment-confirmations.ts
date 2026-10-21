@@ -5,7 +5,7 @@ import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
-import { CANCELLED_BY_COMPANY_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { isEvoliaPaymentMethod, REVIVABLE_EVOLIA_REASONS } from "@/lib/payment-methods";
 import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
@@ -275,6 +275,53 @@ export async function confirmEventRegistrationPaymentCore(
  *   l'abonnement, et signalé pour remboursement (double paiement) ;
  * - `none` : paiement non concerné.
  */
+/**
+ * 21 oct. 2026 — annule un paiement carte / Mobile Money encore en attente
+ * chez Evolia : à la demande du gérant (changement de mode de paiement) ou
+ * sur `payment.failed` d'Evolia. Une offre initiale repasse en attente de
+ * paiement, l'entreprise retrouve l'étape Paiement ; un supplément reste tel
+ * quel. Une confirmation tardive d'Evolia reste honorée
+ * (`reviveCancelledEvoliaPayment`). Renvoie `false` si le paiement n'était
+ * plus en attente.
+ */
+export async function cancelPendingEvoliaPaymentCore(
+  payment: {
+    id: string;
+    method: PaymentMethod;
+    upsellQuantity: number | null;
+    companySubscriptionId: string;
+  },
+  reason: string,
+  actorId: string | null
+): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.companyPayment.updateMany({
+      where: { id: payment.id, status: "PENDING" },
+      data: { status: "REJECTED", reviewedAt: new Date(), rejectionReason: reason },
+    });
+    if (count === 0) return false;
+    if (payment.upsellQuantity == null) {
+      await tx.companySubscription.updateMany({
+        where: { id: payment.companySubscriptionId, status: "PENDING_REVIEW" },
+        data: { status: "PENDING_PAYMENT" },
+      });
+    }
+    // Sans auteur (webhook Evolia), la trace reste dans WebhookLog.
+    if (actorId) {
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: "company_payment.cancel_by_company",
+          targetType: "CompanyPayment",
+          targetId: payment.id,
+          metadata: { method: payment.method, upsell: payment.upsellQuantity != null },
+        },
+      });
+    }
+    return true;
+  });
+}
+
 export async function reviveCancelledEvoliaPayment(
   companyPaymentId: string
 ): Promise<"none" | "revived" | "already-paid"> {
@@ -291,7 +338,7 @@ export async function reviveCancelledEvoliaPayment(
   if (
     !payment ||
     payment.status !== "REJECTED" ||
-    payment.rejectionReason !== CANCELLED_BY_COMPANY_REASON
+    !REVIVABLE_EVOLIA_REASONS.includes(payment.rejectionReason ?? "")
   ) {
     return "none";
   }

@@ -642,6 +642,7 @@ describe("cancelPendingEvoliaPayment", () => {
       method: "CARTE_BANCAIRE",
       upsellQuantity: null,
       createdAt: OLD,
+      companySubscriptionId: "sub_1",
       companySubscription: {
         id: "sub_1",
         companyId: "company_1",
@@ -685,15 +686,15 @@ describe("cancelPendingEvoliaPayment", () => {
     expect(prisma.companySubscription.updateMany).not.toHaveBeenCalled();
   });
 
-  it("waits a quarter of an hour, in case the confirmation is on its way", async () => {
+  it("lets the manager cancel right away (back from a cancellation at Evolia)", async () => {
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
       pending({ createdAt: new Date() }) as never
     );
 
     const result = await cancelPendingEvoliaPayment("payment_1");
 
-    expect(result.success).toBe(false);
-    expect(prisma.companyPayment.updateMany).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(prisma.companyPayment.updateMany).toHaveBeenCalled();
   });
 
   it("refuses a bank transfer (reviewed by the admin)", async () => {

@@ -24,16 +24,19 @@ export function isEvoliaPaymentMethod(method: PaymentMethod): boolean {
 }
 
 /**
- * Paiement carte / Mobile Money abandonné (8 oct. 2026) : le gérant peut
- * l'annuler pour changer de mode de paiement, mais seulement après ce délai,
- * le temps qu'une confirmation d'Evolia déjà en route nous parvienne.
- */
-export const EVOLIA_CANCEL_DELAY_MS = 15 * 60 * 1000;
-
-/**
  * Motif réservé d'un paiement annulé par l'entreprise (et non refusé par
  * l'admin) : une confirmation tardive d'Evolia reste acceptée pour lui
  * (voir `reviveCancelledEvoliaPayment`), le membre ayant bien payé.
  */
 export const CANCELLED_BY_COMPANY_REASON =
   "Annulé par l'entreprise — changement de mode de paiement.";
+
+/**
+ * 21 oct. 2026 — motif réservé d'un paiement qu'Evolia signale annulé ou
+ * refusé (`payment.failed`). Même traitement qu'une annulation par
+ * l'entreprise : une confirmation tardive reste honorée.
+ */
+export const FAILED_AT_EVOLIA_REASON = "Paiement annulé ou refusé chez Evolia.";
+
+/** Motifs de refus après lesquels une confirmation d'Evolia reste acceptée. */
+export const REVIVABLE_EVOLIA_REASONS = [CANCELLED_BY_COMPANY_REASON, FAILED_AT_EVOLIA_REASON];

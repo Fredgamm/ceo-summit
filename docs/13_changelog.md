@@ -26,6 +26,12 @@ Pas encore déployé à la date de cette entrée.
   - secteurs d'intérêt (profil, onboarding) en liste à cocher ;
   - Deal Room : bouton « Filtres » avec le nombre de filtres actifs, tri à côté, filtres en grille ; cartes d'opportunité avec budget et échéance (jours restants) mis en avant.
 
+### Corrigé
+
+- **Client bloqué après une annulation chez Evolia** : la page « Paiement en cours chez Evolia » promettait de « choisir un autre mode de paiement », mais le bouton n'apparaissait qu'au bout de 15 minutes. Il est maintenant disponible tout de suite (avec confirmation). Il annule le paiement en attente et ramène à l'étape Paiement. Si Evolia confirme malgré tout plus tard, le paiement est honoré et un éventuel double paiement est signalé, comme avant.
+- **`payment.failed` d'Evolia** sur un paiement d'entreprise : il annule désormais le paiement en attente et rend l'étape Paiement au client (il était seulement journalisé).
+- La page indique le site de paiement d'Evolia (`event.aiolia.us`), pour qu'une adresse différente du nom « Evolia » n'inquiète pas le client.
+
 ### Sécurité
 
 - Clé **chiffrée en base** (AES-256-GCM, clé dérivée de `NEXTAUTH_SECRET`), jamais renvoyée au navigateur : l'écran n'affiche que ses 4 derniers caractères.

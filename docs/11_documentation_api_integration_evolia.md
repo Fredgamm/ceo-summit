@@ -326,6 +326,7 @@ Chaque appel transmet un **instantané complet** de l'entreprise à cet instant 
    - ~~Vos confirmations de paiement (§2) sont-elles signées avec le même `WEBHOOK_SECRET`, ou avec un secret distinct ?~~ — une seule clé dans les deux sens (21 octobre 2026). Clé de test en usage ; la clé de production sera transmise plus tard et saisie dans Paramètres › Intégrations.
 2. **Confirmation du champ de référence** : que `ceoSummitReference` soit bien porté tel quel jusqu'à votre webhook de confirmation (§2, champ `reference`).
 3. **Cas d'échec/annulation** : un événement `payment.failed` séparé sur votre confirmation (déjà supporté par notre webhook, voir §2) ou un comportement différent ?
+   - Depuis le 21 octobre 2026, un `payment.failed` sur un paiement d'entreprise (`type: "company_payment"`) l'annule chez nous et rend au client l'étape Paiement pour choisir un autre mode ; une confirmation envoyée ensuite pour la même référence reste acceptée. **Merci de nous l'envoyer quand le client annule ou que le paiement est refusé** : sans lui, le client doit annuler lui-même depuis notre page.
 4. Confirmation qu'un instantané complet à chaque appel convient (plutôt qu'un modèle incrémental).
 5. Confirmation que `companyId` suffit à rattacher l'envoi à la bonne entreprise de votre côté.
 6. Confirmation sur le point d'attention ci-dessus : `fullName` unique, ou prénom/nom séparés requis de votre côté ?
