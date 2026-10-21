@@ -276,9 +276,10 @@ export function UpsellPurchaseForm({
       {isEvoliaMethod ? (
         <Alert variant="gold">
           <AlertDescription>
-            Vous allez être redirigé vers la page de paiement sécurisée d&apos;Evolia, notre
-            partenaire de paiement, pour régler par carte ou Mobile Money. Aucune preuve à fournir :
-            votre paiement est confirmé automatiquement.
+            Vous serez redirigé vers l&apos;interface de paiement sécurisée d&apos;Evolia,
+            partenaire de paiement du CEO Summit Indian Ocean, afin de finaliser votre règlement par
+            carte bancaire ou Mobile Money. Votre paiement sera confirmé automatiquement, sans
+            démarche supplémentaire ni justificatif à transmettre.
           </AlertDescription>
         </Alert>
       ) : (

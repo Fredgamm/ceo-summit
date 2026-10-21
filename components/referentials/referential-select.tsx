@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { visibleReferentialOptions } from "@/lib/referential-options";
+import { REFERENTIAL_PRIORITY_COUNT } from "@/lib/referential-options";
 import { ReferentialSearchDialog } from "@/components/referentials/referential-search-dialog";
 import {
   Select,
@@ -31,10 +31,10 @@ interface ReferentialSelectProps {
 }
 
 /**
- * Sélecteur secteur/pays : les 10 premières valeurs du référentiel, puis
- * « Rechercher… » qui ouvre la recherche sur le catalogue complet. Une
- * valeur trouvée par la recherche reste affichée dans la liste une fois
- * choisie.
+ * Sélecteur secteur/pays : toute la liste du référentiel.
+ * Retour de test du 21 oct. 2026 — n'en montrer que les 10 premières
+ * valeurs (suivies de « Rechercher… ») laissait croire que le choix était
+ * limité. La recherche reste proposée, en tête, pour une liste longue.
  */
 export function ReferentialSelect({
   options,
@@ -48,8 +48,7 @@ export function ReferentialSelect({
   disabled,
 }: ReferentialSelectProps) {
   const [searchOpen, setSearchOpen] = React.useState(false);
-  const visible = visibleReferentialOptions(options, [value]);
-  const hasMore = options.length > visible.length;
+  const searchable = options.length > REFERENTIAL_PRIORITY_COUNT;
 
   return (
     <>
@@ -69,20 +68,20 @@ export function ReferentialSelect({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          {allOption && <SelectItem value={allOption.value}>{allOption.label}</SelectItem>}
-          {visible.map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-          {hasMore && (
+          {searchable && (
             <SelectItem
               value={SEARCH_VALUE}
-              className="border-t border-border font-semibold text-navy-mid"
+              className="border-b border-border font-semibold text-navy-mid"
             >
               Rechercher…
             </SelectItem>
           )}
+          {allOption && <SelectItem value={allOption.value}>{allOption.label}</SelectItem>}
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {option}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <ReferentialSearchDialog

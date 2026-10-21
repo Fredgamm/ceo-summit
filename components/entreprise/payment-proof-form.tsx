@@ -105,6 +105,31 @@ export function PaymentProofForm({
   const amountEur = priceEur != null ? (isGroupOffer ? priceEur * declaredCount : priceEur) : null;
   const isEvoliaMethod = isEvoliaPaymentMethod(method);
 
+  // Retour de test du 21 oct. 2026 — dès que l'effectif saisi atteint le
+  // seuil d'une offre de groupe plus avantageuse, on le dit pendant la
+  // saisie (la bascule automatique, elle, se fait en quittant le champ).
+  const betterGroupPlans = isGroupOffer
+    ? groupPlans
+        .filter(
+          (p) =>
+            p.id !== planId &&
+            p.minParticipants != null &&
+            p.minParticipants > (minParticipants ?? 0)
+        )
+        .sort((a, b) => (a.minParticipants ?? 0) - (b.minParticipants ?? 0))
+    : [];
+  const groupThreshold = betterGroupPlans[0]?.minParticipants ?? null;
+  const suggestGroupPlan =
+    !switchingPlan && groupThreshold != null && declaredCount >= groupThreshold;
+
+  function showOtherPlans() {
+    const details = document.getElementById("changer-offre");
+    if (details instanceof HTMLDetailsElement) {
+      details.open = true;
+      details.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
   function handleDeclaredParticipantsChange(raw: string) {
     // Chiffres uniquement : bloque signe négatif, décimales et notation
     // scientifique dès la saisie plutôt que de les valider après coup.
@@ -247,11 +272,35 @@ export function PaymentProofForm({
                 !meetsThreshold && "border-red-500 focus-visible:ring-red-500"
               )}
             />
-            <p className="text-xs text-text-muted">
-              {switchingPlan
-                ? "Ajustement de l'offre selon l'effectif saisi…"
-                : "Combien de personnes de votre entreprise participent. Au-delà d'un seuil de groupe, le tarif de groupe s'applique automatiquement ; vous désignerez les participants après le paiement."}
-            </p>
+            {suggestGroupPlan ? (
+              <div className="rounded-md border border-gold-light bg-gold-pale px-3 py-2.5 text-sm text-text-mid">
+                Vous avez sélectionné {pluralize(declaredCount, "participant")} : l&apos;offre de
+                groupe est plus avantageuse pour votre entreprise. Basculez vers l&apos;offre{" "}
+                {betterGroupPlans.map((p, i) => (
+                  <React.Fragment key={p.id}>
+                    {i > 0 && " ou "}
+                    <strong className="font-semibold text-navy">
+                      {p.name.replace(/\*+/g, "").trim()}
+                    </strong>
+                  </React.Fragment>
+                ))}{" "}
+                (
+                <button
+                  type="button"
+                  onClick={showOtherPlans}
+                  className="font-semibold text-navy-mid underline underline-offset-2"
+                >
+                  voir les offres
+                </button>
+                ). Vous désignerez les participants après le paiement.
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted">
+                {switchingPlan
+                  ? "Ajustement de l'offre selon l'effectif saisi…"
+                  : "Indiquez le nombre de personnes de votre entreprise qui participeront. Vous désignerez les participants après le paiement."}
+              </p>
+            )}
           </div>
         )}
 
@@ -330,9 +379,10 @@ export function PaymentProofForm({
         <div className="flex gap-3 rounded-lg border border-gold-light bg-gold-pale p-4 text-sm text-text-mid">
           <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
           <p>
-            Vous serez redirigé vers la page de paiement sécurisée d&apos;Evolia, notre partenaire
-            de paiement. Aucune preuve à fournir : l&apos;accès de votre équipe s&apos;active dès
-            que le paiement est confirmé.
+            Vous serez redirigé vers l&apos;interface de paiement sécurisée d&apos;Evolia,
+            partenaire de paiement du CEO Summit Indian Ocean, afin de finaliser votre règlement par
+            carte bancaire ou Mobile Money. Votre paiement sera confirmé automatiquement, sans
+            démarche supplémentaire ni justificatif à transmettre.
           </p>
         </div>
       ) : (

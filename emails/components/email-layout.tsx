@@ -63,9 +63,9 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
         >
           <Section
             style={{
-              backgroundColor: COLORS.surface,
+              backgroundColor: "#fff",
               borderBottom: `1px solid ${COLORS.border}`,
-              padding: "20px 32px",
+              padding: "24px 32px",
             }}
           >
             {/* 30 septembre 2026 (rapport QA) — logo en image plutôt qu'un
@@ -75,23 +75,55 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
              * WordPress externe fourni par le testeur — un lien tiers
              * n'est pas garanti stable et beaucoup de clients mail
              * bloquent les images externes par défaut. */}
-            <Img
-              src={`${appUrl()}/logo/ceo-summit-logo.png`}
-              alt="CEO Summit Indian Ocean"
-              width="150"
-              height="72"
-              style={{ display: "block" }}
-            />
+            {/* 21 oct. 2026 — logo Becom (organisateur) à côté de celui de
+             * CEO Summit, séparés d'un trait, comme la maquette d'en-tête.
+             * Tableau plutôt que flex : seul agencement fiable dans Outlook
+             * et Gmail. Becom en PNG (rendu depuis becom_logo.svg) : la
+             * plupart des clients mail n'affichent pas le SVG. */}
+            <table role="presentation" align="center" cellPadding={0} cellSpacing={0} border={0}>
+              <tbody>
+                <tr>
+                  <td style={{ verticalAlign: "middle" }}>
+                    <Img
+                      src={`${appUrl()}/logo/ceo-summit-logo.png`}
+                      alt="CEO Summit Indian Ocean"
+                      width="150"
+                      height="72"
+                      style={{ display: "block" }}
+                    />
+                  </td>
+                  <td style={{ verticalAlign: "middle", padding: "0 16px" }}>
+                    {/* Navy éclairci en dur : `opacity` est ignoré par plusieurs clients mail. */}
+                    <div
+                      style={{ width: 1, height: 32, backgroundColor: "#7680A0", fontSize: 0 }}
+                    />
+                  </td>
+                  <td style={{ verticalAlign: "middle" }}>
+                    <Img
+                      src={`${appUrl()}/logo/becom-logo.png`}
+                      alt="Becom"
+                      width="38"
+                      height="38"
+                      style={{ display: "block" }}
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            {/* Signature de marque (retour de test du 21 oct. 2026), à la place
+             * de l'ancien « Océan Indien · Décideurs ». */}
             <Text
               style={{
-                margin: "8px 0 0",
+                margin: "14px 0 0",
                 fontSize: 10,
-                letterSpacing: 0.6,
+                lineHeight: "14px",
+                letterSpacing: 0.8,
                 textTransform: "uppercase",
+                textAlign: "center",
                 color: COLORS.textMuted,
               }}
             >
-              Océan Indien · Décideurs
+              Conquérir de nouveaux possibles – The power to go beyond
             </Text>
           </Section>
 
@@ -127,8 +159,8 @@ export function EmailLayout({ preview, children }: EmailLayoutProps) {
                 color: COLORS.textMuted,
               }}
             >
-              CEO Summit © 2026 — Plateforme réservée aux membres. Vous recevez cet email car une
-              action a été effectuée sur votre compte CEO Summit.
+              © 2026 CEO Summit Indian Ocean · Tous droits réservés. Accès réservé aux membres. Vous
+              recevez cet e-mail à la suite d&apos;une action effectuée sur votre espace CEO Summit.
             </Text>
           </Section>
         </Container>

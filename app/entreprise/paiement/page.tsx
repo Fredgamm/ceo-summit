@@ -185,7 +185,7 @@ export default async function CompanyPaymentPage(props: {
         subtitle={
           pendingEvoliaPayment
             ? "L'accès de votre équipe s'active dès qu'Evolia nous confirme le paiement, généralement en quelques secondes."
-            : "L'équipe CEO Summit vérifie votre preuve de paiement. Vous recevrez un e-mail dès que l'accès de votre équipe est activé."
+            : "Votre règlement est en cours de validation par l'équipe du CEO Summit Indian Ocean. Dès confirmation du paiement, les accès de votre équipe seront activés afin de vous permettre de finaliser votre participation."
         }
         card={card}
         headerAction={signOut}
@@ -252,7 +252,7 @@ export default async function CompanyPaymentPage(props: {
         liveEurToArRate={liveEurToArRate}
       />
 
-      <details className="group mt-10 border-t border-border pt-6">
+      <details id="changer-offre" className="group mt-10 border-t border-border pt-6">
         <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-navy-mid hover:text-navy">
           Changer d&apos;offre
           <span className="text-xs font-normal text-text-muted group-open:hidden">

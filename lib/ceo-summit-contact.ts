@@ -9,8 +9,9 @@ export const CEO_SUMMIT_CONTACT = {
     "IBF 9B Antsahavola",
     "Immeuble La Préservatrice Vie — Antananarivo 101, Madagascar",
   ],
-  phone: "+261 34 04 544 49",
-  phoneHref: "tel:+261340454449",
+  // Retour de test du 21 oct. 2026 — numéro de contact (auparavant 034 04 544 49).
+  phone: "038 09 131 14",
+  phoneHref: "tel:+261380913114",
   email: "rp@ceo-summit.mg",
   website: "www.ceo-summit.mg",
   websiteHref: "https://www.ceo-summit.mg",

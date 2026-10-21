@@ -67,20 +67,37 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
         example: "https://b2b.ceo-summit.mg/entreprise/paiement",
       },
     ],
-    defaultSubject: "Votre compte CEO Summit est créé — {{companyName}}",
+    // Textes revus au retour de test du 21 oct. 2026.
+    defaultSubject: "Votre espace CEO Summit Indian Ocean est désormais activé | {{companyName}}",
     defaultBlocks: [
-      { id: "1", type: "heading", text: "Bienvenue, {{adminName}}." },
+      {
+        id: "1",
+        type: "heading",
+        text: "Bienvenue sur la plateforme du CEO Summit Indian Ocean, {{adminName}}.",
+      },
       {
         id: "2",
         type: "paragraph",
-        text: "Votre compte gestionnaire et la fiche de **{{companyName}}** sont créés sur CEO Summit, avec l'offre **{{planName}}**.",
+        text: "Votre espace gestionnaire est créé et la fiche institutionnelle de **{{companyName}}** est enregistrée. Votre compte est associé à l'offre **{{planName}}**.",
       },
       {
         id: "3",
         type: "paragraph",
-        text: "Prochaine étape : le paiement. Une fois votre paiement validé par l'équipe CEO Summit, vous pourrez inviter vos collaborateurs et composer la liste des participants.",
+        text: "Prochaine étape : la confirmation de votre adhésion.",
       },
-      { id: "4", type: "button", label: "Procéder au paiement", url: "{{paymentUrl}}" },
+      {
+        id: "4",
+        type: "paragraph",
+        text: "Procédez au règlement de votre offre. Dès validation de votre paiement, l'accès aux fonctionnalités de gestion sera activé : vous pourrez inviter vos collaborateurs et constituer votre délégation de participants.",
+      },
+      { id: "5", type: "button", label: "Procéder au paiement", url: "{{paymentUrl}}" },
+      {
+        id: "6",
+        type: "paragraph",
+        text: "Nous vous souhaitons une excellente expérience sur la plateforme du CEO Summit Indian Ocean.",
+      },
+      { id: "7", type: "paragraph", text: "**L'équipe CEO Summit Indian Ocean**" },
+      { id: "8", type: "paragraph", text: "Une initiative BECOM" },
     ],
   },
   {

@@ -57,14 +57,14 @@ export const EVENT_TEMPLATES: EmailTemplateDefinition[] = [
       {
         id: "2",
         type: "paragraph",
-        text: "Votre inscription à **{{eventTitle}}** ({{eventDateLabel}} · {{eventLocation}}) a bien été enregistrée.",
+        text: "Votre inscription au **{{eventTitle}}** – {{eventDateLabel}}, {{eventLocation}} – a bien été enregistrée.",
       },
       {
         id: "3",
         type: "paragraph",
         text: "Retrouvez les détails de votre inscription à tout moment depuis votre espace CEO Summit.",
       },
-      { id: "4", type: "paragraph", text: "À bientôt à {{eventTitle}} !" },
+      { id: "4", type: "paragraph", text: "À bientôt au {{eventTitle}} !" },
     ],
   },
   {
@@ -94,14 +94,14 @@ export const EVENT_TEMPLATES: EmailTemplateDefinition[] = [
       {
         id: "2",
         type: "paragraph",
-        text: "Votre inscription à **{{eventTitle}}** ({{eventDateLabel}} · {{eventLocation}}) a bien été enregistrée.",
+        text: "Votre inscription au **{{eventTitle}}** – {{eventDateLabel}}, {{eventLocation}} – a bien été enregistrée.",
       },
       {
         id: "3",
         type: "paragraph",
         text: "Votre paiement par virement est en cours de validation par l'équipe CEO Summit. Vous recevrez une confirmation dès validation.",
       },
-      { id: "4", type: "paragraph", text: "À bientôt à {{eventTitle}} !" },
+      { id: "4", type: "paragraph", text: "À bientôt au {{eventTitle}} !" },
     ],
   },
 ];

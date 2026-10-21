@@ -218,7 +218,7 @@ export function CompanySignupWizard({
       <form onSubmit={handleSubmit} className="flex flex-col gap-8" noValidate>
         <fieldset className="flex flex-col gap-4">
           <legend className="mb-4 text-sm font-bold uppercase tracking-[0.1em] text-navy">
-            Vous
+            Mon identité
           </legend>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="signup-name">Nom complet</Label>
@@ -281,13 +281,13 @@ export function CompanySignupWizard({
 
         <fieldset className="flex flex-col gap-4">
           <legend className="mb-4 text-sm font-bold uppercase tracking-[0.1em] text-navy">
-            Votre entreprise
+            Mon organisation
           </legend>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="signup-company-name">Nom de l&apos;entreprise</Label>
+            <Label htmlFor="signup-company-name">Nom de l&apos;organisation</Label>
             <Input
               id="signup-company-name"
-              placeholder="ex. Rakoto Holding"
+              placeholder="ex. BECOM SARL"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
             />
@@ -315,8 +315,8 @@ export function CompanySignupWizard({
             </div>
           </div>
           <p className="-mt-2 text-xs text-text-muted">
-            Logo, description et coordonnées se complètent plus tard, depuis l&apos;espace de votre
-            entreprise.
+            Après le paiement, vous pourrez fournir plus de détails sur votre organisation et
+            ajouter vos collaborateurs.
           </p>
         </fieldset>
 

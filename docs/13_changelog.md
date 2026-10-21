@@ -32,6 +32,13 @@ Pas encore déployé à la date de cette entrée.
 - **`payment.failed` d'Evolia** sur un paiement d'entreprise : il annule désormais le paiement en attente et rend l'étape Paiement au client (il était seulement journalisé).
 - La page indique le site de paiement d'Evolia (`event.aiolia.us`), pour qu'une adresse différente du nom « Evolia » n'inquiète pas le client.
 
+### Retour de test du 21 octobre
+
+- Inscription : « Mon identité », « Mon organisation », « Nom de l'organisation » (ex. BECOM SARL) ; nouveau texte sous Secteur / Pays.
+- Listes secteur et pays : toutes les valeurs à l'ouverture, « Rechercher… » en tête pour une longue liste (il n'en montrait que 10).
+- Paiement : nouvelle aide sous « Nombre de participants » ; message vers l'offre de groupe dès son seuil atteint ; nouveaux textes pour Evolia et pour la vérification d'un virement.
+- E-mails : logo Becom et signature « Conquérir de nouveaux possibles – The power to go beyond » dans l'en-tête ; téléphone 038 09 131 14 et nouveau texte de pied de page ; mail de bienvenue du gestionnaire réécrit ; confirmation d'inscription reformulée.
+
 ### Sécurité
 
 - Clé **chiffrée en base** (AES-256-GCM, clé dérivée de `NEXTAUTH_SECRET`), jamais renvoyée au navigateur : l'écran n'affiche que ses 4 derniers caractères.
