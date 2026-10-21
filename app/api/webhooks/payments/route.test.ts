@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    // Aucune configuration saisie dans /admin/parametres : repli sur les variables d'environnement.
+    platformSetting: { findMany: async () => [] },
     webhookLog: {
       create: vi.fn().mockResolvedValue({ id: "log_1" }),
       update: vi.fn().mockResolvedValue({}),

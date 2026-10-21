@@ -6,6 +6,37 @@
 
 ---
 
+## 2026-10-21 — Evolia configurable depuis l'admin, navigation plus réactive
+
+Pas encore déployé à la date de cette entrée.
+
+### Ajouté
+
+- **Configuration Evolia dans Paramètres › Intégrations** (super admin uniquement) : les trois valeurs fournies par Evolia, à recopier telles quelles. Plus besoin de modifier le `.env` ni de redémarrer le serveur.
+  - **Adresse d'envoi des inscriptions** (`https://api-event.aiolia.us/integration/ceosummit/registrations`) ;
+  - **Lien de paiement** (`https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}`) ;
+  - **Clé Evolia** : une seule clé, qui signe nos envois et vérifie leurs confirmations de paiement (déjà la même dans `EVOLIA_WEBHOOK_SECRET` et `PAYMENT_WEBHOOK_SECRET`).
+  - Priorité : valeur saisie dans l'admin, puis variable d'environnement, puis valeur par défaut. Tant que rien n'est saisi, rien ne change.
+- **Barre de progression** en haut de l'écran à chaque clic sur un lien, et indicateur de chargement dans le back-office : avant, rien ne bougeait pendant le rendu de la page suivante.
+- **Favicon CEO Summit** à la place de celui de Next.js par défaut.
+
+### Sécurité
+
+- Clé **chiffrée en base** (AES-256-GCM, clé dérivée de `NEXTAUTH_SECRET`), jamais renvoyée au navigateur : l'écran n'affiche que ses 4 derniers caractères.
+- Toute modification exige le **mot de passe** de l'admin, est limitée à 5 tentatives par 15 minutes et est inscrite au journal d'audit (`settings.evolia.update`), sans la clé.
+- Adresses refusées si elles ne sont pas en `https://`, pointent vers une adresse interne (localhost, réseau privé) ou contiennent un identifiant.
+
+### À savoir
+
+- **Changer `NEXTAUTH_SECRET` rend la clé saisie illisible** : la plateforme repasse alors sur les variables d'environnement, et l'onglet Intégrations demande de la ressaisir.
+- Ne remplacer la clé dans l'admin **qu'au moment où Evolia bascule sur la nouvelle**, sinon leurs confirmations de paiement (ou nos envois) sont refusées.
+
+### Développement
+
+- `next dev --turbopack` fonctionne désormais dans les worktrees (`turbopack.root` dans `next.config.mjs`) : démarrage en 4,5 s au lieu de 36 s.
+
+---
+
 ## 2026-10-20 — Evolia : fonction et ticket des participants
 
 À la demande d'Evolia, pour les badges. Pas encore déployé à la date de cette entrée.

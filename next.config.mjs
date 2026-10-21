@@ -1,3 +1,6 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import withPWAInit from "@ducanh2912/next-pwa";
 
 /**
@@ -77,6 +80,13 @@ const nextConfig = {
   // Next 15 (14 oct. 2026) — anciennement experimental.serverComponentsExternalPackages.
   serverExternalPackages: ["@prisma/client", "bcryptjs"],
   poweredByHeader: false,
+  // 21 oct. 2026 — `next dev --turbopack` : dans un worktree, node_modules est
+  // une jonction vers ../app/node_modules, que Turbopack refuse si elle pointe
+  // hors de sa racine ("Symlink node_modules is invalid"). Racine = dossier
+  // parent pour couvrir les deux. Sans effet sur le build webpack.
+  turbopack: {
+    root: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
+  },
   async headers() {
     return [
       {

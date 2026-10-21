@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { verifyHmacSignature } from "@/lib/hmac";
+import { getEvoliaConfig } from "@/lib/evolia-config";
 import { paymentWebhookSchema, type PaymentWebhookPayload } from "@/lib/validations/webhooks";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -48,10 +49,11 @@ export async function POST(req: Request) {
 
   const rawBody = await req.text();
   const signature = req.headers.get("X-Webhook-Signature");
-  const secret = process.env.PAYMENT_WEBHOOK_SECRET;
+  // Clé saisie dans /admin/parametres, à défaut PAYMENT_WEBHOOK_SECRET.
+  const { inboundSecret: secret } = await getEvoliaConfig();
 
   if (!secret) {
-    console.error("[payments webhook] PAYMENT_WEBHOOK_SECRET is not configured");
+    console.error("[payments webhook] payment webhook secret is not configured");
     return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
   }
 

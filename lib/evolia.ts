@@ -6,6 +6,7 @@ import { seatCap } from "@/lib/company-seats";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { toZonedIso } from "@/lib/event-timezone";
 import { appUrl } from "@/lib/app-url";
+import { getEvoliaConfig, PAYMENT_URL_PLACEHOLDER } from "@/lib/evolia-config";
 
 /**
  * Intégration Evolia — échange 1 (conception/11 §3) : CEO Summit pousse les
@@ -14,18 +15,17 @@ import { appUrl } from "@/lib/app-url";
  * app/api/webhooks/payments). Chaque envoi est journalisé (`EvoliaPush`) ; un
  * échec ne bloque jamais l'action qui l'a déclenché, l'admin peut relancer.
  *
- * Signature : HMAC-SHA256 du corps brut avec `EVOLIA_WEBHOOK_SECRET`, en
+ * Signature : HMAC-SHA256 du corps brut avec la clé d'envoi Evolia, en
  * hexadécimal dans `X-Webhook-Signature: sha256=<hex>` (même schéma que notre
- * webhook entrant).
+ * webhook entrant). Adresses et clé : /admin/parametres, à défaut les
+ * variables d'environnement (lib/evolia-config.ts).
  */
 
-const DEFAULT_REGISTRATION_URL = "https://api-event.aiolia.us/integration/ceosummit/registrations";
-const DEFAULT_PAYMENT_URL = "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
 const REQUEST_TIMEOUT_MS = 10_000;
 
-export function evoliaPaymentUrl(reference: string): string {
-  const template = process.env.EVOLIA_PAYMENT_URL ?? DEFAULT_PAYMENT_URL;
-  return template.replace("{ceoSummitReference}", encodeURIComponent(reference));
+export async function evoliaPaymentUrl(reference: string): Promise<string> {
+  const { paymentUrlTemplate } = await getEvoliaConfig();
+  return paymentUrlTemplate.replace(PAYMENT_URL_PLACEHOLDER, encodeURIComponent(reference));
 }
 
 export function signEvoliaBody(body: string, secret: string): string {
@@ -281,8 +281,7 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
   const push = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
   if (!push) return false;
 
-  const secret = process.env.EVOLIA_WEBHOOK_SECRET;
-  const url = process.env.EVOLIA_REGISTRATION_URL ?? DEFAULT_REGISTRATION_URL;
+  const { outboundSecret: secret, registrationUrl: url } = await getEvoliaConfig();
   const record = (data: Prisma.EvoliaPushUpdateInput) =>
     prisma.evoliaPush.update({
       where: { id: pushId },
@@ -290,7 +289,7 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
     });
 
   if (!secret) {
-    await record({ status: "FAILED", lastError: "EVOLIA_WEBHOOK_SECRET non configuré." });
+    await record({ status: "FAILED", lastError: "Clé d'envoi Evolia non configurée (Paramètres › Intégrations)." });
     return false;
   }
 

@@ -304,7 +304,7 @@ async function startEvoliaCollection(
   revertSubscription: boolean
 ): Promise<ActionResult<PaymentSubmission>> {
   if (await pushRegistrationToEvolia(paymentId)) {
-    return { success: true, data: { redirectUrl: evoliaPaymentUrl(paymentId) } };
+    return { success: true, data: { redirectUrl: await evoliaPaymentUrl(paymentId) } };
   }
   const payment = await prisma.companyPayment.update({
     where: { id: paymentId },

@@ -323,7 +323,7 @@ Chaque appel transmet un **instantané complet** de l'entreprise à cet instant 
 ### Ce dont nous avons besoin de votre part
 
 1. ~~URL et méthode de votre endpoint, et authentification attendue de notre part~~ — reçus le 8 octobre 2026 (voir « Endpoint et authentification »).
-   - **Reste à confirmer :** vos confirmations de paiement (§2) sont-elles signées avec le même `WEBHOOK_SECRET`, ou avec un secret distinct ?
+   - ~~Vos confirmations de paiement (§2) sont-elles signées avec le même `WEBHOOK_SECRET`, ou avec un secret distinct ?~~ — une seule clé dans les deux sens (21 octobre 2026). Clé de test en usage ; la clé de production sera transmise plus tard et saisie dans Paramètres › Intégrations.
 2. **Confirmation du champ de référence** : que `ceoSummitReference` soit bien porté tel quel jusqu'à votre webhook de confirmation (§2, champ `reference`).
 3. **Cas d'échec/annulation** : un événement `payment.failed` séparé sur votre confirmation (déjà supporté par notre webhook, voir §2) ou un comportement différent ?
 4. Confirmation qu'un instantané complet à chaque appel convient (plutôt qu'un modèle incrémental).

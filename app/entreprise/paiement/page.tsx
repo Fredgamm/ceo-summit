@@ -198,7 +198,7 @@ export default async function CompanyPaymentPage(props: {
             </p>
             <EvoliaPendingPayment
               paymentId={pendingEvoliaPayment.id}
-              paymentUrl={evoliaPaymentUrl(pendingEvoliaPayment.id)}
+              paymentUrl={await evoliaPaymentUrl(pendingEvoliaPayment.id)}
               startedAt={pendingEvoliaPayment.createdAt.toISOString()}
             />
           </div>

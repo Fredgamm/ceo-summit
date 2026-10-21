@@ -463,7 +463,7 @@ export default async function CompanyProfilePage(props: {
                         </p>
                         <EvoliaPendingPayment
                           paymentId={pendingUpsellPayment.id}
-                          paymentUrl={evoliaPaymentUrl(pendingUpsellPayment.id)}
+                          paymentUrl={await evoliaPaymentUrl(pendingUpsellPayment.id)}
                           startedAt={pendingUpsellPayment.createdAt.toISOString()}
                         />
                       </div>

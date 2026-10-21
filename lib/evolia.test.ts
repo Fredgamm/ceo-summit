@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     companyPayment: { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+    // Aucune configuration saisie dans /admin/parametres : repli sur les variables d'environnement.
+    platformSetting: { findMany: async () => [] },
     company: { findUnique: vi.fn() },
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
@@ -97,8 +99,8 @@ afterEach(() => {
 });
 
 describe("helpers", () => {
-  it("builds the payment link from the reference", () => {
-    expect(evoliaPaymentUrl("pay_1")).toBe("https://event.aiolia.us/ceosummit/payment/pay_1");
+  it("builds the payment link from the reference", async () => {
+    expect(await evoliaPaymentUrl("pay_1")).toBe("https://event.aiolia.us/ceosummit/payment/pay_1");
   });
 
   it("signs the raw body with HMAC-SHA256", () => {

@@ -7,6 +7,9 @@ import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { isSmtpConfigured } from "@/lib/resend";
 import { ReferentialManager } from "@/components/admin/settings/referential-manager";
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
+import { EvoliaSettings } from "@/components/admin/settings/evolia-settings";
+import { getEvoliaConfig, getEvoliaSettingsStatus } from "@/lib/evolia-config";
+import { appUrl } from "@/lib/app-url";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -90,7 +93,8 @@ export default async function AdminParametresPage(props: {
 
     tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
   } else if (activeTab === "integrations") {
-    const paymentWebhookConfigured = Boolean(process.env.PAYMENT_WEBHOOK_SECRET);
+    const evoliaStatus = await getEvoliaSettingsStatus();
+    const paymentWebhookConfigured = Boolean((await getEvoliaConfig()).inboundSecret);
     const smtpConfigured = isSmtpConfigured();
     const r2Configured = Boolean(
       process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY
@@ -101,12 +105,13 @@ export default async function AdminParametresPage(props: {
 
     tabContent = (
       <div className="flex flex-col gap-4">
+        <EvoliaSettings status={evoliaStatus} />
         <IntegrationCard
-          title="Confirmation de paiement — webhook générique"
+          title="Confirmation de paiement — webhook entrant"
           configured={paymentWebhookConfigured}
           rows={[
-            { label: "Webhook entrant", value: "app/api/webhooks/payments/route.ts" },
-            { label: "Prestataire branché", value: "aucun pour l'instant" },
+            { label: "Adresse à communiquer à Evolia", value: `${appUrl()}/api/webhooks/payments` },
+            { label: "Clé de vérification", value: "clé Evolia ci-dessus" },
           ]}
         />
         <IntegrationCard
