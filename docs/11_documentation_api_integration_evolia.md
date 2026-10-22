@@ -95,6 +95,22 @@ Recommandé, mais facultatif et rétro-compatible (ajouté le 25 septembre 2026)
 
 Un même `reference` ne peut être confirmé qu'une seule fois (vérifié en base, verrouillé contre les doublons). Un retry sur un paiement déjà confirmé renvoie `409`, sans effet de bord — Evolia peut réessayer sans risque en cas de doute sur la réception d'un `200`.
 
+### Annulation ou échec du paiement (`payment.failed`)
+
+Depuis le 21 octobre 2026, un `payment.failed` sur un paiement d'entreprise (`"type": "company_payment"`) **annule ce paiement chez CEO Summit** : la commande revient en attente de paiement et le gestionnaire retrouve l'étape Paiement, où il peut choisir un autre mode (ou relancer une carte / Mobile Money, sous une nouvelle référence).
+
+```json
+{
+  "event": "payment.failed",
+  "type": "company_payment",
+  "reference": "<ceoSummitReference>"
+}
+```
+
+- Même signature, même clé et mêmes codes de réponse que `payment.confirmed`. `200` = paiement annulé ; `409` = référence inconnue ou paiement déjà confirmé / déjà annulé.
+- **À envoyer quand le client annule sur votre page ou que le paiement est refusé.** Sans lui, le paiement reste « en cours » chez nous jusqu'à ce que le gestionnaire l'annule lui-même (bouton « Changer de mode de paiement », voir §3).
+- Une **confirmation envoyée ensuite** pour la même référence (`payment.confirmed`) **reste acceptée** : le client a bien payé, l'accès s'active. Si l'offre avait entre-temps été réglée autrement, le doublon est signalé à l'équipe CEO Summit pour remboursement.
+
 ### Environnement de test
 
 Pas de sandbox dédiée à ce stade — l'environnement de dev CEO Summit peut recevoir des appels de test une fois une URL d'accès convenue avec l'équipe Evolia (à coordonner séparément, hors de ce document).
@@ -110,6 +126,8 @@ https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}
 ```
 
 Evolia encaisse le paiement et confirme via le webhook de l'échange 2 (§2) une fois le paiement reçu. Tant que cette confirmation n'est pas arrivée, l'espace CEO Summit du gestionnaire lui propose un lien « Reprendre le paiement » vers la même page (paiement interrompu, onglet fermé…) : la page doit donc rester utilisable pour une même `ceoSummitReference` tant qu'elle n'a pas été payée.
+
+**Changement de mode de paiement :** à tout moment avant votre confirmation, le gestionnaire peut aussi annuler ce paiement depuis son espace pour en choisir un autre (bouton « Changer de mode de paiement », disponible immédiatement depuis le 21 octobre 2026). La `ceoSummitReference` est alors annulée chez nous ; une confirmation reçue malgré tout pour elle reste acceptée (voir §2, « Annulation ou échec du paiement »).
 
 **Retour vers CEO Summit après paiement :** une fois le paiement finalisé sur votre page, redirigez le gestionnaire vers :
 
@@ -297,7 +315,7 @@ Même structure aux trois déclencheurs, mais **deux valeurs distinctes du champ
 | `ceoSummitReference`    | **À renvoyer strictement tel quel dans le webhook de confirmation** (§2, champ `reference`) — absent de ce champ, aucun lien possible entre le paiement encaissé et l'inscription.                                                                                                                                                                                                                                                                                       |
 | `paymentMethod`         | `"evolia"` (carte bancaire ou Mobile Money, paiement à encaisser par vos soins) ou `"virement"` (virement ou chèque, déjà réglé et validé manuellement côté CEO Summit — push informatif seulement, rien à encaisser). Absent sur `company.participants.confirmed` — rien à encaisser à ce déclencheur, tout paiement le précède déjà.                                                                                                                                   |
 | `eventDetails`          | Événement auquel l'offre donne accès : `startsAt` et `endsAt` (début et fin, date et heure) en ISO 8601 avec le décalage de Madagascar (`+03:00`), `timezone` toujours `"Indian/Antananarivo"`, `location` (`"En ligne"` pour un événement en ligne). `null` si l'offre ne donne accès à aucun événement.                                                                                                                                                                |
-| `participants[].title`  | Fonction du participant (« Directrice générale »), telle que saisie dans son profil CEO Summit. Demandée à chaque arrivée sur la plateforme et obligatoire pour valider la liste des participants : elle est donc toujours renseignée dans `company.participants.confirmed`. **Peut valoir `null`** dans `company.registration.pushed` pour un compte créé avant le 20 octobre 2026.                                                                                                                                                                                                                                                                                                    |
+| `participants[].title`  | Fonction du participant (« Directrice générale »), telle que saisie dans son profil CEO Summit. Demandée à chaque arrivée sur la plateforme et obligatoire pour valider la liste des participants : elle est donc toujours renseignée dans `company.participants.confirmed`. **Peut valoir `null`** dans `company.registration.pushed` pour un compte créé avant le 20 octobre 2026.                                                                                     |
 | `participants[].ticket` | Offre qui donne accès à l'événement au participant : `type` = nom de l'offre (ex. « Executive corporate pass », « Platinum », « Partenaire institutionnel »), `description` = description de l'offre, **ou `null`**. Les noms d'offres sont configurés par l'équipe CEO Summit et peuvent évoluer : ne les figez pas dans votre code. La **photo de profil n'est pas transmise**.                                                                                        |
 | `amountDue`             | Montant à encaisser pour **ce** push précisément (pas un cumulatif) — le montant de l'offre initiale au déclencheur 1, celui du seul supplément au déclencheur 3. **Toujours en Ariary** : CEO Summit ne stocke les montants dus qu'en Ariary (une offre affichée en euros est convertie au taux du jour lors de sa configuration), d'où `currency` toujours égal à `"MGA"`. Absent sur `company.participants.confirmed` et sur `paymentMethod` `"VIREMENT"`/`"CHEQUE"`. |
 

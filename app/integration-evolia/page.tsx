@@ -212,6 +212,39 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             renvoie <code>409</code>, sans effet de bord — vous pouvez réessayer sans risque en cas
             de doute sur la réception d&apos;un <code>200</code>.
           </p>
+
+          <SubHeading>Annulation ou échec du paiement (payment.failed)</SubHeading>
+          <p>
+            Depuis le 21 octobre 2026, un <code>payment.failed</code> sur un paiement
+            d&apos;entreprise (<code>&quot;type&quot;: &quot;company_payment&quot;</code>){" "}
+            <strong className="text-navy">annule ce paiement chez CEO Summit</strong> : la commande
+            revient en attente de paiement et le gestionnaire retrouve l&apos;étape Paiement pour
+            choisir un autre mode.
+          </p>
+          <Json>{`{
+  "event": "payment.failed",
+  "type": "company_payment",
+  "reference": "<ceoSummitReference>"
+}`}</Json>
+          <ul className="list-disc pl-5">
+            <li>
+              Même signature, même clé et mêmes codes de réponse que <code>payment.confirmed</code>.{" "}
+              <code>200</code> = paiement annulé ; <code>409</code> = référence inconnue ou paiement
+              déjà confirmé / déjà annulé.
+            </li>
+            <li>
+              <strong className="text-navy">
+                À envoyer quand le client annule sur votre page ou que le paiement est refusé.
+              </strong>{" "}
+              Sans lui, le paiement reste « en cours » chez nous jusqu&apos;à ce que le gestionnaire
+              l&apos;annule lui-même (bouton « Changer de mode de paiement »).
+            </li>
+            <li>
+              Une confirmation envoyée ensuite pour la même référence reste acceptée : le client a
+              bien payé, l&apos;accès s&apos;active. Un éventuel double paiement est signalé à
+              l&apos;équipe CEO Summit pour remboursement.
+            </li>
+          </ul>
         </Section>
 
         <Section title="3. Échange 1 — Push d'inscription (CEO Summit → Evolia)">
@@ -229,6 +262,13 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
             Summit du gestionnaire lui propose un lien « Reprendre le paiement » vers la même page
             (paiement interrompu, onglet fermé…) : la page doit donc rester utilisable pour une même{" "}
             <code>ceoSummitReference</code> tant qu&apos;elle n&apos;a pas été payée.
+          </p>
+          <p>
+            <strong className="text-navy">Changement de mode de paiement :</strong> à tout moment
+            avant votre confirmation, le gestionnaire peut aussi annuler ce paiement depuis son
+            espace pour en choisir un autre. La <code>ceoSummitReference</code> est alors annulée
+            chez nous ; une confirmation reçue malgré tout pour elle reste acceptée (voir §2, «
+            Annulation ou échec du paiement »).
           </p>
 
           <p>
@@ -590,9 +630,11 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               authentification »).
               <ul className="list-disc pl-5">
                 <li>
-                  <strong className="text-navy">Reste à confirmer :</strong> vos confirmations de
-                  paiement (§2) sont-elles signées avec le même <code>WEBHOOK_SECRET</code>, ou avec
-                  un secret distinct ?
+                  <s>
+                    Vos confirmations de paiement (§2) sont-elles signées avec le même{" "}
+                    <code>WEBHOOK_SECRET</code>, ou avec un secret distinct ?
+                  </s>{" "}
+                  — une seule clé dans les deux sens (21 octobre 2026).
                 </li>
               </ul>
             </li>
@@ -601,8 +643,12 @@ X-Webhook-Timestamp: <secondes Unix>   (optionnel — voir « Anti-rejeu »)`}</
               votre webhook de confirmation (§2, champ <code>reference</code>).
             </li>
             <li>
-              Cas d&apos;échec/annulation : un événement <code>payment.failed</code> séparé, ou un
-              comportement différent ?
+              Cas d&apos;échec/annulation : <code>payment.failed</code> est désormais traité de
+              notre côté (§2, « Annulation ou échec du paiement »).{" "}
+              <strong className="text-navy">
+                Merci de confirmer que vous l&apos;envoyez quand le client annule ou que le paiement
+                est refusé.
+              </strong>
             </li>
             <li>Confirmation qu&apos;un instantané complet à chaque appel convient.</li>
             <li>
