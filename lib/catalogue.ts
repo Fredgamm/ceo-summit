@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { MEMBER_WITH_ACCESS_WHERE } from "@/lib/plan-access";
+import { MEMBER_WITH_ACCESS_WHERE, NOT_STAFF_WHERE } from "@/lib/plan-access";
 
 /**
  * E2-T03 — pure query-building logic for `/catalogue`, kept separate from
@@ -27,12 +27,16 @@ export interface CatalogueQuery {
 
 export function buildCatalogueQuery(
   params: CatalogueSearchParams,
-  referentials: { validSectors: readonly string[]; validCountries: readonly string[] }
+  referentials: { validSectors: readonly string[]; validCountries: readonly string[] },
+  options: { showStaff?: boolean } = {}
 ): CatalogueQuery {
   const parsedPage = parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
-  const where: Prisma.UserWhereInput = { ...MEMBER_WITH_ACCESS_WHERE };
+  const where: Prisma.UserWhereInput = {
+    ...MEMBER_WITH_ACCESS_WHERE,
+    ...(options.showStaff ? {} : NOT_STAFF_WHERE),
+  };
 
   if (params.secteur && referentials.validSectors.includes(params.secteur)) {
     where.sectors = { has: params.secteur };

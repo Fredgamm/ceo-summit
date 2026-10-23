@@ -12,8 +12,10 @@ import { profileCompleteness } from "@/lib/profile-completeness";
 import {
   getViewerTierFromCompany,
   MEMBER_WITH_ACCESS_WHERE,
+  NOT_STAFF_WHERE,
   VIEWER_TIER_INCLUDE,
 } from "@/lib/plan-access";
+import { getShowStaffInDirectory } from "@/lib/staff-visibility";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { AppShell } from "@/components/layout/app-shell";
 import { MemberCard } from "@/components/catalogue/member-card";
@@ -51,6 +53,7 @@ export default async function DashboardPage() {
   const viewerTier = getViewerTierFromCompany(user.company);
   const companySubscription = user.company?.subscription;
   const isCompanyAdmin = user.company?.companyAdminId === user.id;
+  const showStaff = await getShowStaffInDirectory();
 
   const [
     upcomingEvents,
@@ -99,7 +102,11 @@ export default async function DashboardPage() {
     }),
     prisma.user.findMany({
       // Un compte dont le paiement n'est pas encore validé n'est pas affiché.
-      where: { ...MEMBER_WITH_ACCESS_WHERE, id: { not: user.id } },
+      where: {
+        ...MEMBER_WITH_ACCESS_WHERE,
+        ...(showStaff ? {} : NOT_STAFF_WHERE),
+        id: { not: user.id },
+      },
       orderBy: { createdAt: "desc" },
       take: 3,
       include: { company: { select: { name: true } } },

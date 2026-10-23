@@ -1,5 +1,7 @@
 import type { Prisma, MembershipStatus } from "@prisma/client";
 
+import { NOT_STAFF_WHERE } from "@/lib/plan-access";
+
 /** E8-T04 — pure query-building logic for `/admin/membres`, same rationale as lib/catalogue.ts. */
 
 export const ADMIN_MEMBERS_PAGE_SIZE = 20;
@@ -17,6 +19,8 @@ export interface AdminMembersSearchParams {
   pays?: string;
   secteur?: string;
   statut?: string;
+  /** « 1 » : inclut le staff (CEO Summit, BECOM), masqué par défaut. */
+  staff?: string;
   page?: string;
 }
 
@@ -34,7 +38,7 @@ export function buildAdminMembersQuery(
   const parsedPage = parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
-  const where: Prisma.UserWhereInput = {};
+  const where: Prisma.UserWhereInput = params.staff === "1" ? {} : { ...NOT_STAFF_WHERE };
 
   if (params.pays && referentials.validCountries.includes(params.pays)) {
     where.country = params.pays;

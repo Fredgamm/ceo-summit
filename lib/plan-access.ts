@@ -50,6 +50,14 @@ export const MEMBER_WITH_ACCESS_WHERE = {
   company: { subscription: { status: { in: [...TIER_ELIGIBLE_STATUSES] } } },
 } satisfies Prisma.UserWhereInput;
 
+/**
+ * 23 oct. 2026 — comptes staff (équipes CEO Summit et BECOM, administrateurs
+ * de la plateforme). Retirés de l'annuaire et des « Nouveaux membres » sauf
+ * si Admin › Paramètres les y affiche (lib/staff-visibility.ts), et masqués
+ * par défaut dans Admin › Membres.
+ */
+export const NOT_STAFF_WHERE = { isPlatformAdmin: false } satisfies Prisma.UserWhereInput;
+
 export interface CompanyForTier {
   subscription?: {
     status: string;

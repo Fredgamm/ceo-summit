@@ -10,6 +10,8 @@ import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts
 import { EvoliaSettings } from "@/components/admin/settings/evolia-settings";
 import { BrevoSettings } from "@/components/admin/settings/brevo-settings";
 import { PreregistrationSettings } from "@/components/admin/settings/preregistration-settings";
+import { DirectorySettings } from "@/components/admin/settings/directory-settings";
+import { getShowStaffInDirectory } from "@/lib/staff-visibility";
 import { PREREGISTERED_SUBSCRIPTION_WHERE, getPreregistrationStatus } from "@/lib/preregistration";
 import { getBrevoConfig, isBrevoReady } from "@/lib/brevo";
 import { getEvoliaConfig, getEvoliaSettingsStatus } from "@/lib/evolia-config";
@@ -48,9 +50,11 @@ export default async function AdminParametresPage(props: {
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "tarifs") {
-    const [preregistration, preregisteredCount] = await Promise.all([
+    const [preregistration, preregisteredCount, showStaff, staffCount] = await Promise.all([
       getPreregistrationStatus(),
       prisma.companySubscription.count({ where: PREREGISTERED_SUBSCRIPTION_WHERE }),
+      getShowStaffInDirectory(),
+      prisma.user.count({ where: { isPlatformAdmin: true } }),
     ]);
     // Offres qui auront expiré à l'ouverture des paiements : leurs préinscrits
     // devront changer d'offre (ou l'admin repousse leur date limite).
@@ -85,6 +89,7 @@ export default async function AdminParametresPage(props: {
             <Link href="/admin/plans">Gérer les offres →</Link>
           </Button>
         </div>
+        <DirectorySettings showStaff={showStaff} staffCount={staffCount} />
       </div>
     );
   } else if (activeTab === "referentiels") {

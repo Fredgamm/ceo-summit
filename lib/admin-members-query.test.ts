@@ -8,11 +8,15 @@ const REFERENTIALS = {
 };
 
 describe("buildAdminMembersQuery", () => {
-  it("defaults to no filter, page 1", () => {
+  it("defaults to members without staff, page 1", () => {
     const query = buildAdminMembersQuery({}, REFERENTIALS);
-    expect(query.where).toEqual({});
+    expect(query.where).toEqual({ isPlatformAdmin: false });
     expect(query.skip).toBe(0);
     expect(query.take).toBe(ADMIN_MEMBERS_PAGE_SIZE);
+  });
+
+  it("includes staff when asked", () => {
+    expect(buildAdminMembersQuery({ staff: "1" }, REFERENTIALS).where).toEqual({});
   });
 
   it("filters by a known status", () => {

@@ -101,7 +101,10 @@ export default async function AdminMembresPage(props: {
                         <AvatarFallback>{initials(member.name)}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-semibold text-navy">{member.name}</p>
+                        <p className="flex items-center gap-1.5 font-semibold text-navy">
+                          {member.name}
+                          {member.isPlatformAdmin && <Badge variant="draft">Staff</Badge>}
+                        </p>
                         <p className="text-xs text-text-muted">{member.email}</p>
                       </div>
                     </div>

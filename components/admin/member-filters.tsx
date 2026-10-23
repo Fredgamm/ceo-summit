@@ -96,6 +96,20 @@ export function MemberFilters({ sectors, countries }: { sectors: string[]; count
           ))}
         </SelectContent>
       </Select>
+
+      {/* 23 oct. 2026 — staff CEO Summit / BECOM masqué par défaut. */}
+      <Select
+        value={searchParams.get("staff") === "1" ? "1" : ALL}
+        onValueChange={(v) => updateParam("staff", v)}
+      >
+        <SelectTrigger className="w-[170px]" aria-label="Staff">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ALL}>Sans le staff</SelectItem>
+          <SelectItem value="1">Avec le staff</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 }
