@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AriaryHint } from "@/components/ui/ariary-hint";
+import { BankDetails } from "@/components/entreprise/bank-details";
 
 /**
  * 22 septembre 2026 (`conception/12`) — deux cas, et deux seulement :
@@ -373,6 +374,7 @@ export function PaymentProofForm({
             );
           })}
         </div>
+        <BankDetails method={method} className="mt-3" />
       </section>
 
       {isEvoliaMethod ? (

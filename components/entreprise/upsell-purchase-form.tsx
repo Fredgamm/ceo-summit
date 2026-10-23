@@ -22,6 +22,7 @@ import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
 import { unitPriceAr } from "@/lib/company-payment-amount";
 import { arToEur, formatEuro, formatPlanPriceLive } from "@/lib/utils";
 import { AriaryHint } from "@/components/ui/ariary-hint";
+import { BankDetails } from "@/components/entreprise/bank-details";
 
 /**
  * 22 septembre 2026 (`conception/12` §3.2) — achat d'un supplément de
@@ -284,6 +285,8 @@ export function UpsellPurchaseForm({
         </Alert>
       ) : (
         <>
+          <BankDetails method={method} />
+
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="upsell-proof">Preuve de paiement (image ou PDF) *</Label>
             <Input
