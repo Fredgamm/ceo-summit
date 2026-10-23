@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ChevronDown, Globe, Handshake } from "lucide-react";
+import { ChevronDown, Globe, Handshake, Plus } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -35,7 +35,7 @@ import { StaffOfferPicker } from "@/components/entreprise/staff-offer-picker";
 import { CompanyForm } from "@/components/entreprise/company-form";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
 import { OnboardingStatusList } from "@/components/entreprise/onboarding-status-list";
-import { initials, formatDateFr, formatEuro, planPriceEur } from "@/lib/utils";
+import { cn, initials, formatDateFr, formatEuro, planPriceEur } from "@/lib/utils";
 import { offerBadgeLabel } from "@/lib/offer-badge";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
@@ -312,95 +312,123 @@ export default async function CompanyProfilePage(props: {
 
         {isCompanyAdmin && (
           <TabsContent value="gestion">
-            <div className="flex flex-col gap-4">
-              {/* Refonte UX (14 oct. 2026) — écran d'arrivée après paiement :
+            {/* 23 oct. 2026 — deux colonnes sur grand écran : la liste des
+                participants à gauche (l'action principale), le dossier à droite
+                (statut, abonnement, places supplémentaires). Sur mobile, la
+                colonne de droite passe sous la liste. */}
+            <div
+              className={cn(
+                "grid grid-cols-1 items-start gap-4",
+                !viewer.isPlatformAdmin && "lg:grid-cols-[minmax(0,1fr)_380px]"
+              )}
+            >
+              <div className="flex min-w-0 flex-col gap-4">
+                {/* Refonte UX (14 oct. 2026) — écran d'arrivée après paiement :
                   une fois l'offre active, la liste des participants passe en
                   tête, le reste du dossier se replie en dessous. */}
-              {participantsReady && company.subscription && linkedEvent ? (
-                <EventParticipantsForm
-                  companyId={company.id}
-                  candidates={company.users.map((u) => ({
-                    id: u.id,
-                    name: u.name,
-                    title: u.title,
-                    isManager: u.id === company.companyAdminId,
-                  }))}
-                  initialSelected={eventParticipantIds}
-                  cap={applicableCap}
-                  validatedAtLabel={
-                    company.subscription.participantsValidatedAt
-                      ? formatDateFr(company.subscription.participantsValidatedAt)
-                      : null
-                  }
-                  event={{
-                    title: linkedEvent.title,
-                    dateLabel: formatDateFr(linkedEvent.date, linkedEvent.timezone),
-                    location: linkedEvent.isOnline ? "En ligne" : linkedEvent.location || null,
-                  }}
-                >
-                  {/* Audit (25 septembre 2026) — collaborateurs rassemblés après
+                {participantsReady && company.subscription && linkedEvent ? (
+                  <EventParticipantsForm
+                    companyId={company.id}
+                    candidates={company.users.map((u) => ({
+                      id: u.id,
+                      name: u.name,
+                      title: u.title,
+                      isManager: u.id === company.companyAdminId,
+                    }))}
+                    initialSelected={eventParticipantIds}
+                    cap={applicableCap}
+                    validatedAtLabel={
+                      company.subscription.participantsValidatedAt
+                        ? formatDateFr(company.subscription.participantsValidatedAt)
+                        : null
+                    }
+                    event={{
+                      title: linkedEvent.title,
+                      dateLabel: formatDateFr(linkedEvent.date, linkedEvent.timezone),
+                      location: linkedEvent.isOnline ? "En ligne" : linkedEvent.location || null,
+                    }}
+                  >
+                    {/* Audit (25 septembre 2026) — collaborateurs rassemblés après
                       paiement (BACKLOG_MVP §3), comme `inviteTeammate`. */}
-                  <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
-                </EventParticipantsForm>
-              ) : viewer.isPlatformAdmin ? null : (
-                <div className="rounded-lg border border-border bg-white p-5">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-bold text-navy">Collaborateurs</h2>
-                    {applicableCap != null && (
-                      <span className="text-xs font-semibold text-text-muted">
-                        {usedSeats} / {applicableCap} place(s)
-                      </span>
+                    <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
+                  </EventParticipantsForm>
+                ) : viewer.isPlatformAdmin ? null : (
+                  <div className="rounded-lg border border-border bg-white p-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-sm font-bold text-navy">Collaborateurs</h2>
+                      {applicableCap != null && (
+                        <span className="text-xs font-semibold text-text-muted">
+                          {usedSeats} / {applicableCap} place(s)
+                        </span>
+                      )}
+                    </div>
+                    {subscriptionStatus === "ACTIVE" ? (
+                      <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
+                    ) : (
+                      <Alert>
+                        <AlertDescription>
+                          {INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE}
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
-                  {subscriptionStatus === "ACTIVE" ? (
-                    <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
-                  ) : (
-                    <Alert>
-                      <AlertDescription>
-                        {INVITES_REQUIRE_ACTIVE_SUBSCRIPTION_MESSAGE}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              )}
+                )}
 
-              {isStaffOrganisation && (
-                // 14 oct. 2026 — pas de parcours d'achat pour un administrateur
-                // de la plateforme : son staff est inscrit par une offre gratuite.
-                <div className="rounded-lg border border-border bg-white p-5">
-                  <h2 className="mb-1 text-sm font-bold text-navy">Staff de l&apos;événement</h2>
-                  <p className="mb-3 text-sm text-text-mid">
-                    {activeStaffPlanId
-                      ? "Votre staff est inscrit gratuitement. Pour un autre événement, choisissez-le ci-dessous."
-                      : "En tant qu'administrateur, vous n'avez rien à payer. Choisissez l'événement auquel inscrire votre staff : chacun recevra son badge via Evolia."}
-                  </p>
-                  {staffOffers.length > 0 ? (
-                    <StaffOfferPicker
-                      companyId={company.id}
-                      offers={staffOffers.map((o) => ({
-                        id: o.id,
-                        label: `${o.event!.title} — ${formatDateFr(o.event!.date, o.event!.timezone)} (${o.name})`,
-                      }))}
-                      currentPlanId={activeStaffPlanId}
-                      needsUnlimitedSeats={
-                        activeStaffPlanId != null && !company.subscription?.unlimitedSeats
-                      }
-                    />
-                  ) : (
-                    <p className="text-sm text-text-muted">
-                      Aucune offre Staff disponible. Créez dans{" "}
-                      <Link href="/admin/plans" className="font-semibold text-navy-mid">
-                        Offres
-                      </Link>{" "}
-                      une offre à 0 €, non proposée à l&apos;inscription, rattachée à
-                      l&apos;événement.
+                {isStaffOrganisation && (
+                  // 14 oct. 2026 — pas de parcours d'achat pour un administrateur
+                  // de la plateforme : son staff est inscrit par une offre gratuite.
+                  <div className="rounded-lg border border-border bg-white p-5">
+                    <h2 className="mb-1 text-sm font-bold text-navy">Staff de l&apos;événement</h2>
+                    <p className="mb-3 text-sm text-text-mid">
+                      {activeStaffPlanId
+                        ? "Votre staff est inscrit gratuitement. Pour un autre événement, choisissez-le ci-dessous."
+                        : "En tant qu'administrateur, vous n'avez rien à payer. Choisissez l'événement auquel inscrire votre staff : chacun recevra son badge via Evolia."}
                     </p>
-                  )}
-                </div>
-              )}
+                    {staffOffers.length > 0 ? (
+                      <StaffOfferPicker
+                        companyId={company.id}
+                        offers={staffOffers.map((o) => ({
+                          id: o.id,
+                          label: `${o.event!.title} — ${formatDateFr(o.event!.date, o.event!.timezone)} (${o.name})`,
+                        }))}
+                        currentPlanId={activeStaffPlanId}
+                        needsUnlimitedSeats={
+                          activeStaffPlanId != null && !company.subscription?.unlimitedSeats
+                        }
+                      />
+                    ) : (
+                      <p className="text-sm text-text-muted">
+                        Aucune offre Staff disponible. Créez dans{" "}
+                        <Link href="/admin/plans" className="font-semibold text-navy-mid">
+                          Offres
+                        </Link>{" "}
+                        une offre à 0 €, non proposée à l&apos;inscription, rattachée à
+                        l&apos;événement.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {!viewer.isPlatformAdmin && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <aside className="flex min-w-0 flex-col gap-4">
+                  {/* Replié une fois l'offre active : la checklist n'est plus
+                    l'information principale, elle reste consultable. */}
+                  <details
+                    className="group rounded-lg border border-border bg-white p-5"
+                    open={subscriptionStatus !== "ACTIVE"}
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                      <h2 className="text-sm font-bold text-navy">Statut du dossier</h2>
+                      <span className="flex items-center gap-2 text-xs font-semibold text-text-muted">
+                        {onboardingDone} / {onboardingItems.length} étapes
+                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                      </span>
+                    </summary>
+                    <div className="mt-3">
+                      <OnboardingStatusList items={onboardingItems} />
+                    </div>
+                  </details>
                   <div className="rounded-lg border border-border bg-white p-5">
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-sm font-bold text-navy">Abonnement</h2>
@@ -443,72 +471,64 @@ export default async function CompanyProfilePage(props: {
                     </div>
                   </div>
 
-                  {/* Replié une fois l'offre active : la checklist n'est plus
-                    l'information principale, elle reste consultable. */}
-                  <details
-                    className="group rounded-lg border border-border bg-white p-5"
-                    open={subscriptionStatus !== "ACTIVE"}
-                  >
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-                      <h2 className="text-sm font-bold text-navy">Statut du dossier</h2>
-                      <span className="flex items-center gap-2 text-xs font-semibold text-text-muted">
-                        {onboardingDone} / {onboardingItems.length} étapes
-                        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-                      </span>
-                    </summary>
-                    <div className="mt-3">
-                      <OnboardingStatusList items={onboardingItems} />
-                    </div>
-                  </details>
-                </div>
-              )}
-
-              {!viewer.isPlatformAdmin &&
-                company.subscription &&
-                subscriptionStatus === "ACTIVE" &&
-                (pendingUpsellPayment ? (
-                  <div className="rounded-lg border border-border bg-white p-5">
-                    <h2 className="mb-1 text-sm font-bold text-navy">
-                      Ajouter des places supplémentaires
-                    </h2>
-                    <p className="text-sm text-text-mid">
-                      Supplément de {pendingUpsellPayment.upsellQuantity} place(s) en attente de
-                      validation.
-                    </p>
-                    {isEvoliaPaymentMethod(pendingUpsellPayment.method) && (
-                      <div className="mt-2 flex flex-col gap-2">
+                  {!viewer.isPlatformAdmin &&
+                    company.subscription &&
+                    subscriptionStatus === "ACTIVE" &&
+                    (pendingUpsellPayment ? (
+                      <div className="rounded-lg border border-border bg-white p-5">
+                        <h2 className="mb-1 text-sm font-bold text-navy">
+                          Ajouter des places supplémentaires
+                        </h2>
                         <p className="text-sm text-text-mid">
-                          Paiement en cours chez Evolia, confirmé automatiquement.
+                          Supplément de {pendingUpsellPayment.upsellQuantity} place(s) en attente de
+                          validation.
                         </p>
-                        <EvoliaPendingPayment
-                          paymentId={pendingUpsellPayment.id}
-                          paymentUrl={await evoliaPaymentUrl(pendingUpsellPayment.id)}
-                          startedAt={pendingUpsellPayment.createdAt.toISOString()}
-                        />
+                        {isEvoliaPaymentMethod(pendingUpsellPayment.method) && (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <p className="text-sm text-text-mid">
+                              Paiement en cours chez Evolia, confirmé automatiquement.
+                            </p>
+                            <EvoliaPendingPayment
+                              paymentId={pendingUpsellPayment.id}
+                              paymentUrl={await evoliaPaymentUrl(pendingUpsellPayment.id)}
+                              startedAt={pendingUpsellPayment.createdAt.toISOString()}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  upsellPlans.length > 0 &&
-                  applicableCap != null &&
-                  usedSeats >= applicableCap && (
-                    <div className="rounded-lg border border-border bg-white p-5">
-                      <h2 className="mb-1 text-sm font-bold text-navy">
-                        Ajouter des places supplémentaires
-                      </h2>
-                      <p className="mb-3 text-xs text-text-muted">
-                        Vous avez atteint les {applicableCap} place(s) de votre offre. Pour ajouter
-                        d&apos;autres participants, veuillez choisir une offre ci-dessous.
-                      </p>
-                      <UpsellPurchaseForm
-                        companySubscriptionId={company.subscription.id}
-                        upsellPlans={upsellPlans}
-                        liveEurToArRate={liveEurToArRate}
-                        evoliaAvailable={await isEvoliaLive()}
-                      />
-                    </div>
-                  )
-                ))}
+                    ) : (
+                      upsellPlans.length > 0 &&
+                      applicableCap != null &&
+                      usedSeats >= applicableCap && (
+                        // 23 oct. 2026 — formulaire replié derrière un bouton : la
+                        // colonne de droite reste lisible, on ne l'ouvre que pour acheter.
+                        <details className="group rounded-lg border border-border bg-white p-5">
+                          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                            <h2 className="mb-1 text-sm font-bold text-navy">
+                              Ajouter des places supplémentaires
+                            </h2>
+                            <p className="text-xs text-text-muted">
+                              Vous avez atteint les {applicableCap} place(s) de votre offre. Pour
+                              inviter d&apos;autres participants, ajoutez des places.
+                            </p>
+                            <span className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-navy px-3 text-sm font-semibold text-white group-open:hidden">
+                              <Plus className="h-4 w-4" aria-hidden="true" />
+                              Ajouter des places
+                            </span>
+                          </summary>
+                          <div className="mt-4">
+                            <UpsellPurchaseForm
+                              companySubscriptionId={company.subscription.id}
+                              upsellPlans={upsellPlans}
+                              liveEurToArRate={liveEurToArRate}
+                              evoliaAvailable={await isEvoliaLive()}
+                            />
+                          </div>
+                        </details>
+                      )
+                    ))}
+                </aside>
+              )}
             </div>
           </TabsContent>
         )}
