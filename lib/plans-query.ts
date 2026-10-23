@@ -37,6 +37,8 @@ export async function getActivePlans(opts?: {
   const plans = await prisma.plan.findMany({
     where: {
       isActive: true,
+      // 23 oct. 2026 — une offre dont la date limite est passée n'est plus proposée.
+      OR: [{ availableUntil: null }, { availableUntil: { gte: new Date() } }],
       ...(opts?.selfServiceOnly ? { isSelfService: true, isUpsell: false } : {}),
       // Intégration Evolia (8 oct. 2026) — les offres rattachées à un
       // événement restent au catalogue d'inscription ; on ne filtre par
@@ -67,7 +69,13 @@ export async function getPlanById(id: string): Promise<Plan | null> {
  */
 export async function getPlanBySlug(slug: string): Promise<PlanWithEvent | null> {
   const plan = await prisma.plan.findFirst({
-    where: { slug, isActive: true, isSelfService: true, isUpsell: false },
+    where: {
+      slug,
+      isActive: true,
+      isSelfService: true,
+      isUpsell: false,
+      OR: [{ availableUntil: null }, { availableUntil: { gte: new Date() } }],
+    },
     include: { event: true },
   });
   return plan ? { ...plan, name: cleanPlanName(plan.name) } : null;

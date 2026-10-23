@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
 import { companyAccountSchema } from "@/lib/validations/company-account";
 import { validateSectorAndCountry } from "@/app/actions/company";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -57,6 +58,7 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
   if (!plan) {
     return { success: false, error: "Offre invalide ou plus disponible." };
   }
+  if (!isPlanAvailable(plan)) return { success: false, error: planUnavailableMessage(plan) };
 
   const referentialError = await validateSectorAndCountry(f.sector, f.country);
   if (referentialError) return { success: false, error: referentialError };

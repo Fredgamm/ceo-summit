@@ -9,6 +9,8 @@ import { ReferentialManager } from "@/components/admin/settings/referential-mana
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { EvoliaSettings } from "@/components/admin/settings/evolia-settings";
 import { BrevoSettings } from "@/components/admin/settings/brevo-settings";
+import { PreregistrationSettings } from "@/components/admin/settings/preregistration-settings";
+import { PREREGISTERED_SUBSCRIPTION_WHERE, getPreregistrationStatus } from "@/lib/preregistration";
 import { getBrevoConfig, isBrevoReady } from "@/lib/brevo";
 import { getEvoliaConfig, getEvoliaSettingsStatus } from "@/lib/evolia-config";
 import { appUrl } from "@/lib/app-url";
@@ -46,12 +48,23 @@ export default async function AdminParametresPage(props: {
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "tarifs") {
+    const [preregistration, preregisteredCount] = await Promise.all([
+      getPreregistrationStatus(),
+      prisma.companySubscription.count({ where: PREREGISTERED_SUBSCRIPTION_WHERE }),
+    ]);
     tabContent = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <PreregistrationSettings
+          paymentsOpenOn={preregistration.paymentsOpenOn}
+          active={preregistration.active}
+          openEmailSentAt={preregistration.openEmailSentAt?.toISOString() ?? null}
+          preregisteredCount={preregisteredCount}
+        />
         <div className="rounded-lg border border-border bg-white p-5">
           <h3 className="text-sm font-bold text-navy">Offres & tarifs d&apos;adhésion</h3>
           <p className="mb-4 mt-1 text-xs text-text-muted">
-            Le prix et le nombre de places de chaque offre se gèrent depuis le catalogue des offres.
+            Le prix, le nombre de places et la date limite de chaque offre (« disponible
+            jusqu&apos;au ») se gèrent depuis le catalogue des offres.
           </p>
           <Button asChild>
             <Link href="/admin/plans">Gérer les offres →</Link>

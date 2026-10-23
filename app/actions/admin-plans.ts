@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { availableUntilFromDay } from "@/lib/plan-availability";
 import { requireAdmin } from "@/lib/admin-auth";
 import { planFormSchema } from "@/lib/validations/plan";
 import { convertEurToAr } from "@/lib/currency-conversion";
@@ -55,6 +56,14 @@ async function toPlanData(f: ReturnType<typeof planFormSchema.parse>) {
     isUpsell: f.isUpsell,
     displayOrder: f.displayOrder,
     eventId: f.eventId,
+    // Fin de journée dans le fuseau de l'événement de l'offre (Madagascar à défaut).
+    availableUntil: availableUntilFromDay(
+      f.availableUntil,
+      f.eventId
+        ? (await prisma.event.findUnique({ where: { id: f.eventId }, select: { timezone: true } }))
+            ?.timezone
+        : undefined
+    ),
     /**
      * 22 septembre 2026 (`conception/12` §2.5) — `rank` ne compare plus
      * aucun accès depuis que tout membre payé a les mêmes droits : la

@@ -15,6 +15,11 @@ beforeEach(() => {
   vi.mocked(prisma.plan.findFirst).mockResolvedValue(null);
 });
 
+/** 23 oct. 2026 — une offre dont la date limite est passée n'est plus proposée. */
+const AVAILABLE_NOW = {
+  OR: [{ availableUntil: null }, { availableUntil: { gte: expect.any(Date) } }],
+};
+
 function whereOf(fn: typeof prisma.plan.findMany | typeof prisma.plan.findFirst) {
   return (vi.mocked(fn).mock.calls[0]?.[0] as { where: Record<string, unknown> }).where;
 }
@@ -23,6 +28,7 @@ describe("getActivePlans", () => {
   it("excludes supplement offers (isUpsell) from the self-service catalogue", async () => {
     await getActivePlans({ selfServiceOnly: true });
     expect(whereOf(prisma.plan.findMany)).toEqual({
+      ...AVAILABLE_NOW,
       isActive: true,
       isSelfService: true,
       isUpsell: false,
@@ -31,12 +37,16 @@ describe("getActivePlans", () => {
 
   it("keeps every active plan (supplements and sponsoring included) for admin views", async () => {
     await getActivePlans();
-    expect(whereOf(prisma.plan.findMany)).toEqual({ isActive: true });
+    expect(whereOf(prisma.plan.findMany)).toEqual({
+      ...AVAILABLE_NOW,
+      isActive: true,
+    });
   });
 
   it("keeps offers linked to an event in the catalogue, and filters by event only on request", async () => {
     await getActivePlans({ selfServiceOnly: true, eventId: "evt_1" });
     expect(whereOf(prisma.plan.findMany)).toEqual({
+      ...AVAILABLE_NOW,
       isActive: true,
       isSelfService: true,
       isUpsell: false,
@@ -49,6 +59,7 @@ describe("getPlanBySlug", () => {
   it("never resolves a supplement offer as the main offer of a deep link", async () => {
     await getPlanBySlug("executive-pass");
     expect(whereOf(prisma.plan.findFirst)).toEqual({
+      ...AVAILABLE_NOW,
       slug: "executive-pass",
       isActive: true,
       isSelfService: true,

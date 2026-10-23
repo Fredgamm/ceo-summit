@@ -34,6 +34,8 @@ export interface PlanFormValues {
   isUpsell: boolean;
   displayOrder: number;
   eventId: string;
+  /** « 2026-12-31 » — dernier jour où l'offre peut être choisie et payée ; vide = sans limite. */
+  availableUntil: string;
 }
 
 const EMPTY_VALUES: PlanFormValues = {
@@ -51,6 +53,7 @@ const EMPTY_VALUES: PlanFormValues = {
   isUpsell: false,
   displayOrder: 0,
   eventId: "",
+  availableUntil: "",
 };
 
 function slugify(name: string): string {
@@ -285,6 +288,22 @@ export function PlanForm({ mode, planId, initialValues, events }: PlanFormProps)
           <p className="text-xs text-text-muted">
             Les participants désignés par le gérant seront inscrits à cet événement. Ses dates sont
             transmises à Evolia avec chaque inscription.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="plan-available-until">Disponible jusqu&apos;au (inclus)</Label>
+          <Input
+            id="plan-available-until"
+            type="date"
+            className="max-w-[220px]"
+            value={values.availableUntil}
+            onChange={(e) => set("availableUntil", e.target.value)}
+          />
+          <p className="text-xs text-text-muted">
+            Après ce jour (fin de journée, heure de l&apos;événement), l&apos;offre n&apos;est plus
+            proposée et ne peut plus être payée, même par une entreprise qui l&apos;avait déjà
+            choisie. Vide = sans limite.
           </p>
         </div>
 

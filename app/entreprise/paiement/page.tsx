@@ -14,7 +14,11 @@ import { EmailVerificationPanel } from "@/components/onboarding/email-verificati
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
-import { planPriceEur, pluralize } from "@/lib/utils";
+import { formatDateFr, planPriceEur, pluralize } from "@/lib/utils";
+import { getPreregistrationStatus } from "@/lib/preregistration";
+import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
+import { PreregistrationParticipants } from "@/components/entreprise/preregistration-participants";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const PAYMENT_MODES = [
   {
@@ -215,6 +219,76 @@ export default async function CompanyPaymentPage(props: {
     );
   }
 
+  // 23 oct. 2026 — offre dont la date limite est passée (ex. Early Bird après
+  // le 31 décembre) : on ne peut plus la payer, il faut en changer.
+  const planExpired = !isPlanAvailable(subscription.plan);
+  const expiredNotice = planExpired && (
+    <Alert variant="destructive" className="mb-6">
+      <AlertDescription>{planUnavailableMessage(subscription.plan)}</AlertDescription>
+    </Alert>
+  );
+  const changeOffer = (
+    <details
+      id="changer-offre"
+      open={planExpired}
+      className="group mt-10 border-t border-border pt-6"
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-navy-mid hover:text-navy">
+        Changer d&apos;offre
+        <span className="text-xs font-normal text-text-muted group-open:hidden">
+          Offre actuelle : {cleanPlanName(subscription.plan.name)}
+        </span>
+      </summary>
+      <div className="mt-4">
+        <PlanPicker
+          compact
+          companyId={company.id}
+          plans={allPlans}
+          currentPlanId={subscription.planId}
+          initialPlanId={initialPlanId}
+          liveEurToArRate={liveEurToArRate}
+        />
+      </div>
+    </details>
+  );
+
+  // 23 oct. 2026 — préinscription : offre choisie, effectif déclaré, aucun
+  // paiement (donc rien envoyé à Evolia) avant la date d'ouverture.
+  const preregistration = await getPreregistrationStatus();
+  if (preregistration.active && preregistration.paymentsOpenAt) {
+    return (
+      <JourneyShell
+        current="paiement"
+        title="Votre préinscription est enregistrée"
+        subtitle={`Aucun paiement n'est demandé pour l'instant. Les paiements ouvriront le ${formatDateFr(preregistration.paymentsOpenAt)} : vous recevrez un e-mail ce jour-là pour finaliser votre inscription.`}
+        card={card}
+        headerAction={signOut}
+      >
+        {expiredNotice}
+        <div className="flex flex-col gap-5 rounded-lg border border-border p-5">
+          <p className="text-sm text-text-mid">
+            Offre choisie :{" "}
+            <strong className="font-semibold text-navy">
+              {cleanPlanName(subscription.plan.name)}
+            </strong>
+            {subscription.plan.pricingMode !== "PER_PARTICIPANT" &&
+              subscription.plan.maxTeamMembers != null &&
+              ` · ${pluralize(subscription.plan.maxTeamMembers, "participant")} inclus`}
+            .
+          </p>
+          {subscription.plan.pricingMode === "PER_PARTICIPANT" && (
+            <PreregistrationParticipants
+              companySubscriptionId={subscription.id}
+              minParticipants={subscription.plan.minParticipants}
+              initialCount={subscription.declaredParticipants}
+            />
+          )}
+        </div>
+        {changeOffer}
+      </JourneyShell>
+    );
+  }
+
   return (
     <JourneyShell
       current="paiement"
@@ -239,37 +313,24 @@ export default async function CompanyPaymentPage(props: {
       card={card}
       headerAction={signOut}
     >
-      <PaymentProofForm
-        companyId={company.id}
-        companySubscriptionId={subscription.id}
-        planId={subscription.planId}
-        priceAr={subscription.plan.priceAr}
-        priceEur={subscription.plan.priceEur}
-        minParticipants={subscription.plan.minParticipants}
-        pricingMode={subscription.plan.pricingMode}
-        maxTeamMembers={subscription.plan.maxTeamMembers}
-        groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
-        liveEurToArRate={liveEurToArRate}
-      />
+      {expiredNotice}
+      {!planExpired && (
+        <PaymentProofForm
+          initialDeclaredParticipants={subscription.declaredParticipants}
+          companyId={company.id}
+          companySubscriptionId={subscription.id}
+          planId={subscription.planId}
+          priceAr={subscription.plan.priceAr}
+          priceEur={subscription.plan.priceEur}
+          minParticipants={subscription.plan.minParticipants}
+          pricingMode={subscription.plan.pricingMode}
+          maxTeamMembers={subscription.plan.maxTeamMembers}
+          groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
+          liveEurToArRate={liveEurToArRate}
+        />
+      )}
 
-      <details id="changer-offre" className="group mt-10 border-t border-border pt-6">
-        <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-navy-mid hover:text-navy">
-          Changer d&apos;offre
-          <span className="text-xs font-normal text-text-muted group-open:hidden">
-            Offre actuelle : {cleanPlanName(subscription.plan.name)}
-          </span>
-        </summary>
-        <div className="mt-4">
-          <PlanPicker
-            compact
-            companyId={company.id}
-            plans={allPlans}
-            currentPlanId={subscription.planId}
-            initialPlanId={initialPlanId}
-            liveEurToArRate={liveEurToArRate}
-          />
-        </div>
-      </details>
+      {changeOffer}
     </JourneyShell>
   );
 }

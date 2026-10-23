@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, AdminAccessError } from "@/lib/admin-auth";
 import { getPlanShareUrl } from "@/lib/plan-share";
 import { PlanForm } from "@/components/admin/plans/plan-form";
+import { availableUntilToDay } from "@/lib/plan-availability";
 import { PlanShareButton } from "@/components/admin/plans/plan-share-button";
 
 export const metadata: Metadata = { title: "Admin — Éditer une offre" };
@@ -19,7 +20,10 @@ export default async function EditPlanPage(props: { params: Promise<{ id: string
     throw err;
   }
 
-  const plan = await prisma.plan.findUnique({ where: { id: params.id } });
+  const plan = await prisma.plan.findUnique({
+    where: { id: params.id },
+    include: { event: { select: { timezone: true } } },
+  });
   if (!plan) notFound();
 
   const shareUrl = plan.isActive && plan.isSelfService ? getPlanShareUrl(plan.slug) : null;
@@ -60,6 +64,7 @@ export default async function EditPlanPage(props: { params: Promise<{ id: string
           isUpsell: plan.isUpsell,
           displayOrder: plan.displayOrder,
           eventId: plan.eventId ?? "",
+          availableUntil: availableUntilToDay(plan.availableUntil, plan.event?.timezone),
         }}
       />
     </div>

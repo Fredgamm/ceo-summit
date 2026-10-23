@@ -10,6 +10,8 @@ import { getPlanShareUrl } from "@/lib/plan-share";
 import { formatPlanPrice } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { isPlanAvailable } from "@/lib/plan-availability";
+import { formatDateFr } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PlanAdminActions } from "@/components/admin/plans/plan-admin-actions";
 import { PlanShareButton } from "@/components/admin/plans/plan-share-button";
@@ -121,6 +123,16 @@ export default async function AdminPlansPage(props: {
                     <Badge variant={plan.isActive ? "active" : "draft"}>
                       {plan.isActive ? "Active" : "Inactive"}
                     </Badge>
+                    {plan.availableUntil &&
+                      (isPlanAvailable(plan) ? (
+                        <span className="mt-1 block text-xs text-text-muted">
+                          jusqu&apos;au {formatDateFr(plan.availableUntil)}
+                        </span>
+                      ) : (
+                        <Badge variant="refused" className="mt-1">
+                          Expirée le {formatDateFr(plan.availableUntil)}
+                        </Badge>
+                      ))}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">

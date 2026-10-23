@@ -123,7 +123,11 @@ export default async function CompanyProfilePage(props: {
   const usedSeats = isCompanyAdmin ? await countUsedSeats(company) : 0;
   const upsellPlans = isCompanyAdmin
     ? await prisma.plan.findMany({
-        where: UPSELL_ELIGIBLE_WHERE,
+        where: {
+          ...UPSELL_ELIGIBLE_WHERE,
+          // 23 oct. 2026 — offre supplément dont la date limite est passée : plus proposée.
+          AND: [{ OR: [{ availableUntil: null }, { availableUntil: { gte: new Date() } }] }],
+        },
         orderBy: { displayOrder: "asc" },
       })
     : [];

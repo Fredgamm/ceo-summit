@@ -49,6 +49,7 @@ export function PaymentProofForm({
   pricingMode,
   maxTeamMembers,
   groupPlans,
+  initialDeclaredParticipants,
   liveEurToArRate,
 }: {
   companyId: string;
@@ -74,6 +75,8 @@ export function PaymentProofForm({
    * faut y basculer automatiquement (voir handleDeclaredParticipantsBlur).
    */
   groupPlans: Plan[];
+  /** Effectif déclaré pendant la préinscription, repris comme valeur de départ. */
+  initialDeclaredParticipants?: number | null;
   /** Cours du jour, pour afficher en euros une offre sans prix en €. */
   liveEurToArRate: number;
 }) {
@@ -82,7 +85,7 @@ export function PaymentProofForm({
   const [method, setMethod] = React.useState<PaymentMethod>("VIREMENT");
   const [comment, setComment] = React.useState("");
   const [declaredParticipants, setDeclaredParticipants] = React.useState(
-    String(minParticipants ?? 1)
+    String(initialDeclaredParticipants ?? minParticipants ?? 1)
   );
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);

@@ -73,6 +73,14 @@ export const planFormSchema = z
     /** Achetable en quantité comme supplément d'un abonnement déjà actif (ex. Executive Pass). */
     isUpsell: z.coerce.boolean().default(false),
     displayOrder: z.coerce.number().int().default(0),
+    /** 23 oct. 2026 — « 2026-12-31 », dernier jour de disponibilité ; vide = sans limite. */
+    availableUntil: z
+      .string()
+      .trim()
+      .optional()
+      .nullable()
+      .transform((v) => v || null)
+      .refine((v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v), "Date limite invalide."),
     /**
      * Intégration Evolia (8 oct. 2026, module 18 §4.9) — événement auquel
      * l'offre donne accès (« CEO Summit 2026 »). Vide = offre sans événement.

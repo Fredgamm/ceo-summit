@@ -28,6 +28,16 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
+// Pas de préinscription par défaut : le paiement est ouvert.
+vi.mock("@/lib/preregistration", () => ({
+  getPreregistrationStatus: vi.fn(async () => ({
+    paymentsOpenOn: null,
+    paymentsOpenAt: null,
+    active: false,
+    openEmailSentAt: null,
+  })),
+  paymentsClosedMessage: () => "Les paiements ouvrent le 15 janvier 2027.",
+}));
 vi.mock("@/lib/evolia", () => ({
   pushRegistrationToEvolia: vi.fn().mockResolvedValue(true),
   evoliaPaymentUrl: (ref: string) => `https://evolia.test/pay/${ref}`,
@@ -37,6 +47,7 @@ import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { prisma } from "@/lib/prisma";
 import { pushRegistrationToEvolia } from "@/lib/evolia";
+import { getPreregistrationStatus } from "@/lib/preregistration";
 import {
   selectPlan,
   submitPaymentProof,
@@ -212,6 +223,43 @@ describe("submitPaymentProof", () => {
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/Confirmez d'abord votre adresse/);
     expect(prisma.companySubscription.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("refuses any payment during the preregistration (nothing reaches Evolia)", async () => {
+    vi.mocked(getPreregistrationStatus).mockResolvedValueOnce({
+      paymentsOpenOn: "2027-01-15",
+      paymentsOpenAt: new Date("2027-01-14T21:00:00Z"),
+      active: true,
+      openEmailSentAt: null,
+    });
+
+    const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "CARTE_BANCAIRE" });
+
+    expect(result).toEqual({ success: false, error: "Les paiements ouvrent le 15 janvier 2027." });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(pushRegistrationToEvolia).not.toHaveBeenCalled();
+  });
+
+  it("refuses to pay an offer whose availability date has passed", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValueOnce({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: {
+        name: "Early Bird",
+        priceAr: 2_250_000,
+        minParticipants: 1,
+        pricingMode: "PER_PARTICIPANT",
+        availableUntil: new Date("2026-10-01T20:59:59Z"),
+      },
+    } as never);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/n'est plus disponible depuis le/);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("creates the payment (amount computed from the declared count × unit price) and flips the subscription to PENDING_REVIEW", async () => {

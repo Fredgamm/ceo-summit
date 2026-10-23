@@ -16,6 +16,7 @@ import BroadcastEmail from "@/emails/broadcast-email";
 import { render, toPlainText } from "@react-email/render";
 import { getBrevoConfig, isBrevoReady, sendBrevoBatch } from "@/lib/brevo";
 import { CEO_SUMMIT_CONTACT } from "@/lib/ceo-summit-contact";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 /**
  * Sans Brevo, envois SMTP par petits paquets : 1000 connexions simultanées
@@ -23,23 +24,6 @@ import { CEO_SUMMIT_CONTACT } from "@/lib/ceo-summit-contact";
  * se faisaient refuser ou classer en spam.
  */
 const SMTP_CONCURRENCY = 5;
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 

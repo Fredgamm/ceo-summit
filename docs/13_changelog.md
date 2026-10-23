@@ -6,6 +6,25 @@
 
 ---
 
+## 2026-10-23 — Préinscription, dates limites des offres, coordonnées bancaires
+
+Pas encore déployé à la date de cette entrée.
+
+### Ajouté
+
+- **Préinscription** (Admin › Paramètres › Tarifs & Règles) : un jour d'ouverture des paiements. D'ici là, une entreprise crée son compte, choisit son offre et, pour une offre groupement, indique son nombre de participants, **sans payer**. L'étape Paiement affiche « Votre préinscription est enregistrée » avec la date d'ouverture ; tout paiement est refusé côté serveur. **Rien n'est envoyé à Evolia** avant le paiement : leur intégration ne change pas.
+  - Le cadre affiche le nombre d'entreprises en attente de paiement et, une fois les paiements ouverts, un bouton « Envoyer l'e-mail d'ouverture » (modèle « Préinscription — ouverture des paiements », modifiable dans Admin › E-mails).
+  - Pendant la préinscription, le mail de bienvenue du gestionnaire est remplacé par « Bienvenue gestionnaire — préinscription » (pas de « procédez au paiement »).
+- **Date limite par offre** (« Disponible jusqu'au », Admin › Offres) : après ce jour (fin de journée, heure de l'événement), l'offre n'est plus proposée, ne peut plus être choisie et ne peut plus être payée, même par une entreprise qui l'avait choisie. Celle-ci est invitée à changer d'offre. La liste des offres de l'admin affiche la date, ou « Expirée ». Nouvelle colonne `Plan.availableUntil` (migration `20261023100000_plan_available_until`).
+- **Coordonnées bancaires BECOM** (BRED Madagasikara : IBAN, BIC, RIB, avec copie) affichées pour un virement ou un chèque, au paiement de l'offre et à l'achat de places supplémentaires.
+
+### Données corrigées (préprod et prod)
+
+- Événement : « CEO Summit Indian Ocean, 3e édition », 11 mars 2027 08:00 → 12 mars 2027 22:00, Le Moca, Domaine de Montgaillard, La Réunion, fuseau La Réunion.
+- Offres de groupe renommées « Accès + 10 participants » et « Accès + 30 participants ».
+
+---
+
 ## 2026-10-21 — Evolia configurable depuis l'admin, navigation et mobile
 
 Pas encore déployé à la date de cette entrée.

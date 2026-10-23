@@ -13,7 +13,8 @@ import { MembershipCard, type MembershipCardStatus } from "@/components/onboardi
 import { Button } from "@/components/ui/button";
 import { AriaryHint } from "@/components/ui/ariary-hint";
 import { unitPriceAr } from "@/lib/company-payment-amount";
-import { cn, formatEuro, planPriceEur } from "@/lib/utils";
+import { cn, formatDateFr, formatEuro, planPriceEur } from "@/lib/utils";
+import { getPreregistrationStatus } from "@/lib/preregistration";
 import { getEurToArRate } from "@/lib/currency-conversion";
 
 export const metadata: Metadata = { title: "Accès en attente" };
@@ -118,18 +119,36 @@ export default async function PaymentPendingPage() {
     );
   }
 
+  // 23 oct. 2026 — préinscription : rien à régler avant la date d'ouverture.
+  const preregistration = subscription ? await getPreregistrationStatus() : null;
+  const preregistered = Boolean(preregistration?.active && preregistration.paymentsOpenAt);
+
   if (company) {
     return (
       <JourneyShell
         current={subscription ? "paiement" : "offre"}
-        title={subscription ? "Il reste à régler votre adhésion" : "Choisissez votre offre"}
-        subtitle="L'accès complet à la plateforme s'active dès la confirmation du paiement."
+        title={
+          preregistered
+            ? "Votre préinscription est enregistrée"
+            : subscription
+              ? "Il reste à régler votre adhésion"
+              : "Choisissez votre offre"
+        }
+        subtitle={
+          preregistered
+            ? `Les paiements ouvriront le ${formatDateFr(preregistration!.paymentsOpenAt!)}. L'accès complet à la plateforme s'active dès la confirmation du paiement.`
+            : "L'accès complet à la plateforme s'active dès la confirmation du paiement."
+        }
         card={card}
         headerAction={signOut}
       >
         <Button asChild size="lg" className="w-full justify-center gap-2">
           <Link href="/entreprise/paiement">
-            {subscription ? "Régler mon adhésion" : "Choisir une offre"}{" "}
+            {preregistered
+              ? "Voir ma préinscription"
+              : subscription
+                ? "Régler mon adhésion"
+                : "Choisir une offre"}{" "}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>

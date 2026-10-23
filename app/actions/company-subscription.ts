@@ -19,6 +19,8 @@ import { getEurToArRate } from "@/lib/currency-conversion";
 import { CANCELLED_BY_COMPANY_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 import { cancelPendingEvoliaPaymentCore } from "@/lib/payment-confirmations";
+import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
+import { getPreregistrationStatus, paymentsClosedMessage } from "@/lib/preregistration";
 import { formatEuro } from "@/lib/utils";
 import { PLATFORM_ADMIN_NO_PURCHASE_MESSAGE } from "@/lib/platform-admin-purchase";
 
@@ -107,6 +109,7 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
   if (!plan || !plan.isActive || !plan.isSelfService || plan.isUpsell) {
     return { success: false, error: "Offre invalide." };
   }
+  if (!isPlanAvailable(plan)) return { success: false, error: planUnavailableMessage(plan) };
 
   /**
    * Audit (25 septembre 2026) — `extraSeats` remis à 0 : changer d'offre ou
@@ -128,6 +131,51 @@ export async function selectPlan(companyId: string, planId: string): Promise<Act
   });
 
   revalidatePath(`/entreprises/${companyId}`);
+  revalidatePath("/entreprise/paiement");
+  return { success: true, data: undefined };
+}
+
+/**
+ * 23 oct. 2026 — préinscription : le gérant d'une offre groupement indique
+ * dès maintenant combien de personnes participeront (repris au paiement).
+ * Rien n'est payé ni envoyé à Evolia.
+ */
+export async function savePreregisteredParticipants(
+  companySubscriptionId: string,
+  count: number
+): Promise<ActionResult> {
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
+
+  const subscription = await prisma.companySubscription.findUnique({
+    where: { id: companySubscriptionId },
+    include: { company: true, plan: true },
+  });
+  if (!subscription) return { success: false, error: "Abonnement introuvable." };
+  if (subscription.company.companyAdminId !== viewer.id) {
+    return { success: false, error: "Seul le gérant de l'entreprise peut modifier ce nombre." };
+  }
+  if (subscription.status !== "PENDING_PAYMENT") {
+    return { success: false, error: "Cette inscription n'est plus modifiable ici." };
+  }
+  if (subscription.plan.pricingMode !== "PER_PARTICIPANT") {
+    return { success: false, error: "Le nombre de places de cette offre est fixe." };
+  }
+  if (!Number.isInteger(count) || count < 1 || count > 1000) {
+    return { success: false, error: "Indiquez un nombre de participants entre 1 et 1000." };
+  }
+  if (!meetsMinParticipants(subscription.plan, count)) {
+    return {
+      success: false,
+      error: `Cette offre démarre à ${subscription.plan.minParticipants} participants.`,
+    };
+  }
+
+  await prisma.companySubscription.update({
+    where: { id: companySubscriptionId },
+    data: { declaredParticipants: count },
+  });
   revalidatePath("/entreprise/paiement");
   return { success: true, data: undefined };
 }
@@ -156,6 +204,15 @@ export async function submitPaymentProof(
       success: false,
       error: "Cet abonnement n'est pas en attente de paiement.",
     };
+  }
+  // 23 oct. 2026 — préinscription : aucun paiement (donc aucun envoi à
+  // Evolia) avant la date d'ouverture.
+  const preregistration = await getPreregistrationStatus();
+  if (preregistration.active) {
+    return { success: false, error: paymentsClosedMessage(preregistration) };
+  }
+  if (!isPlanAvailable(subscription.plan)) {
+    return { success: false, error: planUnavailableMessage(subscription.plan) };
   }
 
   const parsed = submitPaymentProofSchema.safeParse(input);
@@ -390,6 +447,9 @@ export async function purchaseUpsellSeats(
   }
 
   const upsellPlan = await prisma.plan.findUnique({ where: { id: f.upsellPlanId } });
+  if (upsellPlan && !isPlanAvailable(upsellPlan)) {
+    return { success: false, error: planUnavailableMessage(upsellPlan) };
+  }
   if (!upsellPlan || !upsellPlan.isActive || !isUpsellEligible(upsellPlan)) {
     return { success: false, error: "Offre supplément invalide." };
   }

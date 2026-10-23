@@ -377,6 +377,11 @@ model Plan {
   hasUnlimitedCredits  Boolean          @default(false)
   rank                 Int
   eligibilityNote      String?          @db.Text
+  /// 23 oct. 2026 — dernier instant où l'offre peut être choisie ou payée
+  /// (fin de journée dans le fuseau de son événement, lib/plan-availability.ts).
+  /// `null` = sans limite. Ex. Early Bird jusqu'au 31 déc. 2026, fin des
+  /// ventes au 28 fév. 2027.
+  availableUntil       DateTime?
   isActive             Boolean          @default(true)
   /// Phase 2ter (1er août 2026) — offres de sponsoring créées pour le suivi
   /// admin mais sans parcours self-service (aucun prix public, deal négocié
