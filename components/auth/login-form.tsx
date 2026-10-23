@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { z } from "zod";
-import { Lock } from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   ACCOUNT_EXPIRED: "Votre adhésion a expiré. Contactez l'équipe CEO Summit pour la renouveler.",
   ACCOUNT_PENDING_ACTIVATION: "Ce compte n'a pas encore été activé. Contactez l'équipe CEO Summit.",
   RATE_LIMITED: "Trop de tentatives de connexion. Réessayez dans quelques minutes.",
+  NETWORK: "La connexion n'a pas abouti. Vérifiez votre réseau puis réessayez.",
 };
 
 /**
@@ -75,10 +76,24 @@ export function LoginForm() {
   const [password, setPassword] = React.useState("");
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [formError, setFormError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  // 23 oct. 2026 — « signing-in » pendant la vérification, « redirecting »
+  // une fois connecté, jusqu'à l'arrivée sur la page suivante : le bouton
+  // redevenait « Se connecter » page encore en chargement, et l'on recliquait
+  // en croyant que rien ne s'était passé.
+  const [phase, setPhase] = React.useState<"idle" | "signing-in" | "redirecting">("idle");
+  const loading = phase !== "idle";
+
+  // Filet de sécurité : si la page suivante n'arrive pas, le bouton redevient
+  // utilisable plutôt que de rester bloqué.
+  React.useEffect(() => {
+    if (phase !== "redirecting") return;
+    const timer = setTimeout(() => setPhase("idle"), 15_000);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setFormError(null);
     setFieldErrors({});
 
@@ -92,7 +107,7 @@ export function LoginForm() {
       return;
     }
 
-    setLoading(true);
+    setPhase("signing-in");
     try {
       const result = await signIn("credentials", {
         email: parsed.data.email,
@@ -102,13 +117,18 @@ export function LoginForm() {
 
       if (result?.error) {
         setFormError(result.error);
+        setPhase("idle");
         return;
       }
 
+      // Le bouton reste occupé jusqu'au départ de la page.
+      setPhase("redirecting");
       router.push(callbackUrl);
       router.refresh();
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error("[login] sign-in failed", err);
+      setFormError("NETWORK");
+      setPhase("idle");
     }
   }
 
@@ -170,8 +190,19 @@ export function LoginForm() {
           </Alert>
         )}
 
-        <Button type="submit" size="lg" className="mt-1 w-full justify-center" disabled={loading}>
-          {loading ? "Connexion…" : "Se connecter"}
+        <Button
+          type="submit"
+          size="lg"
+          className="mt-1 w-full justify-center"
+          disabled={loading}
+          aria-busy={loading}
+        >
+          {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          {phase === "redirecting"
+            ? "Ouverture de votre espace…"
+            : phase === "signing-in"
+              ? "Connexion…"
+              : "Se connecter"}
         </Button>
       </form>
 

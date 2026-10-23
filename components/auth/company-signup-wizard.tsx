@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
 import type { Plan } from "@prisma/client";
 
 import { createCompanyAccount } from "@/app/actions/company-account";
@@ -69,6 +69,7 @@ export function CompanySignupWizard({
   const [country, setCountry] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [redirecting, setRedirecting] = React.useState(false);
 
   const selectedPlan = plans.find((p) => p.id === planId) ?? intendedPlan ?? null;
 
@@ -181,8 +182,13 @@ export function CompanySignupWizard({
         router.push(`/login?callbackUrl=${encodeURIComponent("/entreprise/paiement")}`);
         return;
       }
+      // 23 oct. 2026 — le bouton reste occupé jusqu'au départ de la page.
+      setRedirecting(true);
       router.push("/entreprise/paiement");
       router.refresh();
+    } catch (err) {
+      console.error("[signup] failed", err);
+      setError("La création du compte n'a pas abouti. Vérifiez votre réseau puis réessayez.");
     } finally {
       setLoading(false);
     }
@@ -326,9 +332,21 @@ export function CompanySignupWizard({
           </Alert>
         )}
 
-        <Button type="submit" size="lg" className="w-full justify-center gap-2" disabled={loading}>
-          {loading ? (
-            "Création du compte…"
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full justify-center gap-2"
+          disabled={loading || redirecting}
+          aria-busy={loading || redirecting}
+        >
+          {redirecting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Ouverture du paiement…
+            </>
+          ) : loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Création du compte…
+            </>
           ) : (
             <>
               Continuer vers le paiement <ArrowRight className="h-4 w-4" />
