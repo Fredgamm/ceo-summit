@@ -34,9 +34,12 @@ export function UpsellPurchaseForm({
   companySubscriptionId,
   upsellPlans,
   liveEurToArRate,
+  evoliaAvailable = true,
 }: {
   companySubscriptionId: string;
   upsellPlans: Plan[];
+  /** 23 oct. 2026 — Evolia pas encore activé : virement et chèque seulement. */
+  evoliaAvailable?: boolean;
   /**
    * Rapport QA du 30 sept. 2026 (§10) — cours du jour EUR→Ar, fourni par la
    * page serveur. N'affecte jamais le montant réellement facturé.
@@ -265,7 +268,9 @@ export function UpsellPurchaseForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {PAYMENT_METHOD_OPTIONS.map((opt) => (
+            {PAYMENT_METHOD_OPTIONS.filter(
+              (opt) => evoliaAvailable || !isEvoliaPaymentMethod(opt.value)
+            ).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>

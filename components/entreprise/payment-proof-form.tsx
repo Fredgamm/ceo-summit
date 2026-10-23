@@ -50,6 +50,7 @@ export function PaymentProofForm({
   maxTeamMembers,
   groupPlans,
   initialDeclaredParticipants,
+  evoliaAvailable = true,
   liveEurToArRate,
 }: {
   companyId: string;
@@ -77,6 +78,11 @@ export function PaymentProofForm({
   groupPlans: Plan[];
   /** Effectif déclaré pendant la préinscription, repris comme valeur de départ. */
   initialDeclaredParticipants?: number | null;
+  /**
+   * 23 oct. 2026 — Evolia activé : carte et Mobile Money proposés. Sinon,
+   * virement et chèque seulement (rien ne part vers Evolia avant l'activation).
+   */
+  evoliaAvailable?: boolean;
   /** Cours du jour, pour afficher en euros une offre sans prix en €. */
   liveEurToArRate: number;
 }) {
@@ -346,36 +352,38 @@ export function PaymentProofForm({
           aria-label="Mode de paiement"
           className="grid grid-cols-1 gap-3 sm:grid-cols-2"
         >
-          {METHOD_TILES.map((tile) => {
-            const selected = method === tile.value;
-            return (
-              <button
-                key={tile.value}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => setMethod(tile.value)}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border p-4 text-left transition",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2",
-                  selected
-                    ? "border-navy bg-navy-light/40 ring-1 ring-navy"
-                    : "border-border hover:border-navy-mid"
-                )}
-              >
-                <tile.icon
+          {METHOD_TILES.filter((tile) => evoliaAvailable || !isEvoliaPaymentMethod(tile.value)).map(
+            (tile) => {
+              const selected = method === tile.value;
+              return (
+                <button
+                  key={tile.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setMethod(tile.value)}
                   className={cn(
-                    "mt-0.5 h-5 w-5 shrink-0",
-                    selected ? "text-navy" : "text-text-muted"
+                    "flex items-start gap-3 rounded-lg border p-4 text-left transition",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2",
+                    selected
+                      ? "border-navy bg-navy-light/40 ring-1 ring-navy"
+                      : "border-border hover:border-navy-mid"
                   )}
-                />
-                <span>
-                  <span className="block font-semibold text-navy">{tile.label}</span>
-                  <span className="mt-0.5 block text-xs text-text-muted">{tile.hint}</span>
-                </span>
-              </button>
-            );
-          })}
+                >
+                  <tile.icon
+                    className={cn(
+                      "mt-0.5 h-5 w-5 shrink-0",
+                      selected ? "text-navy" : "text-text-muted"
+                    )}
+                  />
+                  <span>
+                    <span className="block font-semibold text-navy">{tile.label}</span>
+                    <span className="mt-0.5 block text-xs text-text-muted">{tile.hint}</span>
+                  </span>
+                </button>
+              );
+            }
+          )}
         </div>
         <BankDetails method={method} className="mt-3" />
       </section>

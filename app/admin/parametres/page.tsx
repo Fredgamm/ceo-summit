@@ -131,7 +131,10 @@ export default async function AdminParametresPage(props: {
 
     tabContent = (
       <div className="flex flex-col gap-4">
-        <EvoliaSettings status={evoliaStatus} />
+        <EvoliaSettings
+          status={evoliaStatus}
+          heldCount={await prisma.evoliaPush.count({ where: { status: "HELD" } })}
+        />
         <BrevoSettings status={brevoStatus} />
         <IntegrationCard
           title="Confirmation de paiement — webhook entrant"

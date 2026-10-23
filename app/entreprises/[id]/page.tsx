@@ -5,6 +5,7 @@ import { ChevronDown, Globe, Handshake } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isEvoliaLive } from "@/lib/evolia-config";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
 import { getViewerTierFromCompany, VIEWER_TIER_INCLUDE } from "@/lib/plan-access";
@@ -503,6 +504,7 @@ export default async function CompanyProfilePage(props: {
                         companySubscriptionId={company.subscription.id}
                         upsellPlans={upsellPlans}
                         liveEurToArRate={liveEurToArRate}
+                        evoliaAvailable={await isEvoliaLive()}
                       />
                     </div>
                   )

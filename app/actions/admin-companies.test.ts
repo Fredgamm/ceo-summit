@@ -41,6 +41,7 @@ vi.mock("@/lib/event-registration-lock", async (importOriginal) => {
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/evolia-config", () => ({ isEvoliaLive: vi.fn(async () => true) }));
 vi.mock("@/lib/evolia", () => ({
   pushRegistrationToEvolia: vi.fn().mockResolvedValue(undefined),
   pushParticipantsToEvolia: vi.fn().mockResolvedValue(undefined),

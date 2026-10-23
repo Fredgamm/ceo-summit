@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmAdminPassword } from "@/lib/admin-reauth";
+import { releaseHeldEvoliaPushes } from "@/lib/evolia";
 import {
   EVOLIA_SETTING_KEYS,
   PAYMENT_URL_PLACEHOLDER,
@@ -73,15 +74,18 @@ const evoliaSettingsSchema = z.object({
   ),
   secret: secretSchema,
   clearSecret: z.boolean(),
+  /** 23 oct. 2026 — clé de production validée : envois et carte / Mobile Money activés. */
+  live: z.boolean(),
   currentPassword: z.string().min(1, "Confirmez avec votre mot de passe."),
 });
 
 export type EvoliaSettingsInput = z.infer<typeof evoliaSettingsSchema>;
 
-const FIELD_LABEL: Record<EvoliaUrlField | "secret", string> = {
+const FIELD_LABEL: Record<EvoliaUrlField | "secret" | "live", string> = {
   registrationUrl: "adresse d'inscription",
   paymentUrl: "lien de paiement",
   secret: "clé Evolia",
+  live: "activation d'Evolia",
 };
 
 /**
@@ -90,9 +94,13 @@ const FIELD_LABEL: Record<EvoliaUrlField | "secret", string> = {
  * le mot de passe : ces réglages décident où partent les données des
  * participants et quels paiements sont acceptés comme confirmés.
  */
-export async function updateEvoliaSettings(
-  input: EvoliaSettingsInput
-): Promise<ActionResult<{ changed: string[] }>> {
+export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
+  ActionResult<{
+    changed: string[];
+    /** Envois retenus transmis à l'activation. */
+    released: { sent: number; failed: number; skipped: number } | null;
+  }>
+> {
   const { userId } = await requireAdmin("parametres");
 
   const parsed = evoliaSettingsSchema.safeParse(input);
@@ -106,7 +114,7 @@ export async function updateEvoliaSettings(
 
   const current = await getEvoliaSettingsStatus();
   const writes: Prisma.PrismaPromise<unknown>[] = [];
-  const changed: (EvoliaUrlField | "secret")[] = [];
+  const changed: (EvoliaUrlField | "secret" | "live")[] = [];
 
   for (const field of ["registrationUrl", "paymentUrl"] as const) {
     const key = EVOLIA_SETTING_KEYS[field];
@@ -141,7 +149,21 @@ export async function updateEvoliaSettings(
     changed.push("secret");
   }
 
-  if (changed.length === 0) return { success: true, data: { changed: [] } };
+  if (data.live !== current.live) {
+    const liveKey = EVOLIA_SETTING_KEYS.live;
+    writes.push(
+      data.live
+        ? prisma.platformSetting.upsert({
+            where: { key: liveKey },
+            create: { key: liveKey, value: "true" },
+            update: { value: "true" },
+          })
+        : prisma.platformSetting.deleteMany({ where: { key: liveKey } })
+    );
+    changed.push("live");
+  }
+
+  if (changed.length === 0) return { success: true, data: { changed: [], released: null } };
 
   await prisma.$transaction([
     ...writes,
@@ -158,11 +180,16 @@ export async function updateEvoliaSettings(
             ? { registrationUrl: data.registrationUrl || null }
             : {}),
           ...(changed.includes("paymentUrl") ? { paymentUrl: data.paymentUrl || null } : {}),
+          ...(changed.includes("live") ? { live: data.live } : {}),
         },
       },
     }),
   ]);
 
+  // Activation : tout ce qui a été retenu part maintenant chez Evolia.
+  const released = changed.includes("live") && data.live ? await releaseHeldEvoliaPushes() : null;
+
   revalidatePath("/admin/parametres");
-  return { success: true, data: { changed: changed.map((f) => FIELD_LABEL[f]) } };
+  revalidatePath("/entreprise/paiement");
+  return { success: true, data: { changed: changed.map((f) => FIELD_LABEL[f]), released } };
 }

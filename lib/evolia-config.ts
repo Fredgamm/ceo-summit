@@ -30,6 +30,12 @@ export const EVOLIA_SETTING_KEYS = {
   registrationUrl: "evolia.registration_url",
   paymentUrl: "evolia.payment_url",
   secret: "evolia.webhook_secret",
+  /**
+   * 23 oct. 2026 — « true » une fois la clé de production Evolia validée.
+   * D'ici là, rien ne part vers Evolia (envois retenus, lib/evolia.ts) et la
+   * carte / Mobile Money, qui passent par eux, ne sont pas proposés.
+   */
+  live: "evolia.live",
 } as const;
 
 export type EvoliaUrlField = "registrationUrl" | "paymentUrl";
@@ -71,6 +77,7 @@ async function loadSettings() {
     adminSecret,
     secretUnreadable: Boolean(secretRow && !adminSecret),
     secretUpdatedAt: adminSecret ? (secretRow?.updatedAt ?? null) : null,
+    live: byKey.get(EVOLIA_SETTING_KEYS.live)?.value === "true",
   };
 }
 
@@ -81,6 +88,8 @@ export interface EvoliaConfig {
   outboundSecret: string | null;
   /** Vérifie leurs confirmations de paiement (webhook entrant). */
   inboundSecret: string | null;
+  /** Envois à Evolia et paiement par carte / Mobile Money activés. */
+  live: boolean;
 }
 
 /** Valeurs effectives, côté serveur uniquement (contient la clé en clair). */
@@ -91,7 +100,13 @@ export async function getEvoliaConfig(): Promise<EvoliaConfig> {
     paymentUrlTemplate: s.paymentUrl.value,
     outboundSecret: s.adminSecret ?? (process.env.EVOLIA_WEBHOOK_SECRET || null),
     inboundSecret: s.adminSecret ?? (process.env.PAYMENT_WEBHOOK_SECRET || null),
+    live: s.live,
   };
+}
+
+/** Evolia est activé : on lui envoie les inscriptions, la carte et le Mobile Money sont proposés. */
+export async function isEvoliaLive(): Promise<boolean> {
+  return (await loadSettings()).live;
 }
 
 export interface EvoliaSettingsStatus {
@@ -104,6 +119,7 @@ export interface EvoliaSettingsStatus {
     unreadable: boolean;
     updatedAt: string | null;
   };
+  live: boolean;
 }
 
 /** Ce que l'onglet Intégrations peut afficher : jamais la clé en clair. */
@@ -120,5 +136,6 @@ export async function getEvoliaSettingsStatus(): Promise<EvoliaSettingsStatus> {
       unreadable: s.secretUnreadable,
       updatedAt: s.secretUpdatedAt?.toISOString() ?? null,
     },
+    live: s.live,
   };
 }

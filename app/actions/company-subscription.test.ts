@@ -28,16 +28,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
-// Pas de préinscription par défaut : le paiement est ouvert.
-vi.mock("@/lib/preregistration", () => ({
-  getPreregistrationStatus: vi.fn(async () => ({
-    paymentsOpenOn: null,
-    paymentsOpenAt: null,
-    active: false,
-    openEmailSentAt: null,
-  })),
-  paymentsClosedMessage: () => "Les paiements ouvrent le 15 janvier 2027.",
-}));
+// Evolia activé par défaut : carte et Mobile Money disponibles.
+vi.mock("@/lib/evolia-config", () => ({ isEvoliaLive: vi.fn(async () => true) }));
 vi.mock("@/lib/evolia", () => ({
   pushRegistrationToEvolia: vi.fn().mockResolvedValue(true),
   evoliaPaymentUrl: (ref: string) => `https://evolia.test/pay/${ref}`,
@@ -47,7 +39,7 @@ import { requireViewer } from "@/lib/require-viewer";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { prisma } from "@/lib/prisma";
 import { pushRegistrationToEvolia } from "@/lib/evolia";
-import { getPreregistrationStatus } from "@/lib/preregistration";
+import { isEvoliaLive } from "@/lib/evolia-config";
 import {
   selectPlan,
   submitPaymentProof,
@@ -225,19 +217,24 @@ describe("submitPaymentProof", () => {
     expect(prisma.companySubscription.findUnique).not.toHaveBeenCalled();
   });
 
-  it("refuses any payment during the preregistration (nothing reaches Evolia)", async () => {
-    vi.mocked(getPreregistrationStatus).mockResolvedValueOnce({
-      paymentsOpenOn: "2027-01-15",
-      paymentsOpenAt: new Date("2027-01-14T21:00:00Z"),
-      active: true,
-      openEmailSentAt: null,
-    });
+  it("refuses a card payment while Evolia is not activated (nothing reaches Evolia)", async () => {
+    vi.mocked(isEvoliaLive).mockResolvedValueOnce(false);
 
     const result = await submitPaymentProof("sub_1", { ...VALID_INPUT, method: "CARTE_BANCAIRE" });
 
-    expect(result).toEqual({ success: false, error: "Les paiements ouvrent le 15 janvier 2027." });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/réglez par virement ou par chèque/);
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(pushRegistrationToEvolia).not.toHaveBeenCalled();
+  });
+
+  it("still accepts a bank transfer while Evolia is not activated", async () => {
+    vi.mocked(isEvoliaLive).mockResolvedValue(false);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(true);
+    vi.mocked(isEvoliaLive).mockResolvedValue(true);
   });
 
   it("refuses to pay an offer whose availability date has passed", async () => {

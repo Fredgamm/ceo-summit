@@ -4,11 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     companyPayment: { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
-    // Aucune configuration saisie dans /admin/parametres : repli sur les variables d'environnement.
-    platformSetting: { findMany: async () => [] },
+    // Evolia activé ; aucun autre réglage saisi : repli sur les variables d'environnement.
+    platformSetting: {
+      findMany: vi.fn(async () => [{ key: "evolia.live", value: "true", updatedAt: new Date() }]),
+    },
     company: { findUnique: vi.fn() },
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
+      findMany: vi.fn(),
       create: vi.fn().mockResolvedValue({ id: "push_1" }),
       findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn(),
@@ -23,6 +26,7 @@ import {
   evoliaPaymentUrl,
   pushParticipantsToEvolia,
   pushRegistrationToEvolia,
+  releaseHeldEvoliaPushes,
   signEvoliaBody,
 } from "./evolia";
 
@@ -435,5 +439,77 @@ describe("participant fields for the badges (20 oct. 2026)", () => {
     expect(Object.keys(participant).sort()).toEqual(
       ["email", "fullName", "isInitiator", "ticket", "title"].sort()
     );
+  });
+});
+
+describe("before Evolia is activated (23 oct. 2026)", () => {
+  it("records the push as held and sends nothing", async () => {
+    vi.mocked(prisma.platformSetting.findMany).mockResolvedValueOnce([]);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      payment({ method: "VIREMENT" }) as never
+    );
+
+    expect(await pushRegistrationToEvolia("payment_1")).toBe(false);
+
+    expect(prisma.evoliaPush.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ status: "HELD", event: "company.registration.pushed" }),
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("releases registrations first, then each company's latest participant list", async () => {
+    const at = (m: number) => new Date(Date.UTC(2026, 9, 23, 10, m));
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
+      {
+        id: "list_old",
+        companyId: "c1",
+        event: "company.participants.confirmed",
+        createdAt: at(1),
+      },
+      {
+        id: "reg_c1",
+        companyId: "c1",
+        event: "company.registration.pushed",
+        reference: "pay_ok",
+        createdAt: at(0),
+      },
+      {
+        id: "reg_cancelled",
+        companyId: "c2",
+        event: "company.registration.pushed",
+        reference: "pay_rejected",
+        createdAt: at(2),
+      },
+      {
+        id: "list_new",
+        companyId: "c1",
+        event: "company.participants.confirmed",
+        createdAt: at(3),
+      },
+    ] as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockImplementation((async ({
+      where,
+    }: {
+      where: { id: string };
+    }) => ({ status: where.id === "pay_rejected" ? "REJECTED" : "CONFIRMED" })) as never);
+    vi.mocked(prisma.evoliaPush.findUnique).mockImplementation((async ({
+      where,
+    }: {
+      where: { id: string };
+    }) => ({ id: where.id, payload: { event: "x" } })) as never);
+
+    const result = await releaseHeldEvoliaPushes();
+
+    expect(result).toEqual({ sent: 2, failed: 0, skipped: 2 });
+    const delivered = vi
+      .mocked(prisma.evoliaPush.update)
+      .mock.calls.filter(([args]) => args.data.status === "SENT")
+      .map(([args]) => args.where.id);
+    expect(delivered).toEqual(["reg_c1", "list_new"]);
+    const skipped = vi
+      .mocked(prisma.evoliaPush.update)
+      .mock.calls.filter(([args]) => args.data.status === "SKIPPED")
+      .map(([args]) => args.where.id);
+    expect(skipped).toEqual(["reg_cancelled", "list_old"]);
   });
 });

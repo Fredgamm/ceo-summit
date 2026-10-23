@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { isEvoliaLive } from "@/lib/evolia-config";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
 import { deliverEvoliaPush } from "@/lib/evolia";
@@ -199,6 +200,13 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
 
   const push = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
   if (!push) return { success: false, error: "Envoi introuvable." };
+  // 23 oct. 2026 — rien ne part avant l'activation d'Evolia (Paramètres › Intégrations).
+  if (!(await isEvoliaLive())) {
+    return {
+      success: false,
+      error: "Evolia n'est pas encore activé : cet envoi partira automatiquement à l'activation.",
+    };
+  }
 
   // Un paiement annulé ou refusé ne doit pas redevenir encaissable chez Evolia :
   // sa confirmation serait ensuite refusée par notre webhook.

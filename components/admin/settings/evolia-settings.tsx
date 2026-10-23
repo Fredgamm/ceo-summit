@@ -26,12 +26,20 @@ const SOURCE_LABEL: Record<SettingSource, string> = {
  * est en écriture seule : le serveur n'en renvoie que les 4 derniers
  * caractères, un champ vide conserve la clé actuelle.
  */
-export function EvoliaSettings({ status }: { status: EvoliaSettingsStatus }) {
+export function EvoliaSettings({
+  status,
+  heldCount,
+}: {
+  status: EvoliaSettingsStatus;
+  /** Envois retenus en attente de l'activation. */
+  heldCount: number;
+}) {
   const router = useRouter();
   const [registrationUrl, setRegistrationUrl] = React.useState(status.registrationUrl.value);
   const [paymentUrl, setPaymentUrl] = React.useState(status.paymentUrl.value);
   const [secret, setSecret] = React.useState("");
   const [clearSecret, setClearSecret] = React.useState(false);
+  const [live, setLive] = React.useState(status.live);
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
@@ -47,6 +55,7 @@ export function EvoliaSettings({ status }: { status: EvoliaSettingsStatus }) {
         paymentUrl,
         secret,
         clearSecret,
+        live,
         currentPassword,
       });
       if (!result.success) {
@@ -58,6 +67,19 @@ export function EvoliaSettings({ status }: { status: EvoliaSettingsStatus }) {
           ? `Configuration Evolia enregistrée (${result.data.changed.join(", ")}).`
           : "Aucune modification."
       );
+      const released = result.data.released;
+      if (released) {
+        toast.success(
+          `Evolia activé : ${released.sent} envoi(s) transmis${
+            released.skipped ? `, ${released.skipped} écarté(s)` : ""
+          }.`
+        );
+        if (released.failed > 0) {
+          toast.error(
+            `${released.failed} envoi(s) refusé(s) par Evolia : voir les fiches entreprises concernées.`
+          );
+        }
+      }
       setSecret("");
       setClearSecret(false);
       router.refresh();
@@ -72,8 +94,8 @@ export function EvoliaSettings({ status }: { status: EvoliaSettingsStatus }) {
     <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-white p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-navy">Evolia — inscriptions et paiements</h3>
-        <Badge variant={configured ? "active" : "pending"}>
-          {configured ? "● Connecté" : "Non configuré"}
+        <Badge variant={configured && status.live ? "active" : "pending"}>
+          {!configured ? "Non configuré" : status.live ? "● Activé" : "Envois retenus"}
         </Badge>
       </div>
       <p className="mt-1 text-xs text-text-muted">
@@ -143,6 +165,32 @@ export function EvoliaSettings({ status }: { status: EvoliaSettingsStatus }) {
               />
               Supprimer la clé saisie ici (revenir à la variable d&apos;environnement)
             </label>
+          )}
+        </div>
+
+        <div className="rounded-md border border-border p-3">
+          <label className="flex items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={live}
+              onChange={(e) => setLive(e.target.checked)}
+            />
+            <span>
+              <span className="font-semibold text-navy">
+                Evolia activé (clé de production validée)
+              </span>
+              <span className="mt-0.5 block text-xs text-text-muted">
+                Désactivé : rien n&apos;est envoyé à Evolia (inscriptions et listes de participants
+                sont retenues) et seuls le virement et le chèque sont proposés. À l&apos;activation,
+                tous les envois retenus partent chez Evolia.
+              </span>
+            </span>
+          </label>
+          {!status.live && heldCount > 0 && (
+            <p className="mt-2 text-xs font-semibold text-navy">
+              {heldCount} envoi(s) retenu(s) partiront à l&apos;activation.
+            </p>
           )}
         </div>
 

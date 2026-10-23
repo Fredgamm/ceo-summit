@@ -20,9 +20,13 @@ import { CANCELLED_BY_COMPANY_REASON, isEvoliaPaymentMethod } from "@/lib/paymen
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 import { cancelPendingEvoliaPaymentCore } from "@/lib/payment-confirmations";
 import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
-import { getPreregistrationStatus, paymentsClosedMessage } from "@/lib/preregistration";
+import { isEvoliaLive } from "@/lib/evolia-config";
 import { formatEuro } from "@/lib/utils";
 import { PLATFORM_ADMIN_NO_PURCHASE_MESSAGE } from "@/lib/platform-admin-purchase";
+
+/** 23 oct. 2026 — carte et Mobile Money passent par Evolia, pas avant son activation. */
+const EVOLIA_NOT_LIVE_MESSAGE =
+  "Le paiement par carte ou Mobile Money n'est pas encore disponible : réglez par virement ou par chèque.";
 
 /** 14 oct. 2026 — pas de paiement sans adresse confirmée (lib/email-verification.ts). */
 const EMAIL_NOT_VERIFIED_MESSAGE =
@@ -205,12 +209,6 @@ export async function submitPaymentProof(
       error: "Cet abonnement n'est pas en attente de paiement.",
     };
   }
-  // 23 oct. 2026 — préinscription : aucun paiement (donc aucun envoi à
-  // Evolia) avant la date d'ouverture.
-  const preregistration = await getPreregistrationStatus();
-  if (preregistration.active) {
-    return { success: false, error: paymentsClosedMessage(preregistration) };
-  }
   if (!isPlanAvailable(subscription.plan)) {
     return { success: false, error: planUnavailableMessage(subscription.plan) };
   }
@@ -233,6 +231,12 @@ export async function submitPaymentProof(
    * usage du bucket).
    */
   const viaEvolia = isEvoliaPaymentMethod(f.method);
+  // 23 oct. 2026 — carte et Mobile Money passent par Evolia : pas avant son
+  // activation (clé de production validée). Virement et chèque restent
+  // possibles à tout moment, préinscription comprise.
+  if (viaEvolia && !(await isEvoliaLive())) {
+    return { success: false, error: EVOLIA_NOT_LIVE_MESSAGE };
+  }
   if (!viaEvolia && !isKeyUnderPrefix(f.proofFileKey, `company-payments/${viewer.id}/`)) {
     return { success: false, error: "Preuve de paiement invalide." };
   }
@@ -447,6 +451,9 @@ export async function purchaseUpsellSeats(
   }
 
   const upsellPlan = await prisma.plan.findUnique({ where: { id: f.upsellPlanId } });
+  if (isEvoliaPaymentMethod(f.method) && !(await isEvoliaLive())) {
+    return { success: false, error: EVOLIA_NOT_LIVE_MESSAGE };
+  }
   if (upsellPlan && !isPlanAvailable(upsellPlan)) {
     return { success: false, error: planUnavailableMessage(upsellPlan) };
   }

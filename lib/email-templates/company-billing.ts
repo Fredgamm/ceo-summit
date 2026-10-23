@@ -138,7 +138,7 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
       {
         id: "3",
         type: "paragraph",
-        text: "Aucun paiement n'est demandé pour l'instant. Les paiements ouvriront le **{{paymentsOpenDate}}** : nous vous enverrons un e-mail ce jour-là pour finaliser votre inscription.",
+        text: "Aucun paiement n'est exigé avant le **{{paymentsOpenDate}}** : nous vous enverrons un e-mail ce jour-là pour finaliser votre inscription. Si vous le souhaitez, vous pouvez aussi régler dès maintenant depuis votre espace.",
       },
       {
         id: "4",

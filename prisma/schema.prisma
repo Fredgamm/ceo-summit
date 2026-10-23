@@ -1182,6 +1182,12 @@ enum EvoliaPushStatus {
   PENDING
   SENT
   FAILED
+  /// 23 oct. 2026 — retenu tant qu'Evolia n'est pas activé (clé de production
+  /// non validée, Paramètres › Intégrations) ; part à l'activation.
+  HELD
+  /// Écarté à l'activation : paiement annulé entre-temps, ou liste de
+  /// participants remplacée par une plus récente.
+  SKIPPED
 }
 
 /// Intégration Evolia (conception/11, échange 1) — chaque envoi vers Evolia

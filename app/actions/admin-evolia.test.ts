@@ -33,6 +33,7 @@ const BASE: EvoliaSettingsInput = {
   paymentUrl: "",
   secret: "",
   clearSecret: false,
+  live: false,
   currentPassword: "hunter2",
 };
 
@@ -125,7 +126,7 @@ describe("updateEvoliaSettings", () => {
 
   it("writes nothing when nothing changed", async () => {
     const result = await updateEvoliaSettings(BASE);
-    expect(result).toEqual({ success: true, data: { changed: [] } });
+    expect(result).toEqual({ success: true, data: { changed: [], released: null } });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

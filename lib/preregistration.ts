@@ -5,7 +5,7 @@ import { DEFAULT_EVENT_TIMEZONE, zonedLocalToUtc } from "@/lib/event-timezone";
  * 23 oct. 2026 — préinscription : tant que les paiements ne sont pas ouverts,
  * une entreprise crée son compte, choisit son offre et déclare son effectif,
  * sans payer. Rien ne part vers Evolia : il n'est appelé qu'au paiement
- * (lib/evolia.ts), qui reste fermé jusqu'à la date d'ouverture.
+ * (lib/evolia.ts), et ses envois sont retenus tant qu'il n'est pas activé.
  *
  * Réglée dans /admin/parametres (onglet Tarifs & Règles) : un jour
  * d'ouverture, à minuit heure de Madagascar. Sans date, ou une fois la date
@@ -46,18 +46,6 @@ export async function getPreregistrationStatus(
     active: Boolean(paymentsOpenAt && now.getTime() < paymentsOpenAt.getTime()),
     openEmailSentAt: sentAt ? new Date(sentAt) : null,
   };
-}
-
-/** Message renvoyé par les actions de paiement pendant la préinscription. */
-export function paymentsClosedMessage(status: PreregistrationStatus): string {
-  return status.paymentsOpenAt
-    ? `Les paiements ouvrent le ${new Intl.DateTimeFormat("fr-FR", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: DEFAULT_EVENT_TIMEZONE,
-      }).format(status.paymentsOpenAt)} : votre préinscription est enregistrée d'ici là.`
-    : "Les paiements ne sont pas encore ouverts : votre préinscription est enregistrée.";
 }
 
 /**

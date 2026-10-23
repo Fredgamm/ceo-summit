@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { EvoliaPushStatus } from "@prisma/client";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -29,12 +30,17 @@ const EVOLIA_EVENT_LABEL: Record<string, string> = {
   "company.participants.confirmed": "Liste des participants",
 };
 
-const EVOLIA_STATUS: Record<string, { label: string; variant: "pending" | "active" | "refused" }> =
-  {
-    PENDING: { label: "En cours", variant: "pending" },
-    SENT: { label: "Reçu", variant: "active" },
-    FAILED: { label: "Échec", variant: "refused" },
-  };
+const EVOLIA_STATUS: Record<
+  EvoliaPushStatus,
+  { label: string; variant: "pending" | "active" | "refused" | "draft" }
+> = {
+  PENDING: { label: "En cours", variant: "pending" },
+  SENT: { label: "Reçu", variant: "active" },
+  FAILED: { label: "Échec", variant: "refused" },
+  // 23 oct. 2026 — Evolia pas encore activé (Paramètres › Intégrations).
+  HELD: { label: "Retenu jusqu'à l'activation d'Evolia", variant: "pending" },
+  SKIPPED: { label: "Non transmis", variant: "draft" },
+};
 
 /** Phase 2 offres/paiement (30 juillet 2026) — détail entreprise + revue paiement. */
 export default async function AdminCompanyDetailPage(props: { params: Promise<{ id: string }> }) {
@@ -229,12 +235,14 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
                       {formatDateFr(push.createdAt)} · {push.attempts} tentative(s)
                       {push.httpStatus != null && ` · HTTP ${push.httpStatus}`}
                     </p>
-                    {push.status === "FAILED" && push.lastError && (
+                    {(push.status === "FAILED" || push.status === "SKIPPED") && push.lastError && (
                       <p className="mt-1 break-words text-xs text-red-700">{push.lastError}</p>
                     )}
                   </div>
                   <Badge variant={status.variant}>{status.label}</Badge>
-                  {push.status !== "SENT" && <EvoliaPushResendButton pushId={push.id} />}
+                  {(push.status === "FAILED" || push.status === "PENDING") && (
+                    <EvoliaPushResendButton pushId={push.id} />
+                  )}
                 </li>
               );
             })}

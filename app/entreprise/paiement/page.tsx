@@ -16,6 +16,7 @@ import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
 import { formatDateFr, planPriceEur, pluralize } from "@/lib/utils";
 import { getPreregistrationStatus } from "@/lib/preregistration";
+import { isEvoliaLive } from "@/lib/evolia-config";
 import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
 import { PreregistrationParticipants } from "@/components/entreprise/preregistration-participants";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -25,11 +26,13 @@ const PAYMENT_MODES = [
     icon: CreditCard,
     label: "Carte bancaire ou Mobile Money",
     detail: "Paiement immédiat via Evolia, notre partenaire de paiement.",
+    viaEvolia: true,
   },
   {
     icon: Landmark,
     label: "Virement ou chèque",
     detail: "Joignez la preuve de paiement : notre équipe la valide.",
+    viaEvolia: false,
   },
 ];
 
@@ -252,15 +255,37 @@ export default async function CompanyPaymentPage(props: {
     </details>
   );
 
-  // 23 oct. 2026 — préinscription : offre choisie, effectif déclaré, aucun
-  // paiement (donc rien envoyé à Evolia) avant la date d'ouverture.
+  // 23 oct. 2026 — carte et Mobile Money seulement une fois Evolia activé
+  // (clé de production validée) ; virement et chèque toujours possibles.
+  const evoliaLive = await isEvoliaLive();
+  const paymentModes = PAYMENT_MODES.filter((m) => evoliaLive || !m.viaEvolia);
+  const paymentForm = !planExpired && (
+    <PaymentProofForm
+      initialDeclaredParticipants={subscription.declaredParticipants}
+      evoliaAvailable={evoliaLive}
+      companyId={company.id}
+      companySubscriptionId={subscription.id}
+      planId={subscription.planId}
+      priceAr={subscription.plan.priceAr}
+      priceEur={subscription.plan.priceEur}
+      minParticipants={subscription.plan.minParticipants}
+      pricingMode={subscription.plan.pricingMode}
+      maxTeamMembers={subscription.plan.maxTeamMembers}
+      groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
+      liveEurToArRate={liveEurToArRate}
+    />
+  );
+
+  // 23 oct. 2026 — préinscription : rien n'est exigé avant la date
+  // d'ouverture ; l'entreprise peut toutefois déjà régler avec les modes
+  // disponibles. Les envois à Evolia attendent son activation (lib/evolia.ts).
   const preregistration = await getPreregistrationStatus();
   if (preregistration.active && preregistration.paymentsOpenAt) {
     return (
       <JourneyShell
         current="paiement"
         title="Votre préinscription est enregistrée"
-        subtitle={`Aucun paiement n'est demandé pour l'instant. Les paiements ouvriront le ${formatDateFr(preregistration.paymentsOpenAt)} : vous recevrez un e-mail ce jour-là pour finaliser votre inscription.`}
+        subtitle={`Aucun paiement n'est exigé avant le ${formatDateFr(preregistration.paymentsOpenAt)} : vous recevrez un e-mail ce jour-là pour finaliser votre inscription. Vous pouvez aussi régler dès maintenant.`}
         card={card}
         headerAction={signOut}
       >
@@ -284,6 +309,17 @@ export default async function CompanyPaymentPage(props: {
             />
           )}
         </div>
+        {paymentForm && (
+          <details className="group mt-6 rounded-lg border border-border p-5">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-navy-mid hover:text-navy">
+              Régler dès maintenant (facultatif)
+              <span className="block text-xs font-normal text-text-muted">
+                {paymentModes.map((m) => m.label).join(" · ")}
+              </span>
+            </summary>
+            <div className="mt-5">{paymentForm}</div>
+          </details>
+        )}
         {changeOffer}
       </JourneyShell>
     );
@@ -297,7 +333,7 @@ export default async function CompanyPaymentPage(props: {
         // 14 oct. 2026 — deux modes de paiement, deux lignes distinctes
         // (une seule phrase les mélangeait).
         <ul className="mt-1 flex flex-col gap-2.5">
-          {PAYMENT_MODES.map(({ icon: Icon, label, detail }) => (
+          {paymentModes.map(({ icon: Icon, label, detail }) => (
             <li key={label} className="flex items-start gap-3">
               <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gold-pale text-navy">
                 <Icon className="h-4 w-4" aria-hidden />
@@ -314,21 +350,7 @@ export default async function CompanyPaymentPage(props: {
       headerAction={signOut}
     >
       {expiredNotice}
-      {!planExpired && (
-        <PaymentProofForm
-          initialDeclaredParticipants={subscription.declaredParticipants}
-          companyId={company.id}
-          companySubscriptionId={subscription.id}
-          planId={subscription.planId}
-          priceAr={subscription.plan.priceAr}
-          priceEur={subscription.plan.priceEur}
-          minParticipants={subscription.plan.minParticipants}
-          pricingMode={subscription.plan.pricingMode}
-          maxTeamMembers={subscription.plan.maxTeamMembers}
-          groupPlans={allPlans.filter((p) => p.pricingMode === "PER_PARTICIPANT")}
-          liveEurToArRate={liveEurToArRate}
-        />
-      )}
+      {paymentForm}
 
       {changeOffer}
     </JourneyShell>

@@ -221,7 +221,12 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<void>
  */
 async function ensurePaymentlessRegistration(company: CompanyForPush, reference: string) {
   const alreadySent = await prisma.evoliaPush.findFirst({
-    where: { reference, event: "company.registration.pushed", status: "SENT" },
+    // Retenu (Evolia pas encore activé) compte comme déjà transmis : il partira à l'activation.
+    where: {
+      reference,
+      event: "company.registration.pushed",
+      status: { in: ["SENT", "HELD"] },
+    },
     select: { id: true },
   });
   if (alreadySent || !company.subscription) return;
@@ -270,10 +275,79 @@ async function sendToEvolia(
   reference: string | null,
   payload: Record<string, unknown>
 ): Promise<boolean> {
+  // 23 oct. 2026 — tant que la clé de production n'est pas validée
+  // (Paramètres › Intégrations), l'envoi est enregistré mais retenu : il part
+  // à l'activation (releaseHeldEvoliaPushes), rien n'est perdu.
+  const { live } = await getEvoliaConfig();
   const push = await prisma.evoliaPush.create({
-    data: { companyId, event, reference, payload: payload as Prisma.InputJsonValue },
+    data: {
+      companyId,
+      event,
+      reference,
+      payload: payload as Prisma.InputJsonValue,
+      ...(live ? {} : { status: "HELD" as const }),
+    },
   });
+  if (!live) return false;
   return deliverEvoliaPush(push.id);
+}
+
+/**
+ * 23 oct. 2026 — à l'activation d'Evolia : transmet les envois retenus, les
+ * inscriptions d'abord (Evolia n'accepte une liste de participants que pour
+ * une inscription qu'il connaît), puis la liste de participants la plus
+ * récente de chaque entreprise. Sont écartés (SKIPPED) : l'inscription d'un
+ * paiement annulé ou refusé entre-temps, et les listes remplacées par une plus
+ * récente. Un envoi qui échoue reste visible et renvoyable depuis la fiche
+ * de l'entreprise.
+ */
+export async function releaseHeldEvoliaPushes(): Promise<{
+  sent: number;
+  failed: number;
+  skipped: number;
+}> {
+  const held = await prisma.evoliaPush.findMany({
+    where: { status: "HELD" },
+    orderBy: { createdAt: "asc" },
+  });
+  const skip = (id: string, reason: string) =>
+    prisma.evoliaPush.update({ where: { id }, data: { status: "SKIPPED", lastError: reason } });
+
+  const registrations = held.filter((p) => p.event === "company.registration.pushed");
+  const participants = held.filter((p) => p.event === "company.participants.confirmed");
+  const latestListByCompany = new Map(participants.map((p) => [p.companyId, p.id]));
+
+  let sent = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const push of registrations) {
+    const payment = push.reference
+      ? await prisma.companyPayment.findUnique({
+          where: { id: push.reference },
+          select: { status: true },
+        })
+      : null;
+    if (payment?.status === "REJECTED") {
+      await skip(push.id, "Paiement annulé ou refusé avant l'activation d'Evolia : non transmis.");
+      skipped++;
+      continue;
+    }
+    if (await deliverEvoliaPush(push.id)) sent++;
+    else failed++;
+  }
+
+  for (const push of participants) {
+    if (latestListByCompany.get(push.companyId) !== push.id) {
+      await skip(push.id, "Remplacé par une liste de participants plus récente.");
+      skipped++;
+      continue;
+    }
+    if (await deliverEvoliaPush(push.id)) sent++;
+    else failed++;
+  }
+
+  return { sent, failed, skipped };
 }
 
 /** Envoie (ou renvoie) un envoi journalisé, et enregistre le résultat. */
@@ -289,7 +363,10 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
     });
 
   if (!secret) {
-    await record({ status: "FAILED", lastError: "Clé d'envoi Evolia non configurée (Paramètres › Intégrations)." });
+    await record({
+      status: "FAILED",
+      lastError: "Clé d'envoi Evolia non configurée (Paramètres › Intégrations).",
+    });
     return false;
   }
 
