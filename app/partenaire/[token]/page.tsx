@@ -5,6 +5,8 @@ import { AlertTriangle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getReferentialLabels } from "@/lib/referentials-query";
 import { AuthCard } from "@/components/auth/auth-card";
+import { INVITATION_STEPS, JourneyShell } from "@/components/onboarding/journey-shell";
+import { MembershipCard } from "@/components/onboarding/membership-card";
 import { AcceptPartnerInviteForm } from "@/components/partners/accept-partner-invite-form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -48,16 +50,35 @@ export default async function PartnerInvitationPage(props: { params: Promise<{ t
     getReferentialLabels("country"),
   ]);
 
+  // 23 oct. 2026 — même cadre que l'invitation d'un collaborateur (panneau
+  // d'étapes et carte de membre), au lieu d'une carte étroite isolée.
   return (
-    <AuthCard
+    <JourneyShell
+      steps={INVITATION_STEPS}
+      current="acces"
+      panelLabel="Accès partenaire"
       title={`Bienvenue, ${invite.name}`}
-      subtitle={`Accès ${invite.plan.name} — ${invite.email}`}
+      subtitle={
+        <>
+          Créez votre compte et votre entreprise ({invite.email}). Votre accès est ouvert
+          immédiatement, sans paiement. Vous inviterez ensuite vos collaborateurs depuis la fiche de
+          votre entreprise.
+        </>
+      }
+      card={
+        <MembershipCard
+          planName={invite.plan.name}
+          detail="Accès offert par CEO Summit"
+          status="invited"
+        />
+      }
+      headerAction={
+        <Link href="/login" className="text-sm font-semibold text-navy hover:underline">
+          Se connecter
+        </Link>
+      }
     >
-      <p className="mb-4 text-sm text-text-mid">
-        Créez votre compte et votre entreprise. Votre accès est ouvert immédiatement, sans paiement.
-        Vous inviterez ensuite vos collaborateurs depuis la fiche de votre entreprise.
-      </p>
       <AcceptPartnerInviteForm token={params.token} sectors={sectors} countries={countries} />
-    </AuthCard>
+    </JourneyShell>
   );
 }
