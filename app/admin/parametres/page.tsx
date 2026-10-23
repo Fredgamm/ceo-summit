@@ -52,6 +52,17 @@ export default async function AdminParametresPage(props: {
       getPreregistrationStatus(),
       prisma.companySubscription.count({ where: PREREGISTERED_SUBSCRIPTION_WHERE }),
     ]);
+    // Offres qui auront expiré à l'ouverture des paiements : leurs préinscrits
+    // devront changer d'offre (ou l'admin repousse leur date limite).
+    const plansExpiringBeforeOpening = preregistration.paymentsOpenAt
+      ? await prisma.plan.findMany({
+          where: {
+            isActive: true,
+            availableUntil: { lt: preregistration.paymentsOpenAt },
+          },
+          select: { name: true, availableUntil: true },
+        })
+      : [];
     tabContent = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PreregistrationSettings
@@ -59,6 +70,10 @@ export default async function AdminParametresPage(props: {
           active={preregistration.active}
           openEmailSentAt={preregistration.openEmailSentAt?.toISOString() ?? null}
           preregisteredCount={preregisteredCount}
+          plansExpiringBeforeOpening={plansExpiringBeforeOpening.map((p) => ({
+            name: p.name,
+            availableUntil: p.availableUntil!.toISOString(),
+          }))}
         />
         <div className="rounded-lg border border-border bg-white p-5">
           <h3 className="text-sm font-bold text-navy">Offres & tarifs d&apos;adhésion</h3>
@@ -133,7 +148,11 @@ export default async function AdminParametresPage(props: {
       <div className="flex flex-col gap-4">
         <EvoliaSettings
           status={evoliaStatus}
-          heldCount={await prisma.evoliaPush.count({ where: { status: "HELD" } })}
+          heldCount={await prisma.evoliaPush.count({
+            where: {
+              OR: [{ status: "HELD" }, { status: "FAILED", event: "company.registration.pushed" }],
+            },
+          })}
         />
         <BrevoSettings status={brevoStatus} />
         <IntegrationCard

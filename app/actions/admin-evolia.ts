@@ -7,12 +7,13 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmAdminPassword } from "@/lib/admin-reauth";
-import { releaseHeldEvoliaPushes } from "@/lib/evolia";
+import { startEvoliaReleaseInBackground } from "@/lib/evolia";
 import {
   EVOLIA_SETTING_KEYS,
   PAYMENT_URL_PLACEHOLDER,
   encryptSetting,
   getEvoliaSettingsStatus,
+  isEvoliaLive,
   type EvoliaUrlField,
 } from "@/lib/evolia-config";
 
@@ -97,8 +98,8 @@ const FIELD_LABEL: Record<EvoliaUrlField | "secret" | "live", string> = {
 export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
   ActionResult<{
     changed: string[];
-    /** Envois retenus transmis à l'activation. */
-    released: { sent: number; failed: number; skipped: number } | null;
+    /** Activation : la transmission des envois retenus est lancée en arrière-plan. */
+    releaseStarted: boolean;
   }>
 > {
   const { userId } = await requireAdmin("parametres");
@@ -149,6 +150,21 @@ export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
     changed.push("secret");
   }
 
+  // Activer sans clé ferait échouer tous les envois retenus d'un coup.
+  const hasKeyAfterSave = data.secret
+    ? true
+    : data.clearSecret && current.secret.source === "admin"
+      ? Boolean(process.env.EVOLIA_WEBHOOK_SECRET)
+      : current.secret.source !== "none" && !current.secret.unreadable;
+  // Evolia activé (déjà ou à l'instant) sans clé : tous les envois échoueraient
+  // et la carte serait proposée sans pouvoir aboutir.
+  if (data.live && !hasKeyAfterSave) {
+    return {
+      success: false,
+      error: "Enregistrez d'abord la clé Evolia de production avant d'activer Evolia.",
+    };
+  }
+
   if (data.live !== current.live) {
     const liveKey = EVOLIA_SETTING_KEYS.live;
     writes.push(
@@ -163,7 +179,7 @@ export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
     changed.push("live");
   }
 
-  if (changed.length === 0) return { success: true, data: { changed: [], released: null } };
+  if (changed.length === 0) return { success: true, data: { changed: [], releaseStarted: false } };
 
   await prisma.$transaction([
     ...writes,
@@ -187,9 +203,27 @@ export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
   ]);
 
   // Activation : tout ce qui a été retenu part maintenant chez Evolia.
-  const released = changed.includes("live") && data.live ? await releaseHeldEvoliaPushes() : null;
+  const releaseStarted = changed.includes("live") && data.live;
+  if (releaseStarted) startEvoliaReleaseInBackground(userId);
 
   revalidatePath("/admin/parametres");
   revalidatePath("/entreprise/paiement");
-  return { success: true, data: { changed: changed.map((f) => FIELD_LABEL[f]), released } };
+  return {
+    success: true,
+    data: { changed: changed.map((f) => FIELD_LABEL[f]), releaseStarted },
+  };
+}
+
+/**
+ * 23 oct. 2026 — retransmet, en arrière-plan, les envois encore retenus une
+ * fois Evolia activé, et réessaie les inscriptions en échec (sans quoi les
+ * listes de ces entreprises resteraient bloquées).
+ */
+export async function transmitHeldEvoliaPushes(): Promise<ActionResult> {
+  const { userId } = await requireAdmin("parametres");
+  if (!(await isEvoliaLive())) {
+    return { success: false, error: "Evolia n'est pas activé : les envois restent retenus." };
+  }
+  startEvoliaReleaseInBackground(userId, { retryFailedRegistrations: true });
+  return { success: true, data: undefined };
 }

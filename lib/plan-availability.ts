@@ -1,5 +1,6 @@
 import { DEFAULT_EVENT_TIMEZONE, zonedDayKey, zonedLocalToUtc } from "@/lib/event-timezone";
 import { formatDateFr } from "@/lib/utils";
+import { prisma } from "@/lib/prisma";
 
 /**
  * 23 oct. 2026 — date limite de disponibilité d'une offre (`Plan.availableUntil`) :
@@ -22,6 +23,27 @@ export function isPlanAvailable(
   now: Date = new Date()
 ): boolean {
   return !plan.availableUntil || now.getTime() <= plan.availableUntil.getTime();
+}
+
+/**
+ * 23 oct. 2026 — une offre expirée reste payable par l'entreprise qui avait
+ * déjà engagé un paiement pour son offre avant la date limite (virement refusé
+ * pour une preuve illisible, carte annulée…) : elle a choisi et payé à temps.
+ */
+export async function subscriptionCanPayPlan(subscription: {
+  id: string;
+  plan: { availableUntil: Date | null };
+}): Promise<boolean> {
+  if (isPlanAvailable(subscription.plan)) return true;
+  const engaged = await prisma.companyPayment.findFirst({
+    where: {
+      companySubscriptionId: subscription.id,
+      upsellQuantity: null,
+      createdAt: { lte: subscription.plan.availableUntil! },
+    },
+    select: { id: true },
+  });
+  return Boolean(engaged);
 }
 
 export function planUnavailableMessage(plan: PlanAvailabilityFields): string {

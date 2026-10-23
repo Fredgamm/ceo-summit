@@ -38,5 +38,16 @@ export const CANCELLED_BY_COMPANY_REASON =
  */
 export const FAILED_AT_EVOLIA_REASON = "Paiement annulé ou refusé chez Evolia.";
 
+/**
+ * Paiement annulé parce qu'Evolia n'a pas répondu à l'envoi de l'inscription
+ * (startEvoliaCollection). Evolia a pu l'enregistrer malgré tout : si le
+ * client paie, sa confirmation reste acceptée (23 oct. 2026).
+ */
+export const EVOLIA_PUSH_FAILED_REASON = "Transmission à Evolia impossible — paiement non lancé.";
+
 /** Motifs de refus après lesquels une confirmation d'Evolia reste acceptée. */
-export const REVIVABLE_EVOLIA_REASONS = [CANCELLED_BY_COMPANY_REASON, FAILED_AT_EVOLIA_REASON];
+export const REVIVABLE_EVOLIA_REASONS = [
+  CANCELLED_BY_COMPANY_REASON,
+  FAILED_AT_EVOLIA_REASON,
+  EVOLIA_PUSH_FAILED_REASON,
+];

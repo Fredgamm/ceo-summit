@@ -15,7 +15,10 @@ vi.mock("@/lib/prisma", () => ({
       update: vi.fn(),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
-    companySubscription: { update: vi.fn() },
+    companySubscription: {
+      update: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     company: { update: vi.fn(), findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn() },
@@ -51,6 +54,7 @@ vi.mock("@/lib/evolia", () => ({
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isEvoliaLive } from "@/lib/evolia-config";
 import { sendSms } from "@/lib/sms";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { deliverEvoliaPush, pushRegistrationToEvolia } from "@/lib/evolia";
@@ -100,9 +104,10 @@ describe("confirmCompanyPayment", () => {
     const result = await confirmCompanyPayment("payment_1");
 
     expect(result.success).toBe(true);
-    expect(prisma.companySubscription.update).toHaveBeenCalledWith(
+    // Activation conditionnelle : jamais une seconde fois (double paiement).
+    expect(prisma.companySubscription.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "sub_1" },
+        where: { id: "sub_1", status: { not: "ACTIVE" } },
         data: expect.objectContaining({ status: "ACTIVE" }),
       })
     );
@@ -111,6 +116,29 @@ describe("confirmCompanyPayment", () => {
         data: expect.objectContaining({ action: "company_payment.confirm" }),
       })
     );
+  });
+
+  it("refuses to confirm a second payment when the offer is already paid (23 oct. 2026)", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...PAYMENT_BASE,
+      companySubscription: { ...PAYMENT_BASE.companySubscription, status: "ACTIVE" },
+    } as never);
+
+    const result = await confirmCompanyPayment("payment_1");
+
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error).toMatch(/double emploi/);
+    expect(prisma.companyPayment.updateMany).not.toHaveBeenCalled();
+    expect(prisma.companySubscription.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("activates only once when two confirmations race", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(PAYMENT_BASE as never);
+    vi.mocked(prisma.companySubscription.updateMany).mockResolvedValueOnce({ count: 0 } as never);
+
+    const result = await confirmCompanyPayment("payment_1");
+
+    expect(result.success).toBe(false);
   });
 
   it("confirms the payment and activates the subscription in one transaction", async () => {
@@ -343,5 +371,36 @@ describe("resendEvoliaPush", () => {
 
     expect(result.success).toBe(true);
     expect(deliverEvoliaPush).toHaveBeenCalledWith("push_1");
+  });
+
+  it("refuses to resend a push set aside at Evolia's activation", async () => {
+    vi.mocked(prisma.evoliaPush.findUnique).mockResolvedValue({
+      id: "push_1",
+      companyId: "company_1",
+      event: "company.participants.confirmed",
+      reference: null,
+      status: "SKIPPED",
+    } as never);
+
+    const result = await resendEvoliaPush("push_1");
+
+    expect(result.success).toBe(false);
+    expect(deliverEvoliaPush).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing before Evolia is activated", async () => {
+    vi.mocked(isEvoliaLive).mockResolvedValueOnce(false);
+    vi.mocked(prisma.evoliaPush.findUnique).mockResolvedValue({
+      id: "push_1",
+      companyId: "company_1",
+      event: "company.registration.pushed",
+      reference: "payment_1",
+      status: "FAILED",
+    } as never);
+
+    const result = await resendEvoliaPush("push_1");
+
+    expect(result.success).toBe(false);
+    expect(deliverEvoliaPush).not.toHaveBeenCalled();
   });
 });

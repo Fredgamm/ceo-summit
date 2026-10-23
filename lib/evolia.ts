@@ -163,13 +163,14 @@ export async function pushRegistrationToEvolia(companyPaymentId: string): Promis
 }
 
 /** `company.participants.confirmed` — la liste validée par le gérant, qui fait foi pour les badges. */
-export async function pushParticipantsToEvolia(companyId: string): Promise<void> {
+/** Renvoie `true` si Evolia a reçu la liste (retenue, vide ou refusée : `false`). */
+export async function pushParticipantsToEvolia(companyId: string): Promise<boolean> {
   try {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       include: COMPANY_INCLUDE,
     });
-    if (!company?.subscription) return;
+    if (!company?.subscription) return false;
 
     // Evolia exige `ceoSummitReference` sur chaque envoi : celle du paiement
     // de l'offre (déjà transmise avec l'inscription), ou l'abonnement pour une
@@ -188,7 +189,7 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<void>
     if (participants.length === 0) {
       // Evolia refuse une liste vide (la validation l'interdit déjà côté gérant).
       console.warn(`[evolia] participants push skipped for ${company.id}: empty list`);
-      return;
+      return false;
     }
 
     const reference = offerPayment?.id ?? company.subscription.id;
@@ -207,9 +208,10 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<void>
       eventDetails: eventInfo(company),
       participants,
     };
-    await sendToEvolia(company.id, payload.event, reference, payload);
+    return await sendToEvolia(company.id, payload.event, reference, payload);
   } catch (err) {
     console.error("[evolia] failed to build participants push", err);
+    return false;
   }
 }
 
@@ -301,25 +303,54 @@ async function sendToEvolia(
  * récente. Un envoi qui échoue reste visible et renvoyable depuis la fiche
  * de l'entreprise.
  */
-export async function releaseHeldEvoliaPushes(): Promise<{
+export async function releaseHeldEvoliaPushes(
+  options: { retryFailedRegistrations?: boolean } = {}
+): Promise<{
   sent: number;
   failed: number;
   skipped: number;
+  /** Listes gardées en attente : l'inscription de leur entreprise n'est pas encore chez Evolia. */
+  deferred: number;
 }> {
   const held = await prisma.evoliaPush.findMany({
     where: { status: "HELD" },
     orderBy: { createdAt: "asc" },
   });
-  const skip = (id: string, reason: string) =>
-    prisma.evoliaPush.update({ where: { id }, data: { status: "SKIPPED", lastError: reason } });
 
-  const registrations = held.filter((p) => p.event === "company.registration.pushed");
-  const participants = held.filter((p) => p.event === "company.participants.confirmed");
-  const latestListByCompany = new Map(participants.map((p) => [p.companyId, p.id]));
+  // Chaque envoi est « réservé » avant d'être traité : deux transmissions
+  // simultanées (deux admins, double clic) ne l'envoient jamais deux fois.
+  const claim = async (id: string, from: "HELD" | "FAILED") =>
+    (
+      await prisma.evoliaPush.updateMany({
+        where: { id, status: from },
+        data: { status: "PENDING" },
+      })
+    ).count === 1;
+  const setAside = (id: string, from: "HELD" | "PENDING", reason: string) =>
+    prisma.evoliaPush.updateMany({
+      where: { id, status: from },
+      data: { status: "SKIPPED", lastError: reason },
+    });
+
+  const registrations: { id: string; reference: string | null; from: "HELD" | "FAILED" }[] = held
+    .filter((p) => p.event === "company.registration.pushed")
+    .map((p) => ({ id: p.id, reference: p.reference, from: "HELD" as const }));
+  // Bouton « Transmettre les envois retenus » : réessaie aussi les inscriptions
+  // en échec, sans quoi les listes de ces entreprises resteraient bloquées.
+  if (options.retryFailedRegistrations) {
+    const failedRegistrations = await prisma.evoliaPush.findMany({
+      where: { status: "FAILED", event: "company.registration.pushed" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, reference: true },
+    });
+    registrations.push(...failedRegistrations.map((p) => ({ ...p, from: "FAILED" as const })));
+  }
+  const heldLists = held.filter((p) => p.event === "company.participants.confirmed");
 
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  let deferred = 0;
 
   for (const push of registrations) {
     const payment = push.reference
@@ -329,25 +360,52 @@ export async function releaseHeldEvoliaPushes(): Promise<{
         })
       : null;
     if (payment?.status === "REJECTED") {
-      await skip(push.id, "Paiement annulé ou refusé avant l'activation d'Evolia : non transmis.");
-      skipped++;
+      if (push.from === "HELD") {
+        const { count } = await setAside(
+          push.id,
+          "HELD",
+          "Paiement annulé ou refusé avant l'activation d'Evolia : non transmis."
+        );
+        skipped += count;
+      }
       continue;
     }
+    if (!(await claim(push.id, push.from))) continue;
     if (await deliverEvoliaPush(push.id)) sent++;
     else failed++;
   }
 
-  for (const push of participants) {
-    if (latestListByCompany.get(push.companyId) !== push.id) {
-      await skip(push.id, "Remplacé par une liste de participants plus récente.");
-      skipped++;
+  // Une liste par entreprise, recalculée maintenant : jamais un instantané
+  // périmé qui écraserait chez Evolia une liste plus récente (badges).
+  const companies = [...new Set(heldLists.map((p) => p.companyId))];
+  for (const companyId of companies) {
+    const lists = heldLists.filter((p) => p.companyId === companyId);
+    // Evolia refuse la liste d'une inscription qu'il ne connaît pas : elle
+    // reste retenue tant qu'aucune inscription de l'entreprise n'y est arrivée.
+    const registered = await prisma.evoliaPush.findFirst({
+      where: { companyId, event: "company.registration.pushed", status: "SENT" },
+      select: { id: true },
+    });
+    if (!registered) {
+      deferred += lists.length;
       continue;
     }
-    if (await deliverEvoliaPush(push.id)) sent++;
+    const claimed: string[] = [];
+    for (const list of lists) if (await claim(list.id, "HELD")) claimed.push(list.id);
+    if (claimed.length === 0) continue;
+    for (const id of claimed) {
+      await setAside(
+        id,
+        "PENDING",
+        "Remplacé par la liste à jour envoyée à l'activation d'Evolia."
+      );
+    }
+    skipped += claimed.length;
+    if (await pushParticipantsToEvolia(companyId)) sent++;
     else failed++;
   }
 
-  return { sent, failed, skipped };
+  return { sent, failed, skipped, deferred };
 }
 
 /** Envoie (ou renvoie) un envoi journalisé, et enregistre le résultat. */
@@ -405,4 +463,29 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
     console.error("[evolia] push failed", err);
     return false;
   }
+}
+
+/**
+ * Lance la transmission des envois retenus sans la faire attendre à l'écran :
+ * des centaines d'envois (jusqu'à 10 s chacun) dépasseraient le délai d'une
+ * requête. Le résultat est inscrit au journal d'audit ; le nombre d'envois
+ * retenus restant s'affiche dans Paramètres › Intégrations.
+ */
+export function startEvoliaReleaseInBackground(
+  actorId: string,
+  options: { retryFailedRegistrations?: boolean } = {}
+): void {
+  void releaseHeldEvoliaPushes(options)
+    .then((result) =>
+      prisma.auditLog.create({
+        data: {
+          actorId,
+          action: "evolia_push.release",
+          targetType: "EvoliaPush",
+          targetId: "held",
+          metadata: result,
+        },
+      })
+    )
+    .catch((err) => console.error("[evolia] background release failed", err));
 }

@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { updateEvoliaSettings } from "@/app/actions/admin-evolia";
+import { transmitHeldEvoliaPushes, updateEvoliaSettings } from "@/app/actions/admin-evolia";
 import type { EvoliaSettingsStatus, SettingSource } from "@/lib/evolia-config";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export function EvoliaSettings({
   heldCount,
 }: {
   status: EvoliaSettingsStatus;
-  /** Envois retenus en attente de l'activation. */
+  /** Envois retenus, et inscriptions en échec (réessayées par « Transmettre »). */
   heldCount: number;
 }) {
   const router = useRouter();
@@ -40,6 +40,24 @@ export function EvoliaSettings({
   const [secret, setSecret] = React.useState("");
   const [clearSecret, setClearSecret] = React.useState(false);
   const [live, setLive] = React.useState(status.live);
+  const [transmitting, setTransmitting] = React.useState(false);
+
+  async function handleTransmit() {
+    setTransmitting(true);
+    try {
+      const result = await transmitHeldEvoliaPushes();
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        "Transmission lancée en arrière-plan. Rechargez la page dans quelques minutes pour suivre le nombre restant."
+      );
+      router.refresh();
+    } finally {
+      setTransmitting(false);
+    }
+  }
   const [currentPassword, setCurrentPassword] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
@@ -67,18 +85,10 @@ export function EvoliaSettings({
           ? `Configuration Evolia enregistrée (${result.data.changed.join(", ")}).`
           : "Aucune modification."
       );
-      const released = result.data.released;
-      if (released) {
+      if (result.data.releaseStarted) {
         toast.success(
-          `Evolia activé : ${released.sent} envoi(s) transmis${
-            released.skipped ? `, ${released.skipped} écarté(s)` : ""
-          }.`
+          "Evolia activé : la transmission des envois retenus est lancée. Rechargez la page dans quelques minutes pour suivre le nombre restant."
         );
-        if (released.failed > 0) {
-          toast.error(
-            `${released.failed} envoi(s) refusé(s) par Evolia : voir les fiches entreprises concernées.`
-          );
-        }
       }
       setSecret("");
       setClearSecret(false);
@@ -191,6 +201,22 @@ export function EvoliaSettings({
             <p className="mt-2 text-xs font-semibold text-navy">
               {heldCount} envoi(s) retenu(s) partiront à l&apos;activation.
             </p>
+          )}
+          {status.live && heldCount > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <p className="text-xs font-semibold text-navy">
+                {heldCount} envoi(s) retenu(s) ou inscription(s) en échec.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleTransmit}
+                disabled={transmitting}
+              >
+                {transmitting ? "Transmission…" : "Transmettre les envois retenus"}
+              </Button>
+            </div>
           )}
         </div>
 

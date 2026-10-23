@@ -59,6 +59,9 @@ export async function sendPaymentsOpenEmail(): Promise<
 > {
   const { userId } = await requireAdmin("parametres");
   const status = await getPreregistrationStatus();
+  if (!status.paymentsOpenOn) {
+    return { success: false, error: "Aucune préinscription n'est configurée." };
+  }
   if (status.active) {
     return {
       success: false,

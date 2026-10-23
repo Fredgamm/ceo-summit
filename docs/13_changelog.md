@@ -19,6 +19,17 @@ Pas encore déployé à la date de cette entrée.
 - **Date limite par offre** (« Disponible jusqu'au », Admin › Offres) : après ce jour (fin de journée, heure de l'événement), l'offre n'est plus proposée, ne peut plus être choisie et ne peut plus être payée, même par une entreprise qui l'avait choisie. Celle-ci est invitée à changer d'offre. La liste des offres de l'admin affiche la date, ou « Expirée ». Nouvelle colonne `Plan.availableUntil` (migration `20261023100000_plan_available_until`).
 - **Coordonnées bancaires BECOM** (BRED Madagasikara : IBAN, BIC, RIB, avec copie) affichées pour un virement ou un chèque, au paiement de l'offre et à l'achat de places supplémentaires.
 
+### Sécurité des paiements (revue complète du 23 octobre)
+
+- **Double encaissement** : l'admin ne peut plus valider un paiement d'offre quand l'accès est déjà actif (message « doublon, à refuser et rembourser ») ; une confirmation d'Evolia dans ce cas est enregistrée mais signalée « double paiement à rembourser », sans réactiver ni prolonger l'abonnement. L'activation elle-même est conditionnelle (deux confirmations simultanées n'activent qu'une fois).
+- **Double envoi** d'un même paiement (deux onglets, double clic) : un seul paiement est créé.
+- **Confirmation tardive après changement d'offre ou d'effectif** : comparée à ce qui avait été envoyé à Evolia ; en cas d'écart, rien n'est activé automatiquement, le paiement reste en attente avec une note pour l'admin.
+- **Webhook** : ne confirme plus que des paiements carte / Mobile Money (un virement se valide uniquement par l'admin).
+- Un paiement annulé faute de réponse d'Evolia reste honoré si le client paie malgré tout.
+- **Offre expirée** : reste payable par l'entreprise qui avait engagé un paiement avant la date limite (preuve refusée, carte annulée).
+- **Envois à Evolia** : listes de participants recalculées au moment de l'envoi (jamais un instantané périmé) ; une liste ne part qu'une fois l'inscription de l'entreprise reçue par Evolia ; « Transmettre les envois retenus » réessaie aussi les inscriptions en échec ; transmission en arrière-plan ; activation impossible sans clé, clé non supprimable tant qu'Evolia est activé ; un envoi écarté ne peut pas être renvoyé.
+- Préinscription : alerte dans l'admin quand une offre expire avant l'ouverture des paiements ; e-mail d'ouverture refusé sans date configurée.
+
 ### Données corrigées (préprod et prod)
 
 - Événement : « CEO Summit Indian Ocean, 3e édition », 11 mars 2027 08:00 → 12 mars 2027 22:00, Le Moca, Domaine de Montgaillard, La Réunion, fuseau La Réunion.

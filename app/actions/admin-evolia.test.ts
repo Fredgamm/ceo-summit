@@ -4,6 +4,7 @@ vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/rate-limit", () => ({ checkRateLimit: vi.fn() }));
 vi.mock("bcryptjs", () => ({ default: { compare: vi.fn() } }));
+vi.mock("@/lib/evolia", () => ({ startEvoliaReleaseInBackground: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -23,7 +24,8 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { decryptSetting, EVOLIA_SETTING_KEYS } from "@/lib/evolia-config";
+import { decryptSetting, encryptSetting, EVOLIA_SETTING_KEYS } from "@/lib/evolia-config";
+import { startEvoliaReleaseInBackground } from "@/lib/evolia";
 import { updateEvoliaSettings, type EvoliaSettingsInput } from "./admin-evolia";
 
 const SECRET = "s3cr3t".repeat(8);
@@ -126,7 +128,36 @@ describe("updateEvoliaSettings", () => {
 
   it("writes nothing when nothing changed", async () => {
     const result = await updateEvoliaSettings(BASE);
-    expect(result).toEqual({ success: true, data: { changed: [], released: null } });
+    expect(result).toEqual({ success: true, data: { changed: [], releaseStarted: false } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses to activate Evolia without a key", async () => {
+    vi.stubEnv("EVOLIA_WEBHOOK_SECRET", "");
+    const result = await updateEvoliaSettings({ ...BASE, live: true });
+    expect(result.success).toBe(false);
+    expect(startEvoliaReleaseInBackground).not.toHaveBeenCalled();
+  });
+
+  it("starts releasing every held push when Evolia is activated with its key", async () => {
+    vi.stubEnv("EVOLIA_WEBHOOK_SECRET", "");
+    const result = await updateEvoliaSettings({ ...BASE, secret: SECRET, live: true });
+    expect(result).toMatchObject({ success: true, data: { releaseStarted: true } });
+    expect(startEvoliaReleaseInBackground).toHaveBeenCalledWith("admin_1");
+  });
+
+  it("refuses to clear the key while Evolia is activated", async () => {
+    vi.stubEnv("EVOLIA_WEBHOOK_SECRET", "");
+    vi.mocked(prisma.platformSetting.findMany).mockResolvedValue([
+      { key: "evolia.live", value: "true", updatedAt: new Date() },
+      {
+        key: "evolia.webhook_secret",
+        value: encryptSetting(SECRET, "evolia.webhook_secret"),
+        updatedAt: new Date(),
+      },
+    ] as never);
+    const result = await updateEvoliaSettings({ ...BASE, clearSecret: true, live: true });
+    expect(result.success).toBe(false);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

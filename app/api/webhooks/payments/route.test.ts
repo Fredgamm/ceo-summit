@@ -26,6 +26,8 @@ vi.mock("@/lib/payment-confirmations", () => ({
     .fn()
     .mockResolvedValue({ success: true, data: undefined }),
   reviveCancelledEvoliaPayment: vi.fn().mockResolvedValue("none"),
+  evoliaPaymentMismatch: vi.fn().mockResolvedValue(null),
+  holdRevivedPaymentForReview: vi.fn().mockResolvedValue(undefined),
   cancelPendingEvoliaPaymentCore: vi.fn().mockResolvedValue(true),
 }));
 
@@ -38,6 +40,8 @@ import { prisma } from "@/lib/prisma";
 import {
   cancelPendingEvoliaPaymentCore,
   confirmCompanyPaymentCore,
+  evoliaPaymentMismatch,
+  holdRevivedPaymentForReview,
   confirmEventRegistrationPaymentCore,
   reviveCancelledEvoliaPayment,
 } from "@/lib/payment-confirmations";
@@ -289,8 +293,75 @@ describe("POST /api/webhooks/payments", () => {
     expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
   });
 
+  it("never confirms a bank transfer: only the admin validates it (23 oct. 2026)", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      amount: 2500000,
+      method: "VIREMENT",
+    } as never);
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(409);
+    expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+  });
+
+  it("flags a confirmation for an offer that was already paid as a double payment", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      amount: 2500000,
+      method: "CARTE_BANCAIRE",
+    } as never);
+    vi.mocked(confirmCompanyPaymentCore).mockResolvedValueOnce({
+      success: true,
+      data: { companyId: "company_1", doublePayment: true },
+    });
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ error: expect.stringContaining("double paiement") }),
+      })
+    );
+  });
+
+  it("does not activate a late confirmation after the company changed its offer", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      amount: 2500000,
+      method: "CARTE_BANCAIRE",
+    } as never);
+    vi.mocked(reviveCancelledEvoliaPayment).mockResolvedValueOnce("revived");
+    vi.mocked(evoliaPaymentMismatch).mockResolvedValueOnce(
+      "Payé : Gold (6 participant(s)) ; choisi aujourd'hui : Platinum (10 participant(s))."
+    );
+    const body = JSON.stringify({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(holdRevivedPaymentForReview).toHaveBeenCalledWith(
+      "payment_1",
+      expect.stringContaining("Platinum")
+    );
+    expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+  });
+
   it("still confirms but logs a warning when the confirmed amount differs from the amount due", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ amount: 2500000 } as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      amount: 2500000,
+      method: "CARTE_BANCAIRE",
+    } as never);
 
     const body = JSON.stringify({
       event: "payment.confirmed",
@@ -313,7 +384,10 @@ describe("POST /api/webhooks/payments", () => {
   });
 
   it("confirms without a warning when the confirmed amount matches the amount due", async () => {
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ amount: 2500000 } as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      amount: 2500000,
+      method: "CARTE_BANCAIRE",
+    } as never);
 
     const body = JSON.stringify({
       event: "payment.confirmed",

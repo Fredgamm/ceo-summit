@@ -10,6 +10,8 @@ import {
   confirmCompanyPaymentCore,
   reviveCancelledEvoliaPayment,
   cancelPendingEvoliaPaymentCore,
+  evoliaPaymentMismatch,
+  holdRevivedPaymentForReview,
   confirmEventRegistrationPaymentCore,
 } from "@/lib/payment-confirmations";
 
@@ -194,6 +196,19 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
        * admin, via WebhookLog.error + log serveur.
        */
       let warning: string | undefined;
+      // 23 oct. 2026 — Evolia n'encaisse que la carte et le Mobile Money : un
+      // virement ou un chèque ne se valide que par l'admin, jamais par ce webhook.
+      const target = await prisma.companyPayment.findUnique({
+        where: { id: payload.reference },
+        select: { method: true },
+      });
+      if (target && !isEvoliaPaymentMethod(target.method)) {
+        return {
+          success: false,
+          error:
+            "Ce paiement n'est pas un paiement par carte ou Mobile Money (validation par l'admin uniquement).",
+        };
+      }
       if (payload.amount != null) {
         const existing = await prisma.companyPayment.findUnique({
           where: { id: payload.reference },
@@ -219,8 +234,24 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
         ]
           .filter(Boolean)
           .join(" ");
+        // L'entreprise a changé d'offre ou d'effectif depuis : on n'active
+        // rien automatiquement, l'admin vérifie (paiement en attente + note).
+        const mismatch = await evoliaPaymentMismatch(payload.reference);
+        if (mismatch) {
+          await holdRevivedPaymentForReview(payload.reference, mismatch);
+          return {
+            success: true,
+            warning: `${warning} Offre ou effectif modifiés depuis — à vérifier par l'admin : ${mismatch}`,
+          };
+        }
       }
       const result = await confirmCompanyPaymentCore(payload.reference, null);
+      if (result.success && result.data.doublePayment) {
+        return {
+          success: true,
+          warning: `Paiement ${payload.reference} confirmé par Evolia alors que l'offre était déjà réglée — double paiement à rembourser.`,
+        };
+      }
       return result.success ? { success: true, warning } : result;
     }
     case "event_registration": {

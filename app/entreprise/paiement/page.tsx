@@ -17,7 +17,7 @@ import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-pay
 import { formatDateFr, planPriceEur, pluralize } from "@/lib/utils";
 import { getPreregistrationStatus } from "@/lib/preregistration";
 import { isEvoliaLive } from "@/lib/evolia-config";
-import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
+import { planUnavailableMessage, subscriptionCanPayPlan } from "@/lib/plan-availability";
 import { PreregistrationParticipants } from "@/components/entreprise/preregistration-participants";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -224,7 +224,7 @@ export default async function CompanyPaymentPage(props: {
 
   // 23 oct. 2026 — offre dont la date limite est passée (ex. Early Bird après
   // le 31 décembre) : on ne peut plus la payer, il faut en changer.
-  const planExpired = !isPlanAvailable(subscription.plan);
+  const planExpired = !(await subscriptionCanPayPlan(subscription));
   const expiredNotice = planExpired && (
     <Alert variant="destructive" className="mb-6">
       <AlertDescription>{planUnavailableMessage(subscription.plan)}</AlertDescription>

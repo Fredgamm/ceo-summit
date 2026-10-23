@@ -12,6 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
       findMany: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       create: vi.fn().mockResolvedValue({ id: "push_1" }),
       findFirst: vi.fn().mockResolvedValue(null),
       findUnique: vi.fn(),
@@ -457,18 +458,18 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("releases registrations first, then each company's latest participant list", async () => {
+  it("releases registrations first, then sends each company's current list once", async () => {
     const at = (m: number) => new Date(Date.UTC(2026, 9, 23, 10, m));
     vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
       {
         id: "list_old",
-        companyId: "c1",
+        companyId: "company_1",
         event: "company.participants.confirmed",
         createdAt: at(1),
       },
       {
         id: "reg_c1",
-        companyId: "c1",
+        companyId: "company_1",
         event: "company.registration.pushed",
         reference: "pay_ok",
         createdAt: at(0),
@@ -482,7 +483,7 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
       },
       {
         id: "list_new",
-        companyId: "c1",
+        companyId: "company_1",
         event: "company.participants.confirmed",
         createdAt: at(3),
       },
@@ -497,19 +498,62 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
     }: {
       where: { id: string };
     }) => ({ id: where.id, payload: { event: "x" } })) as never);
+    // L'inscription de company_1 est chez Evolia ; sa liste actuelle est recalculée.
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue({ id: "reg_c1" } as never);
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      {
+        user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg", title: "DG" },
+        plan: null,
+      },
+    ] as never);
 
     const result = await releaseHeldEvoliaPushes();
 
-    expect(result).toEqual({ sent: 2, failed: 0, skipped: 2 });
-    const delivered = vi
-      .mocked(prisma.evoliaPush.update)
-      .mock.calls.filter(([args]) => args.data.status === "SENT")
-      .map(([args]) => args.where.id);
-    expect(delivered).toEqual(["reg_c1", "list_new"]);
-    const skipped = vi
-      .mocked(prisma.evoliaPush.update)
+    // reg_c1 transmise ; les deux instantanés de liste écartés au profit d'une
+    // liste recalculée, envoyée une seule fois ; reg_cancelled écartée.
+    expect(result).toEqual({ sent: 2, failed: 0, skipped: 3, deferred: 0 });
+    const setAside = vi
+      .mocked(prisma.evoliaPush.updateMany)
       .mock.calls.filter(([args]) => args.data.status === "SKIPPED")
-      .map(([args]) => args.where.id);
-    expect(skipped).toEqual(["reg_cancelled", "list_old"]);
+      .map(([args]) => (args.where as { id: string }).id);
+    expect(setAside.sort()).toEqual(["list_new", "list_old", "reg_cancelled"]);
+    expect(prisma.evoliaPush.create).toHaveBeenCalledTimes(1);
+    expect(pushedPayload().event).toBe("company.participants.confirmed");
+  });
+
+  it("keeps a list held while its company's registration has not reached Evolia", async () => {
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
+      {
+        id: "list_c9",
+        companyId: "c9",
+        event: "company.participants.confirmed",
+        createdAt: new Date(),
+      },
+    ] as never);
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue(null);
+
+    const result = await releaseHeldEvoliaPushes();
+
+    expect(result).toEqual({ sent: 0, failed: 0, skipped: 0, deferred: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never sends a push another release already claimed", async () => {
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
+      {
+        id: "reg_x",
+        companyId: "cx",
+        event: "company.registration.pushed",
+        reference: null,
+        createdAt: new Date(),
+      },
+    ] as never);
+    vi.mocked(prisma.evoliaPush.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    const result = await releaseHeldEvoliaPushes();
+
+    expect(result.sent).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

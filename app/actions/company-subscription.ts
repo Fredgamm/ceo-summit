@@ -16,10 +16,18 @@ import { isUpsellEligible } from "@/lib/upsell-plans";
 import { computeEffectiveStatus } from "@/lib/company-subscription-status";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { getEurToArRate } from "@/lib/currency-conversion";
-import { CANCELLED_BY_COMPANY_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import {
+  CANCELLED_BY_COMPANY_REASON,
+  EVOLIA_PUSH_FAILED_REASON,
+  isEvoliaPaymentMethod,
+} from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
 import { cancelPendingEvoliaPaymentCore } from "@/lib/payment-confirmations";
-import { isPlanAvailable, planUnavailableMessage } from "@/lib/plan-availability";
+import {
+  isPlanAvailable,
+  planUnavailableMessage,
+  subscriptionCanPayPlan,
+} from "@/lib/plan-availability";
 import { isEvoliaLive } from "@/lib/evolia-config";
 import { formatEuro } from "@/lib/utils";
 import { PLATFORM_ADMIN_NO_PURCHASE_MESSAGE } from "@/lib/platform-admin-purchase";
@@ -209,7 +217,7 @@ export async function submitPaymentProof(
       error: "Cet abonnement n'est pas en attente de paiement.",
     };
   }
-  if (!isPlanAvailable(subscription.plan)) {
+  if (!(await subscriptionCanPayPlan(subscription))) {
     return { success: false, error: planUnavailableMessage(subscription.plan) };
   }
 
@@ -274,8 +282,19 @@ export async function submitPaymentProof(
 
   // Rapport QA du 7 oct. 2026 (§4.2) — taux du jour enregistré avec le
   // paiement, pour l'export en euros.
-  const [payment] = await prisma.$transaction([
-    prisma.companyPayment.create({
+  // 23 oct. 2026 — l'abonnement ne passe en revue qu'une fois : deux envois
+  // simultanés (double clic, deux onglets) créaient deux paiements en attente,
+  // tous deux confirmables (double encaissement).
+  const payment = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.companySubscription.updateMany({
+      where: { id: companySubscriptionId, status: "PENDING_PAYMENT" },
+      data: {
+        status: "PENDING_REVIEW",
+        declaredParticipants: isGroupOffer ? declaredParticipants : null,
+      },
+    });
+    if (count === 0) return null;
+    return tx.companyPayment.create({
       data: {
         companySubscriptionId,
         amount,
@@ -285,15 +304,11 @@ export async function submitPaymentProof(
         comment: f.comment || null,
         submittedById: viewer.id,
       },
-    }),
-    prisma.companySubscription.update({
-      where: { id: companySubscriptionId },
-      data: {
-        status: "PENDING_REVIEW",
-        declaredParticipants: isGroupOffer ? declaredParticipants : null,
-      },
-    }),
-  ]);
+    });
+  });
+  if (!payment) {
+    return { success: false, error: "Un paiement est déjà en cours pour cette offre." };
+  }
 
   if (viaEvolia) {
     const started = await startEvoliaCollection(payment.id, viewer.id, true);
@@ -369,7 +384,7 @@ async function startEvoliaCollection(
     data: {
       status: "REJECTED",
       reviewedAt: new Date(),
-      rejectionReason: "Transmission à Evolia impossible — paiement non lancé.",
+      rejectionReason: EVOLIA_PUSH_FAILED_REASON,
     },
   });
   if (revertSubscription) {

@@ -1,6 +1,7 @@
 import type { PaymentMethod } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { seatCap } from "@/lib/company-seats";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
@@ -8,6 +9,12 @@ import { resolveEmail } from "@/lib/email-template-resolver";
 import { isEvoliaPaymentMethod, REVIVABLE_EVOLIA_REASONS } from "@/lib/payment-methods";
 import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
+
+class AlreadyActiveError extends Error {}
+
+/** Note posée sur un paiement confirmé par Evolia alors que l'offre était déjà réglée. */
+export const DOUBLE_PAYMENT_NOTE =
+  "Confirmé par Evolia alors que l'offre était déjà réglée — double paiement à rembourser.";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -36,7 +43,7 @@ type ActionResult<T = undefined> = { success: true; data: T } | { success: false
 export async function confirmCompanyPaymentCore(
   companyPaymentId: string,
   actorId: string | null
-): Promise<ActionResult<{ companyId: string }>> {
+): Promise<ActionResult<{ companyId: string; doublePayment?: boolean }>> {
   const payment = await prisma.companyPayment.findUnique({
     where: { id: companyPaymentId },
     include: {
@@ -124,26 +131,71 @@ export async function confirmCompanyPaymentCore(
     return { success: true, data: { companyId: payment.companySubscription.companyId } };
   }
 
+  /**
+   * 23 oct. 2026 — offre déjà réglée (accès actif) : ce paiement fait double
+   * emploi (ex. carte confirmée par Evolia après annulation, puis virement).
+   * L'admin ne peut pas le valider ; une confirmation d'Evolia (argent reçu)
+   * est enregistrée mais signalée comme double paiement, sans rien réactiver.
+   */
+  if (payment.companySubscription.status === "ACTIVE") {
+    if (actorId) {
+      return {
+        success: false,
+        error:
+          "L'offre de cette entreprise est déjà réglée (accès actif) : ce paiement fait double emploi. Refusez-le, et remboursez-le si l'argent a été reçu.",
+      };
+    }
+    const { count } = await prisma.companyPayment.updateMany({
+      where: { id: companyPaymentId, status: "PENDING" },
+      data: {
+        status: "CONFIRMED",
+        reviewedAt: now,
+        rejectionReason: DOUBLE_PAYMENT_NOTE,
+      },
+    });
+    if (count === 0) return { success: false, error: "Ce paiement a déjà été traité." };
+    return {
+      success: true,
+      data: { companyId: payment.companySubscription.companyId, doublePayment: true },
+    };
+  }
+
   const oneYearLater = new Date(now);
   oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
 
   // Même transaction que pour un supplément : un échec entre les deux écritures
   // laissait un paiement CONFIRMED (donc non rejouable) avec un abonnement
   // resté en PENDING_REVIEW, c'est-à-dire une entreprise payée sans accès.
-  const confirmed = await prisma.$transaction(async (tx) => {
-    const { count } = await tx.companyPayment.updateMany({
-      where: { id: companyPaymentId, status: "PENDING" },
-      data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+  // L'activation est conditionnelle : deux confirmations simultanées pour la
+  // même entreprise (admin + Evolia) n'activent qu'une fois ; l'autre est
+  // annulée (transaction) et repasse par le contrôle « déjà réglée » ci-dessus.
+  const confirmed = await prisma
+    .$transaction(async (tx) => {
+      const { count } = await tx.companyPayment.updateMany({
+        where: { id: companyPaymentId, status: "PENDING" },
+        data: { status: "CONFIRMED", reviewedById: actorId, reviewedAt: now },
+      });
+      if (count === 0) return "processed" as const;
+      const activated = await tx.companySubscription.updateMany({
+        where: { id: payment.companySubscriptionId, status: { not: "ACTIVE" } },
+        data: { status: "ACTIVE", startDate: now, endDate: oneYearLater },
+      });
+      if (activated.count === 0) throw new AlreadyActiveError();
+      return "confirmed" as const;
+    })
+    .catch((err) => {
+      if (err instanceof AlreadyActiveError) return "already-active" as const;
+      throw err;
     });
-    if (count === 0) return false;
-    await tx.companySubscription.update({
-      where: { id: payment.companySubscriptionId },
-      data: { status: "ACTIVE", startDate: now, endDate: oneYearLater },
-    });
-    return true;
-  });
-  if (!confirmed) {
+  if (confirmed === "processed") {
     return { success: false, error: "Ce paiement a déjà été traité." };
+  }
+  if (confirmed === "already-active") {
+    return {
+      success: false,
+      error:
+        "L'offre de cette entreprise vient d'être réglée par un autre paiement : réessayez pour le voir.",
+    };
   }
 
   // Module 21 §3.0 étape 3 (8 oct. 2026) — l'offre liée à un événement vaut
@@ -320,6 +372,71 @@ export async function cancelPendingEvoliaPaymentCore(
     }
     return true;
   });
+}
+
+/**
+ * 23 oct. 2026 — un paiement Evolia confirmé après annulation porte sur ce que
+ * l'entreprise avait choisi à ce moment-là (instantané de l'inscription
+ * envoyée à Evolia). Si elle a depuis changé d'offre ou de nombre de
+ * participants, l'activer donnerait ce qu'elle n'a pas payé. Renvoie l'écart
+ * à faire vérifier par l'admin, ou `null` si tout correspond.
+ */
+export async function evoliaPaymentMismatch(companyPaymentId: string): Promise<string | null> {
+  const payment = await prisma.companyPayment.findUnique({
+    where: { id: companyPaymentId },
+    include: { companySubscription: { include: { plan: true } } },
+  });
+  // Supplément : il porte sa propre offre et sa quantité, l'abonnement n'y change rien.
+  if (!payment || payment.upsellQuantity != null) return null;
+  const push = await prisma.evoliaPush.findFirst({
+    where: { reference: companyPaymentId, event: "company.registration.pushed" },
+    orderBy: { createdAt: "asc" },
+    select: { payload: true },
+  });
+  if (!push) return null;
+  const offer =
+    (push.payload as { offer?: { name?: string; includedParticipants?: number | null } }).offer ??
+    {};
+  const subscription = payment.companySubscription;
+  const currentSeats = seatCap(subscription);
+  if (
+    offer.name === subscription.plan.name &&
+    (offer.includedParticipants ?? null) === currentSeats
+  ) {
+    return null;
+  }
+  return `Payé : ${offer.name ?? "?"} (${offer.includedParticipants ?? "—"} participant(s)) ; choisi aujourd'hui : ${subscription.plan.name} (${currentSeats ?? "—"} participant(s)).`;
+}
+
+/**
+ * Paiement Evolia ressuscité mais qui ne correspond plus à l'abonnement
+ * (`evoliaPaymentMismatch`) : il reste en attente avec une note, et
+ * l'abonnement passe en vérification pour que l'admin le voie et que
+ * l'entreprise ne paie pas une seconde fois entre-temps.
+ */
+export async function holdRevivedPaymentForReview(companyPaymentId: string, mismatch: string) {
+  const payment = await prisma.companyPayment.findUnique({
+    where: { id: companyPaymentId },
+    select: { comment: true, companySubscriptionId: true },
+  });
+  if (!payment) return;
+  const note = `[À vérifier] Confirmé par Evolia après annulation, alors que l'entreprise a changé d'offre ou d'effectif. ${mismatch}`;
+  await prisma.$transaction([
+    prisma.companyPayment.update({
+      where: { id: companyPaymentId },
+      data: {
+        comment: payment.comment
+          ? `${note}
+
+${payment.comment}`
+          : note,
+      },
+    }),
+    prisma.companySubscription.updateMany({
+      where: { id: payment.companySubscriptionId, status: "PENDING_PAYMENT" },
+      data: { status: "PENDING_REVIEW" },
+    }),
+  ]);
 }
 
 export async function reviveCancelledEvoliaPayment(

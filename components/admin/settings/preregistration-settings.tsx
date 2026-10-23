@@ -21,11 +21,14 @@ export function PreregistrationSettings({
   active,
   openEmailSentAt,
   preregisteredCount,
+  plansExpiringBeforeOpening,
 }: {
   paymentsOpenOn: string | null;
   active: boolean;
   openEmailSentAt: string | null;
   preregisteredCount: number;
+  /** Offres dont la date limite tombe avant l'ouverture des paiements. */
+  plansExpiringBeforeOpening: { name: string; availableUntil: string }[];
 }) {
   const router = useRouter();
   const [day, setDay] = React.useState(paymentsOpenOn ?? "");
@@ -104,6 +107,20 @@ export function PreregistrationSettings({
       <p className="mt-1.5 text-xs text-text-muted">
         À minuit (heure de Madagascar) le jour choisi.
       </p>
+
+      {plansExpiringBeforeOpening.length > 0 && (
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Attention : à l&apos;ouverture des paiements, ces offres auront expiré :{" "}
+          {plansExpiringBeforeOpening
+            .map(
+              (p) => `${p.name.replace(/\*+/g, "").trim()} (le ${formatDateFr(p.availableUntil)})`
+            )
+            .join(", ")}
+          . Les entreprises préinscrites sur l&apos;une d&apos;elles, sans paiement engagé avant
+          cette date, devront choisir une autre offre — sauf si vous repoussez sa date limite dans
+          Admin › Offres.
+        </p>
+      )}
 
       <div className="mt-4 flex flex-col gap-3 rounded-md bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-text-mid">

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { isEvoliaLive } from "@/lib/evolia-config";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
-import { deliverEvoliaPush } from "@/lib/evolia";
+import { deliverEvoliaPush, pushParticipantsToEvolia } from "@/lib/evolia";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { resolveEmail } from "@/lib/email-template-resolver";
 
@@ -200,6 +200,18 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
 
   const push = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
   if (!push) return { success: false, error: "Envoi introuvable." };
+  // Écarté à l'activation (paiement annulé, liste remplacée) : le renvoyer
+  // transmettrait une information périmée. Retenu : part avec la transmission
+  // des envois retenus (Paramètres › Intégrations), pas un par un.
+  if (push.status === "SKIPPED" || push.status === "HELD") {
+    return {
+      success: false,
+      error:
+        push.status === "SKIPPED"
+          ? "Cet envoi a été écarté (paiement annulé ou liste remplacée) : il ne doit pas être renvoyé."
+          : "Cet envoi est retenu : il part avec la transmission des envois retenus (Paramètres › Intégrations).",
+    };
+  }
   // 23 oct. 2026 — rien ne part avant l'activation d'Evolia (Paramètres › Intégrations).
   if (!(await isEvoliaLive())) {
     return {
@@ -223,7 +235,18 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
     }
   }
 
-  const delivered = await deliverEvoliaPush(pushId);
+  // Une liste de participants est recalculée au moment du renvoi : renvoyer
+  // l'ancien instantané pourrait écraser chez Evolia une liste plus récente.
+  let delivered: boolean;
+  if (push.event === "company.participants.confirmed") {
+    await prisma.evoliaPush.updateMany({
+      where: { id: pushId, status: { in: ["FAILED", "PENDING"] } },
+      data: { status: "SKIPPED", lastError: "Remplacé par la liste à jour, renvoyée par l'admin." },
+    });
+    delivered = await pushParticipantsToEvolia(push.companyId);
+  } else {
+    delivered = await deliverEvoliaPush(pushId);
+  }
   await prisma.auditLog.create({
     data: {
       actorId: adminId,

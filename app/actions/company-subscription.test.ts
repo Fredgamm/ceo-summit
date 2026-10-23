@@ -201,7 +201,13 @@ describe("submitPaymentProof", () => {
       company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
       plan: { priceAr: 2_250_000, minParticipants: 10, pricingMode: "PER_PARTICIPANT" },
     } as never);
-    vi.mocked(prisma.$transaction).mockResolvedValue([{ id: "payment_1" }, {}] as never);
+    // Transaction interactive : l'abonnement ne passe en revue qu'une fois.
+    vi.mocked(prisma.$transaction).mockImplementation((async (fn: (tx: unknown) => unknown) =>
+      fn(prisma)) as never);
+    vi.mocked(prisma.companySubscription.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.companyPayment.create).mockResolvedValue({ id: "payment_1" } as never);
+    // Aucun paiement antérieur engagé (date limite des offres).
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue(null);
   });
 
   it("refuses any payment while the manager's address is unconfirmed (14 oct. 2026)", async () => {
@@ -237,6 +243,38 @@ describe("submitPaymentProof", () => {
     vi.mocked(isEvoliaLive).mockResolvedValue(true);
   });
 
+  it("creates only one payment when the same offer is submitted twice at once", async () => {
+    vi.mocked(prisma.companySubscription.updateMany).mockResolvedValueOnce({ count: 0 } as never);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(false);
+    expect(prisma.companyPayment.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps an expired offer payable when a payment was started before its deadline", async () => {
+    vi.mocked(prisma.companySubscription.findUnique).mockResolvedValueOnce({
+      id: "sub_1",
+      companyId: "company_1",
+      status: "PENDING_PAYMENT",
+      company: { companyAdminId: "admin_user_1", name: "Rakoto Holding" },
+      plan: {
+        name: "Early Bird",
+        priceAr: 2_250_000,
+        minParticipants: 1,
+        pricingMode: "PER_PARTICIPANT",
+        availableUntil: new Date("2026-10-01T20:59:59Z"),
+      },
+    } as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValueOnce({
+      id: "rejected_proof",
+    } as never);
+
+    const result = await submitPaymentProof("sub_1", VALID_INPUT);
+
+    expect(result.success).toBe(true);
+  });
+
   it("refuses to pay an offer whose availability date has passed", async () => {
     vi.mocked(prisma.companySubscription.findUnique).mockResolvedValueOnce({
       id: "sub_1",
@@ -266,8 +304,9 @@ describe("submitPaymentProof", () => {
     expect(prisma.companyPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ amount: 22_500_000 }) })
     );
-    expect(prisma.companySubscription.update).toHaveBeenCalledWith(
+    expect(prisma.companySubscription.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: "sub_1", status: "PENDING_PAYMENT" },
         data: expect.objectContaining({ status: "PENDING_REVIEW", declaredParticipants: 10 }),
       })
     );
@@ -360,7 +399,7 @@ describe("submitPaymentProof", () => {
     expect(prisma.companyPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ amount: 20_000_000 }) })
     );
-    expect(prisma.companySubscription.update).toHaveBeenCalledWith(
+    expect(prisma.companySubscription.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ declaredParticipants: null }),
       })
