@@ -114,51 +114,38 @@ const nextConfig = {
   },
 };
 
-const CRITICAL_PAGES = ["/dashboard", "/messagerie"];
-const MEMBER_PAGE_PREFIXES = [
-  "/dashboard",
-  "/deal-room",
-  "/evenements",
-  "/catalogue",
-  "/salles",
-  "/entreprise",
-  "/entreprises",
-  "/membres",
-  "/messagerie",
-  "/profil",
-];
-
-function matchesNavigationTo(pathname, prefixes) {
-  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
-
 /**
- * E9-T01 — offline support for the pages the backlog calls out by name
- * (dashboard, messagerie) plus a StaleWhileRevalidate layer for every other
- * member-facing page. Both sit *ahead* of `@ducanh2912/next-pwa`'s own
- * defaultCache (fonts/images/JS/CSS/API), which we keep via
- * extendDefaultRuntimeCaching — we're only overriding page-navigation
- * caching, not asset caching.
+ * Service worker (next-pwa) — 23 oct. 2026, déconnexion qui « ne marchait pas » :
  *
- * 23 septembre 2026 (incident cache) — /login était dans CRITICAL_PAGES et se
- * retrouvait donc servi depuis un cache vieux de 7 jours (NetworkFirst avec
- * timeout 4s : sur un réseau lent, la version en cache l'emportait). Une page
- * de login n'a aucune utilité hors-ligne (on ne peut pas s'authentifier sans
- * réseau) — la mettre en cache ne fait que risquer de servir du contenu
- * périmé (ex: un lien qu'on vient de retirer) sans jamais apporter le
- * bénéfice recherché. Route explicite en NetworkOnly, placée avant le
- * defaultCache de next-pwa (qui mettrait sinon les pages en cache 24h via son
- * propre NetworkFirst) pour garantir que /login reflète toujours le serveur.
+ * - `dynamicStartUrlRedirect: "/login"` mettait la page /login au précache, à
+ *   l'installation du service worker. Installé par un navigateur connecté,
+ *   /login y renvoyait vers le tableau de bord : la copie gardée était donc le
+ *   tableau de bord de la personne connectée, resservi sous /login à la
+ *   déconnexion (et visible par le suivant sur un appareil partagé). Options
+ *   `cacheStartUrl` / `dynamicStartUrl` / `dynamicStartUrlRedirect` retirées.
+ * - Les règles « pages critiques » (E9-T01) appelaient une fonction définie
+ *   ici, absente du service worker généré : elles plantaient et n'ont jamais
+ *   servi. Remplacées par une seule règle : toute navigation va au serveur
+ *   (jamais une page personnelle depuis un cache) ; hors connexion, la page
+ *   /~offline s'affiche (`fallbacks.document`).
+ *
+ * Restent en cache les ressources statiques (JS, CSS, polices, images) via le
+ * cache par défaut de next-pwa. Les appels d'authentification (/api/auth/*)
+ * ne passent jamais par un cache (21 oct. 2026 : un jeton CSRF périmé y
+ * bloquait la déconnexion).
+ *
+ * ATTENTION : les fonctions `urlPattern` sont recopiées telles quelles dans
+ * public/sw.js — elles ne doivent rien utiliser de ce fichier (constantes,
+ * fonctions), seulement leurs paramètres.
  */
 const withPWA = withPWAInit({
   dest: "public",
   register: true,
   disable: process.env.NODE_ENV === "development",
-  cacheStartUrl: true,
-  dynamicStartUrl: true,
-  // manifest.json's start_url (/dashboard) redirects unauthenticated
-  // visitors to /login — see middleware.ts.
-  dynamicStartUrlRedirect: "/login",
+  // Activés par défaut : précache et route « start-url » de « / », qui
+  // redirige selon la session (tableau de bord ou connexion).
+  cacheStartUrl: false,
+  dynamicStartUrl: false,
   fallbacks: {
     document: "/~offline",
   },
@@ -166,41 +153,12 @@ const withPWA = withPWAInit({
   workboxOptions: {
     runtimeCaching: [
       {
-        urlPattern: ({ url, request }) => request.mode === "navigate" && url.pathname === "/login",
-        handler: "NetworkOnly",
-      },
-      // 21 oct. 2026 (déconnexion bloquée) — le cache « apis » par défaut de
-      // next-pwa (NetworkFirst, 10 s, 24 h) couvrait aussi /api/auth/csrf et
-      // /api/auth/session : sur un réseau lent, signOut() attendait 10 s puis
-      // envoyait un jeton CSRF périmé, refusé — on restait sur la page. Rien
-      // de l'authentification ne doit jamais venir d'un cache.
-      {
         urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith("/api/auth/"),
         handler: "NetworkOnly",
       },
       {
-        urlPattern: ({ url, request }) =>
-          request.mode === "navigate" && matchesNavigationTo(url.pathname, CRITICAL_PAGES),
-        handler: "NetworkFirst",
-        options: {
-          cacheName: "ceo-summit-critical-pages",
-          networkTimeoutSeconds: 4,
-          expiration: { maxEntries: 10, maxAgeSeconds: 7 * 24 * 60 * 60 },
-        },
-      },
-      {
-        urlPattern: ({ url, request }) =>
-          request.mode === "navigate" && matchesNavigationTo(url.pathname, MEMBER_PAGE_PREFIXES),
-        // 21 oct. 2026 — NetworkFirst plutôt que StaleWhileRevalidate : ce
-        // dernier affichait d'abord la version en cache (jusqu'à 24 h), la page
-        // semblait ne jamais se mettre à jour. Le cache ne sert plus que hors
-        // connexion ou si le serveur ne répond pas en 4 s.
-        handler: "NetworkFirst",
-        options: {
-          cacheName: "ceo-summit-member-pages",
-          networkTimeoutSeconds: 4,
-          expiration: { maxEntries: 40, maxAgeSeconds: 24 * 60 * 60 },
-        },
+        urlPattern: ({ request }) => request.mode === "navigate",
+        handler: "NetworkOnly",
       },
     ],
   },

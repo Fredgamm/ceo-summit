@@ -24,10 +24,28 @@ const USER_CACHE_NAMES = [
 /** Au-delà, on considère la déconnexion bloquée et on passe par la page NextAuth. */
 const SIGN_OUT_TIMEOUT_MS = 8000;
 
+/**
+ * 23 oct. 2026 — l'ancien service worker gardait /login (et la page
+ * d'accueil) au précache, enregistrés par un navigateur connecté : c'était
+ * en fait le tableau de bord, resservi sous /login après déconnexion. Le
+ * nouveau service worker ne les précache plus ; en attendant qu'il remplace
+ * l'ancien, on retire ces copies ici.
+ */
+const PRECACHED_USER_PAGES = ["/login", "/"];
+
 async function clearUserCaches() {
   if (typeof caches === "undefined") return;
   try {
     await Promise.all(USER_CACHE_NAMES.map((name) => caches.delete(name)));
+    const precaches = (await caches.keys()).filter((name) => name.includes("precache"));
+    for (const name of precaches) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        if (PRECACHED_USER_PAGES.includes(new URL(request.url).pathname)) {
+          await cache.delete(request);
+        }
+      }
+    }
   } catch {
     // Cache Storage indisponible (navigation privée…) : rien à vider.
   }
