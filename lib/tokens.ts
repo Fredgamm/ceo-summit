@@ -14,3 +14,5 @@ export const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h — architectur
 export const COMPANY_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // 14 oct. 2026 — confirmation de l'adresse du gestionnaire avant paiement.
 export const EMAIL_VERIFICATION_TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
+// 25 oct. 2026 — lien envoyé à un administrateur créé depuis Admin › Paramètres.
+export const ADMIN_INVITE_TTL_MS = 72 * 60 * 60 * 1000;

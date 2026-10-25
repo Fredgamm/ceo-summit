@@ -118,13 +118,20 @@ export default async function AdminParametresPage(props: {
     const adminUsers = await prisma.adminUser.findMany({ orderBy: { createdAt: "asc" } });
     const users = await prisma.user.findMany({
       where: { id: { in: adminUsers.map((a) => a.userId) } },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, passwordHash: true },
     });
     const userById = new Map(users.map((u) => [u.id, u]));
-    const admins = adminUsers.map((admin) => ({
-      ...admin,
-      user: userById.get(admin.userId) ?? { name: "Compte introuvable", email: "" },
-    }));
+    // Jamais le hash vers le navigateur : seulement « a un mot de passe ».
+    const admins = adminUsers.map((admin) => {
+      const user = userById.get(admin.userId);
+      return {
+        ...admin,
+        user: user
+          ? { name: user.name, email: user.email }
+          : { name: "Compte introuvable", email: "" },
+        hasPassword: Boolean(user?.passwordHash),
+      };
+    });
 
     tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
   } else if (activeTab === "integrations") {

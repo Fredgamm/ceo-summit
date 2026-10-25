@@ -68,6 +68,38 @@ export const ACCOUNT_APPLICATION_TEMPLATES: EmailTemplateDefinition[] = [
     ],
   },
   {
+    key: "admin-invite",
+    category: "ACCOUNT_APPLICATION",
+    label: "Invitation administrateur",
+    description:
+      "Envoyé à la personne qu'un super administrateur ajoute comme administrateur de la plateforme, pour qu'elle choisisse son mot de passe.",
+    triggerHint: "app/actions/admin-settings.ts::createAdminAccount (aussi resendAdminInvite)",
+    variables: [
+      { key: "memberName", label: "Nom de l'administrateur", example: "Hery Rakoto" },
+      { key: "roleLabel", label: "Rôle", example: "Super Admin" },
+      {
+        key: "inviteUrl",
+        label: "Lien pour choisir le mot de passe",
+        example: "https://b2b.ceo-summit.mg/reinitialiser/token",
+      },
+    ],
+    defaultSubject: "Votre accès administrateur CEO Summit",
+    defaultBlocks: [
+      { id: "1", type: "heading", text: "Bonjour {{memberName}}," },
+      {
+        id: "2",
+        type: "paragraph",
+        text: "Un compte administrateur de la plateforme CEO Summit vient d'être créé pour vous, avec le rôle **{{roleLabel}}**. Choisissez votre mot de passe pour l'activer.",
+      },
+      { id: "3", type: "button", label: "Choisir mon mot de passe", url: "{{inviteUrl}}" },
+      {
+        id: "4",
+        type: "paragraph",
+        text: "Ce lien est valable 72 heures. Passé ce délai, utilisez « Mot de passe oublié » sur la page de connexion.",
+      },
+    ],
+  },
+  {
     key: "password-changed",
     category: "ACCOUNT_APPLICATION",
     label: "Confirmation de changement de mot de passe",

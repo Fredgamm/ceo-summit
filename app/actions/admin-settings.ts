@@ -7,6 +7,11 @@ import type { AdminRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-auth";
 import { pluralize } from "@/lib/utils";
+import { emailSchema } from "@/lib/validations/auth";
+import { ADMIN_INVITE_TTL_MS, generateSecureToken } from "@/lib/tokens";
+import { resolveEmail } from "@/lib/email-template-resolver";
+import { sendTransactionalEmail } from "@/lib/resend";
+import { appUrl } from "@/lib/app-url";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -107,10 +112,23 @@ export async function promoteToAdmin(email: string, role: AdminRole): Promise<Ac
   const existingAdmin = await prisma.adminUser.findUnique({ where: { userId: user.id } });
   if (existingAdmin) return { success: false, error: "Ce membre est déjà administrateur." };
 
+  await grantAdminRole(user.id, role, actingAdminId);
+
+  revalidatePath("/admin/parametres");
+  return { success: true, data: undefined };
+}
+
+const ADMIN_ROLE_LABEL: Record<AdminRole, string> = {
+  SUPER_ADMIN: "Super Admin",
+  MODERATEUR: "Modérateur",
+  FINANCIER: "Financier",
+};
+
+async function grantAdminRole(userId: string, role: AdminRole, actingAdminId: string) {
   await prisma.$transaction([
-    prisma.adminUser.create({ data: { userId: user.id, role } }),
+    prisma.adminUser.create({ data: { userId, role } }),
     prisma.user.update({
-      where: { id: user.id },
+      where: { id: userId },
       data: { role: "ADMIN", isPlatformAdmin: true },
     }),
   ]);
@@ -120,12 +138,145 @@ export async function promoteToAdmin(email: string, role: AdminRole): Promise<Ac
       actorId: actingAdminId,
       action: "admin.promote",
       targetType: "AdminUser",
-      targetId: user.id,
+      targetId: userId,
       metadata: { role },
     },
   });
+}
 
+/**
+ * Lien « choisir mon mot de passe » (même page que la réinitialisation),
+ * valable 72 h ; les liens précédents de ce compte ne valent plus rien.
+ * Renvoie `false` si l'e-mail n'a pas pu partir : le compte reste créé.
+ */
+async function sendAdminInvite(
+  user: { id: string; name: string; email: string },
+  role: AdminRole
+): Promise<boolean> {
+  const token = generateSecureToken();
+  await prisma.$transaction([
+    prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    }),
+    prisma.passwordResetToken.create({
+      data: { userId: user.id, token, expiresAt: new Date(Date.now() + ADMIN_INVITE_TTL_MS) },
+    }),
+  ]);
+  try {
+    const email = await resolveEmail("admin-invite", {
+      memberName: user.name,
+      roleLabel: ADMIN_ROLE_LABEL[role],
+      inviteUrl: `${appUrl()}/reinitialiser/${token}`,
+    });
+    if (!email) return false;
+    await sendTransactionalEmail({ to: user.email, ...email });
+    return true;
+  } catch (err) {
+    console.error("[sendAdminInvite] failed to send admin invite", err);
+    return false;
+  }
+}
+
+const createAdminSchema = z.object({
+  name: z.string().trim().min(2, "Le nom est requis").max(120),
+  email: emailSchema,
+  role: z.enum(["SUPER_ADMIN", "MODERATEUR", "FINANCIER"]),
+});
+
+/**
+ * 25 oct. 2026 — ajout d'un administrateur sans compte membre préalable : le
+ * super admin choisit nom, e-mail et rôle. Nouveau compte → créé actif, sans
+ * mot de passe, et la personne reçoit un lien pour choisir le sien. E-mail
+ * déjà inscrit → le compte est promu (lien envoyé seulement s'il n'a jamais
+ * eu de mot de passe ; `emailSent: null` = rien à envoyer).
+ */
+export async function createAdminAccount(
+  input: unknown
+): Promise<ActionResult<{ created: boolean; emailSent: boolean | null }>> {
+  const { userId: actingAdminId } = await requireAdmin("parametres");
+
+  const parsed = createAdminSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Données invalides." };
+  }
+  const { name, role } = parsed.data;
+  const email = parsed.data.email.toLowerCase().trim();
+
+  const existing = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, name: true, email: true, passwordHash: true },
+  });
+
+  if (existing) {
+    const existingAdmin = await prisma.adminUser.findUnique({ where: { userId: existing.id } });
+    if (existingAdmin) return { success: false, error: "Ce compte est déjà administrateur." };
+    await grantAdminRole(existing.id, role, actingAdminId);
+    const emailSent = existing.passwordHash ? null : await sendAdminInvite(existing, role);
+    revalidatePath("/admin/parametres");
+    return { success: true, data: { created: false, emailSent } };
+  }
+
+  const now = new Date();
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        email,
+        name,
+        role: "ADMIN",
+        isPlatformAdmin: true,
+        status: "ACTIVE",
+        emailVerifiedAt: now,
+        onboardingCompletedAt: now,
+      },
+      select: { id: true, name: true, email: true },
+    });
+    await tx.adminUser.create({ data: { userId: created.id, role } });
+    await tx.auditLog.create({
+      data: {
+        actorId: actingAdminId,
+        action: "admin.create",
+        targetType: "AdminUser",
+        targetId: created.id,
+        metadata: { role, email },
+      },
+    });
+    return created;
+  });
+
+  const emailSent = await sendAdminInvite(user, role);
   revalidatePath("/admin/parametres");
+  return { success: true, data: { created: true, emailSent } };
+}
+
+/** Renvoie le lien à un administrateur qui n'a pas encore choisi son mot de passe. */
+export async function resendAdminInvite(adminUserId: string): Promise<ActionResult> {
+  const { userId: actingAdminId } = await requireAdmin("parametres");
+
+  const admin = await prisma.adminUser.findUnique({ where: { id: adminUserId } });
+  if (!admin) return { success: false, error: "Compte administrateur introuvable." };
+  const user = await prisma.user.findUnique({
+    where: { id: admin.userId },
+    select: { id: true, name: true, email: true, passwordHash: true },
+  });
+  if (!user) return { success: false, error: "Compte introuvable." };
+  if (user.passwordHash) {
+    return {
+      success: false,
+      error: "Ce compte a déjà un mot de passe : utilisez « Mot de passe oublié ».",
+    };
+  }
+
+  const sent = await sendAdminInvite(user, admin.role);
+  if (!sent) return { success: false, error: "L'e-mail n'a pas pu être envoyé. Réessayez." };
+  await prisma.auditLog.create({
+    data: {
+      actorId: actingAdminId,
+      action: "admin.resend_invite",
+      targetType: "AdminUser",
+      targetId: user.id,
+    },
+  });
   return { success: true, data: undefined };
 }
 

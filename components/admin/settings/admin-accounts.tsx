@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { AdminRole } from "@prisma/client";
 
-import { promoteToAdmin, updateAdminRole, toggleAdminActive } from "@/app/actions/admin-settings";
+import {
+  createAdminAccount,
+  resendAdminInvite,
+  updateAdminRole,
+  toggleAdminActive,
+} from "@/app/actions/admin-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +37,8 @@ export interface AdminAccountRow {
   active: boolean;
   lastLoginAt: Date | null;
   user: { name: string; email: string };
+  /** Faux tant que la personne n'a pas choisi son mot de passe (lien d'invitation). */
+  hasPassword: boolean;
 }
 
 interface AdminAccountsManagerProps {
@@ -40,32 +47,57 @@ interface AdminAccountsManagerProps {
 }
 
 /**
- * E8-T11 — "Administrateurs". Contrairement au wireframe (qui crée un compte
- * ex-nihilo), on promeut un membre existant : c'est le seul flux de création
- * de compte cohérent avec le reste de la plateforme (webhook Evolia ou
- * approbation de candidature) — voir promoteToAdmin dans admin-settings.ts.
+ * E8-T11 — "Administrateurs". 25 oct. 2026 : le super admin crée lui-même
+ * le compte (nom, e-mail, rôle) ; la personne reçoit un lien pour choisir
+ * son mot de passe. Un e-mail déjà inscrit est simplement promu — voir
+ * createAdminAccount dans admin-settings.ts.
  */
 export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsManagerProps) {
   const router = useRouter();
+  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [role, setRole] = React.useState<AdminRole>("MODERATEUR");
-  const [promoting, setPromoting] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+  const [resendingId, setResendingId] = React.useState<string | null>(null);
   const [toggleTarget, setToggleTarget] = React.useState<AdminAccountRow | null>(null);
 
-  async function handlePromote() {
-    if (!email.trim()) return;
-    setPromoting(true);
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || creating) return;
+    setCreating(true);
     try {
-      const result = await promoteToAdmin(email, role);
-      if (result.success) {
-        toast.success("Compte administrateur créé.");
-        setEmail("");
-        router.refresh();
-      } else {
+      const result = await createAdminAccount({ name, email, role });
+      if (!result.success) {
         toast.error(result.error);
+        return;
       }
+      const { created, emailSent } = result.data;
+      const what = created ? "Administrateur créé." : "Compte existant promu administrateur.";
+      if (emailSent === false) {
+        toast.warning(
+          `${what} L'e-mail n'a pas pu partir : utilisez « Renvoyer le lien » dans la liste.`
+        );
+      } else if (emailSent) {
+        toast.success(`${what} Un lien pour choisir son mot de passe lui a été envoyé.`);
+      } else {
+        toast.success(`${what} Il se connecte avec son mot de passe habituel.`);
+      }
+      setName("");
+      setEmail("");
+      router.refresh();
     } finally {
-      setPromoting(false);
+      setCreating(false);
+    }
+  }
+
+  async function handleResend(admin: AdminAccountRow) {
+    setResendingId(admin.id);
+    try {
+      const result = await resendAdminInvite(admin.id);
+      if (result.success) toast.success(`Lien renvoyé à ${admin.user.email}.`);
+      else toast.error(result.error);
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -91,17 +123,26 @@ export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsMan
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-lg border border-border bg-white p-5">
-        <h3 className="mb-3 text-sm font-bold text-navy">Promouvoir un membre en administrateur</h3>
-        <div className="flex flex-wrap items-end gap-2">
+        <h3 className="mb-3 text-sm font-bold text-navy">Ajouter un administrateur</h3>
+        <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-2">
+          <Input
+            placeholder="Nom complet"
+            aria-label="Nom complet"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={120}
+            className="w-full sm:max-w-[220px]"
+          />
           <Input
             type="email"
-            placeholder="email@membre.mg"
+            placeholder="email@ceo-summit.mg"
+            aria-label="Adresse e-mail"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
           <Select value={role} onValueChange={(v) => setRole(v as AdminRole)}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-48" aria-label="Rôle">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -112,12 +153,13 @@ export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsMan
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={handlePromote} disabled={promoting || !email.trim()}>
-            {promoting ? "Création…" : "+ Promouvoir"}
+          <Button type="submit" disabled={creating || !email.trim()}>
+            {creating ? "Création…" : "+ Ajouter"}
           </Button>
-        </div>
+        </form>
         <p className="mt-2 text-xs text-text-muted">
-          Le membre doit déjà avoir un compte actif (via candidature approuvée).
+          La personne reçoit un e-mail pour choisir son mot de passe (lien valable 72 heures). Si
+          l&apos;e-mail a déjà un compte sur la plateforme, ce compte devient administrateur.
         </p>
       </div>
 
@@ -168,17 +210,33 @@ export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsMan
                     {admin.lastLoginAt ? formatDateFr(admin.lastLoginAt) : "Jamais connecté"}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={admin.active ? "active" : "suspended"}>
-                      {admin.active ? "Actif" : "Désactivé"}
-                    </Badge>
+                    {!admin.hasPassword && admin.active ? (
+                      <Badge variant="pending">Mot de passe à choisir</Badge>
+                    ) : (
+                      <Badge variant={admin.active ? "active" : "suspended"}>
+                        {admin.active ? "Actif" : "Désactivé"}
+                      </Badge>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {isSelf ? (
                       <span className="text-xs italic text-text-muted">Votre compte</span>
                     ) : (
-                      <Button variant="ghost" size="sm" onClick={() => setToggleTarget(admin)}>
-                        {admin.active ? "Désactiver" : "Réactiver"}
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        {!admin.hasPassword && admin.active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleResend(admin)}
+                            disabled={resendingId === admin.id}
+                          >
+                            {resendingId === admin.id ? "Envoi…" : "Renvoyer le lien"}
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => setToggleTarget(admin)}>
+                          {admin.active ? "Désactiver" : "Réactiver"}
+                        </Button>
+                      </div>
                     )}
                   </td>
                 </tr>

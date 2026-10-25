@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/email-template-resolver", () => ({
+  resolveEmail: vi.fn().mockResolvedValue({ subject: "s", html: "h", text: "t" }),
+}));
+vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -20,7 +24,8 @@ vi.mock("@/lib/prisma", () => ({
     },
     company: { count: vi.fn() },
     opportunity: { count: vi.fn() },
-    user: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn() },
+    user: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn(), create: vi.fn() },
+    passwordResetToken: { updateMany: vi.fn(), create: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -28,10 +33,13 @@ vi.mock("@/lib/prisma", () => ({
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendTransactionalEmail } from "@/lib/resend";
 import {
   createReferentialItem,
   deleteReferentialItem,
   promoteToAdmin,
+  createAdminAccount,
+  resendAdminInvite,
   updateAdminRole,
   toggleAdminActive,
 } from "./admin-settings";
@@ -45,6 +53,7 @@ beforeEach(() => {
   vi.mocked(auth).mockResolvedValue(SUPER_ADMIN_SESSION);
   vi.mocked(prisma.adminUser.findUnique).mockResolvedValue({ role: "SUPER_ADMIN" } as never);
   vi.mocked(prisma.$transaction).mockImplementation(async (ops: unknown) => {
+    if (typeof ops === "function") return (ops as (tx: typeof prisma) => unknown)(prisma);
     const list = ops as Promise<unknown>[];
     return Promise.all(list);
   });
@@ -155,6 +164,125 @@ describe("promoteToAdmin", () => {
 
     const result = await promoteToAdmin("already-admin@example.com", "MODERATEUR");
     expect(result.success).toBe(false);
+  });
+});
+
+describe("createAdminAccount", () => {
+  const INPUT = { name: "Team CEO Summit", email: "Team@CEO-Summit.mg", role: "SUPER_ADMIN" };
+
+  it("creates an active admin account without password and emails a set-password link", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.user.create).mockResolvedValue({
+      id: "user_new",
+      name: "Team CEO Summit",
+      email: "team@ceo-summit.mg",
+    } as never);
+
+    const result = await createAdminAccount(INPUT);
+
+    expect(result).toEqual({ success: true, data: { created: true, emailSent: true } });
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: "team@ceo-summit.mg",
+          isPlatformAdmin: true,
+          status: "ACTIVE",
+        }),
+      })
+    );
+    expect(prisma.adminUser.create).toHaveBeenCalledWith({
+      data: { userId: "user_new", role: "SUPER_ADMIN" },
+    });
+    expect(prisma.passwordResetToken.create).toHaveBeenCalled();
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "team@ceo-summit.mg" })
+    );
+  });
+
+  it("keeps the account and reports it when the email cannot be sent", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.user.create).mockResolvedValue({
+      id: "user_new",
+      name: "N",
+      email: "n@x.mg",
+    } as never);
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("smtp down"));
+
+    const result = await createAdminAccount(INPUT);
+    expect(result).toEqual({ success: true, data: { created: true, emailSent: false } });
+  });
+
+  it("promotes an existing account that already has a password, without email", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_2",
+      name: "M",
+      email: "m@x.mg",
+      passwordHash: "hash",
+    } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce(null);
+
+    const result = await createAdminAccount(INPUT);
+
+    expect(result).toEqual({ success: true, data: { created: false, emailSent: null } });
+    expect(prisma.user.create).not.toHaveBeenCalled();
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
+  });
+
+  it("rejects an account that is already an admin", async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: "user_2" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ id: "admin_existing" } as never);
+
+    const result = await createAdminAccount(INPUT);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an invalid email or role", async () => {
+    expect((await createAdminAccount({ ...INPUT, email: "pas-un-email" })).success).toBe(false);
+    expect((await createAdminAccount({ ...INPUT, role: "ROOT" })).success).toBe(false);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("resendAdminInvite", () => {
+  it("refuses an admin who already chose a password", async () => {
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({
+      id: "adm_2",
+      userId: "user_2",
+      role: "MODERATEUR",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_2",
+      name: "M",
+      email: "m@x.mg",
+      passwordHash: "hash",
+    } as never);
+
+    const result = await resendAdminInvite("adm_2");
+    expect(result.success).toBe(false);
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
+  });
+
+  it("sends a fresh link to an admin without password", async () => {
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({
+      id: "adm_2",
+      userId: "user_2",
+      role: "MODERATEUR",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: "user_2",
+      name: "M",
+      email: "m@x.mg",
+      passwordHash: null,
+    } as never);
+
+    const result = await resendAdminInvite("adm_2");
+    expect(result.success).toBe(true);
+    expect(prisma.passwordResetToken.updateMany).toHaveBeenCalled();
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "m@x.mg" }));
   });
 });
 
