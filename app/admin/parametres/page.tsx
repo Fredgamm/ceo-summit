@@ -9,10 +9,9 @@ import { ReferentialManager } from "@/components/admin/settings/referential-mana
 import { AdminAccountsManager } from "@/components/admin/settings/admin-accounts";
 import { EvoliaSettings } from "@/components/admin/settings/evolia-settings";
 import { BrevoSettings } from "@/components/admin/settings/brevo-settings";
-import { PreregistrationSettings } from "@/components/admin/settings/preregistration-settings";
 import { DirectorySettings } from "@/components/admin/settings/directory-settings";
+import { StaffOrganizationCard } from "@/components/admin/settings/staff-organization-card";
 import { getShowStaffInDirectory } from "@/lib/staff-visibility";
-import { PREREGISTERED_SUBSCRIPTION_WHERE, getPreregistrationStatus } from "@/lib/preregistration";
 import { getBrevoConfig, isBrevoReady } from "@/lib/brevo";
 import { getEvoliaConfig, getEvoliaSettingsStatus } from "@/lib/evolia-config";
 import { appUrl } from "@/lib/app-url";
@@ -50,35 +49,12 @@ export default async function AdminParametresPage(props: {
   let tabContent: React.ReactNode = null;
 
   if (activeTab === "tarifs") {
-    const [preregistration, preregisteredCount, showStaff, staffCount] = await Promise.all([
-      getPreregistrationStatus(),
-      prisma.companySubscription.count({ where: PREREGISTERED_SUBSCRIPTION_WHERE }),
+    const [showStaff, staffCount] = await Promise.all([
       getShowStaffInDirectory(),
       prisma.user.count({ where: { isPlatformAdmin: true } }),
     ]);
-    // Offres qui auront expiré à l'ouverture des paiements : leurs préinscrits
-    // devront changer d'offre (ou l'admin repousse leur date limite).
-    const plansExpiringBeforeOpening = preregistration.paymentsOpenAt
-      ? await prisma.plan.findMany({
-          where: {
-            isActive: true,
-            availableUntil: { lt: preregistration.paymentsOpenAt },
-          },
-          select: { name: true, availableUntil: true },
-        })
-      : [];
     tabContent = (
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PreregistrationSettings
-          paymentsOpenOn={preregistration.paymentsOpenOn}
-          active={preregistration.active}
-          openEmailSentAt={preregistration.openEmailSentAt?.toISOString() ?? null}
-          preregisteredCount={preregisteredCount}
-          plansExpiringBeforeOpening={plansExpiringBeforeOpening.map((p) => ({
-            name: p.name,
-            availableUntil: p.availableUntil!.toISOString(),
-          }))}
-        />
         <div className="rounded-lg border border-border bg-white p-5">
           <h3 className="text-sm font-bold text-navy">Offres & tarifs d&apos;adhésion</h3>
           <p className="mb-4 mt-1 text-xs text-text-muted">
@@ -118,8 +94,24 @@ export default async function AdminParametresPage(props: {
     const adminUsers = await prisma.adminUser.findMany({ orderBy: { createdAt: "asc" } });
     const users = await prisma.user.findMany({
       where: { id: { in: adminUsers.map((a) => a.userId) } },
-      select: { id: true, name: true, email: true, passwordHash: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        passwordHash: true,
+        company: { select: { name: true, isStaffOrganization: true } },
+      },
     });
+    const staff = await prisma.company.findFirst({
+      where: { isStaffOrganization: true },
+      select: { id: true, name: true, _count: { select: { users: true } } },
+    });
+    const companies = staff
+      ? []
+      : await prisma.company.findMany({
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        });
     const userById = new Map(users.map((u) => [u.id, u]));
     // Jamais le hash vers le navigateur : seulement « a un mot de passe ».
     const admins = adminUsers.map((admin) => {
@@ -130,10 +122,24 @@ export default async function AdminParametresPage(props: {
           ? { name: user.name, email: user.email }
           : { name: "Compte introuvable", email: "" },
         hasPassword: Boolean(user?.passwordHash),
+        inStaff: Boolean(user?.company?.isStaffOrganization),
+        companyName: user?.company?.name ?? null,
       };
     });
 
-    tabContent = <AdminAccountsManager admins={admins} currentUserId={userId} />;
+    tabContent = (
+      <div className="flex flex-col gap-4">
+        <StaffOrganizationCard
+          staff={staff && { id: staff.id, name: staff.name, memberCount: staff._count.users }}
+          companies={companies}
+        />
+        <AdminAccountsManager
+          admins={admins}
+          currentUserId={userId}
+          canAttachToStaff={staff != null}
+        />
+      </div>
+    );
   } else if (activeTab === "integrations") {
     const evoliaStatus = await getEvoliaSettingsStatus();
     const brevo = await getBrevoConfig();

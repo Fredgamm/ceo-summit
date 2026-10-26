@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { requireViewer } from "@/lib/require-viewer";
 import { seatCap } from "@/lib/company-seats";
 import {
@@ -59,7 +60,7 @@ export async function validateEventParticipants(
     },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== viewer.id) {
+  if (!(await canManageCompany(viewer, company))) {
     return { success: false, error: "Seul le gérant de l'entreprise peut valider la liste." };
   }
 

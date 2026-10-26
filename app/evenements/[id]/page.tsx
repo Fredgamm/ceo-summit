@@ -6,6 +6,7 @@ import type { RegistrationStatus } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { eventCapacityBadge } from "@/lib/events-query";
 import { cleanPlanName, getActivePlans } from "@/lib/plans-query";
 import { activeEventOf } from "@/lib/event-participation";
@@ -90,7 +91,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
       select: { status: true },
     }),
   ]);
-  const isCompanyAdmin = viewer.company?.companyAdminId === viewer.id;
+  const isCompanyAdmin = viewer.company ? await canManageCompany(viewer, viewer.company) : false;
 
   const isRegistered =
     viewerRegistration !== null && TAKEN_STATUSES.includes(viewerRegistration.status);
@@ -347,8 +348,8 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
             </EventAccessTicket>
           ) : showPasses ? (
             <EventAccessTicket
-              eyebrow="Accès par offre entreprise"
-              title="Réservé aux offres qui l'incluent"
+              eyebrow="Inclus dans votre inscription"
+              title="Votre accès est déjà réservé"
               actions={
                 <Button asChild variant="gold" className="w-full justify-center">
                   <a href="mailto:register@ceo-summit.mg">Contacter l&apos;équipe</a>
@@ -356,9 +357,14 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
               }
             >
               <p>
-                Cet événement est accessible aux entreprises dont l&apos;offre CEO Summit
-                l&apos;inclut. Pour y participer, contactez l&apos;équipe des inscriptions :
-                register@ceo-summit.mg.
+                Cet événement est compris dans votre participation au CEO Summit, sans démarche ni
+                frais supplémentaires.
+              </p>
+              <p className="mt-2">
+                Une question ? Notre équipe reste disponible :{" "}
+                <a href="mailto:register@ceo-summit.mg" className="underline underline-offset-2">
+                  register@ceo-summit.mg
+                </a>
               </p>
             </EventAccessTicket>
           ) : (

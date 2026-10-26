@@ -12,6 +12,7 @@ import { ADMIN_INVITE_TTL_MS, generateSecureToken } from "@/lib/tokens";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { appUrl } from "@/lib/app-url";
+import { attachToStaffOrganization, getStaffOrganization } from "@/lib/staff-organization";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -112,7 +113,8 @@ export async function promoteToAdmin(email: string, role: AdminRole): Promise<Ac
   const existingAdmin = await prisma.adminUser.findUnique({ where: { userId: user.id } });
   if (existingAdmin) return { success: false, error: "Ce membre est déjà administrateur." };
 
-  await grantAdminRole(user.id, role, actingAdminId);
+  const granted = await grantAdminRole(user.id, role, actingAdminId);
+  if (!granted.ok) return { success: false, error: granted.error };
 
   revalidatePath("/admin/parametres");
   return { success: true, data: undefined };
@@ -124,14 +126,30 @@ const ADMIN_ROLE_LABEL: Record<AdminRole, string> = {
   FINANCIER: "Financier",
 };
 
-async function grantAdminRole(userId: string, role: AdminRole, actingAdminId: string) {
-  await prisma.$transaction([
-    prisma.adminUser.create({ data: { userId, role } }),
-    prisma.user.update({
+/**
+ * 26 oct. 2026 — l'administrateur promu rejoint l'organisation staff ; si
+ * c'est impossible (il gère une autre organisation qui a des membres), rien
+ * n'est accordé.
+ */
+async function grantAdminRole(
+  userId: string,
+  role: AdminRole,
+  actingAdminId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const staff = await getStaffOrganization();
+  const attached = await prisma.$transaction(async (tx) => {
+    if (staff) {
+      const result = await attachToStaffOrganization(tx, userId, staff.id);
+      if (!result.ok) return result;
+    }
+    await tx.adminUser.create({ data: { userId, role } });
+    await tx.user.update({
       where: { id: userId },
       data: { role: "ADMIN", isPlatformAdmin: true },
-    }),
-  ]);
+    });
+    return { ok: true as const };
+  });
+  if (!attached.ok) return attached;
 
   await prisma.auditLog.create({
     data: {
@@ -142,6 +160,7 @@ async function grantAdminRole(userId: string, role: AdminRole, actingAdminId: st
       metadata: { role },
     },
   });
+  return { ok: true };
 }
 
 /**
@@ -211,13 +230,15 @@ export async function createAdminAccount(
   if (existing) {
     const existingAdmin = await prisma.adminUser.findUnique({ where: { userId: existing.id } });
     if (existingAdmin) return { success: false, error: "Ce compte est déjà administrateur." };
-    await grantAdminRole(existing.id, role, actingAdminId);
+    const granted = await grantAdminRole(existing.id, role, actingAdminId);
+    if (!granted.ok) return { success: false, error: granted.error };
     const emailSent = existing.passwordHash ? null : await sendAdminInvite(existing, role);
     revalidatePath("/admin/parametres");
     return { success: true, data: { created: false, emailSent } };
   }
 
   const now = new Date();
+  const staff = await getStaffOrganization();
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
@@ -225,6 +246,7 @@ export async function createAdminAccount(
         name,
         role: "ADMIN",
         isPlatformAdmin: true,
+        companyId: staff?.id ?? null,
         status: "ACTIVE",
         emailVerifiedAt: now,
         onboardingCompletedAt: now,
@@ -333,6 +355,64 @@ export async function toggleAdminActive(adminUserId: string): Promise<ActionResu
     },
   });
 
+  revalidatePath("/admin/parametres");
+  return { success: true, data: undefined };
+}
+
+/**
+ * 26 oct. 2026 — rattache à l'organisation staff un administrateur qui n'y
+ * est pas encore (créé ou promu avant cette règle).
+ */
+export async function attachAdminToStaff(adminUserId: string): Promise<ActionResult> {
+  const { userId: actingAdminId } = await requireAdmin("parametres");
+
+  const admin = await prisma.adminUser.findUnique({ where: { id: adminUserId } });
+  if (!admin) return { success: false, error: "Compte administrateur introuvable." };
+  const staff = await getStaffOrganization();
+  if (!staff) {
+    return { success: false, error: "Désignez d'abord l'organisation du staff." };
+  }
+
+  const result = await prisma.$transaction((tx) =>
+    attachToStaffOrganization(tx, admin.userId, staff.id)
+  );
+  if (!result.ok) return { success: false, error: result.error };
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: actingAdminId,
+      action: "admin.attach_staff",
+      targetType: "AdminUser",
+      targetId: admin.userId,
+      metadata: { companyId: staff.id },
+    },
+  });
+  revalidatePath("/admin/parametres");
+  return { success: true, data: undefined };
+}
+
+/**
+ * Désigne l'organisation du staff, une seule fois : la migration
+ * 20261026100000_staff_organization la fixe déjà quand « CEO Summit » existe.
+ */
+export async function designateStaffOrganization(companyId: string): Promise<ActionResult> {
+  const { userId: actingAdminId } = await requireAdmin("parametres");
+
+  if (await getStaffOrganization()) {
+    return { success: false, error: "L'organisation du staff est déjà désignée." };
+  }
+  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  if (!company) return { success: false, error: "Organisation introuvable." };
+
+  await prisma.company.update({ where: { id: companyId }, data: { isStaffOrganization: true } });
+  await prisma.auditLog.create({
+    data: {
+      actorId: actingAdminId,
+      action: "admin.designate_staff_organization",
+      targetType: "Company",
+      targetId: companyId,
+    },
+  });
   revalidatePath("/admin/parametres");
   return { success: true, data: undefined };
 }

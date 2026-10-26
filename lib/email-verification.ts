@@ -1,6 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { getPreregistrationStatus } from "@/lib/preregistration";
-import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { appUrl } from "@/lib/app-url";
@@ -96,24 +94,12 @@ export async function sendCompanyAdminWelcome(userId: string): Promise<void> {
     });
     const company = user?.company;
     if (!user || !company || company.companyAdminId !== user.id || !company.subscription) return;
-    // 23 oct. 2026 — préinscription : pas de « procédez au paiement » tant
-    // que les paiements sont fermés.
-    const preregistration = await getPreregistrationStatus();
-    const email =
-      preregistration.active && preregistration.paymentsOpenAt
-        ? await resolveEmail("company-admin-welcome-preregistration", {
-            adminName: user.name,
-            companyName: company.name,
-            planName: company.subscription.plan.name,
-            paymentsOpenDate: formatDateFr(preregistration.paymentsOpenAt),
-            preregistrationUrl: `${appUrl()}/entreprise/paiement`,
-          })
-        : await resolveEmail("company-admin-welcome", {
-            adminName: user.name,
-            companyName: company.name,
-            planName: company.subscription.plan.name,
-            paymentUrl: `${appUrl()}/entreprise/paiement`,
-          });
+    const email = await resolveEmail("company-admin-welcome", {
+      adminName: user.name,
+      companyName: company.name,
+      planName: company.subscription.plan.name,
+      paymentUrl: `${appUrl()}/entreprise/paiement`,
+    });
     if (email) await sendTransactionalEmail({ to: user.email, ...email });
   } catch (err) {
     console.error("[sendCompanyAdminWelcome] failed to send admin welcome email", err);

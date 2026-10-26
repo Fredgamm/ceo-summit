@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import type { AdminRole } from "@prisma/client";
 
 import {
+  attachAdminToStaff,
   createAdminAccount,
   resendAdminInvite,
   updateAdminRole,
@@ -39,11 +40,16 @@ export interface AdminAccountRow {
   user: { name: string; email: string };
   /** Faux tant que la personne n'a pas choisi son mot de passe (lien d'invitation). */
   hasPassword: boolean;
+  /** 26 oct. 2026 — rattaché à l'organisation staff (lib/staff-organization.ts). */
+  inStaff: boolean;
+  companyName: string | null;
 }
 
 interface AdminAccountsManagerProps {
   admins: AdminAccountRow[];
   currentUserId: string;
+  /** Une organisation staff est désignée : les admins hors staff peuvent y être rattachés. */
+  canAttachToStaff: boolean;
 }
 
 /**
@@ -52,13 +58,18 @@ interface AdminAccountsManagerProps {
  * son mot de passe. Un e-mail déjà inscrit est simplement promu — voir
  * createAdminAccount dans admin-settings.ts.
  */
-export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsManagerProps) {
+export function AdminAccountsManager({
+  admins,
+  currentUserId,
+  canAttachToStaff,
+}: AdminAccountsManagerProps) {
   const router = useRouter();
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [role, setRole] = React.useState<AdminRole>("MODERATEUR");
   const [creating, setCreating] = React.useState(false);
   const [resendingId, setResendingId] = React.useState<string | null>(null);
+  const [attachingId, setAttachingId] = React.useState<string | null>(null);
   const [toggleTarget, setToggleTarget] = React.useState<AdminAccountRow | null>(null);
 
   async function handleCreate(e: React.FormEvent) {
@@ -98,6 +109,21 @@ export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsMan
       else toast.error(result.error);
     } finally {
       setResendingId(null);
+    }
+  }
+
+  async function handleAttach(admin: AdminAccountRow) {
+    setAttachingId(admin.id);
+    try {
+      const result = await attachAdminToStaff(admin.id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`${admin.user.name} est rattaché(e) au staff.`);
+      router.refresh();
+    } finally {
+      setAttachingId(null);
     }
   }
 
@@ -185,7 +211,15 @@ export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsMan
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy-light text-xs font-bold text-navy">
                         {initials(admin.user.name)}
                       </div>
-                      <span className="font-semibold text-navy">{admin.user.name}</span>
+                      <div className="min-w-0">
+                        <span className="block font-semibold text-navy">{admin.user.name}</span>
+                        {!admin.inStaff && (
+                          <span className="block text-xs text-amber-700">
+                            Hors staff
+                            {admin.companyName ? ` · ${admin.companyName}` : " · sans organisation"}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-text-muted">{admin.user.email}</td>
@@ -219,25 +253,37 @@ export function AdminAccountsManager({ admins, currentUserId }: AdminAccountsMan
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {isSelf ? (
-                      <span className="text-xs italic text-text-muted">Votre compte</span>
-                    ) : (
-                      <div className="flex justify-end gap-1">
-                        {!admin.hasPassword && admin.active && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleResend(admin)}
-                            disabled={resendingId === admin.id}
-                          >
-                            {resendingId === admin.id ? "Envoi…" : "Renvoyer le lien"}
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => setToggleTarget(admin)}>
-                          {admin.active ? "Désactiver" : "Réactiver"}
+                    <div className="flex items-center justify-end gap-1">
+                      {canAttachToStaff && !admin.inStaff && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAttach(admin)}
+                          disabled={attachingId === admin.id}
+                        >
+                          {attachingId === admin.id ? "Rattachement…" : "Rattacher au staff"}
                         </Button>
-                      </div>
-                    )}
+                      )}
+                      {isSelf ? (
+                        <span className="text-xs italic text-text-muted">Votre compte</span>
+                      ) : (
+                        <>
+                          {!admin.hasPassword && admin.active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResend(admin)}
+                              disabled={resendingId === admin.id}
+                            >
+                              {resendingId === admin.id ? "Envoi…" : "Renvoyer le lien"}
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" onClick={() => setToggleTarget(admin)}>
+                            {admin.active ? "Désactiver" : "Réactiver"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

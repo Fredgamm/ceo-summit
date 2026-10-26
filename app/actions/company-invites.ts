@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { requireViewer } from "@/lib/require-viewer";
 import { generateSecureToken, COMPANY_INVITE_TTL_MS } from "@/lib/tokens";
 import {
@@ -57,7 +58,7 @@ export async function inviteTeammate(companyId: string, input: unknown): Promise
     include: { subscription: { include: { plan: { include: { event: true } } } } },
   });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== viewer.id) {
+  if (!(await canManageCompany(viewer, company))) {
     return {
       success: false,
       error: "Seul l'admin de l'entreprise peut inviter des collaborateurs.",
@@ -145,7 +146,7 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
     include: { company: true },
   });
   if (!invite) return { success: false, error: "Invitation introuvable." };
-  if (invite.company.companyAdminId !== viewer.id) {
+  if (!(await canManageCompany(viewer, invite.company))) {
     return { success: false, error: "Seul l'admin de l'entreprise peut révoquer une invitation." };
   }
   if (invite.status !== "PENDING") {
@@ -184,7 +185,7 @@ export async function resendInvite(inviteId: string): Promise<ActionResult> {
     },
   });
   if (!invite) return { success: false, error: "Invitation introuvable." };
-  if (invite.company.companyAdminId !== viewer.id) {
+  if (!(await canManageCompany(viewer, invite.company))) {
     return { success: false, error: "Seul l'admin de l'entreprise peut renvoyer une invitation." };
   }
   if (invite.status !== "PENDING") {

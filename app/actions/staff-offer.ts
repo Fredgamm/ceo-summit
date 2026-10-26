@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { requireViewer } from "@/lib/require-viewer";
 import { isPartnerOffer, partnershipEndDate } from "@/lib/partner-offers";
 
@@ -30,7 +31,7 @@ export async function activateStaffOffer(companyId: string, planId: string): Pro
     include: { subscription: true },
   });
   if (!company) return { success: false, error: "Organisation introuvable." };
-  if (company.companyAdminId !== viewer.id) {
+  if (!(await canManageCompany(viewer, company))) {
     return {
       success: false,
       error: "Seul le gérant de cette organisation peut choisir son offre.",

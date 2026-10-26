@@ -420,28 +420,33 @@ model Plan {
 }
 
 model Company {
-  id                String   @id @default(cuid())
-  name              String
-  sector            String
-  country           String
-  description       String?  @db.Text
-  logoUrl           String?
-  website           String?
+  id                  String   @id @default(cuid())
+  name                String
+  sector              String
+  country             String
+  description         String?  @db.Text
+  logoUrl             String?
+  website             String?
   /// Coordonnées (parcours revu, 1er août 2026).
-  phone             String?
-  address           String?
+  phone               String?
+  address             String?
   /// Réseaux sociaux — clé libre (ex: "linkedin", "facebook") -> URL, plutôt
   /// que des colonnes par plateforme : le formulaire ne fixe pas une liste
   /// fermée de réseaux.
-  socialLinks       Json?
-  additionalInfo    String?  @db.Text
+  socialLinks         Json?
+  additionalInfo      String?  @db.Text
   /// 22 septembre 2026 (`conception/12` §3.3) — case « Je participe » : le
   /// gestionnaire qui inscrit l'entreprise et paie n'assiste pas forcément
   /// lui-même à l'évènement (souvent une secrétaire). `false` par défaut —
   /// il ne consomme une place que s'il coche explicitement cette case
   /// depuis la composition de la liste des participants.
-  adminParticipates Boolean  @default(false)
-  createdAt         DateTime @default(now())
+  adminParticipates   Boolean  @default(false)
+  /// 26 oct. 2026 — organisation unique du staff CEO Summit : tous les
+  /// administrateurs de la plateforme y sont rattachés, et tout super admin
+  /// la gère comme son gérant (lib/staff-organization.ts). Une seule à `true`
+  /// (index unique partiel, migration 20261026100000_staff_organization).
+  isStaffOrganization Boolean  @default(false)
+  createdAt           DateTime @default(now())
 
   /// Phase 2 offres/paiement (30 juillet 2026) — le créateur de la fiche
   /// entreprise devient admin entreprise par défaut (rôle fonctionnel,

@@ -22,7 +22,7 @@ vi.mock("@/lib/prisma", () => ({
       create: vi.fn(),
       delete: vi.fn(),
     },
-    company: { count: vi.fn() },
+    company: { count: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     opportunity: { count: vi.fn() },
     user: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn(), create: vi.fn() },
     passwordResetToken: { updateMany: vi.fn(), create: vi.fn() },
@@ -40,6 +40,7 @@ import {
   promoteToAdmin,
   createAdminAccount,
   resendAdminInvite,
+  attachAdminToStaff,
   updateAdminRole,
   toggleAdminActive,
 } from "./admin-settings";
@@ -242,6 +243,84 @@ describe("createAdminAccount", () => {
     expect((await createAdminAccount({ ...INPUT, email: "pas-un-email" })).success).toBe(false);
     expect((await createAdminAccount({ ...INPUT, role: "ROOT" })).success).toBe(false);
     expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("organisation staff (26 oct. 2026)", () => {
+  const INPUT = { name: "Team CEO Summit", email: "team@ceo-summit.mg", role: "MODERATEUR" };
+
+  it("creates the new admin directly inside the staff organization", async () => {
+    vi.mocked(prisma.company.findFirst).mockResolvedValue({
+      id: "staff",
+      name: "CEO Summit",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.user.create).mockResolvedValue({
+      id: "user_new",
+      name: "N",
+      email: "team@ceo-summit.mg",
+    } as never);
+
+    await createAdminAccount(INPUT);
+
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ companyId: "staff" }) })
+    );
+  });
+
+  it("refuses to promote the manager of a client organization with members", async () => {
+    vi.mocked(prisma.company.findFirst).mockResolvedValue({
+      id: "staff",
+      name: "CEO Summit",
+    } as never);
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ id: "user_2" } as never)
+      .mockResolvedValueOnce({
+        companyId: "client",
+        companyAdminOf: { id: "client", name: "Rakoto Holding", _count: { users: 2 } },
+      } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce(null);
+
+    const result = await promoteToAdmin("gerant@rakoto.mg", "MODERATEUR");
+
+    expect(result.success).toBe(false);
+    expect(prisma.adminUser.create).not.toHaveBeenCalled();
+  });
+
+  it("attaches an existing admin to the staff organization", async () => {
+    vi.mocked(prisma.company.findFirst).mockResolvedValue({
+      id: "staff",
+      name: "CEO Summit",
+    } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({
+      id: "adm_2",
+      userId: "user_2",
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      companyId: "becom",
+      companyAdminOf: { id: "becom", name: "Becom", _count: { users: 0 } },
+    } as never);
+
+    const result = await attachAdminToStaff("adm_2");
+
+    expect(result.success).toBe(true);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "user_2" },
+      data: { companyId: "staff" },
+    });
+  });
+
+  it("asks to designate the staff organization first", async () => {
+    vi.mocked(prisma.company.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({ role: "SUPER_ADMIN" } as never);
+    vi.mocked(prisma.adminUser.findUnique).mockResolvedValueOnce({
+      id: "adm_2",
+      userId: "user_2",
+    } as never);
+
+    expect((await attachAdminToStaff("adm_2")).success).toBe(false);
   });
 });
 

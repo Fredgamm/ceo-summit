@@ -5,6 +5,7 @@ import type { RegistrationStatus } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { countUnreadMessages } from "@/lib/conversations";
 import { allowedVisibilities } from "@/lib/deal-room-query";
 import { eventCapacityBadge } from "@/lib/events-query";
@@ -52,7 +53,7 @@ export default async function DashboardPage() {
 
   const viewerTier = getViewerTierFromCompany(user.company);
   const companySubscription = user.company?.subscription;
-  const isCompanyAdmin = user.company?.companyAdminId === user.id;
+  const isCompanyAdmin = user.company ? await canManageCompany(user, user.company) : false;
   const showStaff = await getShowStaffInDirectory();
 
   const [

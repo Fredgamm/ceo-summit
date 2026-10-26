@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { requireViewer } from "@/lib/require-viewer";
 import { isPublicObjectUrlUnderPrefix } from "@/lib/r2";
 import { companyFormSchema } from "@/lib/validations/company";
@@ -138,7 +139,7 @@ export async function updateCompany(companyId: string, input: unknown): Promise<
 
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) return { success: false, error: "Entreprise introuvable." };
-  if (company.companyAdminId !== viewer.id) {
+  if (!(await canManageCompany(viewer, company))) {
     return { success: false, error: "Seul l'admin de l'entreprise peut modifier sa fiche." };
   }
 

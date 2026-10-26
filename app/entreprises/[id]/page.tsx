@@ -5,6 +5,7 @@ import { ChevronDown, Globe, Handshake, Plus } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { canManageCompany } from "@/lib/staff-organization";
 import { isEvoliaLive } from "@/lib/evolia-config";
 import { countUnreadMessages } from "@/lib/conversations";
 import { getOnboardingStatus } from "@/lib/onboarding-status";
@@ -108,7 +109,8 @@ export default async function CompanyProfilePage(props: {
   });
   if (!company) notFound();
 
-  const isCompanyAdmin = company.companyAdminId === viewer.id;
+  // 26 oct. 2026 — l'organisation staff se gère aussi par tout super admin.
+  const isCompanyAdmin = await canManageCompany(viewer, company);
   // Rapport QA 1er oct. §2.5 — le gérant voit toutes ses fiches (y compris
   // brouillon/en attente/refusée), les autres visiteurs ne voient que les
   // fiches déjà publiées (cohérent avec /catalogue/services).
@@ -186,7 +188,7 @@ export default async function CompanyProfilePage(props: {
   // 14 oct. 2026 — organisation d'un administrateur de la plateforme : pas
   // d'achat, mais une offre « Staff » gratuite (offre partenaire liée à un
   // événement à venir) pour inscrire son équipe (app/actions/staff-offer.ts).
-  const isStaffOrganisation = isCompanyAdmin && viewer.isPlatformAdmin;
+  const isStaffOrganisation = isCompanyAdmin && company.isStaffOrganization;
   const staffOffers = isStaffOrganisation
     ? await prisma.plan.findMany({
         where: { ...PARTNER_OFFER_WHERE, event: { date: { gte: new Date() } } },
@@ -352,7 +354,7 @@ export default async function CompanyProfilePage(props: {
                       paiement (BACKLOG_MVP §3), comme `inviteTeammate`. */}
                     <InviteTeammateForm companyId={company.id} pendingInvites={company.invites} />
                   </EventParticipantsForm>
-                ) : viewer.isPlatformAdmin ? null : (
+                ) : viewer.isPlatformAdmin && !isStaffOrganisation ? null : (
                   <div className="rounded-lg border border-border bg-white p-5">
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-sm font-bold text-navy">Collaborateurs</h2>

@@ -14,11 +14,9 @@ import { EmailVerificationPanel } from "@/components/onboarding/email-verificati
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { evoliaPaymentUrl } from "@/lib/evolia";
 import { EvoliaPendingPayment } from "@/components/entreprise/evolia-pending-payment";
-import { formatDateFr, planPriceEur, pluralize } from "@/lib/utils";
-import { getPreregistrationStatus } from "@/lib/preregistration";
+import { planPriceEur, pluralize } from "@/lib/utils";
 import { isEvoliaLive } from "@/lib/evolia-config";
 import { planUnavailableMessage, subscriptionCanPayPlan } from "@/lib/plan-availability";
-import { PreregistrationParticipants } from "@/components/entreprise/preregistration-participants";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const PAYMENT_MODES = [
@@ -275,55 +273,6 @@ export default async function CompanyPaymentPage(props: {
       liveEurToArRate={liveEurToArRate}
     />
   );
-
-  // 23 oct. 2026 — préinscription : rien n'est exigé avant la date
-  // d'ouverture ; l'entreprise peut toutefois déjà régler avec les modes
-  // disponibles. Les envois à Evolia attendent son activation (lib/evolia.ts).
-  const preregistration = await getPreregistrationStatus();
-  if (preregistration.active && preregistration.paymentsOpenAt) {
-    return (
-      <JourneyShell
-        current="paiement"
-        title="Votre préinscription est enregistrée"
-        subtitle={`Aucun paiement n'est exigé avant le ${formatDateFr(preregistration.paymentsOpenAt)} : vous recevrez un e-mail ce jour-là pour finaliser votre inscription. Vous pouvez aussi régler dès maintenant.`}
-        card={card}
-        headerAction={signOut}
-      >
-        {expiredNotice}
-        <div className="flex flex-col gap-5 rounded-lg border border-border p-5">
-          <p className="text-sm text-text-mid">
-            Offre choisie :{" "}
-            <strong className="font-semibold text-navy">
-              {cleanPlanName(subscription.plan.name)}
-            </strong>
-            {subscription.plan.pricingMode !== "PER_PARTICIPANT" &&
-              subscription.plan.maxTeamMembers != null &&
-              ` · ${pluralize(subscription.plan.maxTeamMembers, "participant")} inclus`}
-            .
-          </p>
-          {subscription.plan.pricingMode === "PER_PARTICIPANT" && (
-            <PreregistrationParticipants
-              companySubscriptionId={subscription.id}
-              minParticipants={subscription.plan.minParticipants}
-              initialCount={subscription.declaredParticipants}
-            />
-          )}
-        </div>
-        {paymentForm && (
-          <details className="group mt-6 rounded-lg border border-border p-5">
-            <summary className="cursor-pointer list-none text-sm font-semibold text-navy-mid hover:text-navy">
-              Régler dès maintenant (facultatif)
-              <span className="block text-xs font-normal text-text-muted">
-                {paymentModes.map((m) => m.label).join(" · ")}
-              </span>
-            </summary>
-            <div className="mt-5">{paymentForm}</div>
-          </details>
-        )}
-        {changeOffer}
-      </JourneyShell>
-    );
-  }
 
   return (
     <JourneyShell

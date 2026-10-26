@@ -76,7 +76,7 @@ export function PaymentProofForm({
    * faut y basculer automatiquement (voir handleDeclaredParticipantsBlur).
    */
   groupPlans: Plan[];
-  /** Effectif déclaré pendant la préinscription, repris comme valeur de départ. */
+  /** Effectif déjà déclaré (paiement précédent refusé ou annulé), repris comme valeur de départ. */
   initialDeclaredParticipants?: number | null;
   /**
    * 23 oct. 2026 — Evolia activé : carte et Mobile Money proposés. Sinon,

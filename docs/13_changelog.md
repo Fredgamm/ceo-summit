@@ -6,6 +6,22 @@
 
 ---
 
+## 2026-10-26 — Organisation unique du staff, retrait de la préinscription
+
+Pas encore déployé à la date de cette entrée.
+
+### Ajouté
+
+- **Organisation du staff** : une seule organisation regroupe le staff : **Becom**, l'entreprise organisatrice (désignée par la migration `20261026100000_staff_organization` à partir de l'organisation « CEO Summit » gérée par un administrateur, puis renommée « Becom » par `20261026120000_staff_organization_becom` ; nouvelle colonne `Company.isStaffOrganization`). Tout **super admin** actif la gère comme son gérant : inviter des membres, désigner les participants, modifier la fiche, choisir l'offre staff, sans en être le gérant en titre.
+- **Administrateurs rattachés au staff** : un administrateur créé depuis Admin › Paramètres y est directement rattaché ; un membre promu y est déplacé (refusé s'il gère une organisation qui a d'autres membres : transférer d'abord la gestion). Onglet Administrateurs : carte « Organisation du staff » (lien « Gérer l'équipe », ou choix de l'organisation si aucune n'est désignée), mention « Hors staff » et bouton « Rattacher au staff » pour les administrateurs créés avant cette règle.
+- **Comptes Becom / CEO Summit déjà inscrits** (migration `20261026110000_staff_members`) : tous les comptes `@ceo-summit.mg` et `@mg-becom.com` rejoignent l'organisation du staff, administrateurs ou non. Même règle que le rattachement : un gérant seul dans son organisation la quitte (elle reste, vide et sans gérant, avec son historique de paiements) ; un gérant d'une organisation qui a d'autres membres n'est pas déplacé.
+
+### Retiré
+
+- **Préinscription** (Admin › Paramètres › Tarifs & Règles, entrée du 23 octobre) : changement de direction, les paiements sont ouverts tout de suite par virement et chèque, la carte et le Mobile Money attendant l'activation d'Evolia (Paramètres › Intégrations). Disparaissent : le cadre « Préinscription » et l'e-mail d'ouverture, l'écran « Votre préinscription est enregistrée », le mail « Bienvenue gestionnaire — préinscription » (le mail de bienvenue habituel est toujours envoyé) et le modèle « Préinscription — ouverture des paiements ». Aucune migration : le réglage `registration.payments_open_on`, s'il existe en base, n'est simplement plus lu.
+
+---
+
 ## 2026-10-23 — Préinscription, dates limites des offres, coordonnées bancaires
 
 Pas encore déployé à la date de cette entrée.
