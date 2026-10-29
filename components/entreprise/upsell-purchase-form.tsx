@@ -18,6 +18,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PAYMENT_METHOD_OPTIONS, isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import {
+  PAYMENT_PROOF_ACCEPT,
+  PAYMENT_PROOF_HINT,
+  uploadPaymentProof,
+} from "@/lib/payment-proof-upload";
 import { MAX_UPSELL_QUANTITY } from "@/lib/validations/company-payment";
 import { unitPriceAr } from "@/lib/company-payment-amount";
 import { arToEur, formatEuro, formatPlanPriceLive } from "@/lib/utils";
@@ -53,6 +58,7 @@ export function UpsellPurchaseForm({
   const [comment, setComment] = React.useState("");
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
@@ -135,17 +141,15 @@ export function UpsellPurchaseForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setUploadError(null);
+    // Un fichier refusé remplace l'ancien : la soumission reste bloquée tant
+    // qu'aucune preuve conforme n'est envoyée.
+    setProof(null);
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/company/payment-proof", { method: "POST", body: formData });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? "Échec de l'upload.");
-        return;
-      }
-      setProof(json.data);
+      const result = await uploadPaymentProof(file);
+      if (result.ok) setProof(result.proof);
+      else setUploadError(result.error);
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -297,12 +301,23 @@ export function UpsellPurchaseForm({
             <Input
               id="upsell-proof"
               type="file"
-              accept="image/*,application/pdf"
+              accept={PAYMENT_PROOF_ACCEPT}
               onChange={handleFileChange}
               disabled={uploading}
             />
-            {uploading && <p className="text-xs text-text-muted">Envoi en cours…</p>}
-            {proof && <p className="text-xs text-emerald-700">✓ {proof.name}</p>}
+            {uploading ? (
+              <p className="text-xs text-text-muted">Envoi en cours…</p>
+            ) : proof ? (
+              <p className="text-xs text-emerald-700">✓ {proof.name}</p>
+            ) : uploadError ? (
+              <p role="alert" className="text-sm text-red-600">
+                {uploadError}
+              </p>
+            ) : (
+              <p className="text-xs text-text-muted">
+                {PAYMENT_PROOF_HINT} Fichier trop lourd ? Une capture d&apos;écran du reçu suffit.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -326,7 +341,13 @@ export function UpsellPurchaseForm({
 
       <Button
         type="submit"
-        disabled={submitting || uploading || declaredQuantity < minQuantity || !selectedPlan}
+        disabled={
+          submitting ||
+          uploading ||
+          declaredQuantity < minQuantity ||
+          !selectedPlan ||
+          (!isEvoliaMethod && !proof)
+        }
         className="justify-center"
       >
         {submitting ? "Envoi…" : isEvoliaMethod ? "Payer avec Evolia" : "Acheter ces places"}

@@ -7,6 +7,11 @@ import type { PaymentMethod, Plan, PlanPricingMode } from "@prisma/client";
 import { selectPlan, submitPaymentProof } from "@/app/actions/company-subscription";
 import { computeDueAmount, meetsMinParticipants } from "@/lib/company-payment-amount";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import {
+  PAYMENT_PROOF_ACCEPT,
+  PAYMENT_PROOF_HINT,
+  uploadPaymentProof,
+} from "@/lib/payment-proof-upload";
 import { arToEur, cn, formatEuro, planPriceEur, pluralize } from "@/lib/utils";
 import {
   ArrowRight,
@@ -95,6 +100,7 @@ export function PaymentProofForm({
   );
   const [proof, setProof] = React.useState<{ key: string; name: string } | null>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [switchingPlan, setSwitchingPlan] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -192,17 +198,15 @@ export function PaymentProofForm({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
+    setUploadError(null);
+    // Un fichier refusé remplace l'ancien : la soumission reste bloquée tant
+    // qu'aucune preuve conforme n'est envoyée.
+    setProof(null);
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/company/payment-proof", { method: "POST", body: formData });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? "Échec de l'upload.");
-        return;
-      }
-      setProof(json.data);
+      const result = await uploadPaymentProof(file);
+      if (result.ok) setProof(result.proof);
+      else setUploadError(result.error);
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -407,7 +411,11 @@ export function PaymentProofForm({
             htmlFor="payment-proof"
             className={cn(
               "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 text-center transition",
-              proof ? "border-emerald-300 bg-emerald-50" : "border-border hover:border-navy-mid"
+              proof
+                ? "border-emerald-300 bg-emerald-50"
+                : uploadError
+                  ? "border-red-300 bg-red-50"
+                  : "border-border hover:border-navy-mid"
             )}
           >
             {proof ? (
@@ -422,20 +430,35 @@ export function PaymentProofForm({
                 <span className="text-sm font-semibold text-navy">
                   {uploading
                     ? "Envoi en cours…"
-                    : "Ajouter le bordereau, l'ordre de virement ou le reçu"}
+                    : uploadError
+                      ? "Choisir un autre fichier"
+                      : "Ajouter le bordereau, l'ordre de virement ou le reçu"}
                 </span>
-                <span className="text-xs text-text-muted">Image ou PDF, 10 Mo maximum</span>
+                <span className="text-xs text-text-muted">{PAYMENT_PROOF_HINT}</span>
               </>
             )}
             <input
               id="payment-proof"
               type="file"
-              accept="image/*,application/pdf"
+              accept={PAYMENT_PROOF_ACCEPT}
               onChange={handleFileChange}
               disabled={uploading}
+              aria-describedby="payment-proof-help"
               className="sr-only"
             />
           </label>
+          {uploadError ? (
+            <p id="payment-proof-help" role="alert" className="-mt-2 text-sm text-red-600">
+              {uploadError}
+            </p>
+          ) : (
+            !proof && (
+              <p id="payment-proof-help" className="-mt-2 text-xs text-text-muted">
+                Fichier trop lourd ? Une capture d&apos;écran du reçu ou de l&apos;ordre de virement
+                suffit. Les photos iPhone (HEIC) ne sont pas acceptées.
+              </p>
+            )
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="payment-comment">Commentaire (facultatif)</Label>
             <Textarea
@@ -459,7 +482,9 @@ export function PaymentProofForm({
       <Button
         type="submit"
         size="lg"
-        disabled={submitting || uploading || switchingPlan || !meetsThreshold}
+        disabled={
+          submitting || uploading || switchingPlan || !meetsThreshold || (!isEvoliaMethod && !proof)
+        }
         className="w-full justify-center gap-2"
       >
         {submitting ? (
@@ -472,6 +497,11 @@ export function PaymentProofForm({
           "Envoyer la preuve de paiement"
         )}
       </Button>
+      {!isEvoliaMethod && !proof && !uploading && (
+        <p className="-mt-6 text-center text-xs text-text-muted">
+          Ajoutez une preuve de paiement conforme pour pouvoir l&apos;envoyer.
+        </p>
+      )}
     </form>
   );
 }

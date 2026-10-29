@@ -198,6 +198,44 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
     ],
   },
   {
+    key: "company-payment-reminder",
+    category: "COMPANY_BILLING",
+    label: "Relance paiement entreprise",
+    description:
+      "Envoyé à l'administrateur d'une entreprise dont l'abonnement attend encore un paiement, sur action manuelle « Relancer » de l'équipe CEO Summit. Volontairement générique : le lien mène à l'étape de paiement, quel que soit le mode choisi (virement, chèque, carte, Mobile Money).",
+    triggerHint: "app/actions/admin-companies.ts::sendCompanyPaymentReminder",
+    variables: [
+      { key: "adminName", label: "Nom de l'administrateur", example: "Jean-Pierre Rakoto" },
+      { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
+      { key: "planName", label: "Nom de l'offre", example: "Early Bird" },
+      {
+        key: "paymentUrl",
+        label: "Lien vers l'étape de paiement",
+        example: "https://b2b.ceo-summit.mg/entreprise/paiement",
+      },
+    ],
+    defaultSubject: "Finalisez votre paiement — {{companyName}}",
+    defaultBlocks: [
+      { id: "1", type: "heading", text: "Votre inscription n'est pas encore finalisée" },
+      {
+        id: "2",
+        type: "paragraph",
+        text: "Bonjour {{adminName}}, l'offre **{{planName}}** de **{{companyName}}** est en attente de paiement : nous n'avons encore reçu aucun paiement pour l'activer.",
+      },
+      {
+        id: "3",
+        type: "paragraph",
+        text: "Si vous avez déjà réglé par virement ou par chèque, il ne reste qu'à joindre votre preuve de paiement (reçu, ordre de virement, photo du chèque). Sinon, choisissez votre mode de paiement depuis votre espace.",
+      },
+      {
+        id: "4",
+        type: "paragraph",
+        text: "Dès la validation, l'accès à la plateforme s'active pour vous et vos collaborateurs.",
+      },
+      { id: "5", type: "button", label: "Finaliser mon paiement", url: "{{paymentUrl}}" },
+    ],
+  },
+  {
     key: "company-upsell-confirmed",
     category: "COMPANY_BILLING",
     label: "Supplément de places confirmé",

@@ -28,32 +28,68 @@ export async function POST(req: Request) {
   const rateLimited = await checkUploadRateLimit(viewer.id);
   if (rateLimited) return rateLimited;
 
-  const formData = await req.formData();
+  // 29 oct. 2026 — toute erreur répond en JSON avec un message lisible : une
+  // exception non rattrapée renvoyait une page d'erreur que le formulaire ne
+  // savait pas lire, et l'entreprise ne voyait aucun message.
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "Envoi incomplet — réessayez avec votre fichier." },
+      { status: 400 }
+    );
+  }
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Fichier manquant." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Aucun fichier reçu — choisissez votre preuve." },
+      { status: 400 }
+    );
   }
-  if (!COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES.includes(file.type)) {
-    return NextResponse.json({ error: "Format non supporté (image ou PDF)." }, { status: 422 });
+  if (file.size === 0) {
+    return NextResponse.json({ error: "Ce fichier est vide." }, { status: 422 });
   }
   if (file.size > COMPANY_PAYMENT_PROOF_MAX_BYTES) {
-    return NextResponse.json({ error: "Fichier trop volumineux (10 Mo max)." }, { status: 422 });
+    return NextResponse.json(
+      {
+        error: `Fichier trop lourd : ${COMPANY_PAYMENT_PROOF_MAX_BYTES / (1024 * 1024)} Mo maximum.`,
+      },
+      { status: 422 }
+    );
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   // Audit sécurité du 14 oct. 2026 (M3) — type vérifié sur le contenu, pas
   // sur le Content-Type annoncé par le navigateur ; c'est lui qui est stocké.
+  // 29 oct. 2026 — c'est désormais le seul contrôle de format : le type
+  // annoncé, parfois vide ou inexact (image/pjpeg…), refusait à tort des
+  // fichiers valides.
   const mimeType = verifiedMimeType(buffer, COMPANY_PAYMENT_PROOF_ALLOWED_MIME_TYPES);
   if (!mimeType) {
-    return NextResponse.json({ error: "Format non supporté (image ou PDF)." }, { status: 422 });
+    return NextResponse.json(
+      {
+        error:
+          "Format non accepté : PDF, JPG, PNG ou WEBP uniquement (les photos iPhone HEIC ne passent pas — faites une capture d'écran).",
+      },
+      { status: 422 }
+    );
   }
   const key = `company-payments/${viewer.id}/${randomUUID()}-${sanitizeFilename(file.name)}`;
-  await uploadPrivateObject({
-    bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
-    key,
-    body: buffer,
-    contentType: mimeType,
-  });
+  try {
+    await uploadPrivateObject({
+      bucket: process.env.R2_BUCKET_DOCUMENTS ?? "ceo-summit-documents",
+      key,
+      body: buffer,
+      contentType: mimeType,
+    });
+  } catch (err) {
+    console.error("[payment-proof] upload failed", err);
+    return NextResponse.json(
+      { error: "L'enregistrement du fichier a échoué — réessayez dans quelques instants." },
+      { status: 502 }
+    );
+  }
 
   return NextResponse.json({ data: { key, name: file.name } }, { status: 200 });
 }

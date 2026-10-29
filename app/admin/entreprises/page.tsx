@@ -11,6 +11,8 @@ import { formatAriary, formatDateFr } from "@/lib/utils";
 import { PARTNER_OFFER_WHERE, isPartnerOffer } from "@/lib/partner-offers";
 import { InvitePartnerForm } from "@/components/admin/partners/invite-partner-form";
 import { PartnerInviteActions } from "@/components/admin/partners/partner-invite-actions";
+import { PaymentReminderButton } from "@/components/admin/entreprises/payment-reminder-button";
+import { COMPANY_PAYMENT_REMINDER_ACTION } from "@/lib/company-payment-reminder";
 
 export const metadata: Metadata = { title: "Admin — Entreprises" };
 
@@ -53,7 +55,9 @@ export default async function AdminEntreprisesPage() {
   const subscriptions = await prisma.companySubscription.findMany({
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: {
-      company: { select: { id: true, name: true, companyAdmin: { select: { name: true } } } },
+      company: {
+        select: { id: true, name: true, companyAdmin: { select: { name: true, email: true } } },
+      },
       plan: {
         select: {
           name: true,
@@ -74,7 +78,10 @@ export default async function AdminEntreprisesPage() {
    * voir lib/payment-confirmations.ts) : compter aussi les abonnements avec
    * un paiement PENDING, quel que soit leur statut.
    */
-  const [partnerOffers, partnerInvites] = await Promise.all([
+  const awaitingPaymentIds = subscriptions
+    .filter((s) => s.status === "PENDING_PAYMENT")
+    .map((s) => s.companyId);
+  const [partnerOffers, partnerInvites, reminders] = await Promise.all([
     prisma.plan.findMany({
       where: PARTNER_OFFER_WHERE,
       orderBy: { displayOrder: "asc" },
@@ -84,7 +91,18 @@ export default async function AdminEntreprisesPage() {
       orderBy: { createdAt: "desc" },
       include: { plan: { select: { name: true } } },
     }),
+    // 29 oct. 2026 — date de la dernière relance de paiement, par entreprise.
+    prisma.auditLog.groupBy({
+      by: ["targetId"],
+      where: {
+        action: COMPANY_PAYMENT_REMINDER_ACTION,
+        targetType: "Company",
+        targetId: { in: awaitingPaymentIds },
+      },
+      _max: { createdAt: true },
+    }),
   ]);
+  const lastReminderByCompany = new Map(reminders.map((r) => [r.targetId, r._max.createdAt]));
   const now = new Date();
 
   const pendingReviewCount = subscriptions.filter(
@@ -208,12 +226,29 @@ export default async function AdminEntreprisesPage() {
                         Supplément à valider
                       </Badge>
                     )}
+                    {sub.status === "PENDING_PAYMENT" &&
+                      lastReminderByCompany.get(sub.companyId) && (
+                        <p className="mt-1 text-xs text-text-muted">
+                          Relancé le {formatDateFr(lastReminderByCompany.get(sub.companyId)!)}
+                        </p>
+                      )}
                   </td>
                   <td className="px-4 py-3 text-text-mid">{formatDateFr(sub.updatedAt)}</td>
                   <td className="px-4 py-3">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/admin/entreprises/${sub.company.id}`}>Voir</Link>
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      {sub.status === "PENDING_PAYMENT" && sub.company.companyAdmin && (
+                        <PaymentReminderButton
+                          compact
+                          companyId={sub.company.id}
+                          companyName={sub.company.name}
+                          adminName={sub.company.companyAdmin.name}
+                          adminEmail={sub.company.companyAdmin.email}
+                        />
+                      )}
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/admin/entreprises/${sub.company.id}`}>Voir</Link>
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

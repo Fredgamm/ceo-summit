@@ -63,6 +63,7 @@ import {
   rejectCompanyPayment,
   reassignCompanyAdmin,
   resendEvoliaPush,
+  sendCompanyPaymentReminder,
 } from "./admin-companies";
 
 const ADMIN_SESSION = { user: { id: "admin_1", role: "ADMIN", isPlatformAdmin: true } } as never;
@@ -402,5 +403,59 @@ describe("resendEvoliaPush", () => {
 
     expect(result.success).toBe(false);
     expect(deliverEvoliaPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendCompanyPaymentReminder", () => {
+  const COMPANY = {
+    id: "company_1",
+    name: "Rakoto Holding",
+    companyAdmin: { name: "Marie Dupont", email: "marie@example.mg" },
+    subscription: { status: "PENDING_PAYMENT", planId: "plan_1", plan: { name: "Early Bird" } },
+  };
+
+  it("emails the company admin a link to the payment step and logs the reminder", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+
+    const result = await sendCompanyPaymentReminder("company_1");
+
+    expect(result.success).toBe(true);
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "marie@example.mg",
+        subject: "Finalisez votre paiement — Rakoto Holding",
+      })
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "company_payment.reminder",
+          targetType: "Company",
+          targetId: "company_1",
+        }),
+      })
+    );
+  });
+
+  it("refuses when the subscription is not awaiting payment", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      ...COMPANY,
+      subscription: { ...COMPANY.subscription, status: "PENDING_REVIEW" },
+    } as never);
+
+    const result = await sendCompanyPaymentReminder("company_1");
+
+    expect(result.success).toBe(false);
+    expect(sendTransactionalEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not log a reminder when the email fails", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(sendTransactionalEmail).mockRejectedValueOnce(new Error("smtp down"));
+
+    const result = await sendCompanyPaymentReminder("company_1");
+
+    expect(result.success).toBe(false);
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
 });

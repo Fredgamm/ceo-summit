@@ -15,6 +15,8 @@ import { isPartnerOffer } from "@/lib/partner-offers";
 import { PartnerSettingsForm } from "@/components/admin/partners/partner-settings-form";
 import { EvoliaPushResendButton } from "@/components/admin/entreprises/evolia-push-resend-button";
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
+import { COMPANY_PAYMENT_REMINDER_ACTION } from "@/lib/company-payment-reminder";
+import { PaymentReminderButton } from "@/components/admin/entreprises/payment-reminder-button";
 
 export const metadata: Metadata = { title: "Admin — Entreprise" };
 
@@ -67,11 +69,23 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
   });
   if (!company) notFound();
 
-  const evoliaPushes = await prisma.evoliaPush.findMany({
-    where: { companyId: company.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
+  const [evoliaPushes, lastReminder] = await Promise.all([
+    prisma.evoliaPush.findMany({
+      where: { companyId: company.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.auditLog.findFirst({
+      where: {
+        action: COMPANY_PAYMENT_REMINDER_ACTION,
+        targetType: "Company",
+        targetId: company.id,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+  ]);
+  const awaitingPayment = company.subscription?.status === "PENDING_PAYMENT";
 
   // Audit (25 septembre 2026) — tous les paiements en attente, pas seulement
   // le plus récent : un paiement initial et un supplément (ou deux
@@ -139,6 +153,21 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
             <Badge variant={company.subscription.status === "ACTIVE" ? "active" : "pending"}>
               {company.subscription.status}
             </Badge>
+            {awaitingPayment && company.companyAdmin && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4">
+                <PaymentReminderButton
+                  companyId={company.id}
+                  companyName={company.name}
+                  adminName={company.companyAdmin.name}
+                  adminEmail={company.companyAdmin.email}
+                />
+                <span className="text-xs text-text-muted">
+                  {lastReminder
+                    ? `Dernière relance : ${formatDateFr(lastReminder.createdAt)}`
+                    : "Aucune relance envoyée"}
+                </span>
+              </div>
+            )}
             {isPartnerOffer(company.subscription.plan) && (
               <div className="mt-4 border-t border-border pt-4">
                 <h3 className="mb-3 text-sm font-bold text-navy">Partenariat</h3>

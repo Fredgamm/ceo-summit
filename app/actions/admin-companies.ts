@@ -9,6 +9,8 @@ import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
 import { deliverEvoliaPush, pushParticipantsToEvolia } from "@/lib/evolia";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { resolveEmail } from "@/lib/email-template-resolver";
+import { appUrl } from "@/lib/app-url";
+import { COMPANY_PAYMENT_REMINDER_ACTION } from "@/lib/company-payment-reminder";
 
 type ActionResult<T = undefined> = { success: true; data: T } | { success: false; error: string };
 
@@ -120,6 +122,57 @@ export async function rejectCompanyPayment(
   revalidatePath("/admin/entreprises");
   revalidatePath(`/admin/entreprises/${payment.companySubscription.companyId}`);
   revalidatePath(`/entreprises/${payment.companySubscription.companyId}`);
+  return { success: true, data: undefined };
+}
+
+/**
+ * 29 oct. 2026 — relance d'une entreprise dont l'abonnement attend toujours
+ * un paiement (aucune preuve soumise, ou preuve refusée). E-mail générique
+ * vers l'étape de paiement, valable pour tous les modes (virement, chèque,
+ * et carte / Mobile Money via Evolia). Chaque relance est tracée dans
+ * l'audit log, d'où la page admin lit la date de la dernière.
+ */
+export async function sendCompanyPaymentReminder(companyId: string): Promise<ActionResult> {
+  const { userId: adminId } = await requireAdmin("entreprises");
+
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    include: { companyAdmin: true, subscription: { include: { plan: true } } },
+  });
+  if (!company) return { success: false, error: "Entreprise introuvable." };
+  if (!company.subscription || company.subscription.status !== "PENDING_PAYMENT") {
+    return { success: false, error: "Cette entreprise n'est pas en attente de paiement." };
+  }
+  if (!company.companyAdmin) {
+    return { success: false, error: "Aucun admin entreprise à relancer." };
+  }
+
+  try {
+    const email = await resolveEmail("company-payment-reminder", {
+      adminName: company.companyAdmin.name,
+      companyName: company.name,
+      planName: company.subscription.plan.name,
+      paymentUrl: `${appUrl()}/entreprise/paiement`,
+    });
+    if (!email) return { success: false, error: "Le modèle d'e-mail de relance est désactivé." };
+    await sendTransactionalEmail({ to: company.companyAdmin.email, ...email });
+  } catch (err) {
+    console.error("[sendCompanyPaymentReminder] failed to send reminder email", err);
+    return { success: false, error: "Échec de l'envoi de l'e-mail. Réessayez plus tard." };
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: adminId,
+      action: COMPANY_PAYMENT_REMINDER_ACTION,
+      targetType: "Company",
+      targetId: companyId,
+      metadata: { to: company.companyAdmin.email, planId: company.subscription.planId },
+    },
+  });
+
+  revalidatePath("/admin/entreprises");
+  revalidatePath(`/admin/entreprises/${companyId}`);
   return { success: true, data: undefined };
 }
 
