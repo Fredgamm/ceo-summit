@@ -181,6 +181,7 @@ export interface MemberMeetingView {
   eventTitle: string;
   timezone: string;
   zone: string;
+  accessInstructions: string;
   /** Le membre visité ne peut pas encore recevoir de demande (profil incomplet). */
   memberUnavailable: boolean;
   /** Demande en cours ou rendez-vous déjà pris entre les deux (RG-10). */
@@ -222,7 +223,7 @@ export async function loadMemberMeetingView(
       id: true,
       title: true,
       timezone: true,
-      meetingSetup: { select: { zone: true } },
+      meetingSetup: { select: { zone: true, accessInstructions: true } },
       meetingSlots: {
         where: { status: "PUBLISHED" },
         orderBy: { startTime: "asc" },
@@ -285,6 +286,7 @@ export async function loadMemberMeetingView(
     eventTitle: event.title,
     timezone: event.timezone,
     zone: event.meetingSetup?.zone ?? "",
+    accessInstructions: event.meetingSetup?.accessInstructions ?? "",
     memberUnavailable: !member || missingMeetingProfileFields(member).length > 0,
     existingBooking: existing
       ? {

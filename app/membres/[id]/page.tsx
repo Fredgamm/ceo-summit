@@ -5,6 +5,7 @@ import type { Prisma } from "@prisma/client";
 import {
   Building2,
   CalendarClock,
+  CalendarPlus,
   Globe,
   Handshake,
   Linkedin,
@@ -34,8 +35,8 @@ import {
   zonedDayKey,
 } from "@/lib/event-timezone";
 import { MyMeetingSlots, type MyMeetingEventView } from "@/components/meetings/my-meeting-slots";
-import { MemberMeetingSlots } from "@/components/meetings/member-meeting-slots";
 import { MyMeetings, type MyMeetingView } from "@/components/meetings/my-meetings";
+import { meetingCta } from "@/lib/meeting-request-ui";
 import { AppShell } from "@/components/layout/app-shell";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
@@ -187,10 +188,23 @@ export default async function MemberProfilePage(props: {
     "deal-room",
     "services",
     ...(showMySlots ? ["creneaux", "mes-rendez-vous"] : []),
-    ...(memberMeeting ? ["rendez-vous"] : []),
   ];
   const defaultTab =
     searchParams?.onglet && tabs.includes(searchParams.onglet) ? searchParams.onglet : "profil";
+  // L'onglet « Rendez-vous événement » est remplacé par une page dédiée (3 nov. 2026) :
+  // les anciens liens `?onglet=rendez-vous` y mènent.
+  if (searchParams?.onglet === "rendez-vous" && memberMeeting) {
+    redirect(`/membres/${user.id}/rendez-vous`);
+  }
+  // Bouton d'en-tête « Demander un rendez-vous » (états : demander, voir, compléter, grisé).
+  const meetingAction = memberMeeting
+    ? meetingCta({
+        existingBooking: memberMeeting.existingBooking,
+        viewerMissingFields: missingMeetingProfileFields(viewer),
+        memberUnavailable: memberMeeting.memberUnavailable,
+        hasFreeSlot: memberMeeting.days.some((d) => d.slots.some((sl) => sl.state === "available")),
+      })
+    : null;
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   return (
@@ -243,6 +257,31 @@ export default async function MemberProfilePage(props: {
               </>
             ) : (
               <>
+                {meetingAction && (
+                  <div className="col-span-2 sm:col-auto">
+                    {meetingAction.kind === "disabled" ? (
+                      <Button disabled title={meetingAction.reason} className="w-full">
+                        <CalendarPlus className="h-4 w-4" aria-hidden />
+                        {meetingAction.label}
+                      </Button>
+                    ) : (
+                      <Button asChild className="w-full">
+                        <Link
+                          href={
+                            meetingAction.kind === "request"
+                              ? `/membres/${user.id}/rendez-vous`
+                              : meetingAction.kind === "view"
+                                ? "/profil?onglet=mes-rendez-vous"
+                                : "/profil/editer"
+                          }
+                        >
+                          <CalendarPlus className="h-4 w-4" aria-hidden />
+                          {meetingAction.label}
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                )}
                 <Button asChild variant="outline">
                   <Link href={`/messagerie?new=${user.id}`}>
                     <Send className="h-4 w-4" aria-hidden />
@@ -277,7 +316,6 @@ export default async function MemberProfilePage(props: {
               )}
             </TabsTrigger>
           )}
-          {memberMeeting && <TabsTrigger value="rendez-vous">Rendez-vous événement</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="profil">
@@ -470,38 +508,6 @@ export default async function MemberProfilePage(props: {
                 description="Les demandes de rendez-vous que vous envoyez ou recevez pendant l'événement s'affichent ici. Pour en demander un, ouvrez le profil d'un participant, onglet « Rendez-vous événement »."
               />
             )}
-          </TabsContent>
-        )}
-
-        {memberMeeting && (
-          <TabsContent value="rendez-vous">
-            <MemberMeetingSlots
-              memberId={user.id}
-              memberName={user.name}
-              eventTitle={memberMeeting.eventTitle}
-              zone={memberMeeting.zone}
-              timezoneLabel={timezoneLabel(memberMeeting.timezone)}
-              memberUnavailable={memberMeeting.memberUnavailable}
-              existingBooking={
-                memberMeeting.existingBooking
-                  ? {
-                      status: memberMeeting.existingBooking.status,
-                      slotId: memberMeeting.existingBooking.slotId,
-                      label: `${formatDayKey(
-                        zonedDayKey(memberMeeting.existingBooking.startTime, memberMeeting.timezone)
-                      )}, ${formatTimeInZone(memberMeeting.existingBooking.startTime, memberMeeting.timezone)}`,
-                    }
-                  : null
-              }
-              days={memberMeeting.days.map((d) => ({
-                label: formatDayKey(d.day),
-                slots: d.slots.map((s) => ({
-                  id: s.id,
-                  range: formatTimeRangeInZone(s.startTime, s.endTime, memberMeeting.timezone),
-                  state: s.state,
-                })),
-              }))}
-            />
           </TabsContent>
         )}
       </Tabs>

@@ -117,7 +117,7 @@ describe("loadMemberMeetingView (visitor side, lot 4)", () => {
       id: "evt_1",
       title: "CEO Summit",
       timezone: "Indian/Reunion",
-      meetingSetup: { zone: "Espace B2B" },
+      meetingSetup: { zone: "Espace B2B", accessInstructions: "Niveau 1" },
       meetingSlots: [
         slot("past", -1, {}), // triés par heure, comme la requête
         slot("free", 48, {}), // libre par défaut
@@ -140,6 +140,8 @@ describe("loadMemberMeetingView (visitor side, lot 4)", () => {
       ["busy", "you-unavailable"],
     ]);
     expect(view!.memberUnavailable).toBe(false);
+    // La page « Demander un rendez-vous » affiche l'espace et ses indications d'accès.
+    expect(view).toMatchObject({ zone: "Espace B2B", accessInstructions: "Niveau 1" });
   });
 
   it("returns the slot of the request or meeting already in progress between them (RG-10)", async () => {
