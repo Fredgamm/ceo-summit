@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
@@ -194,4 +195,144 @@ export async function requestMeeting(input: unknown): Promise<ActionResult<{ boo
     }
     throw err;
   }
+}
+
+/**
+ * Module 21 lots 5 et 8 (3 nov. 2026) — réponse à une demande depuis « Mes
+ * rendez-vous » (P3, P5). Seul le destinataire accepte ou refuse, seul le
+ * demandeur retire (RG-05). Le statut passe de « en attente » au nouveau
+ * statut par une mise à jour conditionnelle : deux réponses simultanées (ou
+ * une réponse et un retrait) ne peuvent pas réussir toutes les deux. Dans la
+ * même transaction, les deux créneaux passent en « réservé » (acceptation)
+ * ou redeviennent libres (refus, retrait, expiration : RG-07).
+ */
+
+type Decision = "accept" | "decline" | "withdraw";
+
+const DECISION_STATUS = {
+  accept: "CONFIRMED",
+  decline: "DECLINED",
+  withdraw: "WITHDRAWN",
+} as const;
+
+class NoLongerPendingError extends Error {}
+
+const NO_LONGER_PENDING = "Cette demande n'est plus en attente.";
+
+export async function acceptMeeting(bookingId: string): Promise<ActionResult> {
+  return decide(bookingId, "accept");
+}
+
+export async function declineMeeting(bookingId: string): Promise<ActionResult> {
+  return decide(bookingId, "decline");
+}
+
+export async function withdrawMeeting(bookingId: string): Promise<ActionResult> {
+  return decide(bookingId, "withdraw");
+}
+
+async function decide(bookingId: string, decision: Decision): Promise<ActionResult> {
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return { success: false, error: viewerResult.error };
+  const viewer = viewerResult.viewer;
+  const now = new Date();
+
+  const booking = await prisma.meetingBooking.findUnique({
+    where: { id: bookingId },
+    select: {
+      status: true,
+      eventId: true,
+      requesterId: true,
+      recipientId: true,
+      expiresAt: true,
+      event: { select: { date: true, endDate: true } },
+    },
+  });
+  if (!booking || (booking.requesterId !== viewer.id && booking.recipientId !== viewer.id)) {
+    return { success: false, error: "Demande introuvable." };
+  }
+  // RG-05
+  if (decision === "withdraw" && booking.requesterId !== viewer.id) {
+    return { success: false, error: "Seul l'auteur de la demande peut la retirer." };
+  }
+  if (decision !== "withdraw" && booking.recipientId !== viewer.id) {
+    return { success: false, error: "Seul le destinataire peut répondre à cette demande." };
+  }
+  if (booking.status !== "PENDING") return { success: false, error: NO_LONGER_PENDING };
+
+  // RG-06 — échéance passée : la demande expire ici même si la tâche
+  // planifiée (lot 6) ne l'a pas encore traitée.
+  if (booking.expiresAt <= now) {
+    await prisma.$transaction(async (tx) => {
+      const { count } = await tx.meetingBooking.updateMany({
+        where: { id: bookingId, status: "PENDING" },
+        data: { status: "EXPIRED" },
+      });
+      if (count === 1) await releaseSlots(tx, bookingId);
+    });
+    revalidateBoth(booking, viewer.id);
+    return { success: false, error: "Cette demande a expiré : le créneau est de nouveau libre." };
+  }
+  // RG-11 — lecture seule après la fin de l'événement.
+  if ((booking.event.endDate ?? booking.event.date) < now) {
+    return { success: false, error: "L'événement est terminé." };
+  }
+  // RG-02 — le destinataire doit toujours participer pour accepter.
+  if (decision === "accept" && (await meetingEventIdFor(viewer.id)) !== booking.eventId) {
+    return {
+      success: false,
+      error:
+        "Les rendez-vous sont réservés aux participants inscrits par une offre active liée à l'événement.",
+    };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const { count } = await tx.meetingBooking.updateMany({
+        where: { id: bookingId, status: "PENDING" },
+        data: {
+          status: DECISION_STATUS[decision],
+          ...(decision === "withdraw" ? {} : { respondedAt: now }),
+        },
+      });
+      if (count !== 1) throw new NoLongerPendingError();
+      if (decision === "accept") {
+        await tx.meetingParticipantSlot.updateMany({
+          where: { bookingId, status: "PENDING" },
+          data: { status: "BOOKED" },
+        });
+      } else {
+        await releaseSlots(tx, bookingId);
+      }
+    });
+  } catch (err) {
+    if (err instanceof NoLongerPendingError) return { success: false, error: NO_LONGER_PENDING };
+    throw err;
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: viewer.id,
+      action: `meeting.${decision}`,
+      targetType: "MeetingBooking",
+      targetId: bookingId,
+    },
+  });
+  // TODO lot 7 (emails) : confirmation aux deux avec .ics, ou refus au demandeur.
+  revalidateBoth(booking, viewer.id);
+  return { success: true, data: undefined };
+}
+
+/** RG-07 — les créneaux bloqués par la demande redeviennent libres. */
+async function releaseSlots(tx: Prisma.TransactionClient, bookingId: string) {
+  await tx.meetingParticipantSlot.updateMany({
+    where: { bookingId },
+    data: { status: "FREE", bookingId: null },
+  });
+}
+
+function revalidateBoth(booking: { requesterId: string; recipientId: string }, viewerId: string) {
+  const partnerId = booking.requesterId === viewerId ? booking.recipientId : booking.requesterId;
+  revalidatePath("/profil");
+  revalidatePath(`/membres/${partnerId}`);
 }

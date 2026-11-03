@@ -10,8 +10,15 @@ vi.mock("@/lib/prisma", () => {
   const prisma = {
     meetingTimeSlot: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
-    meetingBooking: { count: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+    meetingBooking: {
+      count: vi.fn(),
+      findFirst: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
     meetingParticipantSlot: { createMany: vi.fn(), updateMany: vi.fn() },
+    auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
   };
   return { prisma };
@@ -20,7 +27,7 @@ vi.mock("@/lib/prisma", () => {
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
 import { meetingEventIdFor } from "@/lib/meeting-participation";
-import { requestMeeting } from "./meeting-requests";
+import { acceptMeeting, declineMeeting, requestMeeting, withdrawMeeting } from "./meeting-requests";
 
 const REQUESTER = {
   id: "user_a",
@@ -192,5 +199,146 @@ describe("requestMeeting", () => {
     } as never);
 
     expect((await requestMeeting(INPUT)).success).toBe(false);
+  });
+});
+
+describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () => {
+  const RECIPIENT_VIEWER = { ...RECIPIENT, id: "user_b" };
+  const PENDING = {
+    status: "PENDING",
+    eventId: "evt_1",
+    requesterId: "user_a",
+    recipientId: "user_b",
+    expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+    event: SLOT.event,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireViewer).mockResolvedValue({
+      success: true,
+      viewer: RECIPIENT_VIEWER,
+    } as never);
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue(PENDING as never);
+    vi.mocked(prisma.meetingBooking.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.meetingParticipantSlot.updateMany).mockResolvedValue({ count: 2 });
+    vi.mocked(meetingEventIdFor).mockResolvedValue("evt_1");
+    vi.mocked(prisma.$transaction).mockImplementation(((fn: (tx: typeof prisma) => unknown) =>
+      fn(prisma)) as never);
+  });
+
+  it("accepting confirms the meeting and books both slots", async () => {
+    const result = await acceptMeeting("booking_1");
+
+    expect(result).toEqual({ success: true, data: undefined });
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: { status: "CONFIRMED", respondedAt: expect.any(Date) },
+    });
+    expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: "booking_1", status: "PENDING" },
+      data: { status: "BOOKED" },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ actorId: "user_b", action: "meeting.accept" }),
+    });
+  });
+
+  it("declining frees both slots (RG-07)", async () => {
+    const result = await declineMeeting("booking_1");
+
+    expect(result.success).toBe(true);
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: { status: "DECLINED", respondedAt: expect.any(Date) },
+    });
+    expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: "booking_1" },
+      data: { status: "FREE", bookingId: null },
+    });
+  });
+
+  it("only the requester withdraws, and that frees both slots (RG-05, RG-07)", async () => {
+    expect(await withdrawMeeting("booking_1")).toEqual({
+      success: false,
+      error: "Seul l'auteur de la demande peut la retirer.",
+    });
+
+    vi.mocked(requireViewer).mockResolvedValue({ success: true, viewer: REQUESTER } as never);
+    expect((await withdrawMeeting("booking_1")).success).toBe(true);
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: { status: "WITHDRAWN" },
+    });
+    expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: "booking_1" },
+      data: { status: "FREE", bookingId: null },
+    });
+  });
+
+  it("only the recipient accepts or declines (RG-05)", async () => {
+    vi.mocked(requireViewer).mockResolvedValue({ success: true, viewer: REQUESTER } as never);
+
+    expect((await acceptMeeting("booking_1")).success).toBe(false);
+    expect((await declineMeeting("booking_1")).success).toBe(false);
+    expect(prisma.meetingBooking.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("hides a request the viewer is not part of", async () => {
+    vi.mocked(requireViewer).mockResolvedValue({
+      success: true,
+      viewer: { ...REQUESTER, id: "user_c" },
+    } as never);
+
+    expect(await acceptMeeting("booking_1")).toEqual({
+      success: false,
+      error: "Demande introuvable.",
+    });
+  });
+
+  it("refuses a request that is no longer pending, even when it changed meanwhile", async () => {
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue({
+      ...PENDING,
+      status: "WITHDRAWN",
+    } as never);
+    expect((await acceptMeeting("booking_1")).success).toBe(false);
+
+    // Retirée entre la lecture et la réponse : le passage conditionnel échoue.
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue(PENDING as never);
+    vi.mocked(prisma.meetingBooking.updateMany).mockResolvedValue({ count: 0 });
+    expect(await acceptMeeting("booking_1")).toEqual({
+      success: false,
+      error: "Cette demande n'est plus en attente.",
+    });
+    expect(prisma.meetingParticipantSlot.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("expires a request past its deadline instead of accepting it (RG-06)", async () => {
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue({
+      ...PENDING,
+      expiresAt: new Date(Date.now() - 60_000),
+    } as never);
+
+    const result = await acceptMeeting("booking_1");
+
+    expect(result).toEqual({
+      success: false,
+      error: "Cette demande a expiré : le créneau est de nouveau libre.",
+    });
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: { status: "EXPIRED" },
+    });
+    expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
+      where: { bookingId: "booking_1" },
+      data: { status: "FREE", bookingId: null },
+    });
+  });
+
+  it("requires the recipient to still be a participant to accept (RG-02)", async () => {
+    vi.mocked(meetingEventIdFor).mockResolvedValue(null);
+
+    expect((await acceptMeeting("booking_1")).success).toBe(false);
+    expect(prisma.meetingBooking.updateMany).not.toHaveBeenCalled();
   });
 });

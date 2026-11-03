@@ -3,6 +3,11 @@ import type { MeetingAvailability } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { zonedDayKey } from "@/lib/event-timezone";
 import { activeEventOf } from "@/lib/event-participation";
+import {
+  canSeeMeetingContact,
+  meetingDisplayStatus,
+  type MeetingDisplayStatus,
+} from "@/lib/meeting-booking";
 
 /**
  * Module 21 lot 3 (8 oct. 2026) — côté participant : éligibilité (RG-02) et
@@ -284,4 +289,102 @@ export async function loadMemberMeetingView(
       : null,
     days: [...byDay.entries()].map(([day, slots]) => ({ day, slots })),
   };
+}
+
+export interface MyMeeting {
+  id: string;
+  /** Le membre a envoyé la demande (sinon il l'a reçue). */
+  sent: boolean;
+  status: MeetingDisplayStatus;
+  reason: string;
+  startTime: Date;
+  endTime: Date;
+  /** Échéance de réponse d'une demande en attente (RG-06). */
+  expiresAt: Date;
+  event: { id: string; title: string; timezone: string; zone: string; accessInstructions: string };
+  partner: {
+    id: string;
+    name: string;
+    title: string | null;
+    avatarUrl: string | null;
+    companyName: string | null;
+    /** RG-04 — renseigné seulement pour un rendez-vous confirmé ou terminé. */
+    contact: { phone: string | null; email: string } | null;
+  };
+}
+
+const PARTNER_SELECT = {
+  id: true,
+  name: true,
+  title: true,
+  avatarUrl: true,
+  phone: true,
+  email: true,
+  company: { select: { name: true } },
+} as const;
+
+/**
+ * Module 21 lots 5 et 8 (3 nov. 2026) — « Mes rendez-vous » (P5) : demandes
+ * envoyées et reçues du membre, tous événements confondus, par ordre
+ * chronologique des créneaux. Le téléphone et l'e-mail de l'autre
+ * participant ne quittent le serveur que pour un rendez-vous confirmé (RG-04).
+ */
+export async function loadMyMeetings(userId: string, now = new Date()): Promise<MyMeeting[]> {
+  const bookings = await prisma.meetingBooking.findMany({
+    where: { OR: [{ requesterId: userId }, { recipientId: userId }] },
+    orderBy: [{ slot: { startTime: "asc" } }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      status: true,
+      reason: true,
+      expiresAt: true,
+      requesterId: true,
+      slot: { select: { startTime: true, endTime: true } },
+      event: {
+        select: {
+          id: true,
+          title: true,
+          timezone: true,
+          meetingSetup: { select: { zone: true, accessInstructions: true } },
+        },
+      },
+      requester: { select: PARTNER_SELECT },
+      recipient: { select: PARTNER_SELECT },
+    },
+  });
+
+  return bookings.map((b) => {
+    const sent = b.requesterId === userId;
+    const partner = sent ? b.recipient : b.requester;
+    const status = meetingDisplayStatus(
+      { status: b.status, expiresAt: b.expiresAt, endTime: b.slot.endTime },
+      now
+    );
+    return {
+      id: b.id,
+      sent,
+      status,
+      reason: b.reason,
+      startTime: b.slot.startTime,
+      endTime: b.slot.endTime,
+      expiresAt: b.expiresAt,
+      event: {
+        id: b.event.id,
+        title: b.event.title,
+        timezone: b.event.timezone,
+        zone: b.event.meetingSetup?.zone ?? "",
+        accessInstructions: b.event.meetingSetup?.accessInstructions ?? "",
+      },
+      partner: {
+        id: partner.id,
+        name: partner.name,
+        title: partner.title,
+        avatarUrl: partner.avatarUrl,
+        companyName: partner.company?.name ?? null,
+        contact: canSeeMeetingContact(status)
+          ? { phone: partner.phone, email: partner.email }
+          : null,
+      },
+    };
+  });
 }

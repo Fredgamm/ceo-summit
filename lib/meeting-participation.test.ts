@@ -5,13 +5,14 @@ vi.mock("@/lib/prisma", () => ({
     user: { findUnique: vi.fn() },
     eventRegistration: { findUnique: vi.fn() },
     event: { findFirst: vi.fn() },
-    meetingBooking: { findFirst: vi.fn() },
+    meetingBooking: { findFirst: vi.fn(), findMany: vi.fn() },
   },
 }));
 
 import { prisma } from "@/lib/prisma";
 import {
   loadMemberMeetingView,
+  loadMyMeetings,
   meetingEventIdFor,
   missingMeetingProfileFields,
 } from "./meeting-participation";
@@ -145,5 +146,72 @@ describe("loadMemberMeetingView (visitor side, lot 4)", () => {
 
     vi.mocked(prisma.eventRegistration.findUnique).mockResolvedValue(null);
     expect(await loadMemberMeetingView("visitor", "member")).toBeNull();
+  });
+});
+
+describe("loadMyMeetings (« Mes rendez-vous », lots 5 et 8)", () => {
+  const NOW = new Date("2027-03-10T08:00:00Z");
+  const SLOT = {
+    startTime: new Date("2027-03-11T10:00:00Z"),
+    endTime: new Date("2027-03-11T10:30:00Z"),
+  };
+  const EVENT = {
+    id: "evt_1",
+    title: "CEO Summit 2027",
+    timezone: "Indian/Reunion",
+    meetingSetup: { zone: "Espace B2B", accessInstructions: "Niveau 1" },
+  };
+  const person = (id: string) => ({
+    id,
+    name: id,
+    title: null,
+    avatarUrl: null,
+    phone: `+262 ${id}`,
+    email: `${id}@x.re`,
+    company: { name: `Société ${id}` },
+  });
+  const booking = (id: string, status: string, requesterId: string) => ({
+    id,
+    status,
+    reason: "Échanger sur un partenariat.",
+    expiresAt: new Date("2027-03-11T09:50:00Z"),
+    requesterId,
+    slot: SLOT,
+    event: EVENT,
+    requester: person(requesterId),
+    recipient: person(requesterId === "me" ? "paul" : "me"),
+  });
+
+  it("returns the other participant, with phone and e-mail only once confirmed (RG-04)", async () => {
+    vi.mocked(prisma.meetingBooking.findMany).mockResolvedValue([
+      booking("b1", "PENDING", "me"),
+      booking("b2", "CONFIRMED", "paul"),
+    ] as never);
+
+    const [pending, confirmed] = await loadMyMeetings("me", NOW);
+
+    expect(pending).toMatchObject({ sent: true, status: "PENDING" });
+    expect(pending.partner).toMatchObject({
+      id: "paul",
+      companyName: "Société paul",
+      contact: null,
+    });
+    expect(confirmed).toMatchObject({ sent: false, status: "CONFIRMED" });
+    expect(confirmed.partner).toMatchObject({
+      id: "paul",
+      contact: { phone: "+262 paul", email: "paul@x.re" },
+    });
+    expect(confirmed.event).toMatchObject({ zone: "Espace B2B", accessInstructions: "Niveau 1" });
+  });
+
+  it("shows a pending request past its deadline as expired, without contact", async () => {
+    vi.mocked(prisma.meetingBooking.findMany).mockResolvedValue([
+      booking("b1", "PENDING", "paul"),
+    ] as never);
+
+    const [expired] = await loadMyMeetings("me", new Date("2027-03-11T09:55:00Z"));
+
+    expect(expired.status).toBe("EXPIRED");
+    expect(expired.partner.contact).toBeNull();
   });
 });

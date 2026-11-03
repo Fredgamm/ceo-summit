@@ -14,6 +14,7 @@ import { profileCompleteness } from "@/lib/profile-completeness";
 import {
   loadMemberMeetingView,
   loadMyMeetingEvents,
+  loadMyMeetings,
   missingMeetingProfileFields,
 } from "@/lib/meeting-participation";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/event-timezone";
 import { MyMeetingSlots, type MyMeetingEventView } from "@/components/meetings/my-meeting-slots";
 import { MemberMeetingSlots } from "@/components/meetings/member-meeting-slots";
+import { MyMeetings, type MyMeetingView } from "@/components/meetings/my-meetings";
 import { AppShell } from "@/components/layout/app-shell";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { CompanyServicesManager } from "@/components/entreprise/company-services-manager";
@@ -59,6 +61,10 @@ const OPPORTUNITY_STATUS_LABEL: Record<string, string> = {
  * profil, toujours visible (vide tant qu'aucun événement auquel il participe
  * n'a de créneaux publiés). `?onglet=creneaux` l'ouvre directement (lien des
  * emails).
+ *
+ * Module 21 lots 5 et 8 (3 nov. 2026) — onglet « Mes rendez-vous », lui aussi
+ * toujours visible sur son propre profil, avec le nombre de demandes reçues
+ * en attente de réponse. `?onglet=mes-rendez-vous` l'ouvre directement.
  */
 export default async function MemberProfilePage(props: {
   params: Promise<{ id: string }>;
@@ -141,6 +147,25 @@ export default async function MemberProfilePage(props: {
         })),
       }))
     : [];
+  const myMeetings: MyMeetingView[] = isSelf
+    ? (await loadMyMeetings(user.id)).map((m) => {
+        const tz = m.event.timezone;
+        return {
+          id: m.id,
+          sent: m.sent,
+          status: m.status,
+          reason: m.reason,
+          when: `${formatDayKey(zonedDayKey(m.startTime, tz))}, ${formatTimeRangeInZone(m.startTime, m.endTime, tz)}`,
+          timezoneLabel: timezoneLabel(tz),
+          expiresLabel: `${formatDayKey(zonedDayKey(m.expiresAt, tz))} à ${formatTimeInZone(m.expiresAt, tz)}`,
+          eventTitle: m.event.title,
+          zone: m.event.zone,
+          accessInstructions: m.event.accessInstructions,
+          partner: m.partner,
+        };
+      })
+    : [];
+  const pendingReceived = myMeetings.filter((m) => !m.sent && m.status === "PENDING").length;
   // Toujours visible sur son propre profil, même vide (demande du client).
   const showMySlots = isSelf;
   // Module 21 lot 4 — « Rendez-vous événement » : profil d'un autre
@@ -151,7 +176,7 @@ export default async function MemberProfilePage(props: {
     "entreprise",
     "deal-room",
     "services",
-    ...(showMySlots ? ["creneaux"] : []),
+    ...(showMySlots ? ["creneaux", "mes-rendez-vous"] : []),
     ...(memberMeeting ? ["rendez-vous"] : []),
   ];
   const defaultTab =
@@ -231,6 +256,16 @@ export default async function MemberProfilePage(props: {
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
           {showMySlots && <TabsTrigger value="creneaux">Mes créneaux</TabsTrigger>}
+          {showMySlots && (
+            <TabsTrigger value="mes-rendez-vous">
+              Mes rendez-vous
+              {pendingReceived > 0 && (
+                <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-xs font-bold text-white">
+                  {pendingReceived}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
           {memberMeeting && <TabsTrigger value="rendez-vous">Rendez-vous événement</TabsTrigger>}
         </TabsList>
 
@@ -407,7 +442,21 @@ export default async function MemberProfilePage(props: {
               <EmptyState
                 icon={CalendarClock}
                 title="Aucun créneau de rendez-vous pour le moment"
-                description="Les créneaux apparaissent ici quand l'organisation les publie pour un événement auquel vous participez. Vous pourrez alors activer ceux où vous êtes disponible."
+                description="Les créneaux apparaissent ici quand l'organisation les publie pour un événement auquel vous participez. Ils seront actifs par défaut : vous désactiverez ceux où vous n'êtes pas disponible."
+              />
+            )}
+          </TabsContent>
+        )}
+
+        {showMySlots && (
+          <TabsContent value="mes-rendez-vous">
+            {myMeetings.length > 0 ? (
+              <MyMeetings meetings={myMeetings} />
+            ) : (
+              <EmptyState
+                icon={Handshake}
+                title="Aucun rendez-vous pour le moment"
+                description="Les demandes de rendez-vous que vous envoyez ou recevez pendant l'événement s'affichent ici. Pour en demander un, ouvrez le profil d'un participant, onglet « Rendez-vous événement »."
               />
             )}
           </TabsContent>

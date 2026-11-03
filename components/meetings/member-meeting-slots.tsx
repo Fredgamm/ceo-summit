@@ -113,8 +113,11 @@ export function MemberMeetingSlots({
       {sent && (
         <Alert className="mb-4">
           <AlertDescription>
-            Demande envoyée à {memberName} pour le créneau {sent}. Vous serez prévenu de sa réponse
-            ; suivez-la dans « Mes créneaux ».
+            Demande envoyée à {memberName} pour le créneau {sent}. Suivez sa réponse dans{" "}
+            <Link href="/profil?onglet=mes-rendez-vous" className="font-semibold underline">
+              Mes rendez-vous
+            </Link>
+            .
           </AlertDescription>
         </Alert>
       )}
@@ -225,8 +228,8 @@ export function MemberMeetingSlots({
           <p className="text-xs text-text-muted">
             Le créneau est réservé pour vous deux jusqu&apos;à la réponse. Le téléphone de{" "}
             {memberName} vous sera communiqué si la demande est acceptée.{" "}
-            <Link href="/profil?onglet=creneaux" className="underline">
-              Mes créneaux
+            <Link href="/profil?onglet=mes-rendez-vous" className="underline">
+              Mes rendez-vous
             </Link>
           </p>
           {error && (
