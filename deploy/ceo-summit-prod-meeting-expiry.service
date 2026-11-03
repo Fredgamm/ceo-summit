@@ -1,0 +1,7 @@
+[Unit]
+Description=CEO Summit PROD (b2b.ceo-summit.mg) — expiration des demandes de rendez-vous B2B sans réponse
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/ceo-summit-prod/deploy/meeting-expiry.sh

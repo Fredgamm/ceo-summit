@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { expireMeetingBooking, releaseMeetingSlots } from "@/lib/meeting-expiry";
 import { requireViewer } from "@/lib/require-viewer";
 import { meetingEventIdFor, missingMeetingProfileFields } from "@/lib/meeting-participation";
 import {
@@ -261,15 +261,9 @@ async function decide(bookingId: string, decision: Decision): Promise<ActionResu
   if (booking.status !== "PENDING") return { success: false, error: NO_LONGER_PENDING };
 
   // RG-06 — échéance passée : la demande expire ici même si la tâche
-  // planifiée (lot 6) ne l'a pas encore traitée.
+  // planifiée (lib/meeting-expiry.ts) ne l'a pas encore traitée.
   if (booking.expiresAt <= now) {
-    await prisma.$transaction(async (tx) => {
-      const { count } = await tx.meetingBooking.updateMany({
-        where: { id: bookingId, status: "PENDING" },
-        data: { status: "EXPIRED" },
-      });
-      if (count === 1) await releaseSlots(tx, bookingId);
-    });
+    await expireMeetingBooking(bookingId);
     revalidateBoth(booking, viewer.id);
     return { success: false, error: "Cette demande a expiré : le créneau est de nouveau libre." };
   }
@@ -302,7 +296,7 @@ async function decide(bookingId: string, decision: Decision): Promise<ActionResu
           data: { status: "BOOKED" },
         });
       } else {
-        await releaseSlots(tx, bookingId);
+        await releaseMeetingSlots(tx, bookingId);
       }
     });
   } catch (err) {
@@ -321,14 +315,6 @@ async function decide(bookingId: string, decision: Decision): Promise<ActionResu
   // TODO lot 7 (emails) : confirmation aux deux avec .ics, ou refus au demandeur.
   revalidateBoth(booking, viewer.id);
   return { success: true, data: undefined };
-}
-
-/** RG-07 — les créneaux bloqués par la demande redeviennent libres. */
-async function releaseSlots(tx: Prisma.TransactionClient, bookingId: string) {
-  await tx.meetingParticipantSlot.updateMany({
-    where: { bookingId },
-    data: { status: "FREE", bookingId: null },
-  });
 }
 
 function revalidateBoth(booking: { requesterId: string; recipientId: string }, viewerId: string) {

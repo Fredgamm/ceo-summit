@@ -1,0 +1,7 @@
+[Unit]
+Description=CEO Summit — expiration des demandes de rendez-vous B2B sans réponse
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/ceo-summit/deploy/meeting-expiry.sh

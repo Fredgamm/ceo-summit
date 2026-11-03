@@ -1,0 +1,10 @@
+[Unit]
+Description=Expiration des demandes de rendez-vous B2B toutes les 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -303,6 +303,40 @@ sudo chown -R 1000:1000 .local-storage
 # docker run --rm -v "$PWD/.local-storage:/d" alpine chown -R 1000:1000 /d
 ```
 
+## 10 bis. Expiration des rendez-vous B2B (module 21)
+
+Les demandes de rendez-vous sans réponse expirent (échéance de 48 h, ou 10
+minutes avant le créneau) et libèrent leurs créneaux. Une demande échue est
+déjà affichée « expirée » à la lecture ; cette tâche, toutes les 5 minutes,
+fait le travail en base et préviendra les deux personnes par email. Même
+principe que les sauvegardes : timer systemd, pas de cron.
+
+Une fois par instance :
+
+```bash
+# 1. secret dans le .env de l'instance (32 caractères minimum), puis redémarrer l'app
+echo "MEETING_CRON_SECRET=\"$(openssl rand -hex 32)\"" >> .env
+docker compose -f docker-compose.prod.yml up -d --no-build app
+
+# 2. timer — préprod (/opt/ceo-summit)
+chmod +x deploy/meeting-expiry.sh
+cp deploy/ceo-summit-meeting-expiry.service deploy/ceo-summit-meeting-expiry.timer /etc/systemd/system/
+# ... ou prod (/opt/ceo-summit-prod) : fichiers ceo-summit-prod-meeting-expiry.*
+systemctl daemon-reload
+systemctl enable --now ceo-summit-meeting-expiry.timer
+```
+
+Vérifier / lancer à la main :
+
+```bash
+systemctl list-timers ceo-summit-meeting-expiry.timer
+systemctl start ceo-summit-meeting-expiry.service && journalctl -u ceo-summit-meeting-expiry.service -n 5
+# attendu : {"expired":0}
+```
+
+Sans `MEETING_CRON_SECRET`, la route `/api/webhooks/meeting-expiry` répond 503
+et le script s'arrête en erreur : rien n'est ouvert par défaut.
+
 ## 11. Sauvegardes — Postgres + fichiers uploadés
 
 Automatisées via `deploy/backup.sh` (dump Postgres + tar de
