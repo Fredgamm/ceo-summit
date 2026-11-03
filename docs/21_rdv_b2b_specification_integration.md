@@ -198,7 +198,7 @@ Aucun objet « table ». Aucune réutilisation de `Room` (salles de discussion e
 
 **P3 — Le destinataire répond**
 
-- Depuis « Mes rendez-vous » ou depuis l'email (V2 pour l'email, §6).
+- Depuis « Mes rendez-vous » ou depuis l'email : boutons **Accepter** et **Décliner** dans l'email de demande, qui ouvrent une page de confirmation (V1, décision du 3 novembre, D10).
 - **Accepter** : rendez-vous confirmé, les deux créneaux passent en réservé, emails de confirmation aux deux (zone, indications, coordonnées dont le téléphone, `.ics`).
 - **Refuser** : créneaux libérés, email au demandeur.
 
@@ -298,7 +298,7 @@ Tous dans la **bibliothèque d'emails** (Admin → Emails), donc modifiables san
 
 | Lot | Contenu                                                                     | Jours      |
 | --- | --------------------------------------------------------------------------- | ---------- |
-| 11  | Réponse depuis l'email : jetons et page de confirmation                     | 1          |
+| ~~11~~ | ~~Réponse depuis l'email : jetons et page de confirmation~~ — **avancé en V1 le 3 novembre** (lot 7 bis) | — |
 | 12  | Annulation d'un rendez-vous confirmé, avec motif et notification            | 1          |
 | 13  | Signalement d'absence et réclamations (ouverte, transmise, résolue)         | 1,5        |
 | 14  | Relance admin et email admin à chaque confirmation                          | 0,5        |
@@ -321,7 +321,7 @@ Tous dans la **bibliothèque d'emails** (Admin → Emails), donc modifiables san
 | D7  | Une relance admin prolonge-t-elle les 48 h ?                                                            | **Non** (spécification client).                                                                                                                                                                                                                                                                                                                                                              |
 | D8  | Reprendre les données du plugin WordPress ?                                                             | À décider. Sans besoin d'historique, **non**.                                                                                                                                                                                                                                                                                                                                                |
 | D9  | Présentation des emails : gabarit de la plateforme ou entête bleu du plugin ?                           | **Retenu pour le codage (8 oct.)** — **Gabarit de la plateforme**, contenus du client.                                                                                                                                                                                                                                                                                                       |
-| D10 | Réponse depuis l'email : action directe ou page de confirmation ?                                       | **Page de confirmation** (protection contre l'ouverture automatique des liens).                                                                                                                                                                                                                                                                                                              |
+| D10 | Réponse depuis l'email : action directe ou page de confirmation ? | **Tranché (3 nov.) :** boutons Accepter / Décliner dans l'email de demande (V1), qui ouvrent une **page de confirmation** (protection contre l'ouverture automatique des liens). Ancien lot 11, avancé de la V2 à la V1. |
 | D11 | Un rendez-vous confirmé peut-il être annulé ? Jusqu'à quand ?                                           | Oui, avec motif, jusqu'à 2 h avant (V2).                                                                                                                                                                                                                                                                                                                                                     |
 | D12 | Plafond de demandes en attente par personne ?                                                           | **Retenu pour le codage (8 oct.)** — **10**.                                                                                                                                                                                                                                                                                                                                                 |
 | D13 | Échéance quand le créneau arrive avant les 48 h ?                                                       | **Tranché (8 oct.)** : **demande du jour même** → expire à l'heure du créneau ; **demande d'un jour précédent** → la plus proche entre « envoi + 48 h » et « début du créneau − 10 min ». Le créneau est alors libéré. Exemples : jeudi 11 h pour jeudi 14 h → expire jeudi 14 h ; mercredi 18 h pour jeudi 14 h → expire jeudi 13 h 50 ; lundi 10 h pour jeudi 14 h → expire mercredi 10 h. |
@@ -345,7 +345,7 @@ Tous dans la **bibliothèque d'emails** (Admin → Emails), donc modifiables san
 | `POST /api/bookings`                              | Action `requestMeeting`                                                     |
 | `GET /api/me/bookings`                            | Onglet « Mes rendez-vous »                                                  |
 | `POST /api/bookings/:id/accept`, `/decline`       | Actions `acceptMeeting`, `declineMeeting`                                   |
-| `GET /api/booking-decisions`                      | Page `/rendez-vous/repondre/[jeton]` (V2)                                   |
+| `GET /api/booking-decisions`                      | Page `/rendez-vous/repondre/[jeton]` (V1)                                   |
 | `GET /api/bookings/:id/ics`                       | Route `/api/rendez-vous/[id]/ics`                                           |
 | `POST /api/bookings/:id/no-show`                  | Action `reportNoShow` (V2)                                                  |
 | `GET /api/admin/bookings`, `/export`              | Page `/admin/rendez-vous/[id]` + route d'export CSV/PDF                     |
@@ -384,17 +384,18 @@ Les codes d'erreur de la spécification client (§16) sont repris comme messages
 | Lot   | Contenu                                                                                                                                                                                                                                                                                                                                                                                     | Estimation | État       |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- |
 | 7     | **Emails** (bibliothèque d'emails, contenus du doc client §7 et §14) : nouvelle demande, confirmation aux deux avec `.ics` et lien Google Agenda, refus, expiration, « vos créneaux sont ouverts » (publication / nouvelle inscription), annulation par l'organisation (désactivation d'un créneau) ; route `/api/rendez-vous/[id]/ics` (**faite le 3 nov.** : générateur `lib/meeting-ics.ts`, heures en UTC, lignes repliées à 75 octets, `METHOD:PUBLISH` sans invité, rappel 30 min, `inline` pour la feuille « Ajouter à l'agenda » d'iPhone ; boutons « Ajouter à mon agenda » et « Google Agenda » dans « Mes rendez-vous » ; reste à joindre le fichier aux emails)                                                     | ~1 j       | ⏳ à faire |
+| 7 bis | **Réponse depuis l'email** (avancé de la V2, D10) : boutons « Accepter » / « Décliner » dans l'email de demande ; jeton long, **haché** en base (`decisionTokenHash`), propre à la demande et à son destinataire, à usage unique, invalide dès que la demande n'est plus en attente (RG-15) ; page publique `/rendez-vous/repondre/[jeton]` qui résume la demande et demande confirmation avant d'enregistrer la réponse (pas de connexion requise) | ~1 j | ⏳ à faire |
 | 9     | **Admin — suivi** : liste de tous les rendez-vous avec filtres (statut, date), export CSV (Excel FR) et PDF, liste terrain par créneau imprimable                                                                                                                                                                                                                                           | ~1 j       | ⏳ à faire |
 | 10    | Tests de bout en bout (demandes simultanées, expiration) et recette avec ~30 comptes                                                                                                                                                                                                                                                                                                        | ~1 j       | ⏳ à faire |
 | (4)   | Annuaire RDV de l'événement (participants ayant des créneaux libres, recherche) — entrée secondaire, le profil restant l'entrée principale                                                                                                                                                                                                                                                  | ~0,5 j     | ⏳ à faire |
 
-**Total restant V1 : ~3,5 jours.**
+**Total restant V1 : ~4,5 jours.**
 
 ### 9.3 V2 (après le jour J)
 
 | Lot | Contenu                                                             | Décision liée |
 | --- | ------------------------------------------------------------------- | ------------- |
-| 11  | Répondre depuis l'email (jeton haché, page de confirmation)         | D10           |
+| ~~11~~ | ~~Répondre depuis l'email~~ — avancé en V1 (lot 7 bis, §9.2) | D10 |
 | 12  | Annulation d'un rendez-vous confirmé, avec motif et notification    | D11           |
 | 13  | Signalement d'absence et réclamations (ouverte, transmise, résolue) | D6            |
 | 14  | Relance admin d'une demande, email admin à chaque confirmation      | D7            |

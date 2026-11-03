@@ -11,19 +11,19 @@
 
 ## Sommaire
 
-| #   | Email                                 | Destinataire         | Déclencheur                          | Texte | Phase |
-| --- | ------------------------------------- | -------------------- | ------------------------------------ | ----- | ----- |
-| 1   | Nouvelle demande de rendez-vous       | Destinataire         | Une demande est envoyée              | ✅    | V1    |
-| 2   | Rendez-vous confirmé                  | Demandeur            | La demande est acceptée              | ⚠️ ✏️ | V1    |
-| 3   | Rendez-vous confirmé                  | Destinataire         | La demande est acceptée              | ⚠️ ✏️ | V1    |
-| 4   | Demande refusée                       | Demandeur            | La demande est refusée               | ✏️    | V1    |
-| 5   | Demande expirée                       | Demandeur            | Sans réponse à l'échéance            | ✏️    | V1    |
-| 6   | Demande expirée                       | Destinataire         | Sans réponse à l'échéance            | ✏️    | V1    |
-| 7   | Vos créneaux sont ouverts             | Participant          | Publication, ou nouvelle inscription | ✏️    | V1    |
-| 8   | Rendez-vous annulé par l'organisation | Personnes concernées | L'admin désactive un créneau         | ✏️    | V1    |
-| 9   | Notification de confirmation          | Admin                | Un rendez-vous est confirmé          | ⚠️ ✏️ | V2    |
-| 10  | Rappel d'une demande en attente       | Destinataire         | Relance par l'admin                  | ✏️    | V2    |
-| 11  | Absence signalée                      | Admin                | Un participant signale une absence   | ✏️    | V2    |
+| #   | Email                                                         | Destinataire             | Déclencheur                        | Texte | Phase |
+| --- | ------------------------------------------------------------- | ------------------------ | ---------------------------------- | ----- | ----- |
+| 1   | Nouvelle demande de rendez-vous (boutons Accepter / Décliner) | Destinataire             | Une demande est envoyée            | ✅    | V1    |
+| 2   | Rendez-vous confirmé                                          | Demandeur                | La demande est acceptée            | ⚠️ ✏️ | V1    |
+| 3   | Rendez-vous confirmé                                          | Destinataire             | La demande est acceptée            | ⚠️ ✏️ | V1    |
+| 4   | Demande refusée                                               | Demandeur                | La demande est refusée             | ✏️    | V1    |
+| 5   | Demande expirée                                               | Demandeur                | Sans réponse à l'échéance          | ✏️    | V1    |
+| 6   | Demande expirée                                               | Destinataire             | Sans réponse à l'échéance          | ✏️    | V1    |
+| 7   | Vos créneaux sont ouverts                                     | Participant déjà inscrit | Publication des créneaux           | ✏️    | V1    |
+| 8   | Rendez-vous annulé par l'organisation                         | Personnes concernées     | L'admin désactive un créneau       | ✏️    | V1    |
+| 9   | Notification de confirmation                                  | Admin                    | Un rendez-vous est confirmé        | ⚠️ ✏️ | V2    |
+| 10  | Rappel d'une demande en attente                               | Destinataire             | Relance par l'admin                | ✏️    | V2    |
+| 11  | Absence signalée                                              | Admin                    | Un participant signale une absence | ✏️    | V2    |
 
 ⚠️ = le client a donné la liste des champs à faire figurer, pas le texte. Le texte ci-dessous est un projet qui respecte cette liste.
 
@@ -83,14 +83,16 @@ Motif de la demande :
 
 Actions :
 - Voir le profil : {{requesterProfileUrl}}
-- Répondre à la demande : {{myMeetingsUrl}}
+- Accepter le rendez-vous : {{acceptUrl}}
+- Décliner le rendez-vous : {{declineUrl}}
 
+Ces liens sont personnels, sécurisés et utilisables une seule fois.
 Sans réponse avant {{expiresAt}}, la demande pourra expirer automatiquement.
 ```
 
 - pied de page participant.
 
-> **Écart avec le texte du client :** il prévoit deux liens directs « Accepter » et « Décliner » dans l'email. La spec (D10) les place en V2, avec une page de confirmation (les antivirus ouvrent parfois les liens des emails et déclencheraient une réponse sans que la personne l'ait voulu). En V1, un seul lien **« Répondre à la demande »** mène à « Mes rendez-vous ». Tout le reste du texte est celui du client.
+> **Texte du client, sans écart.** Les deux boutons « Accepter » et « Décliner » sont dans l'email (décision du 3 novembre). Pour la sécurité, un clic ouvre d'abord une **page de confirmation** (« Accepter le rendez-vous avec … ? ») et c'est le bouton de cette page qui enregistre la réponse : les antivirus et les aperçus de messagerie ouvrent parfois les liens d'un email et répondraient sinon à la place du destinataire. Aucune connexion n'est demandée, le lien est personnel et ne sert qu'une fois. Le destinataire peut aussi répondre depuis « Mes rendez-vous ».
 
 ---
 
@@ -201,7 +203,7 @@ Si vous souhaitez tout de même rencontrer cette personne, vous pouvez lui propo
 
 ## 7. Vos créneaux sont ouverts ✏️ (V1)
 
-**À** : chaque participant éligible, à la publication des créneaux, ou à son inscription si elle a lieu après · **Objet** : `Vous participez aux rendez-vous B2B : vérifiez vos créneaux`
+**À** : chaque participant déjà inscrit et éligible, à la publication des créneaux · **Objet** : `Vous participez aux rendez-vous B2B : vérifiez vos créneaux`
 
 ```text
 Bonjour {{firstName}},
@@ -308,11 +310,14 @@ Traiter la réclamation : {{claimUrl}}
 
 ---
 
-## Points à valider
+## Décisions (3 novembre 2026)
 
-1. **Email 1 : un seul lien « Répondre »** en V1 au lieu de « Accepter / Décliner » (voir l'écart ci-dessus). D'accord ?
-2. **Refus (4) et expirations (5, 6)** : le ton et la proposition de reprendre rendez-vous conviennent-ils ?
-3. **Email 7** : doit-il aussi partir aux membres qui s'inscrivent après la publication ? (Proposé : oui.)
-4. **Email 8** : doit-il partir aussi quand un gérant retire un participant ? (Proposé : oui.)
-5. **Email admin (9)** : à quelle adresse l'envoyer ? Pas d'adresse d'organisation dédiée n'est configurée aujourd'hui.
-6. **Heures** : toujours dans le fuseau de l'événement, avec sa mention (« heure de La Réunion »), jamais dans le fuseau du destinataire.
+1. **Email 1 : boutons « Accepter » et « Décliner »** — retenu, texte du client conservé. Un clic ouvre une page de confirmation (voir la note de l'email 1). Cela fait passer la réponse depuis l'email (ancien lot 11) de la V2 à la V1.
+2. **Refus (4) et expirations (5, 6)** — ton validé.
+3. **Email 7** — envoyé aux membres **déjà inscrits** à la publication des créneaux. Un membre qui s'inscrit après la publication ne reçoit pas cet email (il voit ses créneaux actifs dans « Mes créneaux »).
+
+**Encore ouverts, avec la proposition retenue par défaut :**
+
+4. Email 8 (annulation) aussi quand un gérant retire un participant : **oui**.
+5. Adresse de l'email admin (9, V2) : à définir avant la V2.
+6. Heures toujours dans le fuseau de l'événement, avec sa mention : **oui**.
