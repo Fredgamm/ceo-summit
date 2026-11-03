@@ -171,7 +171,7 @@ export function RequestMeeting({
                   <span className="text-xs font-semibold capitalize opacity-80">
                     {parts.weekday}
                   </span>
-                  <span className="text-base font-bold">{parts.date}</span>
+                  <span className="text-sm font-bold sm:text-base">{parts.date}</span>
                   <span className={cn("text-xs", active ? "text-white/80" : "text-text-muted")}>
                     {freeLabel(free)}
                   </span>
@@ -211,7 +211,7 @@ export function RequestMeeting({
                                 setSelected({ id: slot.id, range: slot.range });
                               }}
                               className={cn(
-                                "flex h-12 w-full items-center justify-center whitespace-nowrap rounded-xl border-2 px-2 text-base font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2",
+                                "flex h-11 w-full items-center justify-center whitespace-nowrap rounded-xl border-2 px-1 text-sm font-semibold transition-colors sm:h-12 sm:px-2 sm:text-base sm:font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2",
                                 active
                                   ? "border-navy bg-navy text-white"
                                   : "border-navy/30 bg-white text-navy hover:border-navy"
@@ -222,12 +222,12 @@ export function RequestMeeting({
                           ) : (
                             <div
                               aria-disabled="true"
-                              className="flex h-12 w-full cursor-not-allowed select-none flex-col items-center justify-center rounded-xl border-2 border-transparent bg-slate-100 px-1 leading-tight text-slate-600"
+                              className="flex h-11 w-full cursor-not-allowed select-none flex-col items-center justify-center rounded-xl border-2 border-transparent bg-slate-100 px-1 leading-tight text-slate-600 sm:h-12"
                             >
-                              <span className="whitespace-nowrap text-sm font-medium line-through decoration-slate-400">
+                              <span className="whitespace-nowrap text-xs font-medium line-through decoration-slate-400 sm:text-sm">
                                 {slot.range}
                               </span>
-                              <span className="text-xs font-semibold">{state}</span>
+                              <span className="text-[11px] font-semibold sm:text-xs">{state}</span>
                             </div>
                           )}
                         </li>
