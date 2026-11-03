@@ -12,6 +12,9 @@ export const MEETING_REASON_MAX = 500;
 /** RG-09 — demandes en attente par demandeur (D12). */
 export const MAX_PENDING_REQUESTS = 10;
 
+/** RG-06 / D13 — délai maximal de réponse à une demande, en heures. */
+export const MEETING_REQUEST_TTL_HOURS = 48;
+
 const HOUR = 3600 * 1000;
 
 /**
@@ -23,7 +26,7 @@ const HOUR = 3600 * 1000;
  */
 export function meetingRequestExpiry(sentAt: Date, slotStart: Date, timeZone: string): Date {
   if (zonedDayKey(sentAt, timeZone) === zonedDayKey(slotStart, timeZone)) return slotStart;
-  const in48h = new Date(sentAt.getTime() + 48 * HOUR);
+  const in48h = new Date(sentAt.getTime() + MEETING_REQUEST_TTL_HOURS * HOUR);
   const tenBefore = new Date(slotStart.getTime() - 10 * 60 * 1000);
   return in48h < tenBefore ? in48h : tenBefore;
 }

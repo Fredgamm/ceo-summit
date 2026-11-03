@@ -14,6 +14,7 @@ import {
   zonedDayKey,
 } from "@/lib/event-timezone";
 import { loadMemberMeetingView, missingMeetingProfileFields } from "@/lib/meeting-participation";
+import { MEETING_REQUEST_TTL_HOURS } from "@/lib/meeting-booking";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequestMeeting, type RequestDayView } from "@/components/meetings/request-meeting";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -120,10 +121,17 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
               {meeting.accessInstructions ? ` · ${meeting.accessInstructions}` : ""}
             </span>
           </p>
-          <p className="mt-2 text-xs text-text-muted">
-            Le créneau est réservé pour vous deux jusqu&apos;à la réponse. Le téléphone de{" "}
-            {member.name} vous est communiqué si la demande est acceptée.
-          </p>
+          <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-xs text-text-muted">
+            <li>Le créneau est réservé pour vous deux en attendant la réponse.</li>
+            <li>
+              Sans réponse sous {MEETING_REQUEST_TTL_HOURS} h au maximum (plus tôt si le créneau
+              approche), la demande expire et le créneau est libéré automatiquement.
+            </li>
+            <li>
+              Si {member.name} accepte, vous recevez par email son téléphone et le fichier
+              calendrier.
+            </li>
+          </ul>
         </div>
 
         {blocked ? (
