@@ -1237,7 +1237,7 @@ enum MeetingSlotStatus {
 }
 
 /// Disponibilité d'un participant sur un créneau (§3.2). Pas de ligne =
-/// inactif (opt-in, D3) ; INACTIVE = désactivé après avoir été activé.
+/// libre (actif par défaut, D3 révisée) ; INACTIVE = désactivé par le participant.
 enum MeetingAvailability {
   INACTIVE
   FREE
@@ -1289,8 +1289,9 @@ model MeetingTimeSlot {
   @@index([eventId, status, startTime])
 }
 
-/// Créée quand le participant active le créneau (D3). Unique par membre et
-/// par créneau. Une demande passe les créneaux des deux participants de
+/// Créée au premier changement d'état du créneau pour ce membre
+/// (désactivation, demande ; sans ligne il est libre, D3 révisée). Unique par
+/// membre et par créneau. Une demande passe les créneaux des deux participants de
 /// FREE à PENDING par une mise à jour conditionnelle (RG-03).
 model MeetingParticipantSlot {
   id        String              @id @default(cuid())

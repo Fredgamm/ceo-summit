@@ -49,7 +49,7 @@ export function MeetingPublishButton({
         open={open}
         onOpenChange={setOpen}
         title="Publier les créneaux"
-        description="Les participants de l'événement verront ces créneaux dans « Mes créneaux », inactifs tant qu'ils ne les activent pas. Les demandes de rendez-vous seront possibles jusqu'à la fin de l'événement."
+        description="Les participants de l'événement verront ces créneaux dans « Mes créneaux », actifs par défaut : chacun désactive ceux où il n'est pas disponible. Les demandes de rendez-vous seront possibles jusqu'à la fin de l'événement."
         confirmLabel="Publier"
         onConfirm={publish}
       />

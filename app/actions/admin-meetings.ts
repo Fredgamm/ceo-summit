@@ -311,7 +311,7 @@ export async function setMeetingSlotDisabled(
 
 /**
  * Publication : les créneaux en brouillon deviennent visibles des
- * participants, inactifs tant qu'ils ne les activent pas (D3). La
+ * participants, actifs par défaut (D3 révisée). La
  * réservation est ouverte jusqu'à la fin de l'événement (RG-11).
  */
 export async function publishMeetingSlots(
