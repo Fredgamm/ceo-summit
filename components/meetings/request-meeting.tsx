@@ -172,7 +172,7 @@ export function RequestMeeting({
                       ) : (
                         <div
                           aria-disabled="true"
-                          className="flex h-11 w-full items-center justify-between gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 text-xs text-slate-500"
+                          className="flex h-11 w-full cursor-not-allowed select-none items-center justify-between gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 text-xs text-slate-500"
                         >
                           <span className="whitespace-nowrap font-semibold">{slot.range}</span>
                           <span className="font-medium">{label}</span>
