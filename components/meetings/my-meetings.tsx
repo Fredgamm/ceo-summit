@@ -155,7 +155,7 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtrer les rendez-vous">
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filtrer les rendez-vous">
         {visibleMeetingFilters(counts, filter).map((value) => {
           const f = MEETING_FILTERS.find((x) => x.value === value)!;
           return (
@@ -166,7 +166,7 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
               aria-selected={filter === f.value}
               onClick={() => setFilter(f.value)}
               className={cn(
-                "flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors",
+                "flex h-8 items-center gap-1 rounded-full border px-3 text-[13px] font-semibold transition-colors",
                 filter === f.value
                   ? "border-navy bg-navy text-white shadow-sm"
                   : "border-border bg-white text-text-mid hover:border-navy/40"
@@ -175,7 +175,7 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
               {f.label}
               <span
                 className={cn(
-                  "rounded-full px-1.5 text-xs font-bold",
+                  "rounded-full px-1.5 text-[11px] font-bold leading-4",
                   filter === f.value ? "bg-white/20 text-white" : "bg-surface-2 text-text-mid"
                 )}
               >
