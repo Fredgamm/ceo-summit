@@ -193,7 +193,7 @@ export function RequestMeeting({
       )}
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl sm:p-8">
           <DialogHeader>
             <DialogTitle>Demander un rendez-vous à {memberName}</DialogTitle>
             <DialogDescription>
@@ -204,7 +204,7 @@ export function RequestMeeting({
             <Label htmlFor="meeting-reason">Motif de la rencontre *</Label>
             <Textarea
               id="meeting-reason"
-              rows={4}
+              rows={7}
               maxLength={MEETING_REASON_MAX}
               placeholder="ex. Présenter notre offre logistique et explorer un partenariat dans l'océan Indien."
               value={reason}
