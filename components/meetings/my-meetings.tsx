@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarClock, CalendarPlus, Mail, MapPin, Phone } from "lucide-react";
+import { CalendarClock, CalendarPlus, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 
 import { acceptMeeting, declineMeeting, withdrawMeeting } from "@/app/actions/meeting-requests";
 import {
@@ -12,7 +12,17 @@ import {
   type MeetingDisplayStatus,
   type MeetingFilter,
 } from "@/lib/meeting-booking";
+import { ACCEPT_QUICK_REPLIES, DECLINE_QUICK_REPLIES } from "@/lib/meeting-request-ui";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ResponseMessageField } from "@/components/meetings/response-message-field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -23,6 +33,8 @@ export interface MyMeetingView {
   sent: boolean;
   status: MeetingDisplayStatus;
   reason: string;
+  /** Mot du destinataire en répondant. */
+  responseMessage: string | null;
   /** « 12 mars 2027, 14h00 – 14h30 » */
   when: string;
   timezoneLabel: string;
@@ -53,7 +65,8 @@ const STATUS: Record<MeetingDisplayStatus, { label: string; badge: string }> = {
   CANCELLED: { label: "Annulé", badge: "bg-slate-50 text-slate-500 ring-slate-200" },
 };
 
-type Confirming = { id: string; kind: "decline" | "withdraw"; name: string } | null;
+type Confirming = { id: string; name: string } | null;
+type Responding = { id: string; kind: "accept" | "decline"; name: string } | null;
 
 /**
  * Module 21 lots 5 et 8 (3 nov. 2026) — onglet « Mes rendez-vous »
@@ -68,6 +81,8 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [confirming, setConfirming] = React.useState<Confirming>(null);
+  const [responding, setResponding] = React.useState<Responding>(null);
+  const [message, setMessage] = React.useState("");
 
   const visible = meetings.filter((m) => matchesMeetingFilter(m.status, filter));
   const countOf = (f: MeetingFilter) =>
@@ -171,6 +186,24 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
                   {m.reason}
                 </p>
 
+                {m.responseMessage && (
+                  <div className="rounded-md border border-navy/20 bg-navy-light/40 p-3 text-sm">
+                    <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-navy">
+                      <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                      {m.sent ? `Message de ${m.partner.name}` : "Votre message"}
+                    </p>
+                    <p className="leading-relaxed text-text">{m.responseMessage}</p>
+                    {m.sent && (
+                      <Link
+                        href={`/messagerie?new=${m.partner.id}`}
+                        className="mt-2 inline-block text-xs font-semibold text-navy-mid underline"
+                      >
+                        Lui répondre
+                      </Link>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-1 text-xs text-text-mid">
                   <p>
                     {m.eventTitle} · Horaires en {m.timezoneLabel}
@@ -231,18 +264,22 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
                           size="sm"
                           variant="ghost"
                           disabled={busy !== null}
-                          onClick={() =>
-                            setConfirming({ id: m.id, kind: "decline", name: m.partner.name })
-                          }
+                          onClick={() => {
+                            setMessage("");
+                            setResponding({ id: m.id, kind: "decline", name: m.partner.name });
+                          }}
                         >
                           Refuser
                         </Button>
                         <Button
                           size="sm"
                           disabled={busy !== null}
-                          onClick={() => run(m.id, acceptMeeting)}
+                          onClick={() => {
+                            setMessage("");
+                            setResponding({ id: m.id, kind: "accept", name: m.partner.name });
+                          }}
                         >
-                          {busy === m.id ? "Envoi…" : "Accepter"}
+                          Accepter
                         </Button>
                       </>
                     ) : (
@@ -250,9 +287,7 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
                         size="sm"
                         variant="outline"
                         disabled={busy !== null}
-                        onClick={() =>
-                          setConfirming({ id: m.id, kind: "withdraw", name: m.partner.name })
-                        }
+                        onClick={() => setConfirming({ id: m.id, name: m.partner.name })}
                       >
                         Retirer la demande
                       </Button>
@@ -268,21 +303,66 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(open) => !open && setConfirming(null)}
-        title={confirming?.kind === "decline" ? "Refuser la demande" : "Retirer la demande"}
-        description={
-          confirming?.kind === "decline"
-            ? `La demande de ${confirming.name} sera refusée et le créneau redeviendra libre.`
-            : `Votre demande à ${confirming?.name ?? ""} sera retirée et le créneau redeviendra libre.`
-        }
-        confirmLabel={confirming?.kind === "decline" ? "Refuser" : "Retirer"}
+        title="Retirer la demande"
+        description={`Votre demande à ${confirming?.name ?? ""} sera retirée et le créneau redeviendra libre.`}
+        confirmLabel="Retirer"
         variant="destructive"
         onConfirm={async () => {
           if (!confirming) return;
-          const { id, kind } = confirming;
+          const { id } = confirming;
           setConfirming(null);
-          await run(id, kind === "decline" ? declineMeeting : withdrawMeeting);
+          await run(id, withdrawMeeting);
         }}
       />
+
+      <Dialog open={responding !== null} onOpenChange={(open) => !open && setResponding(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {responding?.kind === "accept"
+                ? `Accepter le rendez-vous avec ${responding.name}`
+                : `Refuser la demande de ${responding?.name ?? ""}`}
+            </DialogTitle>
+            <DialogDescription>
+              {responding?.kind === "accept"
+                ? `Laissez un mot à ${responding.name} (facultatif) : où vous retrouver, comment vous reconnaître…`
+                : "Vous pouvez expliquer pourquoi (facultatif). Le créneau redeviendra libre."}
+            </DialogDescription>
+          </DialogHeader>
+          {responding && (
+            <ResponseMessageField
+              id="meeting-response-message"
+              replies={responding.kind === "accept" ? ACCEPT_QUICK_REPLIES : DECLINE_QUICK_REPLIES}
+              value={message}
+              onChange={setMessage}
+              disabled={busy !== null}
+            />
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setResponding(null)} disabled={busy !== null}>
+              Annuler
+            </Button>
+            <Button
+              variant={responding?.kind === "decline" ? "destructive" : "default"}
+              disabled={busy !== null}
+              onClick={async () => {
+                if (!responding) return;
+                const { id, kind } = responding;
+                await run(id, (i) =>
+                  kind === "accept" ? acceptMeeting(i, message) : declineMeeting(i, message)
+                );
+                setResponding(null);
+              }}
+            >
+              {busy !== null
+                ? "Envoi…"
+                : responding?.kind === "accept"
+                  ? "Confirmer le rendez-vous"
+                  : "Refuser la demande"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

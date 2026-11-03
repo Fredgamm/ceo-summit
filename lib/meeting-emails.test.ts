@@ -20,10 +20,12 @@ import { meetingEventIdFor } from "@/lib/meeting-participation";
 import {
   cleanForEmail,
   firstNameOf,
+  responseMessageSentence,
   sendMeetingCancelledEmails,
   sendMeetingConfirmedEmails,
   sendMeetingDeclinedEmail,
   sendMeetingExpiredEmails,
+  sendMeetingPartnerMessageEmail,
   sendMeetingRequestEmail,
   sendMeetingSlotsOpenEmails,
 } from "./meeting-emails";
@@ -282,5 +284,92 @@ describe("sendMeetingSlotsOpenEmails", () => {
     expect(prisma.eventRegistration.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { eventId: "evt_1", status: "CONFIRMED" } })
     );
+  });
+});
+
+describe("le mot du destinataire dans les emails (A)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(resolveEmail).mockResolvedValue({ subject: "S", react: null as never });
+    vi.mocked(sendTransactionalEmail).mockResolvedValue({ id: "x" });
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue({
+      ...BOOKING,
+      responseMessage: "Retrouvons-nous à l'entrée.",
+    } as never);
+  });
+
+  it("responseMessageSentence: a short sentence, or nothing at all", () => {
+    expect(responseMessageSentence("Avec plaisir !")).toBe(" Son message : « Avec plaisir ! ».");
+    expect(responseMessageSentence(null)).toBe("");
+    expect(responseMessageSentence("   ")).toBe("");
+  });
+
+  it("responseMessageSentence: markdown typed in the word cannot become formatting or a link", () => {
+    const sentence = responseMessageSentence("Voir [mon site](https://evil.example) **vite**");
+    expect(sentence).not.toMatch(/\[[^\]]*\]\([^)]*\)/);
+    expect(sentence).not.toContain("**");
+  });
+
+  it("declined: the requester gets the word in the email", async () => {
+    await sendMeetingDeclinedEmail("b1");
+
+    expect(sent()[0].variables.responseMessageSentence).toBe(
+      " Son message : « Retrouvons-nous à l'entrée. »."
+    );
+  });
+
+  it("confirmed: the word is passed to the template (used by the requester's email)", async () => {
+    vi.mocked(loadMeetingCalendarInput).mockResolvedValue({
+      ok: true,
+      input: {
+        bookingId: "b1",
+        start: BOOKING.slot.startTime,
+        end: BOOKING.slot.endTime,
+        eventTitle: "CEO Summit 2027",
+        eventLocation: "Saint-Denis",
+        zone: "Espace B2B",
+        accessInstructions: "Niveau 1",
+        timezoneLabel: "heure de La Réunion",
+        startLabel: "11 janvier 2027, 10h00",
+        partner: { name: "Paul", title: null, companyName: "X", phone: "+262", email: "p@x.re" },
+        reason: "Motif",
+        partnerProfileUrl: "https://b2b/membres/x",
+      },
+    } as never);
+
+    await sendMeetingConfirmedEmails("b1");
+
+    expect(sent().map((s) => s.variables.responseMessageSentence)).toEqual([
+      " Son message : « Retrouvons-nous à l'entrée. ».",
+      " Son message : « Retrouvons-nous à l'entrée. ».",
+    ]);
+  });
+
+  it("sendMeetingPartnerMessageEmail: a separate email to the requester, with a link to answer", async () => {
+    await sendMeetingPartnerMessageEmail("b1");
+
+    expect(sendTransactionalEmail).toHaveBeenCalledTimes(1);
+    expect(sendTransactionalEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: "marie@x.re" })
+    );
+    const [{ key, variables }] = sent();
+    expect(key).toBe("meeting-partner-message");
+    expect(variables).toMatchObject({
+      firstName: "Marie",
+      partnerName: "Paul Rakoto",
+      message: "Retrouvons-nous à l'entrée.",
+    });
+    expect(String(variables.conversationUrl)).toMatch(/\/messagerie\?new=paul$/);
+  });
+
+  it("sendMeetingPartnerMessageEmail: nothing is sent when there is no word", async () => {
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue({
+      ...BOOKING,
+      responseMessage: null,
+    } as never);
+
+    await sendMeetingPartnerMessageEmail("b1");
+
+    expect(resolveEmail).not.toHaveBeenCalled();
   });
 });

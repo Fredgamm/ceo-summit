@@ -248,6 +248,26 @@ Nous vous prions de nous excuser pour ce changement. Vous pouvez reprendre rende
 
 ---
 
+## 8 bis. Message du destinataire ✏️ (V1)
+
+**À** : le demandeur · **Objet** : `Message de {{partnerName}} sur votre rendez-vous`
+
+```text
+Bonjour {{firstName}},
+
+{{partnerName}} vous écrit au sujet de votre rendez-vous du {{slotDate}}, à {{slotTime}} ({{timezoneLabel}}) :
+
+« {{message}} »
+
+[Lui répondre]
+```
+
++ pied de page participant.
+
+> Envoyé seulement quand le destinataire ajoute son mot **après** avoir répondu depuis le lien de l'email (la confirmation ou le refus est alors déjà parti). Quand le mot est laissé en même temps que la réponse (depuis « Mes rendez-vous »), il figure dans l'email de confirmation (2) ou de refus (4) : ` Son message : « … ».` Dans les deux cas, il est aussi déposé dans la messagerie.
+
+---
+
 ## 9. Notification de confirmation à l'admin ⚠️ ✏️ (V2)
 
 **À** : l'adresse d'alerte admin déjà configurée (`ADMIN_ALERT_EMAIL`) · **Objet** : `Rendez-vous B2B confirmé - {{requesterCompany}} / {{recipientCompany}}`

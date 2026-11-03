@@ -132,3 +132,20 @@ export function freeLabel(count: number): string {
   if (count === 0) return "Complet";
   return count === 1 ? "1 libre" : `${count} libres`;
 }
+
+/**
+ * Réponses toutes prêtes pour le mot facultatif laissé en acceptant ou en
+ * refusant une demande (300 caractères au plus, `MEETING_RESPONSE_MESSAGE_MAX`).
+ */
+export const ACCEPT_QUICK_REPLIES = [
+  { label: "Avec plaisir", text: "Avec plaisir, à bientôt !" },
+  { label: "Rendez-vous à l'entrée", text: "Retrouvons-nous à l'entrée de l'Espace B2B." },
+  { label: "Appelez-moi", text: "Appelez-moi à votre arrivée, je viendrai à votre rencontre." },
+  { label: "J'arrive en avance", text: "Je serai là quelques minutes en avance." },
+] as const;
+
+export const DECLINE_QUICK_REPLIES = [
+  { label: "Pas disponible", text: "Désolé, je ne suis pas disponible à cette heure." },
+  { label: "Un autre créneau ?", text: "Pourriez-vous me proposer un autre créneau ?" },
+  { label: "Pas pour le moment", text: "Merci, mais ce n'est pas pour moi pour le moment." },
+] as const;

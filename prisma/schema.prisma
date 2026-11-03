@@ -1329,6 +1329,9 @@ model MeetingBooking {
   /// Jeton de réponse depuis l'email (V2, RG-15), haché.
   decisionTokenHash String?              @unique
   cancelReason      String?              @db.Text
+  /// Mot facultatif du destinataire en acceptant ou en refusant (300 caractères au plus) :
+  /// affiché au demandeur, envoyé par email et déposé dans la messagerie.
+  responseMessage   String?              @db.Text
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 

@@ -211,20 +211,25 @@ export async function requestMeeting(input: unknown): Promise<ActionResult<{ boo
  * partagée avec les boutons de l'email.
  */
 
-export async function acceptMeeting(bookingId: string): Promise<ActionResult> {
-  return decide(bookingId, "accept");
+/** `message` : mot facultatif laissé au demandeur en répondant (300 caractères au plus). */
+export async function acceptMeeting(bookingId: string, message?: string): Promise<ActionResult> {
+  return decide(bookingId, "accept", message);
 }
 
-export async function declineMeeting(bookingId: string): Promise<ActionResult> {
-  return decide(bookingId, "decline");
+export async function declineMeeting(bookingId: string, message?: string): Promise<ActionResult> {
+  return decide(bookingId, "decline", message);
 }
 
 export async function withdrawMeeting(bookingId: string): Promise<ActionResult> {
   return decide(bookingId, "withdraw");
 }
 
-async function decide(bookingId: string, decision: MeetingDecision): Promise<ActionResult> {
+async function decide(
+  bookingId: string,
+  decision: MeetingDecision,
+  message?: string
+): Promise<ActionResult> {
   const viewerResult = await requireViewer();
   if (!viewerResult.success) return { success: false, error: viewerResult.error };
-  return respondToMeeting({ bookingId, actorId: viewerResult.viewer.id, decision });
+  return respondToMeeting({ bookingId, actorId: viewerResult.viewer.id, decision, message });
 }

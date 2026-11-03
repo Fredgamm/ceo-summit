@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
+vi.mock("@/lib/meeting-messaging", () => ({
+  postMeetingResponseMessage: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/meeting-emails", () => ({
   sendMeetingRequestEmail: vi.fn().mockResolvedValue(undefined),
   sendMeetingConfirmedEmails: vi.fn().mockResolvedValue(undefined),
@@ -33,6 +36,7 @@ vi.mock("@/lib/prisma", () => {
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
 import { meetingEventIdFor } from "@/lib/meeting-participation";
+import { postMeetingResponseMessage } from "@/lib/meeting-messaging";
 import {
   sendMeetingConfirmedEmails,
   sendMeetingDeclinedEmail,
@@ -250,6 +254,7 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
     requesterId: "user_a",
     recipientId: "user_b",
     expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+    slot: { startTime: SLOT_START },
     event: SLOT.event,
   };
 
@@ -273,7 +278,7 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
     expect(result).toEqual({ success: true, data: undefined });
     expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
       where: { id: "booking_1", status: "PENDING" },
-      data: { status: "CONFIRMED", respondedAt: expect.any(Date) },
+      data: { status: "CONFIRMED", respondedAt: expect.any(Date), responseMessage: null },
     });
     expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
       where: { bookingId: "booking_1", status: "PENDING" },
@@ -293,7 +298,7 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
     expect(result.success).toBe(true);
     expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
       where: { id: "booking_1", status: "PENDING" },
-      data: { status: "DECLINED", respondedAt: expect.any(Date) },
+      data: { status: "DECLINED", respondedAt: expect.any(Date), responseMessage: null },
     });
     expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
       where: { bookingId: "booking_1" },
@@ -390,5 +395,100 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
 
     expect((await acceptMeeting("booking_1")).success).toBe(false);
     expect(prisma.meetingBooking.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("le mot facultatif du destinataire (A)", () => {
+  const PENDING = {
+    status: "PENDING",
+    eventId: "evt_1",
+    requesterId: "user_a",
+    recipientId: "user_b",
+    expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+    slot: { startTime: SLOT_START },
+    event: SLOT.event,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireViewer).mockResolvedValue({
+      success: true,
+      viewer: { ...RECIPIENT, id: "user_b" },
+    } as never);
+    vi.mocked(prisma.meetingBooking.findUnique).mockResolvedValue(PENDING as never);
+    vi.mocked(prisma.meetingBooking.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.meetingParticipantSlot.updateMany).mockResolvedValue({ count: 2 });
+    vi.mocked(meetingEventIdFor).mockResolvedValue("evt_1");
+    vi.mocked(prisma.$transaction).mockImplementation(((fn: (tx: typeof prisma) => unknown) =>
+      fn(prisma)) as never);
+  });
+
+  it("accepting with a word stores it, and posts it to the requester in the messaging", async () => {
+    const result = await acceptMeeting("booking_1", "  Retrouvons-nous à l'entrée.  ");
+
+    expect(result.success).toBe(true);
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: {
+        status: "CONFIRMED",
+        respondedAt: expect.any(Date),
+        responseMessage: "Retrouvons-nous à l'entrée.",
+      },
+    });
+    expect(postMeetingResponseMessage).toHaveBeenCalledWith({
+      fromUserId: "user_b",
+      toUserId: "user_a",
+      slotLabel: expect.stringMatching(/\d{2}h\d{2}$/),
+      text: "Retrouvons-nous à l'entrée.",
+    });
+  });
+
+  it("declining can carry a word too", async () => {
+    await declineMeeting("booking_1", "Pourriez-vous proposer un autre créneau ?");
+
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: expect.objectContaining({
+        status: "DECLINED",
+        responseMessage: "Pourriez-vous proposer un autre créneau ?",
+      }),
+    });
+    expect(postMeetingResponseMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("the word is optional: nothing typed means nothing stored and nothing posted", async () => {
+    await acceptMeeting("booking_1", "   ");
+
+    expect(prisma.meetingBooking.updateMany).toHaveBeenCalledWith({
+      where: { id: "booking_1", status: "PENDING" },
+      data: expect.objectContaining({ status: "CONFIRMED", responseMessage: null }),
+    });
+    expect(postMeetingResponseMessage).not.toHaveBeenCalled();
+  });
+
+  it("refuses a word longer than 300 characters, before touching anything", async () => {
+    const result = await acceptMeeting("booking_1", "x".repeat(301));
+
+    expect(result).toEqual({
+      success: false,
+      error: "Votre message ne doit pas dépasser 300 caractères.",
+    });
+    expect(prisma.meetingBooking.updateMany).not.toHaveBeenCalled();
+    expect(postMeetingResponseMessage).not.toHaveBeenCalled();
+  });
+
+  it("a failing messaging never undoes the response", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(postMeetingResponseMessage).mockRejectedValueOnce(new Error("clé manquante"));
+
+    expect((await acceptMeeting("booking_1", "Avec plaisir !")).success).toBe(true);
+  });
+
+  it("a withdrawal carries no word", async () => {
+    vi.mocked(requireViewer).mockResolvedValue({ success: true, viewer: REQUESTER } as never);
+
+    await withdrawMeeting("booking_1");
+
+    expect(postMeetingResponseMessage).not.toHaveBeenCalled();
   });
 });

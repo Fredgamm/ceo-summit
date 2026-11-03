@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canSeeMeetingContact,
   matchesMeetingFilter,
+  normalizeResponseMessage,
   meetingDisplayStatus,
   meetingRequestExpiry,
 } from "./meeting-booking";
@@ -91,5 +92,33 @@ describe("matchesMeetingFilter (P5, D16)", () => {
     expect(matchesMeetingFilter("COMPLETED", "past")).toBe(true);
     expect(matchesMeetingFilter("CONFIRMED", "past")).toBe(false);
     expect(matchesMeetingFilter("WITHDRAWN", "all")).toBe(true);
+  });
+});
+
+describe("normalizeResponseMessage (le mot facultatif en répondant)", () => {
+  it("is optional: nothing, blanks or null mean no word", () => {
+    expect(normalizeResponseMessage(undefined)).toEqual({ ok: true, message: null });
+    expect(normalizeResponseMessage(null)).toEqual({ ok: true, message: null });
+    expect(normalizeResponseMessage("   \n ")).toEqual({ ok: true, message: null });
+  });
+
+  it("trims the word", () => {
+    expect(normalizeResponseMessage("  Avec plaisir !  ")).toEqual({
+      ok: true,
+      message: "Avec plaisir !",
+    });
+  });
+
+  it("accepts exactly 300 characters, refuses 301", () => {
+    expect(normalizeResponseMessage("x".repeat(300)).ok).toBe(true);
+    expect(normalizeResponseMessage("x".repeat(301))).toEqual({
+      ok: false,
+      error: "Votre message ne doit pas dépasser 300 caractères.",
+    });
+  });
+
+  it("refuses anything that is not text", () => {
+    expect(normalizeResponseMessage(42)).toEqual({ ok: false, error: "Message invalide." });
+    expect(normalizeResponseMessage({ text: "x" }).ok).toBe(false);
   });
 });

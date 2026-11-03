@@ -125,6 +125,11 @@ const CONFIRMED_VARIABLES: EmailVariableDef[] = [
   REASON,
   v("icsUrl", "Lien du fichier calendrier", "https://b2b.ceo-summit.mg/api/rendez-vous/abc/ics"),
   v("googleCalendarUrl", "Lien Google Agenda", "https://calendar.google.com/calendar/render?..."),
+  v(
+    "responseMessageSentence",
+    "Mot laissé par le destinataire (vide s'il n'y en a pas)",
+    " Son message : « Avec plaisir, retrouvons-nous à l'entrée de l'Espace B2B. »."
+  ),
 ];
 
 export const MEETINGS_TEMPLATES: EmailTemplateDefinition[] = [
@@ -235,7 +240,7 @@ export const MEETINGS_TEMPLATES: EmailTemplateDefinition[] = [
     variables: CONFIRMED_VARIABLES,
     defaultSubject: "Rendez-vous confirmé avec {{partnerName}} - {{slotDate}}, {{slotTime}}",
     defaultBlocks: confirmedBlocks(
-      "**{{partnerName}}** a accepté votre demande de rendez-vous. Votre rencontre est confirmée."
+      "**{{partnerName}}** a accepté votre demande de rendez-vous. Votre rencontre est confirmée.{{responseMessageSentence}}"
     ),
   },
   {
@@ -265,6 +270,11 @@ export const MEETINGS_TEMPLATES: EmailTemplateDefinition[] = [
       SLOT_TIME,
       TZ_LABEL,
       DIRECTORY_URL,
+      v(
+        "responseMessageSentence",
+        "Mot laissé par le destinataire (vide s'il n'y en a pas)",
+        " Son message : « Pourriez-vous proposer un autre créneau ? »."
+      ),
     ],
     defaultSubject: "Votre demande de rendez-vous n'a pas été retenue - {{partnerCompany}}",
     defaultBlocks: [
@@ -272,7 +282,7 @@ export const MEETINGS_TEMPLATES: EmailTemplateDefinition[] = [
       {
         id: "b2",
         type: "paragraph",
-        text: "**{{partnerName}}**, de **{{partnerCompany}}**, n'a pas pu donner suite à votre demande de rendez-vous du {{slotDate}}, à {{slotTime}} ({{timezoneLabel}}).",
+        text: "**{{partnerName}}**, de **{{partnerCompany}}**, n'a pas pu donner suite à votre demande de rendez-vous du {{slotDate}}, à {{slotTime}} ({{timezoneLabel}}).{{responseMessageSentence}}",
       },
       {
         id: "b3",
@@ -280,6 +290,39 @@ export const MEETINGS_TEMPLATES: EmailTemplateDefinition[] = [
         text: "Le créneau est de nouveau libre : vous pouvez proposer un autre horaire à cette personne, ou rencontrer d'autres participants du CEO Summit.",
       },
       { id: "b4", type: "button", label: "Voir les participants", url: "{{directoryUrl}}" },
+      ...CLOSING,
+    ],
+  },
+  {
+    key: "meeting-partner-message",
+    category: "MEETINGS",
+    label: "Rendez-vous B2B — message du destinataire",
+    description:
+      "Envoyé au demandeur quand le destinataire ajoute un mot après avoir répondu depuis l'email (la confirmation ou le refus est déjà partie). Le mot est aussi déposé dans la messagerie.",
+    triggerHint: "lib/meeting-response.ts::addResponseMessageByToken",
+    variables: [
+      FIRST_NAME,
+      PARTNER_NAME,
+      SLOT_DATE,
+      SLOT_TIME,
+      TZ_LABEL,
+      v("message", "Message du destinataire", "Retrouvons-nous à l'entrée de l'Espace B2B."),
+      v(
+        "conversationUrl",
+        "Lien pour lui répondre dans la messagerie",
+        "https://b2b.ceo-summit.mg/messagerie?new=abc"
+      ),
+    ],
+    defaultSubject: "Message de {{partnerName}} sur votre rendez-vous",
+    defaultBlocks: [
+      { id: "b1", type: "heading", text: "Bonjour {{firstName}}," },
+      {
+        id: "b2",
+        type: "paragraph",
+        text: "**{{partnerName}}** vous écrit au sujet de votre rendez-vous du {{slotDate}}, à {{slotTime}} ({{timezoneLabel}}) :",
+      },
+      { id: "b3", type: "paragraph", text: "« {{message}} »" },
+      { id: "b4", type: "button", label: "Lui répondre", url: "{{conversationUrl}}" },
       ...CLOSING,
     ],
   },

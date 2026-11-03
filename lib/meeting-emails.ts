@@ -40,6 +40,16 @@ export function firstNameOf(name: string): string {
   return cleanForEmail(name).split(" ")[0] || "";
 }
 
+/**
+ * Phrase ajoutée à l'email du demandeur quand le destinataire a laissé un mot
+ * en répondant : vide sans mot (les modèles n'ont pas de bloc conditionnel).
+ * « Son message » reste correct quel que soit le genre de la personne.
+ */
+export function responseMessageSentence(message: string | null | undefined): string {
+  const text = cleanForEmail(message);
+  return text ? ` Son message : « ${text} ».` : "";
+}
+
 const person = {
   id: true,
   name: true,
@@ -54,6 +64,7 @@ async function loadBookingContext(bookingId: string) {
     select: {
       id: true,
       reason: true,
+      responseMessage: true,
       expiresAt: true,
       slot: { select: { startTime: true, endTime: true } },
       event: {
@@ -157,6 +168,7 @@ export async function sendMeetingConfirmedEmails(bookingId: string): Promise<voi
           partnerProfileUrl: calendar.input.partnerProfileUrl,
           icsUrl: `${appUrl()}/api/rendez-vous/${bookingId}/ics`,
           googleCalendarUrl: googleCalendarUrl(calendar.input),
+          responseMessageSentence: responseMessageSentence(booking.responseMessage),
         },
         [
           {
@@ -183,6 +195,25 @@ export async function sendMeetingDeclinedEmail(bookingId: string): Promise<void>
     partnerName: cleanForEmail(booking.recipient.name),
     partnerCompany: cleanForEmail(booking.recipient.company?.name),
     directoryUrl: `${appUrl()}/catalogue`,
+    responseMessageSentence: responseMessageSentence(booking.responseMessage),
+  });
+}
+
+/**
+ * Le destinataire ajoute son mot après avoir répondu depuis l'email : la
+ * confirmation (ou le refus) est déjà partie, le mot arrive donc dans un email
+ * à part, avec un lien pour lui répondre dans la messagerie.
+ */
+export async function sendMeetingPartnerMessageEmail(bookingId: string): Promise<void> {
+  const ctx = await loadBookingContext(bookingId);
+  if (!ctx || !ctx.booking.responseMessage) return;
+  const { booking, shared } = ctx;
+  await send(booking.requester.email, "meeting-partner-message", {
+    ...shared,
+    firstName: firstNameOf(booking.requester.name),
+    partnerName: cleanForEmail(booking.recipient.name),
+    message: cleanForEmail(booking.responseMessage),
+    conversationUrl: `${appUrl()}/messagerie?new=${booking.recipient.id}`,
   });
 }
 

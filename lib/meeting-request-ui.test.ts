@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ACCEPT_QUICK_REPLIES,
+  DECLINE_QUICK_REPLIES,
   QUICK_REASONS,
   applyQuickReason,
   dayParts,
@@ -162,5 +164,21 @@ describe("freeLabel", () => {
     expect(freeLabel(12)).toBe("12 libres");
     expect(freeLabel(1)).toBe("1 libre");
     expect(freeLabel(0)).toBe("Complet");
+  });
+});
+
+describe("réponses toutes prêtes (accepter / refuser)", () => {
+  it("each fits the 300-character limit on its own, and is never empty", () => {
+    for (const r of [...ACCEPT_QUICK_REPLIES, ...DECLINE_QUICK_REPLIES]) {
+      expect(r.text.length).toBeGreaterThan(0);
+      expect(r.text.length).toBeLessThanOrEqual(300);
+    }
+  });
+
+  it("can be combined with what the person typed, within the limit", () => {
+    const typed = "Je suis en chemise bleue.";
+    const combined = applyQuickReason(typed, ACCEPT_QUICK_REPLIES[0].text, 300);
+    expect(combined).toBe(`${typed} ${ACCEPT_QUICK_REPLIES[0].text}`);
+    expect(combined.length).toBeLessThanOrEqual(300);
   });
 });

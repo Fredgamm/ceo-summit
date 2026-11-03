@@ -6,10 +6,17 @@ import {
   sendMeetingConfirmedEmails,
   sendMeetingDeclinedEmail,
   sendMeetingExpiredEmails,
+  sendMeetingPartnerMessageEmail,
 } from "@/lib/meeting-emails";
 import { meetingEventIdFor } from "@/lib/meeting-participation";
-import { meetingDisplayStatus } from "@/lib/meeting-booking";
+import {
+  MEETING_RESPONSE_MESSAGE_WINDOW_MINUTES,
+  meetingDisplayStatus,
+  normalizeResponseMessage,
+} from "@/lib/meeting-booking";
 import { hashMeetingToken } from "@/lib/meeting-token";
+import { formatDayKey, formatTimeInZone, zonedDayKey } from "@/lib/event-timezone";
+import { postMeetingResponseMessage } from "@/lib/meeting-messaging";
 
 /**
  * Module 21 lots 5, 7 et 7 bis — réponse à une demande de rendez-vous, depuis
@@ -49,10 +56,19 @@ export async function respondToMeeting(
     decision: MeetingDecision;
     /** Faux pour la page publique de l'email : elle affiche elle-même le résultat. */
     revalidate?: boolean;
+    /** Mot facultatif en acceptant ou en refusant (300 caractères au plus). */
+    message?: string | null;
   },
   now = new Date()
 ): Promise<Result> {
   const { bookingId, actorId, decision, revalidate = true } = input;
+  // Le mot ne concerne que l'acceptation et le refus ; un retrait n'en porte pas.
+  const normalized =
+    decision === "withdraw"
+      ? { ok: true as const, message: null }
+      : normalizeResponseMessage(input.message);
+  if (!normalized.ok) return { success: false, error: normalized.error };
+  const message = normalized.message;
 
   const booking = await prisma.meetingBooking.findUnique({
     where: { id: bookingId },
@@ -62,7 +78,8 @@ export async function respondToMeeting(
       requesterId: true,
       recipientId: true,
       expiresAt: true,
-      event: { select: { date: true, endDate: true } },
+      slot: { select: { startTime: true } },
+      event: { select: { date: true, endDate: true, timezone: true } },
     },
   });
   if (!booking || (booking.requesterId !== actorId && booking.recipientId !== actorId)) {
@@ -105,7 +122,7 @@ export async function respondToMeeting(
         where: { id: bookingId, status: "PENDING" },
         data: {
           status: DECISION_STATUS[decision],
-          ...(decision === "withdraw" ? {} : { respondedAt: now }),
+          ...(decision === "withdraw" ? {} : { respondedAt: now, responseMessage: message }),
         },
       });
       if (count !== 1) throw new NoLongerPendingError();
@@ -133,8 +150,24 @@ export async function respondToMeeting(
   });
   if (decision === "accept") notify(sendMeetingConfirmedEmails(bookingId), "confirmation");
   if (decision === "decline") notify(sendMeetingDeclinedEmail(bookingId), "refus");
+  if (message) {
+    notify(
+      postMeetingResponseMessage({
+        fromUserId: actorId,
+        toUserId: booking.requesterId,
+        slotLabel: slotLabel(booking.slot.startTime, booking.event.timezone),
+        text: message,
+      }),
+      "message de réponse"
+    );
+  }
   if (revalidate) revalidateBoth(booking, actorId);
   return { success: true, data: undefined };
+}
+
+/** « 11 janvier 2027, 09h30 » dans le fuseau de l'événement. */
+function slotLabel(start: Date, timeZone: string): string {
+  return `${formatDayKey(zonedDayKey(start, timeZone))}, ${formatTimeInZone(start, timeZone)}`;
 }
 
 function revalidateBoth(booking: { requesterId: string; recipientId: string }, actorId: string) {
@@ -190,4 +223,69 @@ export async function respondToMeetingByToken(
     decision: choice === "accepter" ? "accept" : "decline",
     revalidate: false,
   });
+}
+
+/**
+ * Depuis la page de l'email : la réponse s'enregistre à l'ouverture, puis la
+ * personne peut ajouter son mot. Le même jeton le permet, une seule fois, dans
+ * l'heure qui suit la réponse ; au-delà, on passe par la messagerie. Le mot est
+ * rangé avec la demande, déposé dans la messagerie, et envoyé par un email à part
+ * (la confirmation est déjà partie).
+ */
+export async function addResponseMessageByToken(
+  token: string,
+  raw: unknown,
+  now = new Date()
+): Promise<Result> {
+  const normalized = normalizeResponseMessage(raw);
+  if (!normalized.ok) return { success: false, error: normalized.error };
+  if (!normalized.message)
+    return { success: false, error: "Écrivez votre message avant de l'envoyer." };
+
+  const booking = await prisma.meetingBooking.findUnique({
+    where: { decisionTokenHash: hashMeetingToken(token) },
+    select: {
+      id: true,
+      status: true,
+      respondedAt: true,
+      responseMessage: true,
+      requesterId: true,
+      recipientId: true,
+      slot: { select: { startTime: true } },
+      event: { select: { timezone: true } },
+    },
+  });
+  if (!booking) return { success: false, error: "Ce lien n'est pas valide." };
+  if ((booking.status !== "CONFIRMED" && booking.status !== "DECLINED") || !booking.respondedAt) {
+    return { success: false, error: "Vous pouvez ajouter un message juste après avoir répondu." };
+  }
+  if (booking.responseMessage) {
+    return { success: false, error: "Votre message a déjà été envoyé." };
+  }
+  const windowMs = MEETING_RESPONSE_MESSAGE_WINDOW_MINUTES * 60_000;
+  if (now.getTime() - booking.respondedAt.getTime() > windowMs) {
+    return {
+      success: false,
+      error: "Le délai pour ajouter un message est dépassé : écrivez-lui depuis la messagerie.",
+    };
+  }
+
+  // Conditionnel : deux envois simultanés (deux onglets) ne déposent qu'un message.
+  const { count } = await prisma.meetingBooking.updateMany({
+    where: { id: booking.id, responseMessage: null },
+    data: { responseMessage: normalized.message },
+  });
+  if (count !== 1) return { success: false, error: "Votre message a déjà été envoyé." };
+
+  notify(
+    postMeetingResponseMessage({
+      fromUserId: booking.recipientId,
+      toUserId: booking.requesterId,
+      slotLabel: slotLabel(booking.slot.startTime, booking.event.timezone),
+      text: normalized.message,
+    }),
+    "message de réponse"
+  );
+  notify(sendMeetingPartnerMessageEmail(booking.id), "message du partenaire");
+  return { success: true, data: undefined };
 }

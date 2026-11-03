@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { respondToMeetingByToken } from "@/lib/meeting-response";
+import { addResponseMessageByToken, respondToMeetingByToken } from "@/lib/meeting-response";
 
 type ActionResult = { success: true; data: undefined } | { success: false; error: string };
 
@@ -20,6 +20,17 @@ export async function respondByEmailToken(
     return { success: false, error: "Ce lien n'est pas valide." };
   }
   return respondToMeetingByToken(token, choice);
+}
+
+/**
+ * Après avoir répondu depuis l'email, la personne peut ajouter un mot
+ * facultatif pour le demandeur (une fois, dans l'heure qui suit). Même jeton.
+ */
+export async function addEmailResponseMessage(
+  token: string,
+  message: string
+): Promise<ActionResult> {
+  return addResponseMessageByToken(token, message);
 }
 
 /**

@@ -96,3 +96,31 @@ export function matchesMeetingFilter(status: MeetingDisplayStatus, filter: Meeti
       return true;
   }
 }
+
+/**
+ * Module 21 (3 nov. 2026) — mot facultatif du destinataire en acceptant ou en
+ * refusant : 300 caractères au plus, affiché au demandeur, envoyé par email et
+ * déposé dans la messagerie.
+ */
+export const MEETING_RESPONSE_MESSAGE_MAX = 300;
+
+/** Fenêtre pendant laquelle on peut encore ajouter son mot après avoir répondu depuis l'email. */
+export const MEETING_RESPONSE_MESSAGE_WINDOW_MINUTES = 60;
+
+export type NormalizedResponseMessage =
+  { ok: true; message: string | null } | { ok: false; error: string };
+
+/** Espaces rognés ; vide = pas de mot (c'est facultatif) ; trop long = refusé. */
+export function normalizeResponseMessage(raw: unknown): NormalizedResponseMessage {
+  if (raw === undefined || raw === null) return { ok: true, message: null };
+  if (typeof raw !== "string") return { ok: false, error: "Message invalide." };
+  const message = raw.trim();
+  if (message === "") return { ok: true, message: null };
+  if (message.length > MEETING_RESPONSE_MESSAGE_MAX) {
+    return {
+      ok: false,
+      error: `Votre message ne doit pas dépasser ${MEETING_RESPONSE_MESSAGE_MAX} caractères.`,
+    };
+  }
+  return { ok: true, message };
+}

@@ -305,6 +305,8 @@ export interface MyMeeting {
   sent: boolean;
   status: MeetingDisplayStatus;
   reason: string;
+  /** Mot du destinataire en répondant (affiché au demandeur ; au destinataire, son propre mot). */
+  responseMessage: string | null;
   startTime: Date;
   endTime: Date;
   /** Échéance de réponse d'une demande en attente (RG-06). */
@@ -347,6 +349,7 @@ export async function loadMyMeetings(userId: string, now = new Date()): Promise<
       id: true,
       status: true,
       reason: true,
+      responseMessage: true,
       expiresAt: true,
       requesterId: true,
       slot: { select: { startTime: true, endTime: true } },
@@ -381,6 +384,7 @@ export async function loadMyMeetings(userId: string, now = new Date()): Promise<
       sent,
       status,
       reason: b.reason,
+      responseMessage: b.responseMessage,
       startTime: b.slot.startTime,
       endTime: b.slot.endTime,
       expiresAt: b.expiresAt,

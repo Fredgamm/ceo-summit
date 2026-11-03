@@ -165,6 +165,7 @@ export default async function MemberProfilePage(props: {
           sent: m.sent,
           status: m.status,
           reason: m.reason,
+          responseMessage: m.responseMessage,
           when: `${formatDayKey(zonedDayKey(m.startTime, tz))}, ${formatTimeRangeInZone(m.startTime, m.endTime, tz)}`,
           timezoneLabel: timezoneLabel(tz),
           expiresLabel: `${formatDayKey(zonedDayKey(m.expiresAt, tz))} à ${formatTimeInZone(m.expiresAt, tz)}`,
