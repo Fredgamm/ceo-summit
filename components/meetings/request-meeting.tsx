@@ -117,7 +117,7 @@ export function RequestMeeting({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-white p-4">
+    <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
       {days.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Choisir un jour">
@@ -150,14 +150,14 @@ export function RequestMeeting({
       {!day || day.slots.length === 0 ? (
         <p className="text-sm text-text-mid">Aucun créneau pour ce jour.</p>
       ) : (
-        <div className="grid gap-x-8 gap-y-4 xl:grid-cols-2 xl:items-start">
+        <div className="flex flex-col gap-4">
           {PERIODS.map((period) => {
             const slots = day.slots.filter((s) => slotPeriod(s.range) === period.value);
             if (slots.length === 0) return null;
             return (
               <section key={period.value}>
                 <h2 className="mb-2 text-xs font-bold uppercase text-gold">{period.label}</h2>
-                <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-2">
+                <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                   {slots.map((slot) => {
                     const label = visitorSlotLabel(slot.state);
                     return (
