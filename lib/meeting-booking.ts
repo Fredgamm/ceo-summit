@@ -46,6 +46,17 @@ export function meetingDisplayStatus(
   return booking.status as MeetingDisplayStatus;
 }
 
+/** Libellés français des statuts, pour « Mes rendez-vous », l'admin et les exports. */
+export const MEETING_STATUS_LABEL: Record<MeetingDisplayStatus, string> = {
+  PENDING: "En attente",
+  CONFIRMED: "Confirmé",
+  COMPLETED: "Terminé",
+  DECLINED: "Refusé",
+  EXPIRED: "Expiré",
+  WITHDRAWN: "Retiré",
+  CANCELLED: "Annulé",
+};
+
 /** RG-04 — le téléphone de l'autre participant n'est visible qu'après confirmation. */
 export function canSeeMeetingContact(status: MeetingDisplayStatus): boolean {
   return status === "CONFIRMED" || status === "COMPLETED";

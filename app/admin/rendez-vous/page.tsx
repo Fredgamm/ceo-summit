@@ -99,7 +99,15 @@ export default async function AdminMeetingsPage() {
                         <Badge variant="secondary">Non configuré</Badge>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="space-x-4 whitespace-nowrap px-4 py-3 text-right">
+                      {setupStatus === "PUBLISHED" && (
+                        <Link
+                          href={`/admin/rendez-vous/${event.id}`}
+                          className="font-semibold text-navy-mid"
+                        >
+                          Suivre les rendez-vous →
+                        </Link>
+                      )}
                       <Link
                         href={`/admin/evenements/${event.id}/creneaux`}
                         className="font-semibold text-navy-mid"
