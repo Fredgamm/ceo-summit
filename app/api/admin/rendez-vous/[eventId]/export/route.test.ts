@@ -89,7 +89,7 @@ describe("GET /api/admin/rendez-vous/[eventId]/export", () => {
     expect(res.headers.get("content-disposition")).toMatch(/rendez-vous-ceo-summit-2027\.csv/);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // BOM pour Excel
-    expect(csv.split("\r\n")[0]).toContain("Demandeur;Entreprise du demandeur");
+    expect(csv.split("\r\n")[0]).toContain("Demandeur;Entreprise du demandeur;Email du demandeur");
     expect(csv).toContain("'=HYPERLINK(evil)"); // préfixé, donc affiché comme du texte
     expect(csv).not.toMatch(/;=HYPERLINK/);
   });

@@ -37,8 +37,8 @@ const STATUS_ORDER: MeetingDisplayStatus[] = [
 /**
  * Module 21 lot 9 (3 nov. 2026) — suivi par l'organisation (conception/21
  * P7) : tous les rendez-vous d'un événement, filtres par statut et par jour,
- * exports CSV et PDF, liste terrain. Les coordonnées des participants ne
- * s'affichent que pour un rendez-vous confirmé ou terminé.
+ * exports CSV et PDF, liste terrain. L'organisation voit toutes les
+ * informations des participants, quel que soit le statut.
  */
 export default async function AdminEventMeetingsPage(props: {
   params: Promise<{ eventId: string }>;
@@ -190,7 +190,9 @@ export default async function AdminEventMeetingsPage(props: {
                       >
                         {p.name}
                       </Link>
-                      <span className="block text-xs text-text-muted">{p.company}</span>
+                      <span className="block text-xs text-text-muted">
+                        {[p.title, p.company].filter(Boolean).join(" · ")}
+                      </span>
                       {p.phone && <span className="block text-xs text-text-mid">{p.phone}</span>}
                       {p.email && <span className="block text-xs text-text-mid">{p.email}</span>}
                     </td>
@@ -203,8 +205,8 @@ export default async function AdminEventMeetingsPage(props: {
         </div>
       )}
       <p className="text-xs text-text-muted">
-        Les téléphones et emails des participants ne s&apos;affichent que pour un rendez-vous
-        confirmé ou terminé, comme pour les participants eux-mêmes.
+        L&apos;organisation voit toutes les coordonnées des participants. Entre eux, le téléphone de
+        l&apos;autre ne leur est communiqué qu&apos;après confirmation du rendez-vous.
       </p>
     </div>
   );

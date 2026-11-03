@@ -31,9 +31,15 @@ export interface MeetingsPdfProps {
 }
 
 function MeetingsDocument({ table, generatedAtLabel }: MeetingsPdfProps) {
+  // Beaucoup de colonnes (liste complète) : police plus petite pour tenir en largeur.
+  const compact = table.header.length > 10;
   return (
     <Document title={table.title}>
-      <Page size="A4" orientation="landscape" style={styles.page}>
+      <Page
+        size="A4"
+        orientation="landscape"
+        style={[styles.page, { fontSize: compact ? 6 : 8, padding: compact ? 20 : 28 }]}
+      >
         <Text style={styles.title}>{table.title}</Text>
         <Text style={styles.subtitle}>
           {table.subtitle} — généré le {generatedAtLabel}
@@ -45,7 +51,13 @@ function MeetingsDocument({ table, generatedAtLabel }: MeetingsPdfProps) {
           <>
             <View style={styles.headerRow} fixed>
               {table.header.map((label, i) => (
-                <Text key={label} style={[styles.headerCell, { flex: table.columnFlex[i] }]}>
+                <Text
+                  key={label}
+                  style={[
+                    styles.headerCell,
+                    { flex: table.columnFlex[i], padding: compact ? 3 : 5 },
+                  ]}
+                >
                   {label}
                 </Text>
               ))}
@@ -53,7 +65,10 @@ function MeetingsDocument({ table, generatedAtLabel }: MeetingsPdfProps) {
             {table.rows.map((row, r) => (
               <View key={r} style={styles.row} wrap={false}>
                 {row.map((value, i) => (
-                  <Text key={i} style={[styles.cell, { flex: table.columnFlex[i] }]}>
+                  <Text
+                    key={i}
+                    style={[styles.cell, { flex: table.columnFlex[i], padding: compact ? 3 : 5 }]}
+                  >
                     {value}
                   </Text>
                 ))}

@@ -127,6 +127,7 @@ export default async function AdminFieldListPage(props: {
                               {[p.company, p.title].filter(Boolean).join(" · ")}
                             </p>
                             {p.phone && <p className="text-xs text-text-mid">{p.phone}</p>}
+                            {p.email && <p className="text-xs text-text-mid">{p.email}</p>}
                           </div>
                         ))}
                       </li>

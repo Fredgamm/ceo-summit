@@ -93,15 +93,24 @@ describe("loadAdminMeetings", () => {
     expect(view!.counts.all).toBe(2);
   });
 
-  it("only exposes phones and emails for a confirmed or completed meeting (RG-04)", async () => {
+  it("shows the organization every participant detail, whatever the status", async () => {
     const view = await loadAdminMeetings("evt_1", {}, NOW);
 
-    const byId = Object.fromEntries(view!.meetings.map((m) => [m.id, m]));
-    expect(byId.b1.requester).toMatchObject({ phone: "+262 marie", email: "marie@x.re" });
-    expect(byId.b1.recipient).toMatchObject({ phone: "+262 paul", email: "paul@x.re" });
-    for (const id of ["b2", "b3", "b4"]) {
-      expect(byId[id].requester).toMatchObject({ phone: "", email: "" });
-      expect(byId[id].recipient).toMatchObject({ phone: "", email: "" });
+    expect(view!.meetings.map((m) => m.status)).toEqual([
+      "CONFIRMED",
+      "PENDING",
+      "DECLINED",
+      "EXPIRED",
+    ]);
+    for (const m of view!.meetings) {
+      expect(m.requester).toMatchObject({
+        name: "Marie Andrianina",
+        title: "Directeur",
+        company: "Océan Logistique",
+        phone: "+262 marie",
+        email: "marie@x.re",
+      });
+      expect(m.recipient).toMatchObject({ phone: "+262 paul", email: "paul@x.re" });
     }
   });
 
@@ -141,7 +150,7 @@ describe("tables", () => {
     view = (await loadAdminMeetings("evt_1", {}, NOW))!;
   });
 
-  it("list: one row per meeting, same column count as the header, times in the event zone", () => {
+  it("list: every detail of both people on each row, times in the event zone", () => {
     const table = buildMeetingsListTable(view, {});
 
     expect(table.rows).toHaveLength(4);
@@ -151,16 +160,23 @@ describe("tables", () => {
       "11 janvier 2027",
       "10h00 – 10h30",
       "Confirmé",
-      "Marie Andrianina",
+      "Marie Andrianina (Directeur)",
       "Océan Logistique",
-      "Paul Rakoto",
-      "Rakoto Holding",
+      "marie@x.re",
       "+262 marie",
+      "Paul Rakoto (Directeur)",
+      "Rakoto Holding",
+      "paul@x.re",
       "+262 paul",
       "Motif b1",
+      "9 janvier 2027 à 12h00",
+      "",
     ]);
-    // Une demande en attente n'expose aucun téléphone.
-    expect(table.rows[1].slice(7, 9)).toEqual(["", ""]);
+    // Une demande en attente montre aussi les coordonnées : l'organisation gère tout.
+    const pending = table.rows[1];
+    expect(pending[2]).toBe("En attente");
+    expect(pending.slice(5, 7)).toEqual(["marie@x.re", "+262 marie"]);
+    expect(pending.slice(9, 11)).toEqual(["paul@x.re", "+262 paul"]);
     expect(table.rows[3][2]).toBe("Expiré");
   });
 
@@ -171,18 +187,20 @@ describe("tables", () => {
     expect(table.subtitle).toContain("11 janvier 2027");
   });
 
-  it("field list: only the meetings that will take place, with both phones", () => {
+  it("field list: only the meetings that will take place, with both people's contacts", () => {
     const table = buildFieldListTable(view, {});
 
     expect(table.rows).toHaveLength(1);
     expect(table.rows[0]).toEqual([
       "11 janvier 2027",
       "10h00 – 10h30",
-      "Marie Andrianina",
+      "Marie Andrianina (Directeur)",
       "Océan Logistique",
+      "marie@x.re",
       "+262 marie",
-      "Paul Rakoto",
+      "Paul Rakoto (Directeur)",
       "Rakoto Holding",
+      "paul@x.re",
       "+262 paul",
     ]);
     expect(table.subtitle).toContain("Espace B2B");

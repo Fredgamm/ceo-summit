@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { formatDayKey, formatTimeRangeInZone, zonedDayKey } from "@/lib/event-timezone";
+import {
+  formatDayKey,
+  formatTimeInZone,
+  formatTimeRangeInZone,
+  zonedDayKey,
+} from "@/lib/event-timezone";
 import {
   MEETING_STATUS_LABEL,
-  canSeeMeetingContact,
   meetingDisplayStatus,
   type MeetingDisplayStatus,
 } from "@/lib/meeting-booking";
@@ -14,10 +18,11 @@ import {
  * (`MeetingTable`) puis rendu en écran, en CSV ou en PDF : mêmes données
  * partout.
  *
- * Les coordonnées des participants (téléphone, email) ne figurent que pour un
- * rendez-vous confirmé ou terminé : c'est le seul cas où elles sont aussi
- * communiquées entre les participants (RG-04) ; une demande en attente, refusée
- * ou expirée n'en expose pas, même à l'organisation.
+ * L'organisation voit **toutes** les informations des participants (nom,
+ * fonction, entreprise, email, téléphone), quel que soit le statut du rendez-vous
+ * : c'est ce qui lui permet de le gérer, de relancer ou d'aider sur place. Les
+ * participants, eux, ne voient le téléphone de l'autre qu'après confirmation
+ * (RG-04) ; cette règle ne concerne que leurs propres écrans et emails.
  */
 
 export interface AdminMeetingFilters {
@@ -32,7 +37,6 @@ export interface AdminMeetingParty {
   name: string;
   company: string;
   title: string;
-  /** Renseignés seulement pour un rendez-vous confirmé ou terminé. */
   email: string;
   phone: string;
 }
@@ -123,16 +127,13 @@ export async function loadAdminMeetings(
   const tz = event.timezone;
   const days = [...new Set(event.meetingSlots.map((s) => zonedDayKey(s.startTime, tz)))];
 
-  const party = (
-    user: (typeof event.meetings)[number]["requester"],
-    withContact: boolean
-  ): AdminMeetingParty => ({
+  const party = (user: (typeof event.meetings)[number]["requester"]): AdminMeetingParty => ({
     id: user.id,
     name: user.name,
     company: user.company?.name ?? "",
     title: user.title ?? "",
-    email: withContact ? user.email : "",
-    phone: withContact ? (user.phone ?? "") : "",
+    email: user.email,
+    phone: user.phone ?? "",
   });
 
   const counts = EMPTY_COUNTS();
@@ -147,15 +148,14 @@ export async function loadAdminMeetings(
     counts.all++;
     counts[status]++;
     if (filters.status && filters.status !== "all" && status !== filters.status) continue;
-    const withContact = canSeeMeetingContact(status);
     meetings.push({
       id: b.id,
       status,
       dayKey,
       start: b.slot.startTime,
       end: b.slot.endTime,
-      requester: party(b.requester, withContact),
-      recipient: party(b.recipient, withContact),
+      requester: party(b.requester),
+      recipient: party(b.recipient),
       reason: b.reason,
       createdAt: b.createdAt,
       respondedAt: b.respondedAt,
@@ -195,7 +195,12 @@ export interface MeetingTable {
   columnFlex: number[];
 }
 
-const person = (p: AdminMeetingParty) => p.name;
+/** « Nom (fonction) » : la fonction accompagne le nom pour garder le tableau lisible. */
+const person = (p: AdminMeetingParty) => (p.title ? `${p.name} (${p.title})` : p.name);
+
+/** « 9 janvier 2027 à 12h00 » dans le fuseau de l'événement. */
+const stamp = (date: Date | null, tz: string) =>
+  date ? `${formatDayKey(zonedDayKey(date, tz))} à ${formatTimeInZone(date, tz)}` : "";
 
 /**
  * Liste complète : tous les rendez-vous filtrés, quel que soit leur statut,
@@ -218,24 +223,32 @@ export function buildMeetingsListTable(view: AdminMeetingsView, filters: AdminMe
       "Statut",
       "Demandeur",
       "Entreprise du demandeur",
+      "Email du demandeur",
+      "Téléphone du demandeur",
       "Destinataire",
       "Entreprise du destinataire",
-      "Téléphone du demandeur",
+      "Email du destinataire",
       "Téléphone du destinataire",
       "Motif",
+      "Demande envoyée le",
+      "Réponse le",
     ],
-    columnFlex: [1.1, 1.1, 0.9, 1.4, 1.5, 1.4, 1.5, 1.3, 1.3, 3],
+    columnFlex: [1, 0.9, 0.8, 1.3, 1.2, 1.6, 1.1, 1.3, 1.2, 1.6, 1.1, 2, 1.2, 1.2],
     rows: view.meetings.map((m) => [
       formatDayKey(m.dayKey),
       formatTimeRangeInZone(m.start, m.end, tz),
       MEETING_STATUS_LABEL[m.status],
       person(m.requester),
       m.requester.company,
+      m.requester.email,
+      m.requester.phone,
       person(m.recipient),
       m.recipient.company,
-      m.requester.phone,
+      m.recipient.email,
       m.recipient.phone,
       m.reason,
+      stamp(m.createdAt, tz),
+      stamp(m.respondedAt, tz),
     ]),
   };
   return table;
@@ -261,20 +274,24 @@ export function buildFieldListTable(view: AdminMeetingsView, filters: AdminMeeti
       "Heure",
       "Participant 1",
       "Entreprise 1",
+      "Email 1",
       "Téléphone 1",
       "Participant 2",
       "Entreprise 2",
+      "Email 2",
       "Téléphone 2",
     ],
-    columnFlex: [1.2, 1.2, 1.6, 1.6, 1.3, 1.6, 1.6, 1.3],
+    columnFlex: [1.1, 1.1, 1.5, 1.4, 1.6, 1.1, 1.5, 1.4, 1.6, 1.1],
     rows: held.map((m) => [
       formatDayKey(m.dayKey),
       formatTimeRangeInZone(m.start, m.end, tz),
       person(m.requester),
       m.requester.company,
+      m.requester.email,
       m.requester.phone,
       person(m.recipient),
       m.recipient.company,
+      m.recipient.email,
       m.recipient.phone,
     ]),
   };
