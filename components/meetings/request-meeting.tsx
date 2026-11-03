@@ -117,81 +117,80 @@ export function RequestMeeting({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
-      {days.length > 1 && (
-        <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="Choisir un jour">
-          {days.map((d) => {
-            const free = d.slots.filter((s) => s.state === "available").length;
-            return (
-              <button
-                key={d.key}
-                type="button"
-                role="tab"
-                aria-selected={day?.key === d.key}
-                onClick={() => setDayKey(d.key)}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors",
-                  day?.key === d.key
-                    ? "border-navy bg-navy text-white"
-                    : "border-border bg-white text-text-mid hover:border-navy/40"
-                )}
-              >
-                {d.label}
-                <span className="ml-1.5 opacity-70">({free})</span>
-              </button>
-            );
-          })}
+    <div className="rounded-lg border border-border bg-white p-4">
+      {days.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Choisir un jour">
+            {days.map((d) => {
+              const free = d.slots.filter((s) => s.state === "available").length;
+              return (
+                <button
+                  key={d.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={day?.key === d.key}
+                  onClick={() => setDayKey(d.key)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+                    day?.key === d.key
+                      ? "border-navy bg-navy text-white"
+                      : "border-border bg-white text-text-mid hover:border-navy/40"
+                  )}
+                >
+                  {d.label}
+                  <span className="ml-1.5 opacity-70">({free})</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-text-muted">Horaires en {timezoneLabel}</p>
         </div>
       )}
 
       {!day || day.slots.length === 0 ? (
         <p className="text-sm text-text-mid">Aucun créneau pour ce jour.</p>
       ) : (
-        PERIODS.map((period) => {
-          const slots = day.slots.filter((s) => slotPeriod(s.range) === period.value);
-          if (slots.length === 0) return null;
-          return (
-            <section key={period.value} className="mb-5 last:mb-0">
-              <h2 className="mb-2 text-xs font-bold uppercase text-gold">{period.label}</h2>
-              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {slots.map((slot) => {
-                  const label = visitorSlotLabel(slot.state);
-                  return (
-                    <li key={slot.id}>
-                      {label === null ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setError(null);
-                            setSelected({ id: slot.id, label: `${day.label}, ${slot.range}` });
-                          }}
-                          className="flex h-11 w-full items-center justify-center rounded-lg border border-navy/30 bg-white px-2 text-sm font-semibold text-navy transition-colors hover:border-navy hover:bg-navy hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2"
-                        >
-                          {slot.range}
-                        </button>
-                      ) : (
-                        <div
-                          aria-disabled="true"
-                          className="flex h-11 w-full cursor-not-allowed select-none items-center justify-between gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 text-xs text-slate-500"
-                        >
-                          <span className="whitespace-nowrap font-semibold">{slot.range}</span>
-                          <span className="font-medium">{label}</span>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          );
-        })
+        <div className="grid gap-x-8 gap-y-4 xl:grid-cols-2 xl:items-start">
+          {PERIODS.map((period) => {
+            const slots = day.slots.filter((s) => slotPeriod(s.range) === period.value);
+            if (slots.length === 0) return null;
+            return (
+              <section key={period.value}>
+                <h2 className="mb-2 text-xs font-bold uppercase text-gold">{period.label}</h2>
+                <ul className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-2">
+                  {slots.map((slot) => {
+                    const label = visitorSlotLabel(slot.state);
+                    return (
+                      <li key={slot.id}>
+                        {label === null ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setError(null);
+                              setSelected({ id: slot.id, label: `${day.label}, ${slot.range}` });
+                            }}
+                            className="flex h-10 w-full items-center justify-center rounded-lg border border-navy/30 bg-white px-2 text-sm font-semibold text-navy transition-colors hover:border-navy hover:bg-navy hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2"
+                          >
+                            {slot.range}
+                          </button>
+                        ) : (
+                          <div
+                            aria-disabled="true"
+                            className="flex h-10 w-full cursor-not-allowed select-none items-center justify-between gap-1 rounded-lg border border-slate-200 bg-slate-100 px-2 text-xs text-slate-500"
+                          >
+                            <span className="whitespace-nowrap font-semibold">{slot.range}</span>
+                            <span className="font-medium">{label}</span>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       )}
-
-      <p className="mt-4 text-xs text-text-muted">
-        Horaires en {timezoneLabel}
-        {zone ? ` · ${zone}` : ""}. Le créneau est réservé pour vous deux jusqu&apos;à la réponse ;
-        le téléphone de {memberName} vous est communiqué si la demande est acceptée.
-      </p>
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent>

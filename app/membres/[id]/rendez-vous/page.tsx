@@ -90,7 +90,9 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
       user={{ name: viewer.name, avatarUrl: viewer.avatarUrl, isAdmin: viewer.isPlatformAdmin }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      <div className="mx-auto flex max-w-4xl flex-col gap-4">
+      {/* Grand écran (3 nov. 2026) : colonne d'information à gauche, créneaux à droite ;
+          sur mobile, tout s'empile. */}
+      <div className="mx-auto flex max-w-6xl flex-col gap-3">
         <Link
           href={`/membres/${member.id}`}
           className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-navy-mid hover:underline"
@@ -98,65 +100,74 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
           <ArrowLeft className="h-4 w-4" aria-hidden /> Retour au profil
         </Link>
 
-        <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
-          <h1 className="text-lg font-bold text-navy sm:text-xl">Demander un rendez-vous</h1>
-          <div className="mt-3 flex items-center gap-3">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
-              <AvatarFallback>{initials(member.name)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="font-semibold text-navy">{member.name}</p>
-              <p className="truncate text-sm text-text-muted">
-                {[member.title, member.company?.name].filter(Boolean).join(" · ")}
-              </p>
+        <div className="grid gap-4 lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start">
+          <aside className="flex flex-col gap-3 rounded-lg border border-border bg-white p-4 lg:sticky lg:top-4">
+            <h1 className="text-base font-bold text-navy">Demander un rendez-vous</h1>
+            <div className="flex items-center gap-3">
+              <Avatar className="h-11 w-11">
+                <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
+                <AvatarFallback>{initials(member.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-navy">{member.name}</p>
+                <p className="truncate text-sm text-text-muted">
+                  {[member.title, member.company?.name].filter(Boolean).join(" · ")}
+                </p>
+              </div>
             </div>
-          </div>
-          <p className="mt-3 flex items-start gap-1.5 text-sm text-text-mid">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            <span>
-              {meeting.eventTitle} — {meeting.zone}
-              {meeting.accessInstructions ? ` · ${meeting.accessInstructions}` : ""}
-            </span>
-          </p>
-        </div>
+            <p className="flex items-start gap-1.5 text-sm text-text-mid">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                {meeting.eventTitle} — {meeting.zone}
+                {meeting.accessInstructions ? ` · ${meeting.accessInstructions}` : ""}
+              </span>
+            </p>
+            <p className="border-t border-border pt-3 text-xs text-text-muted">
+              Le créneau est réservé pour vous deux jusqu&apos;à la réponse. Le téléphone de{" "}
+              {member.name} vous est communiqué si la demande est acceptée.
+            </p>
+          </aside>
 
-        {blocked ? (
-          <Alert>
-            <AlertTriangle />
-            <AlertDescription>
-              {blocked}{" "}
-              <Link href="/profil?onglet=mes-rendez-vous" className="font-semibold underline">
-                Voir mes rendez-vous
-              </Link>
-            </AlertDescription>
-          </Alert>
-        ) : viewerMissing.length > 0 ? (
-          <Alert>
-            <AlertTriangle />
-            <AlertDescription>
-              Complétez votre profil avant de demander un rendez-vous ({viewerMissing.join(", ")}).{" "}
-              <Button asChild variant="link" className="h-auto p-0">
-                <Link href="/profil/editer">Compléter mon profil</Link>
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ) : meeting.memberUnavailable ? (
-          <Alert>
-            <AlertTriangle />
-            <AlertDescription>
-              {member.name} ne peut pas encore recevoir de demande de rendez-vous.
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <RequestMeeting
-            memberId={member.id}
-            memberName={member.name}
-            timezoneLabel={timezoneLabel(tz)}
-            zone={meeting.zone}
-            days={days}
-          />
-        )}
+          <div className="min-w-0">
+            {blocked ? (
+              <Alert>
+                <AlertTriangle />
+                <AlertDescription>
+                  {blocked}{" "}
+                  <Link href="/profil?onglet=mes-rendez-vous" className="font-semibold underline">
+                    Voir mes rendez-vous
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : viewerMissing.length > 0 ? (
+              <Alert>
+                <AlertTriangle />
+                <AlertDescription>
+                  Complétez votre profil avant de demander un rendez-vous (
+                  {viewerMissing.join(", ")}).{" "}
+                  <Button asChild variant="link" className="h-auto p-0">
+                    <Link href="/profil/editer">Compléter mon profil</Link>
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : meeting.memberUnavailable ? (
+              <Alert>
+                <AlertTriangle />
+                <AlertDescription>
+                  {member.name} ne peut pas encore recevoir de demande de rendez-vous.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <RequestMeeting
+                memberId={member.id}
+                memberName={member.name}
+                timezoneLabel={timezoneLabel(tz)}
+                zone={meeting.zone}
+                days={days}
+              />
+            )}
+          </div>
+        </div>
       </div>
     </AppShell>
   );
