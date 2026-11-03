@@ -48,7 +48,6 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateFr, initials } from "@/lib/utils";
 import { AddButton } from "@/components/ui/add-button";
-import { SignOutButton } from "@/components/auth/sign-out-button";
 
 export const metadata: Metadata = { title: "Profil membre" };
 
@@ -249,12 +248,10 @@ export default async function MemberProfilePage(props: {
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:pb-1">
             {isSelf ? (
               <>
-                <Button asChild variant="outline">
+                <Button asChild variant="outline" className="col-span-2 sm:col-auto">
                   <Link href="/profil/editer">Éditer mon profil</Link>
                 </Button>
-                {/* 14 oct. 2026 — sur mobile, la déconnexion n'est plus dans la
-                    barre du bas : elle se fait ici (la sidebar desktop l'a déjà). */}
-                <SignOutButton className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 text-sm font-semibold text-red-600 hover:bg-red-50 md:hidden" />
+                {/* 3 nov. 2026 — la déconnexion mobile est dans le menu « Profil » de la barre du haut. */}
               </>
             ) : (
               <>

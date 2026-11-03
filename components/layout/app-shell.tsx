@@ -1,3 +1,5 @@
+import { auth } from "@/auth";
+import { countNotifications } from "@/lib/notifications";
 import { MemberSidebar } from "@/components/layout/member-sidebar";
 import { MobileHeader } from "@/components/layout/mobile-header";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
@@ -22,9 +24,18 @@ interface AppShellProps {
  * Mobile (<768px): sidebar and right panel hidden, header + bottom nav take over
  * (audit mobile du 22 septembre 2026, conception/14 §1 — MobileHeader complète
  * MobileBottomNav pour reproduire la sidebar desktop en entier sur mobile).
+ * 3 nov. 2026 : le header mobile porte une cloche de notifications ; son
+ * compteur est lu ici (`countNotifications`).
  * Body gets top/bottom padding on mobile so content isn't hidden behind them.
  */
-export function AppShell({ user, badges, rightPanel, children }: AppShellProps) {
+export async function AppShell({ user, badges, rightPanel, children }: AppShellProps) {
+  // Cloche de la barre du haut (mobile) : ce qui attend une réponse du membre.
+  // Un échec de lecture ne doit jamais empêcher d'afficher la page.
+  const session = await auth();
+  const notifications = session?.user?.id
+    ? await countNotifications(session.user.id).catch(() => 0)
+    : 0;
+
   return (
     <div className="flex min-h-screen">
       <MemberSidebar user={user} badges={badges} />
@@ -47,8 +58,14 @@ export function AppShell({ user, badges, rightPanel, children }: AppShellProps) 
         </aside>
       )}
 
-      <MobileHeader />
-      <MobileBottomNav badges={{ rooms: badges?.rooms, messages: badges?.messages }} />
+      <MobileHeader notifications={notifications} />
+      <MobileBottomNav
+        badges={{
+          opportunities: badges?.opportunities,
+          rooms: badges?.rooms,
+          messages: badges?.messages,
+        }}
+      />
       <InstallPrompt />
     </div>
   );

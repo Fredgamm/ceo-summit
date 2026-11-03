@@ -21,11 +21,13 @@ Pas encore déployé à la date de cette entrée. Développé en local sur la br
 - **Calendrier** : fichier `.ics` (route `/api/rendez-vous/[id]/ics`) et lien Google Agenda depuis « Mes rendez-vous » et l'email de confirmation, pensés pour iPhone, Android et Outlook (heures en UTC, lignes repliées, rappel 30 minutes).
 - **Suivi par l'organisation** (Admin › Opérations › Créneaux rendez-vous › « Suivre les rendez-vous ») : tous les rendez-vous d'un événement, filtres par statut et par jour, exports **CSV** (lisible dans Excel) et **PDF**, **liste terrain** par créneau (PDF à imprimer, CSV). L'organisation voit toutes les informations des participants ; chaque export est journalisé.
 - **Annulation en cas de retrait d'un participant** : quand un gérant retire un participant de sa liste, ses demandes et rendez-vous B2B sont annulés, avec email aux personnes concernées.
+- **Notifications** (cloche de la barre du haut, sur mobile) : la plateforme n'avait pas de centre de notifications. La page `/notifications` liste ce qui attend une réponse du membre : demandes de **rendez-vous B2B** reçues, demandes de contact du **Deal Room**, et ses messages non lus. La cloche affiche le nombre de demandes en attente (« 9+ » au-delà de 9). Première version **sans nouvelle table** : tout est déduit des données existantes, et la liste se met à jour quand une demande reçoit une réponse ou expire. Pas encore de notification « push ».
 
 ### Modifié
 
 - **Créneaux actifs par défaut** pour tous les membres éligibles : textes, commentaires et message de publication alignés sur ce comportement (aucun changement de logique).
 - **Profil membre** : boutons « Message » (icône d'envoi) et « Se connecter » côte à côte, sur une même ligne ; sur mobile, les **onglets passent à la ligne** et se partagent la largeur au lieu de défiler (les derniers étaient coupés). Vaut pour le profil, la fiche entreprise et la fiche membre côté admin.
+- **Navigation mobile allégée** : la barre du haut ne garde que **Événements**, **Notifications** et **Profil**. « Profil » ouvre un menu déroulant : Mon profil, **Mon entreprise**, **Installer l'application** (tant qu'elle n'est pas installée) et **Déconnexion** (retirée de l'en-tête du profil, où elle faisait doublon). **Deal Room** passe dans la barre du bas : Accueil, Membres, Deal Room, Salles, Messages (« Mon entreprise » n'y est plus). La navigation de bureau ne change pas.
 - L'envoi d'emails accepte maintenant des **pièces jointes** (utilisées pour le `.ics`) ; sans pièce jointe, rien ne change.
 - La page `/rendez-vous/repondre/` est publique dans le middleware (le jeton tient lieu de session).
 

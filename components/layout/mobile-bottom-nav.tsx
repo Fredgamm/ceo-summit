@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutGrid, Mail, MessagesSquare, Building2 } from "lucide-react";
+import { Diamond, Home, LayoutGrid, Mail, MessagesSquare } from "lucide-react";
 
+import { isUnder } from "@/lib/mobile-nav";
 import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "/dashboard", label: "Accueil", icon: Home },
   { href: "/catalogue", label: "Membres", icon: LayoutGrid },
+  { href: "/deal-room", label: "Deal Room", icon: Diamond, badgeKey: "opportunities" as const },
   { href: "/salles", label: "Salles", icon: MessagesSquare, badgeKey: "rooms" as const },
   { href: "/messagerie", label: "Messages", icon: Mail, badgeKey: "messages" as const },
-  { href: "/entreprise", label: "Entreprise", icon: Building2 },
 ];
 
 const ITEM_CLASSNAME =
@@ -27,14 +28,15 @@ const ITEM_CLASSNAME =
  * jusqu'ici) les remplacent ici. Complète, avec MobileHeader, le repli
  * mobile de la sidebar desktop (components/layout/member-sidebar.tsx).
  *
- * 14 oct. 2026 — navigation du quotidien en bas, à portée de pouce :
- * Accueil, Membres, Salles, Messages, Mon Entreprise. Événements et Deal
- * Room passent en haut ; la déconnexion se fait depuis « Mon profil ».
+ * 14 oct. 2026 — navigation du quotidien en bas, à portée de pouce.
+ * 3 nov. 2026 — Accueil, Membres, Deal Room, Salles, Messages. « Mon
+ * entreprise » rejoint le menu « Profil » de la barre du haut (MobileHeader),
+ * avec l'installation de l'application et la déconnexion.
  */
 export function MobileBottomNav({
   badges = {},
 }: {
-  badges?: Partial<Record<"rooms" | "messages", number>>;
+  badges?: Partial<Record<"opportunities" | "rooms" | "messages", number>>;
 }) {
   const pathname = usePathname();
 
@@ -42,7 +44,7 @@ export function MobileBottomNav({
     <nav className="fixed inset-x-0 bottom-0 z-[200] border-t border-border bg-white pb-[env(safe-area-inset-bottom,6px)] pt-1.5 md:hidden">
       <div className="flex items-center justify-around">
         {ITEMS.map((item) => {
-          const active = pathname.startsWith(item.href);
+          const active = isUnder(pathname, item.href);
           const badge = item.badgeKey ? badges[item.badgeKey] : undefined;
           return (
             <Link
