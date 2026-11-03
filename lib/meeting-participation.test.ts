@@ -128,7 +128,7 @@ describe("loadMemberMeetingView (visitor side, lot 4)", () => {
     } as never);
   });
 
-  it("shows free slots, greys taken ones, hides deactivated ones", async () => {
+  it("shows free slots, greys taken and deactivated ones (not clickable)", async () => {
     const view = await loadMemberMeetingView("visitor", "member");
 
     const states = view!.days.flatMap((d) => d.slots.map((s) => [s.id, s.state]));
@@ -136,6 +136,7 @@ describe("loadMemberMeetingView (visitor side, lot 4)", () => {
       ["past", "past"],
       ["free", "available"],
       ["taken", "taken"],
+      ["hidden", "inactive"],
       ["busy", "you-unavailable"],
     ]);
     expect(view!.memberUnavailable).toBe(false);

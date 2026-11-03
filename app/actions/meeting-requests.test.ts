@@ -114,6 +114,18 @@ describe("requestMeeting", () => {
     });
   });
 
+  it("refuses a slot the recipient deactivated (no free row to lock)", async () => {
+    vi.mocked(prisma.meetingParticipantSlot.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    const result = await requestMeeting(INPUT);
+
+    expect(result.success).toBe(false);
+    expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
+      where: { slotId: "slot_1", userId: "user_b", status: "FREE" },
+      data: { status: "PENDING", bookingId: expect.any(String) },
+    });
+  });
+
   it("refuses when the requester is not available on that slot", async () => {
     vi.mocked(prisma.meetingParticipantSlot.updateMany)
       .mockResolvedValueOnce({ count: 1 })

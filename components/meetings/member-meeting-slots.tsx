@@ -21,7 +21,7 @@ import {
 import { Clock, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type State = "available" | "taken" | "you-unavailable" | "past";
+type State = "available" | "inactive" | "taken" | "you-unavailable" | "past";
 
 export interface MemberSlotView {
   id: string;
@@ -29,11 +29,15 @@ export interface MemberSlotView {
   state: State;
 }
 
-/** Même code couleur que « Mes créneaux » : libre vert, pris orange, indisponible gris. */
+/** Même code couleur que « Mes créneaux » : libre vert, pris orange, inactif ou indisponible gris. */
 const STATE: Record<State, { label: string; badge: string }> = {
   available: {
     label: "Libre",
     badge: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  },
+  inactive: {
+    label: "Inactif",
+    badge: "bg-slate-100 text-slate-600 ring-slate-200",
   },
   taken: {
     label: "Déjà pris",

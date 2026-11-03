@@ -191,7 +191,7 @@ Aucun objet « table ». Aucune réutilisation de `Room` (salles de discussion e
 
 **P2 — Un participant demande un rendez-vous**
 
-1. **Point d'entrée principal : le profil du membre.** Profil public `/membres/[id]`, nouvel **onglet « Rendez-vous événement »** (à côté de Profil, Entreprise, Opportunités, Services), visible seulement si le visiteur et le membre participent tous deux à l'événement. Il liste les créneaux que le membre a **activés** : libres cliquables ; en attente ou réservés visibles mais grisés (« déjà pris ») ; message clair s'il n'y a plus de créneau libre ou si le membre n'a activé aucun créneau.
+1. **Point d'entrée principal : le profil du membre.** Profil public `/membres/[id]`, nouvel **onglet « Rendez-vous événement »** (à côté de Profil, Entreprise, Opportunités, Services), visible seulement si le visiteur et le membre participent tous deux à l'événement. Il liste **tous** les créneaux : libres cliquables ; ceux que le membre a **désactivés** visibles, grisés et non cliquables (« Inactif ») ; en attente ou réservés visibles mais grisés (« déjà pris ») ; message clair s'il n'y a plus de créneau libre ou si le membre n'a activé aucun créneau.
 2. **Annuaire RDV** de l'événement (secondaire) : participants ayant au moins un créneau libre, recherche par nom, entreprise ou secteur, lien vers l'onglet « Rendez-vous événement » de chaque profil.
 3. **Demande** : choix du créneau, motif obligatoire, envoi (bouton désactivé au clic, contrôle serveur de toutes les règles).
 4. **Email au destinataire** (contenu de la spécification client) avec liens « Accepter » et « Décliner » vers une page de confirmation.

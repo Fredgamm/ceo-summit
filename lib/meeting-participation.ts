@@ -171,7 +171,7 @@ export async function loadMyMeetingEvents(
 }
 
 /** Ce que le visiteur voit d'un créneau sur le profil d'un autre participant. */
-export type VisitorSlotState = "available" | "taken" | "you-unavailable" | "past";
+export type VisitorSlotState = "available" | "inactive" | "taken" | "you-unavailable" | "past";
 
 export interface MemberMeetingView {
   eventId: string;
@@ -192,8 +192,9 @@ export interface MemberMeetingView {
  * Module 21 lot 4 — onglet « Rendez-vous événement » du profil d'un autre
  * participant (conception/21 P2). `null` si le visiteur et le membre ne
  * participent pas tous deux au même Summit par une offre, ou si la
- * réservation n'est pas ouverte. Les créneaux que le membre a désactivés ne
- * sont pas montrés ; ceux en attente ou réservés apparaissent « pris ».
+ * réservation n'est pas ouverte. Les créneaux que le membre a désactivés
+ * apparaissent « inactifs » et ceux en attente ou réservés « pris » : visibles
+ * mais non cliquables, pour que la grille reste la même que la sienne.
  */
 export async function loadMemberMeetingView(
   visitorId: string,
@@ -259,15 +260,16 @@ export async function loadMemberMeetingView(
     const statusOf = (userId: string) =>
       slot.participantSlots.find((p) => p.userId === userId)?.status ?? "FREE";
     const memberStatus = statusOf(memberId);
-    if (memberStatus === "INACTIVE") continue;
     const state: VisitorSlotState =
       slot.startTime <= now
         ? "past"
-        : memberStatus !== "FREE"
-          ? "taken"
-          : statusOf(visitorId) !== "FREE"
-            ? "you-unavailable"
-            : "available";
+        : memberStatus === "INACTIVE"
+          ? "inactive"
+          : memberStatus !== "FREE"
+            ? "taken"
+            : statusOf(visitorId) !== "FREE"
+              ? "you-unavailable"
+              : "available";
     const day = zonedDayKey(slot.startTime, event.timezone);
     byDay.set(day, [
       ...(byDay.get(day) ?? []),
