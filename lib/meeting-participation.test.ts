@@ -142,6 +142,22 @@ describe("loadMemberMeetingView (visitor side, lot 4)", () => {
     expect(view!.memberUnavailable).toBe(false);
   });
 
+  it("returns the slot of the request or meeting already in progress between them (RG-10)", async () => {
+    vi.mocked(prisma.meetingBooking.findFirst).mockResolvedValue({
+      status: "CONFIRMED",
+      slotId: "taken",
+      slot: { startTime: new Date("2027-03-11T10:00:00Z") },
+    } as never);
+
+    const view = await loadMemberMeetingView("visitor", "member");
+
+    expect(view!.existingBooking).toEqual({
+      status: "CONFIRMED",
+      slotId: "taken",
+      startTime: new Date("2027-03-11T10:00:00Z"),
+    });
+  });
+
   it("is not shown on one's own profile, nor when one of them is not a participant", async () => {
     expect(await loadMemberMeetingView("member", "member")).toBeNull();
 

@@ -181,7 +181,7 @@ export interface MemberMeetingView {
   /** Le membre visité ne peut pas encore recevoir de demande (profil incomplet). */
   memberUnavailable: boolean;
   /** Demande en cours ou rendez-vous déjà pris entre les deux (RG-10). */
-  existingBooking: { status: "PENDING" | "CONFIRMED"; startTime: Date } | null;
+  existingBooking: { status: "PENDING" | "CONFIRMED"; slotId: string; startTime: Date } | null;
   days: {
     day: string;
     slots: { id: string; startTime: Date; endTime: Date; state: VisitorSlotState }[];
@@ -251,7 +251,7 @@ export async function loadMemberMeetingView(
           { requesterId: memberId, recipientId: visitorId },
         ],
       },
-      select: { status: true, slot: { select: { startTime: true } } },
+      select: { status: true, slotId: true, slot: { select: { startTime: true } } },
     }),
   ]);
 
@@ -286,6 +286,7 @@ export async function loadMemberMeetingView(
     existingBooking: existing
       ? {
           status: existing.status as "PENDING" | "CONFIRMED",
+          slotId: existing.slotId,
           startTime: existing.slot.startTime,
         }
       : null,

@@ -475,6 +475,7 @@ export default async function MemberProfilePage(props: {
                 memberMeeting.existingBooking
                   ? {
                       status: memberMeeting.existingBooking.status,
+                      slotId: memberMeeting.existingBooking.slotId,
                       label: `${formatDayKey(
                         zonedDayKey(memberMeeting.existingBooking.startTime, memberMeeting.timezone)
                       )}, ${formatTimeInZone(memberMeeting.existingBooking.startTime, memberMeeting.timezone)}`,

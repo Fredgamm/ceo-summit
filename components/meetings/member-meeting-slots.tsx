@@ -53,6 +53,18 @@ const STATE: Record<State, { label: string; badge: string }> = {
   },
 };
 
+/** Libre, mais non réservable par ce visiteur (RG-10, profil incomplet). */
+const STATE_NOT_BOOKABLE = {
+  label: "Non réservable",
+  badge: "bg-slate-100 text-slate-600 ring-slate-200",
+};
+
+/** Le créneau de la demande ou du rendez-vous déjà en cours avec ce membre. */
+const BOOKING_MINE = {
+  confirmed: { label: "Votre rendez-vous", badge: "bg-navy-light text-navy ring-navy/30" },
+  pending: { label: "Votre demande", badge: "bg-amber-50 text-amber-800 ring-amber-200" },
+};
+
 /**
  * Module 21 lot 4 (8 oct. 2026) — onglet « Rendez-vous événement » du profil
  * d'un autre participant (conception/21 P2) : ses créneaux libres sont
@@ -75,7 +87,7 @@ export function MemberMeetingSlots({
   timezoneLabel: string;
   days: { label: string; slots: MemberSlotView[] }[];
   memberUnavailable: boolean;
-  existingBooking: { status: "PENDING" | "CONFIRMED"; label: string } | null;
+  existingBooking: { status: "PENDING" | "CONFIRMED"; slotId: string; label: string } | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = React.useState<{ id: string; label: string } | null>(null);
@@ -157,8 +169,19 @@ export function MemberMeetingSlots({
               <p className="mb-2 text-xs font-bold uppercase text-gold">{day.label}</p>
               <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                 {day.slots.map((slot) => {
-                  const state = STATE[slot.state];
                   const canAsk = slot.state === "available" && !blocked;
+                  // Un créneau libre qu'on ne peut pas demander (rendez-vous ou
+                  // demande déjà en cours avec ce membre, profil incomplet) ne
+                  // s'affiche pas « Libre » ; le créneau du rendez-vous existant
+                  // est repéré.
+                  const state =
+                    existingBooking?.slotId === slot.id
+                      ? existingBooking.status === "CONFIRMED"
+                        ? BOOKING_MINE.confirmed
+                        : BOOKING_MINE.pending
+                      : slot.state === "available" && blocked
+                        ? STATE_NOT_BOOKABLE
+                        : STATE[slot.state];
                   return (
                     <li
                       key={slot.id}
