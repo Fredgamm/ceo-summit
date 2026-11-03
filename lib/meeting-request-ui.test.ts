@@ -4,6 +4,7 @@ import {
   ACCEPT_QUICK_REPLIES,
   DECLINE_QUICK_REPLIES,
   QUICK_REASONS,
+  dayTile,
   applyQuickReason,
   dayParts,
   defaultDay,
@@ -180,5 +181,12 @@ describe("réponses toutes prêtes (accepter / refuser)", () => {
     const combined = applyQuickReason(typed, ACCEPT_QUICK_REPLIES[0].text, 300);
     expect(combined).toBe(`${typed} ${ACCEPT_QUICK_REPLIES[0].text}`);
     expect(combined.length).toBeLessThanOrEqual(300);
+  });
+});
+
+describe("dayTile", () => {
+  it("gives the short weekday, the day number and the short month", () => {
+    expect(dayTile("2027-01-11")).toEqual({ weekday: "lun", day: "11", month: "janv" });
+    expect(dayTile("2027-03-02")).toEqual({ weekday: "mar", day: "2", month: "mars" });
   });
 });

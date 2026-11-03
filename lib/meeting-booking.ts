@@ -78,6 +78,20 @@ export const MEETING_FILTERS = [
 
 export type MeetingFilter = (typeof MEETING_FILTERS)[number]["value"];
 
+/**
+ * Filtres à afficher dans « Mes rendez-vous » : « À venir » toujours, les autres
+ * seulement s'ils contiennent quelque chose (ou si c'est le filtre ouvert). Sur
+ * téléphone, sept puces dont plusieurs à zéro prenaient trois lignes.
+ */
+export function visibleMeetingFilters(
+  counts: Record<MeetingFilter, number>,
+  active: MeetingFilter
+): MeetingFilter[] {
+  return MEETING_FILTERS.map((f) => f.value).filter(
+    (value) => value === "upcoming" || value === active || counts[value] > 0
+  );
+}
+
 export function matchesMeetingFilter(status: MeetingDisplayStatus, filter: MeetingFilter): boolean {
   switch (filter) {
     case "upcoming":

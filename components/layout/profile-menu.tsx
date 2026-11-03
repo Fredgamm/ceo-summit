@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, ChevronDown, User } from "lucide-react";
+import { Building2, CalendarClock, ChevronDown, User } from "lucide-react";
 
 import { InstallAppButton } from "@/components/layout/install-app-button";
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -79,6 +79,10 @@ export function ProfileMenu() {
           >
             <User className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
             Mon profil
+          </Link>
+          <Link href="/profil?onglet=mes-rendez-vous" role="menuitem" className={ITEM}>
+            <CalendarClock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+            Mes rendez-vous
           </Link>
           <Link
             href="/entreprise"

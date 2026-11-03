@@ -45,11 +45,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProfileTabButton, ProfileTabs, RdvViewSwitch } from "@/components/profile/profile-tabs";
 import { formatDateFr, initials } from "@/lib/utils";
 import { AddButton } from "@/components/ui/add-button";
 
 export const metadata: Metadata = { title: "Profil membre" };
+
+/** Quatre onglets sur une ligne en mobile : texte et marges réduits en dessous de `sm`. */
+const MOBILE_TAB = "px-1 text-[13px] sm:px-5 sm:text-sm";
 
 const OPPORTUNITY_STATUS_LABEL: Record<string, string> = {
   PENDING_MODERATION: "En attente de validation",
@@ -166,6 +170,8 @@ export default async function MemberProfilePage(props: {
           reason: m.reason,
           responseMessage: m.responseMessage,
           when: `${formatDayKey(zonedDayKey(m.startTime, tz))}, ${formatTimeRangeInZone(m.startTime, m.endTime, tz)}`,
+          dayKey: zonedDayKey(m.startTime, tz),
+          timeRange: formatTimeRangeInZone(m.startTime, m.endTime, tz),
           timezoneLabel: timezoneLabel(tz),
           expiresLabel: `${formatDayKey(zonedDayKey(m.expiresAt, tz))} à ${formatTimeInZone(m.expiresAt, tz)}`,
           eventTitle: m.event.title,
@@ -216,96 +222,122 @@ export default async function MemberProfilePage(props: {
       }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      {/* Mobile (21 oct. 2026) : photo à cheval sur la bannière, nom en dessous et
+      <ProfileTabs defaultTab={defaultTab}>
+        {/* Mobile (21 oct. 2026) : photo à cheval sur la bannière, nom en dessous et
           boutons sur toute la largeur — côte à côte, le nom n'avait plus la place
           et la photo décrochait de la bannière. */}
-      <div className="mb-4 overflow-hidden rounded-lg border border-border bg-white">
-        <div className="h-16 bg-navy sm:h-24" />
-        <div className="flex flex-col gap-4 p-4 pt-0 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:p-6 sm:pt-0">
-          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
-            <Avatar className="-mt-10 h-20 w-20 shrink-0 border-4 border-white sm:h-24 sm:w-24">
-              <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
-              <AvatarFallback className="text-lg">{initials(user.name)}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 sm:pb-1">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-                <h1 className="text-lg font-bold leading-tight text-navy sm:text-xl">
-                  {user.name}
-                </h1>
-                {offerBadge && <Badge variant="chairman">{offerBadge}</Badge>}
+        <div className="mb-4 overflow-hidden rounded-lg border border-border bg-white">
+          <div className="h-16 bg-navy sm:h-24" />
+          <div className="flex flex-col gap-4 p-4 pt-0 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:p-6 sm:pt-0">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+              <Avatar className="-mt-10 h-20 w-20 shrink-0 border-4 border-white sm:h-24 sm:w-24">
+                <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
+                <AvatarFallback className="text-lg">{initials(user.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 sm:pb-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                  <h1 className="text-lg font-bold leading-tight text-navy sm:text-xl">
+                    {user.name}
+                  </h1>
+                  {offerBadge && <Badge variant="chairman">{offerBadge}</Badge>}
+                </div>
+                <p className="mt-1 text-sm text-text-muted">
+                  {[user.title, user.company?.name, user.country].filter(Boolean).join(" · ")}
+                </p>
+                <p className="mt-1.5 text-xs text-text-muted">
+                  Membre depuis {formatDateFr(user.createdAt)}
+                </p>
               </div>
-              <p className="mt-1 text-sm text-text-muted">
-                {[user.title, user.company?.name, user.country].filter(Boolean).join(" · ")}
-              </p>
-              <p className="mt-1.5 text-xs text-text-muted">
-                Membre depuis {formatDateFr(user.createdAt)}
-              </p>
             </div>
-          </div>
 
-          {/* 3 nov. 2026 — les deux boutons côte à côte (mobile : moitié de la largeur
+            {/* 3 nov. 2026 — les deux boutons côte à côte (mobile : moitié de la largeur
               chacun), jamais empilés. */}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:pb-1">
-            {isSelf ? (
-              <>
-                <Button asChild variant="outline" className="col-span-2 sm:col-auto">
-                  <Link href="/profil/editer">Éditer mon profil</Link>
-                </Button>
-                {/* 3 nov. 2026 — la déconnexion mobile est dans le menu « Profil » de la barre du haut. */}
-              </>
-            ) : (
-              <>
-                {meetingAction && (
-                  <div className="col-span-2 sm:col-auto">
-                    {meetingAction.kind === "disabled" ? (
-                      <Button disabled title={meetingAction.reason} className="w-full">
-                        <CalendarPlus className="h-4 w-4" aria-hidden />
-                        {meetingAction.label}
-                      </Button>
-                    ) : (
-                      <Button asChild className="w-full">
-                        <Link
-                          href={
-                            meetingAction.kind === "request"
-                              ? `/membres/${user.id}/rendez-vous`
-                              : meetingAction.kind === "view"
-                                ? "/profil?onglet=mes-rendez-vous"
-                                : "/profil/editer"
-                          }
-                        >
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:pb-1">
+              {isSelf ? (
+                <>
+                  <Button asChild variant="outline" className="sm:col-auto">
+                    <Link href="/profil/editer">Éditer mon profil</Link>
+                  </Button>
+                  {/* Mobile : « Mes rendez-vous » n'est plus un onglet de la liste, mais un bouton ici. */}
+                  <Button asChild variant="outline" className="md:hidden">
+                    <ProfileTabButton value="mes-rendez-vous">
+                      <CalendarClock className="h-4 w-4" aria-hidden />
+                      Rendez-vous
+                      {pendingReceived > 0 && (
+                        <span className="rounded-full bg-amber-500 px-1.5 text-xs font-bold text-white">
+                          {pendingReceived}
+                        </span>
+                      )}
+                    </ProfileTabButton>
+                  </Button>
+                  {/* 3 nov. 2026 — la déconnexion mobile est dans le menu « Profil » de la barre du haut. */}
+                </>
+              ) : (
+                <>
+                  {meetingAction && (
+                    <div className="col-span-2 sm:col-auto">
+                      {meetingAction.kind === "disabled" ? (
+                        <Button disabled title={meetingAction.reason} className="w-full">
                           <CalendarPlus className="h-4 w-4" aria-hidden />
                           {meetingAction.label}
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                )}
-                <Button asChild variant="outline">
-                  <Link href={`/messagerie?new=${user.id}`}>
-                    <Send className="h-4 w-4" aria-hidden />
-                    Message
-                  </Link>
-                </Button>
-                <Button disabled title="Disponible avec le Deal Room (bientôt)">
-                  <Handshake className="h-4 w-4" aria-hidden />
-                  Se connecter
-                </Button>
-              </>
-            )}
+                        </Button>
+                      ) : (
+                        <Button asChild className="w-full">
+                          <Link
+                            href={
+                              meetingAction.kind === "request"
+                                ? `/membres/${user.id}/rendez-vous`
+                                : meetingAction.kind === "view"
+                                  ? "/profil?onglet=mes-rendez-vous"
+                                  : "/profil/editer"
+                            }
+                          >
+                            <CalendarPlus className="h-4 w-4" aria-hidden />
+                            {meetingAction.label}
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  <Button asChild variant="outline">
+                    <Link href={`/messagerie?new=${user.id}`}>
+                      <Send className="h-4 w-4" aria-hidden />
+                      Message
+                    </Link>
+                  </Button>
+                  <Button disabled title="Disponible avec le Deal Room (bientôt)">
+                    <Handshake className="h-4 w-4" aria-hidden />
+                    Se connecter
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <Tabs defaultValue={defaultTab}>
-        {/* Mobile : les onglets passent à la ligne et se partagent la largeur (components/ui/tabs.tsx). */}
-        <TabsList>
-          <TabsTrigger value="profil">Profil</TabsTrigger>
-          <TabsTrigger value="entreprise">Entreprise</TabsTrigger>
-          <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
-          <TabsTrigger value="services">Services</TabsTrigger>
-          {showMySlots && <TabsTrigger value="creneaux">Mes créneaux</TabsTrigger>}
+        {/* Mobile : quatre onglets sur une seule ligne ; « Mes créneaux » et « Mes rendez-vous »
+            sont des onglets de bureau (md+), sur mobile ils s'ouvrent depuis l'en-tête. */}
+        <div id="profile-tabs-top" className="scroll-mt-16" />
+        <TabsList className="flex-nowrap md:flex-wrap">
+          <TabsTrigger value="profil" className={MOBILE_TAB}>
+            Profil
+          </TabsTrigger>
+          <TabsTrigger value="entreprise" className={MOBILE_TAB}>
+            Entreprise
+          </TabsTrigger>
+          <TabsTrigger value="deal-room" className={MOBILE_TAB}>
+            Opportunités
+          </TabsTrigger>
+          <TabsTrigger value="services" className={MOBILE_TAB}>
+            Services
+          </TabsTrigger>
           {showMySlots && (
-            <TabsTrigger value="mes-rendez-vous">
+            <TabsTrigger value="creneaux" className="hidden md:block">
+              Mes créneaux
+            </TabsTrigger>
+          )}
+          {showMySlots && (
+            <TabsTrigger value="mes-rendez-vous" className="hidden md:block">
               Mes rendez-vous
               {pendingReceived > 0 && (
                 <span className="ml-1.5 rounded-full bg-amber-500 px-1.5 text-xs font-bold text-white">
@@ -480,6 +512,7 @@ export default async function MemberProfilePage(props: {
 
         {showMySlots && (
           <TabsContent value="creneaux">
+            <RdvViewSwitch pending={pendingReceived} />
             {meetingEvents.length > 0 ? (
               <MyMeetingSlots
                 events={meetingEvents}
@@ -497,6 +530,7 @@ export default async function MemberProfilePage(props: {
 
         {showMySlots && (
           <TabsContent value="mes-rendez-vous">
+            <RdvViewSwitch pending={pendingReceived} />
             {myMeetings.length > 0 ? (
               <MyMeetings meetings={myMeetings} />
             ) : (
@@ -508,7 +542,7 @@ export default async function MemberProfilePage(props: {
             )}
           </TabsContent>
         )}
-      </Tabs>
+      </ProfileTabs>
     </AppShell>
   );
 }

@@ -4,6 +4,7 @@ import {
   canSeeMeetingContact,
   matchesMeetingFilter,
   normalizeResponseMessage,
+  visibleMeetingFilters,
   meetingDisplayStatus,
   meetingRequestExpiry,
 } from "./meeting-booking";
@@ -120,5 +121,42 @@ describe("normalizeResponseMessage (le mot facultatif en répondant)", () => {
   it("refuses anything that is not text", () => {
     expect(normalizeResponseMessage(42)).toEqual({ ok: false, error: "Message invalide." });
     expect(normalizeResponseMessage({ text: "x" }).ok).toBe(false);
+  });
+});
+
+describe("visibleMeetingFilters (« Mes rendez-vous »)", () => {
+  const counts = (over: Partial<Record<string, number>> = {}) =>
+    ({
+      upcoming: 0,
+      pending: 0,
+      confirmed: 0,
+      past: 0,
+      declined: 0,
+      expired: 0,
+      all: 0,
+      ...over,
+    }) as Parameters<typeof visibleMeetingFilters>[0];
+
+  it("always keeps « À venir », and hides the empty ones", () => {
+    expect(
+      visibleMeetingFilters(counts({ upcoming: 1, confirmed: 1, all: 2 }), "upcoming")
+    ).toEqual(["upcoming", "confirmed", "all"]);
+    expect(visibleMeetingFilters(counts(), "upcoming")).toEqual(["upcoming"]);
+  });
+
+  it("keeps the open filter visible even when it is empty", () => {
+    expect(visibleMeetingFilters(counts({ all: 3 }), "expired")).toEqual([
+      "upcoming",
+      "expired",
+      "all",
+    ]);
+  });
+
+  it("keeps the order of the filters", () => {
+    const all = visibleMeetingFilters(
+      counts({ upcoming: 1, pending: 1, confirmed: 1, past: 1, declined: 1, expired: 1, all: 6 }),
+      "upcoming"
+    );
+    expect(all).toEqual(["upcoming", "pending", "confirmed", "past", "declined", "expired", "all"]);
   });
 });

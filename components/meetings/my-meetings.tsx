@@ -3,16 +3,25 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarClock, CalendarPlus, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronRight,
+  Clock,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+} from "lucide-react";
 
 import { acceptMeeting, declineMeeting, withdrawMeeting } from "@/app/actions/meeting-requests";
 import {
   MEETING_FILTERS,
   matchesMeetingFilter,
+  visibleMeetingFilters,
   type MeetingDisplayStatus,
   type MeetingFilter,
 } from "@/lib/meeting-booking";
-import { ACCEPT_QUICK_REPLIES, DECLINE_QUICK_REPLIES } from "@/lib/meeting-request-ui";
+import { ACCEPT_QUICK_REPLIES, DECLINE_QUICK_REPLIES, dayTile } from "@/lib/meeting-request-ui";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ResponseMessageField } from "@/components/meetings/response-message-field";
 import {
@@ -37,6 +46,10 @@ export interface MyMeetingView {
   responseMessage: string | null;
   /** « 12 mars 2027, 14h00 – 14h30 » */
   when: string;
+  /** Jour du rendez-vous dans le fuseau de l'événement : « 2027-03-12 ». */
+  dayKey: string;
+  /** « 14h00 – 14h30 » */
+  timeRange: string;
   timezoneLabel: string;
   /** Échéance de réponse d'une demande en attente, déjà formatée. */
   expiresLabel: string;
@@ -55,15 +68,47 @@ export interface MyMeetingView {
 }
 
 /** Même code couleur que « Mes créneaux » : en attente orange, confirmé bleu marine. */
-const STATUS: Record<MeetingDisplayStatus, { label: string; badge: string }> = {
-  PENDING: { label: "En attente", badge: "bg-amber-50 text-amber-800 ring-amber-200" },
-  CONFIRMED: { label: "Confirmé", badge: "bg-navy-light text-navy ring-navy/30" },
-  COMPLETED: { label: "Terminé", badge: "bg-slate-100 text-slate-600 ring-slate-200" },
-  DECLINED: { label: "Refusé", badge: "bg-red-50 text-red-700 ring-red-200" },
-  EXPIRED: { label: "Expiré", badge: "bg-slate-50 text-slate-500 ring-slate-200" },
-  WITHDRAWN: { label: "Retiré", badge: "bg-slate-50 text-slate-500 ring-slate-200" },
-  CANCELLED: { label: "Annulé", badge: "bg-slate-50 text-slate-500 ring-slate-200" },
+const STATUS: Record<MeetingDisplayStatus, { label: string; badge: string; accent: string }> = {
+  PENDING: {
+    label: "En attente",
+    badge: "bg-amber-100 text-amber-800 ring-amber-300",
+    accent: "border-l-amber-500",
+  },
+  CONFIRMED: {
+    label: "Confirmé",
+    badge: "bg-navy text-white ring-navy",
+    accent: "border-l-navy",
+  },
+  COMPLETED: {
+    label: "Terminé",
+    badge: "bg-slate-100 text-slate-600 ring-slate-200",
+    accent: "border-l-slate-300",
+  },
+  DECLINED: {
+    label: "Refusé",
+    badge: "bg-red-50 text-red-700 ring-red-200",
+    accent: "border-l-red-400",
+  },
+  EXPIRED: {
+    label: "Expiré",
+    badge: "bg-slate-50 text-slate-500 ring-slate-200",
+    accent: "border-l-slate-300",
+  },
+  WITHDRAWN: {
+    label: "Retiré",
+    badge: "bg-slate-50 text-slate-500 ring-slate-200",
+    accent: "border-l-slate-300",
+  },
+  CANCELLED: {
+    label: "Annulé",
+    badge: "bg-slate-50 text-slate-500 ring-slate-200",
+    accent: "border-l-slate-300",
+  },
 };
+
+/** Ligne de contact : toute la ligne se touche, la valeur est lisible. */
+const CONTACT_ROW =
+  "flex min-h-11 items-center gap-3 px-3 py-2 text-sm font-medium text-navy hover:bg-surface-2";
 
 type Confirming = { id: string; name: string } | null;
 type Responding = { id: string; kind: "accept" | "decline"; name: string } | null;
@@ -85,8 +130,12 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
   const [message, setMessage] = React.useState("");
 
   const visible = meetings.filter((m) => matchesMeetingFilter(m.status, filter));
-  const countOf = (f: MeetingFilter) =>
-    meetings.filter((m) => matchesMeetingFilter(m.status, f)).length;
+  const counts = Object.fromEntries(
+    MEETING_FILTERS.map((f) => [
+      f.value,
+      meetings.filter((m) => matchesMeetingFilter(m.status, f.value)).length,
+    ])
+  ) as Record<MeetingFilter, number>;
 
   async function run(
     id: string,
@@ -107,23 +156,34 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtrer les rendez-vous">
-        {MEETING_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            role="tab"
-            aria-selected={filter === f.value}
-            onClick={() => setFilter(f.value)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
-              filter === f.value
-                ? "border-navy bg-navy text-white"
-                : "border-border bg-white text-text-mid hover:border-navy/40"
-            )}
-          >
-            {f.label} <span className="opacity-70">({countOf(f.value)})</span>
-          </button>
-        ))}
+        {visibleMeetingFilters(counts, filter).map((value) => {
+          const f = MEETING_FILTERS.find((x) => x.value === value)!;
+          return (
+            <button
+              key={f.value}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                "flex min-h-10 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors",
+                filter === f.value
+                  ? "border-navy bg-navy text-white shadow-sm"
+                  : "border-border bg-white text-text-mid hover:border-navy/40"
+              )}
+            >
+              {f.label}
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-xs font-bold",
+                  filter === f.value ? "bg-white/20 text-white" : "bg-surface-2 text-text-mid"
+                )}
+              >
+                {counts[f.value]}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {error && (
@@ -137,23 +197,50 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
           Aucun rendez-vous dans cette catégorie.
         </p>
       ) : (
-        <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {visible.map((m) => {
             const status = STATUS[m.status];
             const received = !m.sent;
+            const tile = dayTile(m.dayKey);
+            const inactive = ["EXPIRED", "WITHDRAWN", "CANCELLED", "DECLINED"].includes(m.status);
             return (
               <li
                 key={m.id}
-                className="flex flex-col gap-3 rounded-lg border border-border bg-white p-4"
+                className={cn(
+                  "flex flex-col overflow-hidden rounded-xl border border-l-4 border-border bg-white shadow-sm",
+                  status.accent,
+                  inactive && "opacity-80"
+                )}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="flex items-center gap-2 text-sm font-semibold text-navy">
-                    <CalendarClock className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
-                    {m.when}
-                  </p>
+                {/* Quand ? Tuile de date, heure en grand, statut. */}
+                <div
+                  className={cn(
+                    "flex items-center gap-3 p-4",
+                    m.status === "PENDING" ? "bg-amber-50" : "bg-surface-2"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex h-16 w-14 shrink-0 flex-col items-center justify-center rounded-lg text-white",
+                      inactive ? "bg-slate-400" : "bg-navy"
+                    )}
+                    aria-hidden
+                  >
+                    <span className="text-[11px] font-semibold uppercase leading-none tracking-wide opacity-80">
+                      {tile.weekday}
+                    </span>
+                    <span className="my-0.5 text-2xl font-bold leading-none">{tile.day}</span>
+                    <span className="text-[11px] font-semibold uppercase leading-none tracking-wide opacity-80">
+                      {tile.month}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-lg font-bold leading-tight text-navy">{m.timeRange}</p>
+                    <p className="mt-0.5 text-xs text-text-mid">Horaires en {m.timezoneLabel}</p>
+                  </div>
                   <span
                     className={cn(
-                      "shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+                      "shrink-0 self-start rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset",
                       status.badge
                     )}
                   >
@@ -161,139 +248,145 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={m.partner.avatarUrl ?? undefined} alt={m.partner.name} />
-                    <AvatarFallback>{initials(m.partner.name)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className="text-xs text-text-muted">
-                      {m.sent ? "Demande envoyée à" : "Demande reçue de"}
-                    </p>
-                    <Link
-                      href={`/membres/${m.partner.id}`}
-                      className="font-semibold text-navy hover:underline"
-                    >
-                      {m.partner.name}
-                    </Link>
-                    <p className="truncate text-xs text-text-muted">
-                      {[m.partner.title, m.partner.companyName].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                </div>
+                <div className="flex flex-col gap-4 p-4">
+                  {/* Avec qui ? */}
+                  <Link href={`/membres/${m.partner.id}`} className="group flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={m.partner.avatarUrl ?? undefined} alt={m.partner.name} />
+                      <AvatarFallback>{initials(m.partner.name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                        {m.sent ? "Demande envoyée à" : "Demande reçue de"}
+                      </p>
+                      <p className="truncate text-base font-bold text-navy group-hover:underline">
+                        {m.partner.name}
+                      </p>
+                      <p className="truncate text-sm text-text-mid">
+                        {[m.partner.title, m.partner.companyName].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
+                  </Link>
 
-                <p className="rounded-md bg-surface-2 p-3 text-sm leading-relaxed text-text">
-                  {m.reason}
-                </p>
+                  {/* Pourquoi ? */}
+                  <blockquote className="border-l-4 border-gold bg-gold-pale/50 py-2 pl-3 pr-2 text-sm leading-relaxed text-text">
+                    {m.reason}
+                  </blockquote>
 
-                {m.responseMessage && (
-                  <div className="rounded-md border border-navy/20 bg-navy-light/40 p-3 text-sm">
-                    <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-navy">
-                      <MessageCircle className="h-3.5 w-3.5" aria-hidden />
-                      {m.sent ? `Message de ${m.partner.name}` : "Votre message"}
-                    </p>
-                    <p className="leading-relaxed text-text">{m.responseMessage}</p>
-                    {m.sent && (
-                      <Link
-                        href={`/messagerie?new=${m.partner.id}`}
-                        className="mt-2 inline-block text-xs font-semibold text-navy-mid underline"
-                      >
-                        Lui répondre
-                      </Link>
-                    )}
-                  </div>
-                )}
+                  {m.responseMessage && (
+                    <div className="rounded-lg border border-navy/20 bg-navy-light/40 p-3 text-sm">
+                      <p className="mb-1 flex items-center gap-1.5 text-xs font-bold text-navy">
+                        <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                        {m.sent ? `Message de ${m.partner.name}` : "Votre message"}
+                      </p>
+                      <p className="leading-relaxed text-text">{m.responseMessage}</p>
+                      {m.sent && (
+                        <Link
+                          href={`/messagerie?new=${m.partner.id}`}
+                          className="mt-2 inline-block text-sm font-semibold text-navy-mid underline"
+                        >
+                          Lui répondre
+                        </Link>
+                      )}
+                    </div>
+                  )}
 
-                <div className="flex flex-col gap-1 text-xs text-text-mid">
-                  <p>
-                    {m.eventTitle} · Horaires en {m.timezoneLabel}
-                  </p>
-                  <p className="flex items-start gap-1.5">
-                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                    <span>
-                      {m.zone}
-                      {m.accessInstructions && ` — ${m.accessInstructions}`}
+                  {/* Où ? */}
+                  <div className="flex items-start gap-3 text-sm">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-light text-navy">
+                      <MapPin className="h-4 w-4" aria-hidden />
                     </span>
-                  </p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-navy">{m.zone}</p>
+                      {m.accessInstructions && (
+                        <p className="text-text-mid">{m.accessInstructions}</p>
+                      )}
+                    </div>
+                  </div>
+
                   {m.status === "PENDING" && (
-                    <p className="text-amber-700">Réponse attendue avant le {m.expiresLabel}.</p>
+                    <p className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+                      <Clock className="h-4 w-4 shrink-0" aria-hidden />
+                      Réponse attendue avant le {m.expiresLabel}
+                    </p>
+                  )}
+
+                  {m.partner.contact && (
+                    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                      {m.partner.contact.phone && (
+                        <a
+                          href={`tel:${m.partner.contact.phone.replace(/\s/g, "")}`}
+                          className={CONTACT_ROW}
+                        >
+                          <Phone className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+                          <span className="flex-1">{m.partner.contact.phone}</span>
+                          <span className="text-xs font-semibold text-text-muted">Appeler</span>
+                        </a>
+                      )}
+                      <a href={`mailto:${m.partner.contact.email}`} className={CONTACT_ROW}>
+                        <Mail className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
+                        <span className="min-w-0 flex-1 truncate">{m.partner.contact.email}</span>
+                        <span className="text-xs font-semibold text-text-muted">Écrire</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {m.googleCalendarUrl && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Fichier .ics : feuille « Ajouter à l'agenda » sur iPhone, Google Agenda sur Android. */}
+                      <Button asChild variant="outline" className="h-11">
+                        <a href={`/api/rendez-vous/${m.id}/ics`}>
+                          <CalendarPlus className="h-4 w-4" aria-hidden /> Mon agenda
+                        </a>
+                      </Button>
+                      <Button asChild variant="outline" className="h-11">
+                        <a href={m.googleCalendarUrl} target="_blank" rel="noreferrer">
+                          Google Agenda
+                        </a>
+                      </Button>
+                    </div>
+                  )}
+
+                  {m.status === "PENDING" && (
+                    <div className={cn("grid gap-2", received ? "grid-cols-2" : "grid-cols-1")}>
+                      {received ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="h-11"
+                            disabled={busy !== null}
+                            onClick={() => {
+                              setMessage("");
+                              setResponding({ id: m.id, kind: "decline", name: m.partner.name });
+                            }}
+                          >
+                            Refuser
+                          </Button>
+                          <Button
+                            className="h-11"
+                            disabled={busy !== null}
+                            onClick={() => {
+                              setMessage("");
+                              setResponding({ id: m.id, kind: "accept", name: m.partner.name });
+                            }}
+                          >
+                            Accepter
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="h-11"
+                          disabled={busy !== null}
+                          onClick={() => setConfirming({ id: m.id, name: m.partner.name })}
+                        >
+                          Retirer la demande
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                {m.partner.contact && (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-sm">
-                    {m.partner.contact.phone && (
-                      <a
-                        href={`tel:${m.partner.contact.phone.replace(/\s/g, "")}`}
-                        className="inline-flex items-center gap-1.5 font-medium text-navy-mid"
-                      >
-                        <Phone className="h-4 w-4" aria-hidden /> {m.partner.contact.phone}
-                      </a>
-                    )}
-                    <a
-                      href={`mailto:${m.partner.contact.email}`}
-                      className="inline-flex min-w-0 items-center gap-1.5 font-medium text-navy-mid"
-                    >
-                      <Mail className="h-4 w-4 shrink-0" aria-hidden />
-                      <span className="truncate">{m.partner.contact.email}</span>
-                    </a>
-                  </div>
-                )}
-
-                {m.googleCalendarUrl && (
-                  <div className="flex flex-wrap gap-2">
-                    {/* Fichier .ics : feuille « Ajouter à l'agenda » sur iPhone, Google Agenda sur Android. */}
-                    <Button asChild size="sm" variant="outline">
-                      <a href={`/api/rendez-vous/${m.id}/ics`}>
-                        <CalendarPlus className="h-4 w-4" aria-hidden /> Ajouter à mon agenda
-                      </a>
-                    </Button>
-                    <Button asChild size="sm" variant="ghost">
-                      <a href={m.googleCalendarUrl} target="_blank" rel="noreferrer">
-                        Google Agenda
-                      </a>
-                    </Button>
-                  </div>
-                )}
-
-                {m.status === "PENDING" && (
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-                    {received ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={busy !== null}
-                          onClick={() => {
-                            setMessage("");
-                            setResponding({ id: m.id, kind: "decline", name: m.partner.name });
-                          }}
-                        >
-                          Refuser
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={busy !== null}
-                          onClick={() => {
-                            setMessage("");
-                            setResponding({ id: m.id, kind: "accept", name: m.partner.name });
-                          }}
-                        >
-                          Accepter
-                        </Button>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy !== null}
-                        onClick={() => setConfirming({ id: m.id, name: m.partner.name })}
-                      >
-                        Retirer la demande
-                      </Button>
-                    )}
-                  </div>
-                )}
               </li>
             );
           })}

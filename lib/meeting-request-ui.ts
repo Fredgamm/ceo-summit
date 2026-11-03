@@ -149,3 +149,18 @@ export const DECLINE_QUICK_REPLIES = [
   { label: "Un autre créneau ?", text: "Pourriez-vous me proposer un autre créneau ?" },
   { label: "Pas pour le moment", text: "Merci, mais ce n'est pas pour moi pour le moment." },
 ] as const;
+
+/**
+ * Tuile de date d'une carte de rendez-vous (« lun. / 11 / janv. ») pour un jour
+ * « 2027-01-11 », indépendante du fuseau de l'appareil.
+ */
+export function dayTile(dayKey: string): { weekday: string; day: string; month: string } {
+  const noon = new Date(`${dayKey}T12:00:00Z`);
+  const fmt = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("fr-FR", { ...options, timeZone: "UTC" }).format(noon);
+  return {
+    weekday: fmt({ weekday: "short" }).replace(".", ""),
+    day: String(noon.getUTCDate()),
+    month: fmt({ month: "short" }).replace(".", ""),
+  };
+}
