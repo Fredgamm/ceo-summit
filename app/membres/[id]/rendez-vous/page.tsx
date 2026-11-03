@@ -127,10 +127,6 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
               Sans réponse sous {MEETING_REQUEST_TTL_HOURS} h au maximum (plus tôt si le créneau
               approche), la demande expire et le créneau est libéré automatiquement.
             </li>
-            <li>
-              Si {member.name} accepte, vous recevez par email son téléphone et le fichier
-              calendrier.
-            </li>
           </ul>
         </div>
 
