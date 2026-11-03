@@ -6,6 +6,52 @@
 
 ---
 
+## 2026-11-03 — Rendez-vous B2B : suite du module 21 (réponses, emails, suivi admin)
+
+Pas encore déployé à la date de cette entrée. Développé en local sur la branche `feat/rdv-b2b-v1-suite` (partie de `production`) ; la recette (lot 10) reste à faire. Voir `docs/21_rdv_b2b_specification_integration.md` §9 pour l'avancement détaillé.
+
+### Ajouté
+
+- **« Mes rendez-vous »** (onglet de « Mon profil », pastille des demandes reçues en attente) : demandes reçues et envoyées, filtres (« À venir » par défaut), **Accepter / Refuser / Retirer**. L'acceptation réserve les deux créneaux ; un refus, un retrait ou une expiration les libèrent. Le téléphone et l'email de l'autre participant ne sont envoyés par le serveur qu'après confirmation.
+- **« Demander un rendez-vous »** : bouton dans l'en-tête du profil d'un autre participant, qui ouvre une page dédiée (bouton « Retour au profil », un jour à la fois, matin / après-midi). Un créneau libre se choisit d'un appui ; les autres sont grisés avec un mot court (« Réservé », « Inactif », « Occupé », « Passé ») et ne peuvent pas être demandés. Le bouton s'adapte : « Voir ma demande » / « Voir mon rendez-vous » (une seule demande par couple), « Compléter mon profil », ou grisé avec la raison. Cela **remplace l'onglet « Rendez-vous événement »** ; l'ancien lien redirige vers la page.
+- **Expiration automatique** : une demande sans réponse expire (48 h au maximum, ramenées à 10 minutes avant le créneau si c'est plus tôt ; le jour même, à l'heure du créneau) et libère les deux créneaux. Elle s'affiche « expirée » dès l'échéance, et une tâche toutes les 5 minutes (timer systemd, route `/api/webhooks/meeting-expiry` protégée par `MEETING_CRON_SECRET`) fait le travail en base.
+- **8 emails** (Admin › Emails, nouvelle catégorie « Rendez-vous B2B », modifiables sans développement) : nouvelle demande avec boutons **Accepter / Décliner**, confirmation au demandeur et au destinataire (coordonnées du partenaire, fichier `.ics` joint), refus, expiration (demandeur et destinataire), « vos créneaux sont ouverts » (aux participants déjà inscrits, à la première publication), annulation par l'organisation. Texte de la demande repris du client ; les autres ont été validés le 3 novembre (`docs/21_annexe_emails_rendez_vous.md`).
+- **Réponse depuis l'email** : les boutons ouvrent `/rendez-vous/repondre/[jeton]` (sans connexion), qui enregistre la réponse puis affiche un message. Lien personnel à usage unique, invalide dès que la demande n'est plus en attente.
+- **Calendrier** : fichier `.ics` (route `/api/rendez-vous/[id]/ics`) et lien Google Agenda depuis « Mes rendez-vous » et l'email de confirmation, pensés pour iPhone, Android et Outlook (heures en UTC, lignes repliées, rappel 30 minutes).
+- **Suivi par l'organisation** (Admin › Opérations › Créneaux rendez-vous › « Suivre les rendez-vous ») : tous les rendez-vous d'un événement, filtres par statut et par jour, exports **CSV** (lisible dans Excel) et **PDF**, **liste terrain** par créneau (PDF à imprimer, CSV). L'organisation voit toutes les informations des participants ; chaque export est journalisé.
+- **Annulation en cas de retrait d'un participant** : quand un gérant retire un participant de sa liste, ses demandes et rendez-vous B2B sont annulés, avec email aux personnes concernées.
+
+### Modifié
+
+- **Créneaux actifs par défaut** pour tous les membres éligibles : textes, commentaires et message de publication alignés sur ce comportement (aucun changement de logique).
+- **Profil membre** : boutons « Message » (icône d'envoi) et « Se connecter » côte à côte, sur une même ligne ; sur mobile, les **onglets passent à la ligne** et se partagent la largeur au lieu de défiler (les derniers étaient coupés). Vaut pour le profil, la fiche entreprise et la fiche membre côté admin.
+- L'envoi d'emails accepte maintenant des **pièces jointes** (utilisées pour le `.ics`) ; sans pièce jointe, rien ne change.
+- La page `/rendez-vous/repondre/` est publique dans le middleware (le jeton tient lieu de session).
+
+### Sécurité
+
+- Jeton des boutons d'email : 256 bits, **stocké haché**, jamais en clair en base.
+- La réponse part du navigateur et non au simple affichage de la page, pour qu'un antivirus ou un aperçu de messagerie ne réponde pas à la place du destinataire.
+- Les textes saisis par les membres (nom, entreprise, motif) sont nettoyés avant d'entrer dans un email : aucun lien ni mise en forme injectés.
+- Les participants ne voient le téléphone de l'autre qu'après confirmation (inchangé) ; l'organisation voit tout, d'où la journalisation des exports. Les exports neutralisent l'injection de formules Excel.
+- La route d'expiration reste fermée (503) tant que `MEETING_CRON_SECRET` n'est pas défini, et compare le secret en temps constant.
+
+### Mise en production (sans toucher à l'existant)
+
+- **Une seule migration**, additive : `20261103100000_meeting_email_category` ajoute la valeur « MEETINGS » à la liste des catégories d'emails. Aucune table ni donnée existante n'est modifiée.
+- Au 3 novembre, la préprod et la production n'ont pas évolué depuis le début de la branche : la fusion ne devrait pas poser de conflit.
+- Aucun créneau n'est publié en production : aucune demande existante ne peut être touchée.
+- **À faire au déploiement** (détail dans DEPLOY.md §10 bis et la spec §9.4) : définir `MEETING_CRON_SECRET` dans le `.env` de chaque instance et activer le timer d'expiration ; régler le fuseau « La Réunion » sur l'événement ; vérifier l'envoi des emails avec un vrai compte.
+- Pas de déploiement sans l'accord explicite du client.
+
+### Reste à faire
+
+- **Lot 10 : recette** (essais de bout en bout, demandes simultanées, environ 30 comptes).
+- **V2** : annulation d'un rendez-vous confirmé par un participant, absences et réclamations, relance admin et email admin à chaque confirmation, tableau de bord, nettoyage automatique, reprise des données du plugin.
+- **Module 23 (plus tard)** : connexions entre membres, sur le modèle de LinkedIn (`docs/23_connexions_membres_recommandation.md`).
+
+---
+
 ## 2026-10-26 — Organisation unique du staff, retrait de la préinscription
 
 Pas encore déployé à la date de cette entrée.
