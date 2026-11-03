@@ -162,6 +162,7 @@ export default async function MemberProfilePage(props: {
           zone: m.event.zone,
           accessInstructions: m.event.accessInstructions,
           partner: m.partner,
+          googleCalendarUrl: m.googleCalendarUrl,
         };
       })
     : [];

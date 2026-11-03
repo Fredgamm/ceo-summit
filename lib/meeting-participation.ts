@@ -3,6 +3,9 @@ import type { MeetingAvailability } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { zonedDayKey } from "@/lib/event-timezone";
 import { activeEventOf } from "@/lib/event-participation";
+import { appUrl } from "@/lib/app-url";
+import { formatDayKey, formatTimeInZone, timezoneLabel } from "@/lib/event-timezone";
+import { googleCalendarUrl } from "@/lib/meeting-ics";
 import {
   canSeeMeetingContact,
   meetingDisplayStatus,
@@ -314,6 +317,8 @@ export interface MyMeeting {
     /** RG-04 — renseigné seulement pour un rendez-vous confirmé ou terminé. */
     contact: { phone: string | null; email: string } | null;
   };
+  /** Lien « Ajouter à Google Agenda » : confirmé ou terminé seulement. */
+  googleCalendarUrl: string | null;
 }
 
 const PARTNER_SELECT = {
@@ -347,6 +352,7 @@ export async function loadMyMeetings(userId: string, now = new Date()): Promise<
         select: {
           id: true,
           title: true,
+          location: true,
           timezone: true,
           meetingSetup: { select: { zone: true, accessInstructions: true } },
         },
@@ -363,6 +369,11 @@ export async function loadMyMeetings(userId: string, now = new Date()): Promise<
       { status: b.status, expiresAt: b.expiresAt, endTime: b.slot.endTime },
       now
     );
+    const zone = b.event.meetingSetup?.zone ?? "";
+    const accessInstructions = b.event.meetingSetup?.accessInstructions ?? "";
+    const contact = canSeeMeetingContact(status)
+      ? { phone: partner.phone, email: partner.email }
+      : null;
     return {
       id: b.id,
       sent,
@@ -375,8 +386,8 @@ export async function loadMyMeetings(userId: string, now = new Date()): Promise<
         id: b.event.id,
         title: b.event.title,
         timezone: b.event.timezone,
-        zone: b.event.meetingSetup?.zone ?? "",
-        accessInstructions: b.event.meetingSetup?.accessInstructions ?? "",
+        zone,
+        accessInstructions,
       },
       partner: {
         id: partner.id,
@@ -384,10 +395,30 @@ export async function loadMyMeetings(userId: string, now = new Date()): Promise<
         title: partner.title,
         avatarUrl: partner.avatarUrl,
         companyName: partner.company?.name ?? null,
-        contact: canSeeMeetingContact(status)
-          ? { phone: partner.phone, email: partner.email }
-          : null,
+        contact,
       },
+      googleCalendarUrl: contact
+        ? googleCalendarUrl({
+            bookingId: b.id,
+            start: b.slot.startTime,
+            end: b.slot.endTime,
+            eventTitle: b.event.title,
+            eventLocation: b.event.location,
+            zone,
+            accessInstructions,
+            timezoneLabel: timezoneLabel(b.event.timezone),
+            startLabel: `${formatDayKey(zonedDayKey(b.slot.startTime, b.event.timezone))}, ${formatTimeInZone(b.slot.startTime, b.event.timezone)}`,
+            partner: {
+              name: partner.name,
+              title: partner.title,
+              companyName: partner.company?.name ?? null,
+              phone: contact.phone,
+              email: contact.email,
+            },
+            reason: b.reason,
+            partnerProfileUrl: `${appUrl()}/membres/${partner.id}`,
+          })
+        : null,
     };
   });
 }

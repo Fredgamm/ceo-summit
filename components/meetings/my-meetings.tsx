@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarClock, Mail, MapPin, Phone } from "lucide-react";
+import { CalendarClock, CalendarPlus, Mail, MapPin, Phone } from "lucide-react";
 
 import { acceptMeeting, declineMeeting, withdrawMeeting } from "@/app/actions/meeting-requests";
 import {
@@ -39,6 +39,7 @@ export interface MyMeetingView {
     companyName: string | null;
     contact: { phone: string | null; email: string } | null;
   };
+  googleCalendarUrl: string | null;
 }
 
 /** Même code couleur que « Mes créneaux » : en attente orange, confirmé bleu marine. */
@@ -203,6 +204,22 @@ export function MyMeetings({ meetings }: { meetings: MyMeetingView[] }) {
                       <Mail className="h-4 w-4 shrink-0" aria-hidden />
                       <span className="truncate">{m.partner.contact.email}</span>
                     </a>
+                  </div>
+                )}
+
+                {m.googleCalendarUrl && (
+                  <div className="flex flex-wrap gap-2">
+                    {/* Fichier .ics : feuille « Ajouter à l'agenda » sur iPhone, Google Agenda sur Android. */}
+                    <Button asChild size="sm" variant="outline">
+                      <a href={`/api/rendez-vous/${m.id}/ics`}>
+                        <CalendarPlus className="h-4 w-4" aria-hidden /> Ajouter à mon agenda
+                      </a>
+                    </Button>
+                    <Button asChild size="sm" variant="ghost">
+                      <a href={m.googleCalendarUrl} target="_blank" rel="noreferrer">
+                        Google Agenda
+                      </a>
+                    </Button>
                   </div>
                 )}
 
