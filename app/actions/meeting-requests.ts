@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
@@ -187,8 +186,9 @@ export async function requestMeeting(input: unknown): Promise<ActionResult<{ boo
     sendMeetingRequestEmail(booking.id, decision.token).catch((err) =>
       console.error("[meeting-email] demande non envoyée", err)
     );
-    revalidatePath(`/membres/${recipientId}`);
-    revalidatePath("/profil");
+    // Pas de revalidatePath : toute revalidation dans une action recharge aussi la page
+    // courante, qui, voyant la demande créée, remplacerait le message « Demande envoyée ».
+    // Les pages concernées sont dynamiques (session) : elles se rechargent à l'ouverture.
     return { success: true, data: { bookingId: booking.id } };
   } catch (err) {
     if (err instanceof SlotTakenError) {

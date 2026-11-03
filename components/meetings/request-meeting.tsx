@@ -85,10 +85,11 @@ export function RequestMeeting({
         router.refresh();
         return;
       }
+      // Pas de rechargement ici : la page, voyant la demande qui vient d'être créée,
+      // remplacerait aussitôt ce message de succès par « vous avez déjà une demande ».
       setSentLabel(selected.label);
       setSelected(null);
       setReason("");
-      router.refresh();
     } finally {
       setSending(false);
     }
