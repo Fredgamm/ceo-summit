@@ -14,7 +14,6 @@ import {
   zonedDayKey,
 } from "@/lib/event-timezone";
 import { loadMemberMeetingView, missingMeetingProfileFields } from "@/lib/meeting-participation";
-import { MEETING_REQUEST_TTL_HOURS } from "@/lib/meeting-booking";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequestMeeting, type RequestDayView } from "@/components/meetings/request-meeting";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -73,7 +72,6 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
   const viewerMissing = missingMeetingProfileFields(viewer);
   const days: RequestDayView[] = meeting.days.map((d) => ({
     key: d.day,
-    label: formatDayKey(d.day),
     slots: d.slots.map((s) => ({
       id: s.id,
       range: formatTimeRangeInZone(s.startTime, s.endTime, tz),
@@ -83,7 +81,7 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
   const unreadMessages = await countUnreadMessages(viewer.id);
 
   const blocked = meeting.existingBooking
-    ? `Vous avez déjà ${meeting.existingBooking.status === "PENDING" ? "une demande en cours" : "un rendez-vous"} avec ${member.name} (${formatDayKey(zonedDayKey(meeting.existingBooking.startTime, tz))}, ${formatTimeInZone(meeting.existingBooking.startTime, tz)}). Une seule demande ou un seul rendez-vous est possible entre deux participants.`
+    ? `Vous avez déjà ${meeting.existingBooking.status === "PENDING" ? "une demande en cours" : "un rendez-vous"} avec ${member.name} (${formatDayKey(zonedDayKey(meeting.existingBooking.startTime, tz))}, ${formatTimeInZone(meeting.existingBooking.startTime, tz)}). On ne peut avoir qu'un rendez-vous à la fois avec la même personne.`
     : null;
 
   return (
@@ -91,8 +89,8 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
       user={{ name: viewer.name, avatarUrl: viewer.avatarUrl, isAdmin: viewer.isPlatformAdmin }}
       badges={{ messages: unreadMessages || undefined }}
     >
-      {/* Une seule colonne, cartes et largeur comme les autres pages du profil. */}
-      <div className="flex flex-col gap-4">
+      {/* Page courte et lisible d'un coup d'œil : qui, où, puis trois étapes (components/meetings/request-meeting.tsx). */}
+      <div className="mx-auto flex max-w-4xl flex-col gap-4">
         <Link
           href={`/membres/${member.id}`}
           className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-navy-mid hover:underline"
@@ -100,34 +98,35 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
           <ArrowLeft className="h-4 w-4" aria-hidden /> Retour au profil
         </Link>
 
-        <div className="rounded-lg border border-border bg-white p-4 sm:p-6">
-          <h1 className="text-lg font-bold text-navy sm:text-xl">Demander un rendez-vous</h1>
-          <div className="mt-3 flex items-center gap-3">
-            <Avatar className="h-12 w-12">
+        <div className="rounded-2xl border border-border bg-white p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-14 w-14 shrink-0">
               <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
               <AvatarFallback>{initials(member.name)}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="font-semibold text-navy">{member.name}</p>
+              <h1 className="text-lg font-bold leading-tight text-navy sm:text-xl">
+                Rendez-vous avec {member.name}
+              </h1>
               <p className="truncate text-sm text-text-muted">
                 {[member.title, member.company?.name].filter(Boolean).join(" · ")}
               </p>
             </div>
           </div>
-          <p className="mt-3 flex items-start gap-1.5 text-sm text-text-mid">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            <span>
-              {meeting.eventTitle} — {meeting.zone}
-              {meeting.accessInstructions ? ` · ${meeting.accessInstructions}` : ""}
-            </span>
-          </p>
-          <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-xs text-text-muted">
-            <li>Le créneau est réservé pour vous deux en attendant la réponse.</li>
-            <li>
-              Sans réponse sous {MEETING_REQUEST_TTL_HOURS} h au maximum (plus tôt si le créneau
-              approche), la demande expire et le créneau est libéré automatiquement.
-            </li>
-          </ul>
+          <details className="mt-3 text-sm text-text-mid">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium">
+              <MapPin className="h-4 w-4 shrink-0 text-gold" aria-hidden />
+              <span>{meeting.zone}</span>
+              {meeting.accessInstructions && (
+                <span className="text-xs font-semibold text-navy-mid underline">
+                  Comment s&apos;y rendre ?
+                </span>
+              )}
+            </summary>
+            {meeting.accessInstructions && (
+              <p className="mt-2 pl-[1.375rem] text-text">{meeting.accessInstructions}</p>
+            )}
+          </details>
         </div>
 
         {blocked ? (
@@ -144,7 +143,7 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
           <Alert>
             <AlertTriangle />
             <AlertDescription>
-              Complétez votre profil avant de demander un rendez-vous ({viewerMissing.join(", ")}).{" "}
+              Avant de demander un rendez-vous, complétez votre profil ({viewerMissing.join(", ")}).{" "}
               <Button asChild variant="link" className="h-auto p-0">
                 <Link href="/profil/editer">Compléter mon profil</Link>
               </Button>
@@ -162,7 +161,6 @@ export default async function MemberMeetingRequestPage(props: { params: Promise<
             memberId={member.id}
             memberName={member.name}
             timezoneLabel={timezoneLabel(tz)}
-            zone={meeting.zone}
             days={days}
           />
         )}

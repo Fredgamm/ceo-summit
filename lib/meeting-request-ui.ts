@@ -79,3 +79,56 @@ export function defaultDay(
   const withFree = days.find((d) => d.slots.some((s) => s.state === "available"));
   return (withFree ?? days[0])?.key ?? null;
 }
+
+/**
+ * Page « Prendre rendez-vous » (3 nov. 2026, refonte « simple comme bonjour ») :
+ * trois étapes — quel jour, quelle heure, pourquoi — avec des motifs prêts à
+ * choisir pour éviter de taper sur un téléphone.
+ */
+export const QUICK_REASONS = [
+  {
+    label: "Présenter mon entreprise",
+    text: "Je souhaite vous présenter mon entreprise et mes services.",
+  },
+  { label: "Trouver un partenaire", text: "Je cherche un partenaire pour un projet commun." },
+  { label: "Proposer une collaboration", text: "Je souhaite vous proposer une collaboration." },
+  {
+    label: "Faire connaissance",
+    text: "J'aimerais faire connaissance et échanger sur notre secteur.",
+  },
+] as const;
+
+/**
+ * Clic sur un motif prêt à l'emploi : il remplace le champ s'il est vide ou ne
+ * contient qu'un autre motif prêt à l'emploi, sinon il s'ajoute à la suite de ce
+ * que la personne a écrit (jamais d'écrasement d'un texte saisi). Borné à `max`.
+ */
+export function applyQuickReason(current: string, text: string, max: number): string {
+  const trimmed = current.trim();
+  const isOnlyQuick = trimmed === "" || QUICK_REASONS.some((r) => r.text === trimmed);
+  const next = isOnlyQuick ? text : `${trimmed} ${text}`;
+  return next.slice(0, max);
+}
+
+/** Aide sous le champ du motif : dit ce qu'il manque au lieu de laisser un bouton grisé muet. */
+export function reasonHint(length: number, min: number): string | null {
+  if (length >= min) return null;
+  const missing = min - length;
+  return length === 0
+    ? "Choisissez un motif ci-dessus, ou écrivez le vôtre."
+    : `Encore ${missing} caractère${missing > 1 ? "s" : ""} pour pouvoir envoyer.`;
+}
+
+/** « lundi » et « 11 janvier » pour un jour « 2027-01-11 » (indépendant du fuseau de l'appareil). */
+export function dayParts(dayKey: string): { weekday: string; date: string } {
+  const noon = new Date(`${dayKey}T12:00:00Z`);
+  const fmt = (options: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("fr-FR", { ...options, timeZone: "UTC" }).format(noon);
+  return { weekday: fmt({ weekday: "long" }), date: fmt({ day: "numeric", month: "long" }) };
+}
+
+/** « 12 libres », « 1 libre » ou « Complet ». */
+export function freeLabel(count: number): string {
+  if (count === 0) return "Complet";
+  return count === 1 ? "1 libre" : `${count} libres`;
+}
