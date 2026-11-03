@@ -2,7 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
-import { Building2, CalendarClock, Globe, Handshake, Linkedin, Mail, Phone } from "lucide-react";
+import {
+  Building2,
+  CalendarClock,
+  Globe,
+  Handshake,
+  Linkedin,
+  Mail,
+  Phone,
+  Send,
+} from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -220,11 +229,9 @@ export default async function MemberProfilePage(props: {
             </div>
           </div>
 
-          <div
-            className={`gap-2 sm:flex sm:flex-wrap sm:pb-1 ${
-              isSelf ? "grid grid-cols-2" : "flex flex-col"
-            }`}
-          >
+          {/* 3 nov. 2026 — les deux boutons côte à côte (mobile : moitié de la largeur
+              chacun), jamais empilés. */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:pb-1">
             {isSelf ? (
               <>
                 <Button asChild variant="outline">
@@ -237,11 +244,14 @@ export default async function MemberProfilePage(props: {
             ) : (
               <>
                 <Button asChild variant="outline">
-                  <Link href={`/messagerie?new=${user.id}`}>Envoyer un message</Link>
+                  <Link href={`/messagerie?new=${user.id}`}>
+                    <Send className="h-4 w-4" aria-hidden />
+                    Message
+                  </Link>
                 </Button>
                 <Button disabled title="Disponible avec le Deal Room (bientôt)">
-                  <Handshake className="h-4 w-4" />
-                  Demander une connexion
+                  <Handshake className="h-4 w-4" aria-hidden />
+                  Se connecter
                 </Button>
               </>
             )}
