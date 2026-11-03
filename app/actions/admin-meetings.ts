@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { zonedLocalToUtc } from "@/lib/event-timezone";
 import { buildSlotGrid, eventDayKeys } from "@/lib/meeting-slots";
 import { MEETING_EVENT_TYPE } from "@/lib/meeting-participation";
+import { sendMeetingCancelledEmails, sendMeetingSlotsOpenEmails } from "@/lib/meeting-emails";
 import {
   meetingGridSchema,
   meetingSetupSchema,
@@ -281,7 +282,11 @@ export async function setMeetingSlotDisabled(
     };
   }
 
-  // TODO lot 7 (emails) : prévenir les participants des demandes annulées.
+  // Demandes touchées, relevées avant l'annulation pour prévenir les deux personnes.
+  const toCancel = await prisma.meetingBooking.findMany({
+    where: { slotId, status: ACTIVE_BOOKING },
+    select: { id: true, status: true },
+  });
   await prisma.$transaction([
     prisma.meetingBooking.updateMany({
       where: { slotId, status: ACTIVE_BOOKING },
@@ -304,6 +309,10 @@ export async function setMeetingSlotDisabled(
       metadata: { cancelled: activeBookings },
     },
   });
+
+  sendMeetingCancelledEmails(
+    toCancel.map((b) => ({ id: b.id, wasConfirmed: b.status === "CONFIRMED" }))
+  ).catch((err) => console.error("[meeting-email] annulation non envoyée", err));
 
   revalidateSlots(slot.eventId);
   return { success: true, data: { cancelled: activeBookings } };
@@ -333,7 +342,10 @@ export async function publishMeetingSlots(
     return { success: false, error: "Générez au moins un créneau avant de publier." };
   }
 
-  // TODO lot 7 (emails) : « Vous participez aux rendez-vous B2B, configurez vos créneaux ».
+  // « Vos créneaux sont ouverts » : seulement à la première publication, aux
+  // participants déjà inscrits (décision du 3 novembre). Publier de nouveaux
+  // créneaux ensuite ne renvoie pas d'email.
+  const firstPublication = event.meetingSetup.status !== "PUBLISHED";
   await prisma.$transaction([
     prisma.meetingTimeSlot.updateMany({
       where: { eventId, status: "DRAFT" },
@@ -353,6 +365,12 @@ export async function publishMeetingSlots(
       metadata: { published: drafts },
     },
   });
+
+  if (firstPublication) {
+    sendMeetingSlotsOpenEmails(eventId).catch((err) =>
+      console.error("[meeting-email] ouverture des créneaux non envoyée", err)
+    );
+  }
 
   revalidateSlots(eventId);
   return { success: true, data: { published: drafts } };

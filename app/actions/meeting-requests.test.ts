@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
+vi.mock("@/lib/meeting-emails", () => ({
+  sendMeetingRequestEmail: vi.fn().mockResolvedValue(undefined),
+  sendMeetingConfirmedEmails: vi.fn().mockResolvedValue(undefined),
+  sendMeetingDeclinedEmail: vi.fn().mockResolvedValue(undefined),
+  sendMeetingExpiredEmails: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/meeting-participation", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/meeting-participation")>();
   return { ...actual, meetingEventIdFor: vi.fn() };
@@ -27,6 +33,12 @@ vi.mock("@/lib/prisma", () => {
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
 import { meetingEventIdFor } from "@/lib/meeting-participation";
+import {
+  sendMeetingConfirmedEmails,
+  sendMeetingDeclinedEmail,
+  sendMeetingExpiredEmails,
+  sendMeetingRequestEmail,
+} from "@/lib/meeting-emails";
 import { acceptMeeting, declineMeeting, requestMeeting, withdrawMeeting } from "./meeting-requests";
 
 const REQUESTER = {
@@ -90,9 +102,17 @@ describe("requestMeeting", () => {
           reason: INPUT.reason,
           // Plusieurs jours avant : 48 h après l'envoi.
           expiresAt: expect.any(Date),
+          // RG-15 : seul le hachage du jeton est conservé.
+          decisionTokenHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         }),
       })
     );
+    // L'email part avec le jeton en clair, jamais celui qui est en base.
+    const [bookingId, token] = vi.mocked(sendMeetingRequestEmail).mock.calls[0];
+    const stored = vi.mocked(prisma.meetingBooking.create).mock.calls[0][0].data.decisionTokenHash;
+    expect(bookingId).toBe("booking_1");
+    expect(token).not.toBe(stored);
+    expect(token.length).toBeGreaterThanOrEqual(43);
     expect(prisma.meetingParticipantSlot.updateMany).toHaveBeenCalledWith({
       where: { slotId: "slot_1", userId: "user_b", status: "FREE" },
       data: { status: "PENDING", bookingId: "booking_1" },
@@ -101,6 +121,14 @@ describe("requestMeeting", () => {
       where: { slotId: "slot_1", userId: "user_a", status: "FREE" },
       data: { status: "PENDING", bookingId: "booking_1" },
     });
+  });
+
+  it("sends no email when the slot was just taken", async () => {
+    vi.mocked(prisma.meetingParticipantSlot.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    await requestMeeting(INPUT);
+
+    expect(sendMeetingRequestEmail).not.toHaveBeenCalled();
   });
 
   it("refuses a slot just taken by someone else (concurrent requests)", async () => {
@@ -254,6 +282,9 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ actorId: "user_b", action: "meeting.accept" }),
     });
+    // Confirmation aux deux (téléphone, .ics) ; aucun email de refus.
+    expect(sendMeetingConfirmedEmails).toHaveBeenCalledWith("booking_1");
+    expect(sendMeetingDeclinedEmail).not.toHaveBeenCalled();
   });
 
   it("declining frees both slots (RG-07)", async () => {
@@ -268,6 +299,8 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
       where: { bookingId: "booking_1" },
       data: { status: "FREE", bookingId: null },
     });
+    expect(sendMeetingDeclinedEmail).toHaveBeenCalledWith("booking_1");
+    expect(sendMeetingConfirmedEmails).not.toHaveBeenCalled();
   });
 
   it("only the requester withdraws, and that frees both slots (RG-05, RG-07)", async () => {
@@ -286,6 +319,9 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
       where: { bookingId: "booking_1" },
       data: { status: "FREE", bookingId: null },
     });
+    // Retrait : aucun email n'est prévu par la spécification.
+    expect(sendMeetingDeclinedEmail).not.toHaveBeenCalled();
+    expect(sendMeetingConfirmedEmails).not.toHaveBeenCalled();
   });
 
   it("only the recipient accepts or declines (RG-05)", async () => {
@@ -345,6 +381,8 @@ describe("acceptMeeting / declineMeeting / withdrawMeeting (lots 5 et 8)", () =>
       where: { bookingId: "booking_1" },
       data: { status: "FREE", bookingId: null },
     });
+    // La demande vient d'expirer : les deux personnes en sont prévenues.
+    expect(sendMeetingExpiredEmails).toHaveBeenCalledWith("booking_1");
   });
 
   it("requires the recipient to still be a participant to accept (RG-02)", async () => {

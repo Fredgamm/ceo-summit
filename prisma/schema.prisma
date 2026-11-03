@@ -1160,6 +1160,7 @@ enum EmailTemplateCategory {
   SERVICES
   MESSAGING
   ADMIN_ALERT
+  MEETINGS
 }
 
 /// Une ligne = un ÉCART par rapport au registre déclaré en code

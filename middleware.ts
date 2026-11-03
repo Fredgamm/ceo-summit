@@ -34,7 +34,15 @@ const PUBLIC_ROUTES = [
   "/~offline",
 ];
 // "/verifier-email/" (14 oct. 2026) : lien de confirmation d'adresse, ouvrable sans session.
-const PUBLIC_PREFIXES = ["/reinitialiser/", "/invitation/", "/partenaire/", "/verifier-email/"];
+// "/rendez-vous/repondre/" (3 nov. 2026) : boutons Accepter / Décliner de l'email de demande
+// de rendez-vous B2B ; le jeton à usage unique tient lieu de session.
+const PUBLIC_PREFIXES = [
+  "/reinitialiser/",
+  "/invitation/",
+  "/partenaire/",
+  "/verifier-email/",
+  "/rendez-vous/repondre/",
+];
 
 function isPublicRoute(pathname: string) {
   if (PUBLIC_ROUTES.includes(pathname)) return true;

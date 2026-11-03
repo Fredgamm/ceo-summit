@@ -92,6 +92,20 @@ describe("sendTransactionalEmail — production", () => {
     );
   });
 
+  it("carries attachments, such as the .ics of a confirmed meeting", async () => {
+    setEnv({ NODE_ENV: "production", ...REAL_SMTP, EMAIL_FROM: "noreply@ceo-summit.mg" });
+    const { sendTransactionalEmail } = await loadModule();
+    const attachment = {
+      filename: "rendez-vous-ceo-summit.ics",
+      content: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+      contentType: "text/calendar; charset=utf-8; method=PUBLISH",
+    };
+
+    await sendTransactionalEmail({ ...message, attachments: [attachment] });
+
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ attachments: [attachment] }));
+  });
+
   it("still honours an explicit MAIL_DEV_MODE=true", async () => {
     setEnv({ NODE_ENV: "production", MAIL_DEV_MODE: "true" });
     const { sendTransactionalEmail } = await loadModule();

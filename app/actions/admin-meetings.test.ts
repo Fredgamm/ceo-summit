@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({ auth: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/meeting-emails", () => ({
+  sendMeetingCancelledEmails: vi.fn().mockResolvedValue(undefined),
+  sendMeetingSlotsOpenEmails: vi.fn().mockResolvedValue(0),
+}));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -20,7 +24,7 @@ vi.mock("@/lib/prisma", () => ({
       updateMany: vi.fn(),
       count: vi.fn(),
     },
-    meetingBooking: { count: vi.fn(), updateMany: vi.fn() },
+    meetingBooking: { count: vi.fn(), findMany: vi.fn(), updateMany: vi.fn() },
     meetingParticipantSlot: { updateMany: vi.fn() },
     auditLog: { create: vi.fn() },
     $transaction: vi.fn(),
@@ -29,6 +33,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { sendMeetingCancelledEmails, sendMeetingSlotsOpenEmails } from "@/lib/meeting-emails";
 import {
   addMeetingSlot,
   deleteMeetingSlot,
@@ -261,6 +266,10 @@ describe("admin meeting actions", () => {
 
     it("cancels them and frees participants' availabilities once confirmed", async () => {
       vi.mocked(prisma.meetingBooking.count).mockResolvedValue(2);
+      vi.mocked(prisma.meetingBooking.findMany).mockResolvedValue([
+        { id: "b1", status: "PENDING" },
+        { id: "b2", status: "CONFIRMED" },
+      ] as never);
 
       const result = await setMeetingSlotDisabled("slot_1", true, { confirmCancel: true });
 
@@ -277,6 +286,11 @@ describe("admin meeting actions", () => {
         where: { id: "slot_1" },
         data: { status: "DISABLED" },
       });
+      // Les deux personnes de chaque demande sont prévenues, avec la bonne phrase.
+      expect(sendMeetingCancelledEmails).toHaveBeenCalledWith([
+        { id: "b1", wasConfirmed: false },
+        { id: "b2", wasConfirmed: true },
+      ]);
     });
 
     it("re-enables a disabled slot as published", async () => {
@@ -309,6 +323,21 @@ describe("admin meeting actions", () => {
       expect(prisma.eventMeetingSetup.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ status: "PUBLISHED" }) })
       );
+      // Première publication : « vos créneaux sont ouverts » aux inscrits.
+      expect(sendMeetingSlotsOpenEmails).toHaveBeenCalledWith("evt_1");
+    });
+
+    it("does not re-send « créneaux ouverts » when publishing more slots later", async () => {
+      vi.mocked(prisma.event.findUnique).mockResolvedValue({
+        ...EVENT,
+        meetingSetup: { status: "PUBLISHED" },
+      } as never);
+      vi.mocked(prisma.meetingTimeSlot.count).mockResolvedValue(2);
+
+      const result = await publishMeetingSlots("evt_1");
+
+      expect(result).toEqual({ success: true, data: { published: 2 } });
+      expect(sendMeetingSlotsOpenEmails).not.toHaveBeenCalled();
     });
 
     it("refuses to publish an empty grid", async () => {

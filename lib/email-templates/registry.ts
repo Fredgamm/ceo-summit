@@ -9,6 +9,7 @@ import { ROOM_MODERATION_TEMPLATES } from "./room-moderation";
 import { SERVICES_TEMPLATES } from "./services";
 import { MESSAGING_TEMPLATES } from "./messaging";
 import { ADMIN_ALERT_TEMPLATES } from "./admin-alert";
+import { MEETINGS_TEMPLATES } from "./meetings";
 
 const ALL_TEMPLATES: EmailTemplateDefinition[] = [
   ...ACCOUNT_APPLICATION_TEMPLATES,
@@ -20,6 +21,7 @@ const ALL_TEMPLATES: EmailTemplateDefinition[] = [
   ...SERVICES_TEMPLATES,
   ...MESSAGING_TEMPLATES,
   ...ADMIN_ALERT_TEMPLATES,
+  ...MEETINGS_TEMPLATES,
 ];
 
 export const EMAIL_TEMPLATES: Record<string, EmailTemplateDefinition> = Object.fromEntries(

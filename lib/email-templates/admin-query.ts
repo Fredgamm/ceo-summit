@@ -15,6 +15,7 @@ export const EMAIL_TEMPLATE_CATEGORY_LABELS: Record<EmailTemplateCategory, strin
   SERVICES: "Services",
   MESSAGING: "Messagerie",
   ADMIN_ALERT: "Alertes internes admin",
+  MEETINGS: "Rendez-vous B2B",
 };
 
 export interface EmailTemplateListRow {

@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/require-viewer", () => ({ requireViewer: vi.fn() }));
 vi.mock("@/lib/evolia", () => ({ pushParticipantsToEvolia: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/meeting-cancellation", () => ({
+  cancelMeetingsOfRemovedParticipants: vi.fn().mockResolvedValue(0),
+}));
 vi.mock("@/lib/event-participation", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/event-participation")>();
   return {
@@ -26,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
 import { prisma } from "@/lib/prisma";
 import { requireViewer } from "@/lib/require-viewer";
 import { pushParticipantsToEvolia } from "@/lib/evolia";
+import { cancelMeetingsOfRemovedParticipants } from "@/lib/meeting-cancellation";
 import {
   registerCompanyMemberToEvent,
   sendEventRegistrationEmail,
@@ -112,6 +116,8 @@ describe("validateEventParticipants", () => {
       where: { eventId: "event_1", userId: { in: ["user_3"] } },
       data: { status: "CANCELLED" },
     });
+    // RG-14 — leurs demandes et rendez-vous B2B sont annulés avec eux.
+    expect(cancelMeetingsOfRemovedParticipants).toHaveBeenCalledWith("event_1", ["user_3"]);
     expect(prisma.company.update).toHaveBeenCalledWith({
       where: { id: "company_1" },
       data: { adminParticipates: false },
@@ -154,7 +160,12 @@ describe("validateEventParticipants", () => {
     vi.mocked(prisma.company.findUnique).mockResolvedValue(
       company({
         users: [
-          { id: "manager_1", name: "Marie", email: "marie@test.local", title: "Directrice générale" },
+          {
+            id: "manager_1",
+            name: "Marie",
+            email: "marie@test.local",
+            title: "Directrice générale",
+          },
           { id: "user_2", name: "Jean", email: "jean@test.local", title: null },
         ],
       }) as never
@@ -172,7 +183,12 @@ describe("validateEventParticipants", () => {
     vi.mocked(prisma.company.findUnique).mockResolvedValue(
       company({
         users: [
-          { id: "manager_1", name: "Marie", email: "marie@test.local", title: "Directrice générale" },
+          {
+            id: "manager_1",
+            name: "Marie",
+            email: "marie@test.local",
+            title: "Directrice générale",
+          },
           { id: "user_2", name: "Jean", email: "jean@test.local", title: "" },
         ],
       }) as never

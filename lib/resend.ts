@@ -88,10 +88,18 @@ function getSmtpTransport(): nodemailer.Transporter {
   return smtpTransport;
 }
 
+/** Pièce jointe : le fichier .ics des rendez-vous B2B confirmés (module 21). */
+export interface EmailAttachment {
+  filename: string;
+  content: string;
+  contentType: string;
+}
+
 interface SendTransactionalEmailArgs {
   to: string;
   subject: string;
   react: ReactElement;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -99,7 +107,12 @@ interface SendTransactionalEmailArgs {
  * password reset, event reminders, Deal Room notifications...) goes through
  * this so we have one place to add retry/logging/bounce handling later.
  */
-export async function sendTransactionalEmail({ to, subject, react }: SendTransactionalEmailArgs) {
+export async function sendTransactionalEmail({
+  to,
+  subject,
+  react,
+  attachments,
+}: SendTransactionalEmailArgs) {
   const from = getDefaultFromAddress();
 
   if (!isMailDevMode() && !isSmtpConfigured()) {
@@ -116,7 +129,7 @@ export async function sendTransactionalEmail({ to, subject, react }: SendTransac
 
   if (isMailDevMode()) {
     try {
-      await getDevTransport().sendMail({ from, to, replyTo, subject, html, text });
+      await getDevTransport().sendMail({ from, to, replyTo, subject, html, text, attachments });
     } catch (err) {
       console.error(
         "[mail] MAIL_DEV_MODE actif mais Maildev est injoignable sur " +
@@ -130,7 +143,15 @@ export async function sendTransactionalEmail({ to, subject, react }: SendTransac
   }
 
   try {
-    const info = await getSmtpTransport().sendMail({ from, to, replyTo, subject, html, text });
+    const info = await getSmtpTransport().sendMail({
+      from,
+      to,
+      replyTo,
+      subject,
+      html,
+      text,
+      attachments,
+    });
     return { id: info.messageId };
   } catch (err) {
     // Caller decides whether to throw/retry; we always log for the audit trail.

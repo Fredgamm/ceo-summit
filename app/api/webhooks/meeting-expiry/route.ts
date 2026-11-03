@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { expireDueMeetings } from "@/lib/meeting-expiry";
+import { sendMeetingExpiredEmails } from "@/lib/meeting-emails";
 
 /**
  * POST /api/webhooks/meeting-expiry — appelée toutes les 5 minutes par le
@@ -37,6 +38,11 @@ export async function POST(req: Request) {
   }
 
   const expired = await expireDueMeetings();
-  // TODO lot 7 (emails) : « Demande expirée » aux deux participants de chaque demande.
+  // « Demande expirée » aux deux personnes de chaque demande, l'une après l'autre.
+  for (const { id } of expired) {
+    await sendMeetingExpiredEmails(id).catch((err) =>
+      console.error("[meeting-email] expiration non envoyée", err)
+    );
+  }
   return NextResponse.json({ expired: expired.length });
 }

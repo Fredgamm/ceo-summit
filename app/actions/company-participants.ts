@@ -13,6 +13,7 @@ import {
   sendEventRegistrationEmail,
 } from "@/lib/event-participation";
 import { pushParticipantsToEvolia } from "@/lib/evolia";
+import { cancelMeetingsOfRemovedParticipants } from "@/lib/meeting-cancellation";
 import { jobTitleSchema } from "@/lib/validations/company";
 
 type ActionResult<T = undefined> =
@@ -132,6 +133,8 @@ export async function validateEventParticipants(
       where: { eventId: activeEvent.eventId, userId: { in: removedIds } },
       data: { status: "CANCELLED" },
     });
+    // RG-14 — leurs demandes et rendez-vous B2B sont annulés, avec notification.
+    await cancelMeetingsOfRemovedParticipants(activeEvent.eventId, removedIds);
   }
 
   let registered = 0;
