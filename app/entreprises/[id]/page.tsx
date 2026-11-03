@@ -249,8 +249,8 @@ export default async function CompanyProfilePage(props: {
       {/* key : un lien interne vers ?tab=… (ex. « Ajouter une description ») remonte
           les onglets sur le bon, defaultValue n'étant lu qu'au premier rendu. */}
       <Tabs key={defaultTab} defaultValue={defaultTab}>
-        {/* Mobile : la ligne d'onglets défile bord à bord de l'écran. */}
-        <TabsList className="-mx-4 px-4 md:mx-0 md:px-0">
+        {/* Mobile : les onglets passent à la ligne et se partagent la largeur (components/ui/tabs.tsx). */}
+        <TabsList>
           <TabsTrigger value="apercu">Aperçu</TabsTrigger>
           <TabsTrigger value="membres">Membres ({company.users.length})</TabsTrigger>
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>

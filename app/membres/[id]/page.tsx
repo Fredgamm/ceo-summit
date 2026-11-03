@@ -250,8 +250,8 @@ export default async function MemberProfilePage(props: {
       </div>
 
       <Tabs defaultValue={defaultTab}>
-        {/* Mobile : la ligne d'onglets défile bord à bord de l'écran. */}
-        <TabsList className="-mx-4 px-4 md:mx-0 md:px-0">
+        {/* Mobile : les onglets passent à la ligne et se partagent la largeur (components/ui/tabs.tsx). */}
+        <TabsList>
           <TabsTrigger value="profil">Profil</TabsTrigger>
           <TabsTrigger value="entreprise">Entreprise</TabsTrigger>
           <TabsTrigger value="deal-room">Opportunités</TabsTrigger>
