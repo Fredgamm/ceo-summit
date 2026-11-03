@@ -250,7 +250,7 @@ Nous vous prions de nous excuser pour ce changement. Vous pouvez reprendre rende
 
 ## 9. Notification de confirmation à l'admin ⚠️ ✏️ (V2)
 
-**À** : l'équipe d'organisation · **Objet** : `Rendez-vous B2B confirmé - {{requesterCompany}} / {{recipientCompany}}`
+**À** : l'adresse d'alerte admin déjà configurée (`ADMIN_ALERT_EMAIL`) · **Objet** : `Rendez-vous B2B confirmé - {{requesterCompany}} / {{recipientCompany}}`
 
 ```text
 Un rendez-vous B2B vient d'être confirmé.
@@ -295,7 +295,7 @@ Sans réponse avant {{expiresAt}}, la demande expirera. Ce rappel ne prolonge pa
 
 ## 11. Absence signalée ✏️ (V2)
 
-**À** : l'équipe d'organisation · **Objet** : `Absence signalée - rendez-vous {{bookingId}}`
+**À** : l'adresse d'alerte admin déjà configurée (`ADMIN_ALERT_EMAIL`) · **Objet** : `Absence signalée - rendez-vous {{bookingId}}`
 
 ```text
 {{reporterName}} ({{reporterCompany}}) signale que {{absentName}} ({{absentCompany}}) ne s'est pas présenté(e) au rendez-vous du {{slotDate}}, à {{slotTime}}, espace {{zone}}.
@@ -315,9 +315,9 @@ Traiter la réclamation : {{claimUrl}}
 1. **Email 1 : boutons « Accepter » et « Décliner »** — retenu, texte du client conservé. Un clic ouvre une page de confirmation (voir la note de l'email 1). Cela fait passer la réponse depuis l'email (ancien lot 11) de la V2 à la V1.
 2. **Refus (4) et expirations (5, 6)** — ton validé.
 3. **Email 7** — envoyé aux membres **déjà inscrits** à la publication des créneaux. Un membre qui s'inscrit après la publication ne reçoit pas cet email (il voit ses créneaux actifs dans « Mes créneaux »).
+4. **Adresse des emails admin (9 et 11)** — l'adresse **déjà configurée** (`ADMIN_ALERT_EMAIL`, la même que les alertes de paiement), catégorie « Alertes internes admin » de la bibliothèque d'emails. Rien de nouveau à configurer.
 
 **Encore ouverts, avec la proposition retenue par défaut :**
 
-4. Email 8 (annulation) aussi quand un gérant retire un participant : **oui**.
-5. Adresse de l'email admin (9, V2) : à définir avant la V2.
+5. Email 8 (annulation) aussi quand un gérant retire un participant : **oui**.
 6. Heures toujours dans le fuseau de l'événement, avec sa mention : **oui**.
