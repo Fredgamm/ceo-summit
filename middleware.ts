@@ -148,6 +148,6 @@ export const config = {
      *     itself impossible: signIn() calls /api/auth/callback/credentials, which
      *     this middleware redirected to /login before NextAuth ever saw it.
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons|logo|splash|manifest.json|sw\\.js|workbox-|fallback-|api/webhooks|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|logo|splash|manifest.json|sw\\.js|workbox-|worker-|fallback-|api/webhooks|api/auth).*)",
   ],
 };

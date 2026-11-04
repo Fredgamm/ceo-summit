@@ -9,6 +9,7 @@ import { loadNotifications } from "@/lib/notifications";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PushToggle } from "@/components/notifications/push-toggle";
 
 export const metadata: Metadata = { title: "Notifications" };
 
@@ -77,6 +78,8 @@ export default async function NotificationsPage() {
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-4">
         <h1 className="text-xl font-bold text-navy">Notifications</h1>
+
+        <PushToggle />
 
         {empty ? (
           <EmptyState

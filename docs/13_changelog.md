@@ -10,6 +10,8 @@
 
 **Profil membre (mobile) et « Mes rendez-vous ».** Quatre onglets sur une ligne (Profil, Entreprise, Opportunités, Services) ; « Rendez-vous » devient un bouton de l'en-tête (avec pastille des demandes en attente) et un élément du menu « Profil » ; « Mes créneaux » est une vue « Demandes | Mes créneaux ». Le bureau garde ses onglets. Cartes de rendez-vous refaites (tuile de date, heure en grand, statut coloré, motif en citation, lieu, échéance, contacts et boutons larges) ; filtres vides masqués.
 
+**Notifications push de la PWA (module 24, local).** Carte « Activer les notifications » sur la page Notifications ; push pour chaque événement du module Rendez-vous (demande, confirmation, refus, expiration, annulation, mot du partenaire, créneaux ouverts). Nouvelle table `PushSubscription`, dépendance `web-push`, clés VAPID à créer par instance. Voir `docs/24_notifications_push_pwa.md`.
+
 Pas encore déployé à la date de cette entrée. Développé en local sur la branche `feat/rdv-b2b-v1-suite` (partie de `production`) ; la recette (lot 10) reste à faire. Voir `docs/21_rdv_b2b_specification_integration.md` §9 pour l'avancement détaillé.
 
 ### Ajouté

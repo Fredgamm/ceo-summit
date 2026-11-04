@@ -337,6 +337,20 @@ systemctl start ceo-summit-meeting-expiry.service && journalctl -u ceo-summit-me
 Sans `MEETING_CRON_SECRET`, la route `/api/webhooks/meeting-expiry` répond 503
 et le script s'arrête en erreur : rien n'est ouvert par défaut.
 
+## 10 ter. Notifications push de la PWA (module 24)
+
+Une paire de clés VAPID **par instance**, puis recréer le conteneur `app` (même méthode que
+section 10 bis : exporter `IMAGE_TAG` de l'image en cours, `up -d --no-build app`). Sans clés, la
+fonction est inactive et sans effet.
+
+```bash
+npx web-push generate-vapid-keys        # sur le poste de dev, une paire par instance
+# dans le .env de l'instance :
+#   VAPID_PUBLIC_KEY="…"  VAPID_PRIVATE_KEY="…"  VAPID_SUBJECT="mailto:hello@ceo-summit.mg"
+```
+
+Ne pas changer la paire une fois des membres abonnés. Détail : `docs/24_notifications_push_pwa.md`.
+
 ## 11. Sauvegardes — Postgres + fichiers uploadés
 
 Automatisées via `deploy/backup.sh` (dump Postgres + tar de
