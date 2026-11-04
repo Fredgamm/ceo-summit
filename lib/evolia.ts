@@ -352,6 +352,12 @@ export async function releaseHeldEvoliaPushes(
   let skipped = 0;
   let deferred = 0;
 
+  // Une inscription en échec est reconstruite à partir des données actuelles
+  // plutôt que renvoyée telle quelle : son contenu enregistré date parfois d'avant
+  // une évolution de l'API d'Evolia (montant, devise, fin de l'événement…) et
+  // serait refusé à chaque fois (« Corps de requête invalide »).
+  const rebuilt = new Set<string>();
+
   for (const push of registrations) {
     const payment = push.reference
       ? await prisma.companyPayment.findUnique({
@@ -371,6 +377,39 @@ export async function releaseHeldEvoliaPushes(
       continue;
     }
     if (!(await claim(push.id, push.from))) continue;
+
+    if (push.from === "FAILED" && payment && push.reference) {
+      if (rebuilt.has(push.reference)) {
+        // Plusieurs échecs pour le même paiement : un seul envoi reconstruit suffit.
+        await setAside(push.id, "PENDING", "Doublon : remplacé par un envoi reconstruit.");
+        skipped++;
+        continue;
+      }
+      rebuilt.add(push.reference);
+      const startedAt = new Date();
+      const ok = await pushRegistrationToEvolia(push.reference);
+      const replacement = await prisma.evoliaPush.findFirst({
+        where: {
+          reference: push.reference,
+          event: "company.registration.pushed",
+          createdAt: { gte: startedAt },
+        },
+        select: { id: true },
+      });
+      if (replacement) {
+        await setAside(push.id, "PENDING", "Reconstruit avec les données à jour : nouvel envoi.");
+      } else {
+        // Rien n'a pu être reconstruit : l'envoi d'origine reste en échec, visible et renvoyable.
+        await prisma.evoliaPush.updateMany({
+          where: { id: push.id, status: "PENDING" },
+          data: { status: "FAILED", lastError: "Reconstruction impossible : données manquantes." },
+        });
+      }
+      if (ok) sent++;
+      else failed++;
+      continue;
+    }
+
     if (await deliverEvoliaPush(push.id)) sent++;
     else failed++;
   }
