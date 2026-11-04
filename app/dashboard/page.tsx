@@ -19,6 +19,7 @@ import {
 import { getShowStaffInDirectory } from "@/lib/staff-visibility";
 import { getEurToArRate } from "@/lib/currency-conversion";
 import { AppShell } from "@/components/layout/app-shell";
+import { PushPrompt } from "@/components/notifications/push-prompt";
 import { MemberCard } from "@/components/catalogue/member-card";
 import { OpportunityCard } from "@/components/deal-room/opportunity-card";
 import { EventCard } from "@/components/events/event-card";
@@ -331,6 +332,8 @@ export default async function DashboardPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-navy">Bonjour, {user.name.split(" ")[0]} 👋</h1>
       </div>
+
+      <PushPrompt />
 
       {nextEvent && (
         <div className="mb-6 flex flex-col items-start gap-4 rounded-lg bg-navy p-6 text-white sm:flex-row sm:items-center">
