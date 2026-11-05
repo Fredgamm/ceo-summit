@@ -115,6 +115,22 @@ describe("sendBrevoBatch", () => {
     );
     const { errors } = await sendBrevoBatch(CONFIG, MESSAGE, recipients(1));
     expect(errors[0]).toMatch(/Clé d'API Brevo refusée/);
+    expect(errors[0]).toMatch(/Key not found/);
+  });
+
+  it("explains a server IP blocked by Brevo", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(401, {
+          code: "unauthorized",
+          message:
+            "We have detected you are using an unrecognised IP address 57.128.183.148. If you performed this action make sure to add the new IP address in this link: https://app.brevo.com/security/authorised_ips",
+        })
+      )
+    );
+    const { errors } = await sendBrevoBatch(CONFIG, MESSAGE, recipients(1));
+    expect(errors[0]).toMatch(/adresse IP du serveur \(57\.128\.183\.148\)/);
   });
 
   it("explains an unvalidated sender", async () => {
