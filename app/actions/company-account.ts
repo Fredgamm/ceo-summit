@@ -76,6 +76,7 @@ export async function createCompanyAccount(input: unknown): Promise<ActionResult
           name: f.name,
           title: f.title,
           email: normalizedEmail,
+          phone: f.phone,
           passwordHash,
           status: "ACTIVE",
         },
