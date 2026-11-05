@@ -19,15 +19,32 @@ export const meetingSetupSchema = z.object({
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Grille : jours de l'événement, plage quotidienne, durée, pause optionnelle. */
-export const meetingGridSchema = z.object({
-  days: z.array(z.string().regex(DAY)).min(1, "Choisissez au moins un jour"),
-  dayStart: z.string().regex(HHMM, "Heure de début invalide"),
-  dayEnd: z.string().regex(HHMM, "Heure de fin invalide"),
-  durationMinutes: z.coerce.number().int(),
-  pauseStart: z.string().optional().default(""),
-  pauseEnd: z.string().optional().default(""),
-});
+/**
+ * Grille : jours de l'événement, plages horaires quotidiennes, durée.
+ * 5 nov. 2026 : `ranges` (plusieurs plages, ex. 11:00–12:00 et 15:00–16:00)
+ * remplace l'ancien couple plage + pause, toujours accepté.
+ */
+export const meetingGridSchema = z
+  .object({
+    days: z.array(z.string().regex(DAY)).min(1, "Choisissez au moins un jour"),
+    ranges: z
+      .array(
+        z.object({
+          start: z.string().regex(HHMM, "Heure de début invalide"),
+          end: z.string().regex(HHMM, "Heure de fin invalide"),
+        })
+      )
+      .max(12, "12 plages horaires au maximum")
+      .optional(),
+    dayStart: z.string().regex(HHMM, "Heure de début invalide").optional(),
+    dayEnd: z.string().regex(HHMM, "Heure de fin invalide").optional(),
+    durationMinutes: z.coerce.number().int(),
+    pauseStart: z.string().optional().default(""),
+    pauseEnd: z.string().optional().default(""),
+  })
+  .refine((v) => (v.ranges?.length ?? 0) > 0 || (v.dayStart && v.dayEnd), {
+    message: "Ajoutez au moins une plage horaire",
+  });
 
 /** Ajout manuel d'un créneau. */
 export const meetingSlotSchema = z.object({

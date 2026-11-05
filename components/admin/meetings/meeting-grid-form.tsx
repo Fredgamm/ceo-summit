@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { generateMeetingSlots } from "@/app/actions/admin-meetings";
-import { SLOT_DURATIONS, buildSlotGrid } from "@/lib/meeting-slots";
+import { SLOT_DURATIONS, buildSlotGrid, timeToMinutes, type TimeRange } from "@/lib/meeting-slots";
 import { formatDayKey, formatTimeInZone, zonedDayKey } from "@/lib/event-timezone";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -43,12 +43,12 @@ export function MeetingGridForm({
 }) {
   const router = useRouter();
   const [days, setDays] = React.useState<string[]>(eventDays);
-  const [dayStart, setDayStart] = React.useState("09:00");
-  const [dayEnd, setDayEnd] = React.useState("17:00");
+  // Plages proposées par défaut : une le matin, une l'après-midi.
+  const [ranges, setRanges] = React.useState<TimeRange[]>([
+    { start: "09:00", end: "12:30" },
+    { start: "14:00", end: "17:00" },
+  ]);
   const [duration, setDuration] = React.useState(defaultDuration);
-  const [withPause, setWithPause] = React.useState(true);
-  const [pauseStart, setPauseStart] = React.useState("12:30");
-  const [pauseEnd, setPauseEnd] = React.useState("14:00");
   const [error, setError] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -56,14 +56,27 @@ export function MeetingGridForm({
 
   React.useEffect(() => setDuration(defaultDuration), [defaultDuration]);
 
-  const input = {
-    days,
-    dayStart,
-    dayEnd,
-    durationMinutes: duration,
-    pauseStart: withPause ? pauseStart : "",
-    pauseEnd: withPause ? pauseEnd : "",
-  };
+  const input = { days, ranges, durationMinutes: duration };
+
+  function updateRange(index: number, patch: Partial<TimeRange>) {
+    setRanges((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  function addRange() {
+    setRanges((prev) => {
+      // La nouvelle plage commence 1 h après la dernière, pour une heure.
+      const last = prev[prev.length - 1];
+      const from = last ? (timeToMinutes(last.end) ?? 16 * 60) + 60 : 9 * 60;
+      const start = Math.min(from, 22 * 60);
+      const fmt = (m: number) =>
+        `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      return [...prev, { start: fmt(start), end: fmt(Math.min(start + 60, 23 * 60 + 59)) }];
+    });
+  }
+
+  function removeRange(index: number) {
+    setRanges((prev) => prev.filter((_, i) => i !== index));
+  }
   const preview = buildSlotGrid({ ...input, timeZone });
 
   // Aperçu : les horaires sont les mêmes chaque jour, on montre ceux du premier.
@@ -116,25 +129,52 @@ export function MeetingGridForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>À quelles heures les participants peuvent-ils se rencontrer ?</Label>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-text-mid">
-          <span>De</span>
-          <Input
-            aria-label="Heure de début"
-            type="time"
-            className="w-32"
-            value={dayStart}
-            onChange={(e) => setDayStart(e.target.value)}
-          />
-          <span>à</span>
-          <Input
-            aria-label="Heure de fin"
-            type="time"
-            className="w-32"
-            value={dayEnd}
-            onChange={(e) => setDayEnd(e.target.value)}
-          />
+        <Label>Pendant quelles plages horaires les participants peuvent-ils se rencontrer ?</Label>
+        <p className="text-xs text-text-muted">
+          Ajoutez autant de plages que nécessaire (ex. 11:00 à 12:00 puis 15:00 à 16:00). Entre deux
+          plages, aucun rendez-vous n&apos;est possible.
+        </p>
+        <div className="flex flex-col gap-2">
+          {ranges.map((range, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2 text-sm text-text-mid">
+              <span className="w-16 font-medium text-navy">Plage {i + 1}</span>
+              <span>de</span>
+              <Input
+                aria-label={`Début de la plage ${i + 1}`}
+                type="time"
+                className="w-32"
+                value={range.start}
+                onChange={(e) => updateRange(i, { start: e.target.value })}
+              />
+              <span>à</span>
+              <Input
+                aria-label={`Fin de la plage ${i + 1}`}
+                type="time"
+                className="w-32"
+                value={range.end}
+                onChange={(e) => updateRange(i, { end: e.target.value })}
+              />
+              {ranges.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeRange(i)}
+                  aria-label={`Retirer la plage ${i + 1}`}
+                >
+                  Retirer
+                </Button>
+              )}
+            </div>
+          ))}
         </div>
+        {ranges.length < 12 && (
+          <div>
+            <Button type="button" variant="outline" size="sm" onClick={addRange}>
+              + Ajouter une plage horaire
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -151,33 +191,6 @@ export function MeetingGridForm({
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <label className="flex items-center gap-2 text-sm font-medium text-navy">
-          <Checkbox checked={withPause} onCheckedChange={(c) => setWithPause(c === true)} />
-          Prévoir une pause sans rendez-vous (ex. déjeuner)
-        </label>
-        {withPause && (
-          <div className="flex flex-wrap items-center gap-2 pl-6 text-sm text-text-mid">
-            <span>De</span>
-            <Input
-              aria-label="Début de la pause"
-              type="time"
-              className="w-32"
-              value={pauseStart}
-              onChange={(e) => setPauseStart(e.target.value)}
-            />
-            <span>à</span>
-            <Input
-              aria-label="Fin de la pause"
-              type="time"
-              className="w-32"
-              value={pauseEnd}
-              onChange={(e) => setPauseEnd(e.target.value)}
-            />
-          </div>
-        )}
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">

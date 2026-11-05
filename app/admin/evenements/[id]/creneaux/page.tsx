@@ -253,7 +253,7 @@ export default async function EventMeetingSlotsPage(props: { params: Promise<{ i
               n={2}
               state={step2}
               title="À quelles heures ?"
-              hint="Indiquez la plage horaire : les créneaux sont découpés automatiquement."
+              hint="Indiquez une ou plusieurs plages horaires : chacune est découpée automatiquement en rendez-vous."
             />
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
