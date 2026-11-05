@@ -285,11 +285,9 @@ export default async function MemberProfilePage(props: {
                         <Button asChild className="w-full">
                           <Link
                             href={
-                              meetingAction.kind === "request"
-                                ? `/membres/${user.id}/rendez-vous`
-                                : meetingAction.kind === "view"
-                                  ? "/profil?onglet=mes-rendez-vous"
-                                  : "/profil/editer"
+                              meetingAction.kind === "view"
+                                ? "/profil?onglet=mes-rendez-vous"
+                                : `/membres/${user.id}/rendez-vous`
                             }
                           >
                             <CalendarPlus className="h-4 w-4" aria-hidden />

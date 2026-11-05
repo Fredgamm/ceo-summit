@@ -32,8 +32,11 @@ export function meetingCta(input: {
         input.existingBooking.status === "PENDING" ? "Voir ma demande" : "Voir mon rendez-vous",
     };
   }
+  // 5 nov. 2026 — sur la fiche d'un autre membre, « Compléter mon profil »
+  // ne se comprenait pas : le bouton garde son libellé et la page de
+  // rendez-vous explique ce qui manque, avec le lien vers l'édition du profil.
   if (input.viewerMissingFields.length > 0) {
-    return { kind: "complete-profile", label: "Compléter mon profil" };
+    return { kind: "complete-profile", label: "Demander un rendez-vous" };
   }
   if (input.memberUnavailable) {
     return {

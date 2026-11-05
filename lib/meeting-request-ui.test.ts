@@ -51,7 +51,7 @@ describe("meetingCta", () => {
   it("asks the visitor to complete their profile first (RG-02)", () => {
     expect(meetingCta({ ...OK, viewerMissingFields: ["téléphone"] })).toEqual({
       kind: "complete-profile",
-      label: "Compléter mon profil",
+      label: "Demander un rendez-vous",
     });
   });
 
