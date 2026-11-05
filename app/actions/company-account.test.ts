@@ -32,6 +32,7 @@ const VALID_INPUT = {
   name: "Jean-Pierre Rakoto",
   title: "Directeur général",
   email: "jp.rakoto@example.mg",
+  phone: "+261 34 12 345 67",
   password: "Password1",
   confirmPassword: "Password1",
   companyName: "Rakoto Holding",
@@ -66,6 +67,7 @@ describe("createCompanyAccount", () => {
         data: expect.objectContaining({
           name: "Jean-Pierre Rakoto",
           email: "jp.rakoto@example.mg",
+          phone: "+261 34 12 345 67",
           status: "ACTIVE",
         }),
       })
@@ -196,5 +198,11 @@ describe("job title (Evolia badge)", () => {
   it("is required", async () => {
     const result = await createCompanyAccount({ ...VALID_INPUT, title: "" });
     expect(result.success).toBe(false);
+  });
+  it("requires a phone number with a country code", async () => {
+    for (const phone of ["", "34 12 345 67", "+261 12"]) {
+      const result = await createCompanyAccount({ ...VALID_INPUT, phone });
+      expect(result.success).toBe(false);
+    }
   });
 });

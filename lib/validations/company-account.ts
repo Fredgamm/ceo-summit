@@ -18,6 +18,17 @@ export const companyAccountSchema = z
     name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),
     title: jobTitleSchema,
     email: emailSchema,
+    /**
+     * 5 nov. 2026 — téléphone obligatoire dès l'inscription, au format
+     * international « +261 34 12 345 67 » (indicatif choisi dans la liste).
+     */
+    phone: z
+      .string({ required_error: "Le téléphone est requis" })
+      .trim()
+      .min(1, "Le téléphone est requis")
+      .max(30, "Numéro de téléphone trop long")
+      .regex(/^\+\d{1,4} [\d\s()-]+$/, "Numéro de téléphone invalide")
+      .refine((value) => value.replace(/\D/g, "").length >= 8, "Numéro de téléphone trop court"),
     password: passwordSchema,
     confirmPassword: z.string(),
     companyName: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères").max(120),

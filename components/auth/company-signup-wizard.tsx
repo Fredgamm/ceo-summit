@@ -13,12 +13,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { AriaryHint } from "@/components/ui/ariary-hint";
 import { JourneyShell } from "@/components/onboarding/journey-shell";
 import { MembershipCard } from "@/components/onboarding/membership-card";
 import { ReferentialSelect } from "@/components/referentials/referential-select";
 import { cn, formatEuro, planPriceEur, pluralize } from "@/lib/utils";
+import {
+  DEFAULT_PHONE_COUNTRY,
+  formatInternationalPhone,
+  phoneCountryByIso,
+  phoneCountryByName,
+} from "@/lib/phone-countries";
 
 interface CompanySignupWizardProps {
   plans: Plan[];
@@ -62,6 +69,10 @@ export function CompanySignupWizard({
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [title, setTitle] = React.useState("");
+  const [phoneCountry, setPhoneCountry] = React.useState(DEFAULT_PHONE_COUNTRY);
+  const [phoneNumber, setPhoneNumber] = React.useState("");
+  // Tant que la personne n'a pas choisi l'indicatif elle-même, il suit le pays de l'organisation.
+  const [phoneCountryTouched, setPhoneCountryTouched] = React.useState(false);
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
@@ -161,6 +172,7 @@ export function CompanySignupWizard({
         name,
         title,
         email,
+        phone: formatInternationalPhone(phoneCountryByIso(phoneCountry)?.dial ?? "", phoneNumber),
         password,
         confirmPassword,
         companyName,
@@ -258,6 +270,23 @@ export function CompanySignupWizard({
               autoComplete="email"
             />
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="signup-phone">Téléphone</Label>
+            <PhoneInput
+              id="signup-phone"
+              countryIso={phoneCountry}
+              onCountryChange={(iso) => {
+                setPhoneCountry(iso);
+                setPhoneCountryTouched(true);
+              }}
+              number={phoneNumber}
+              onNumberChange={setPhoneNumber}
+            />
+            <p className="text-xs text-text-muted">
+              Choisissez l&apos;indicatif du pays, puis votre numéro. Il sert aux autres
+              participants pour vous joindre lors des rendez-vous confirmés.
+            </p>
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="signup-password">Mot de passe</Label>
@@ -314,7 +343,11 @@ export function CompanySignupWizard({
               <ReferentialSelect
                 options={countries}
                 value={country}
-                onValueChange={setCountry}
+                onValueChange={(value) => {
+                  setCountry(value);
+                  const match = phoneCountryByName(value);
+                  if (match && !phoneCountryTouched) setPhoneCountry(match.iso);
+                }}
                 placeholder="Sélectionner…"
                 searchTitle="Rechercher un pays"
               />
