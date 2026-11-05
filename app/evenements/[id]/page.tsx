@@ -318,15 +318,8 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
                       </Link>
                     </Button>
                   )}
-                  {isRegistered && (
-                    <Button
-                      asChild
-                      variant="outline"
-                      className="w-full justify-center border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
-                    >
-                      <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
-                    </Button>
-                  )}
+                  {/* 5 nov. 2026 — bouton « Voir mon badge » masqué à la demande du client
+                      (la page /evenements/[id]/badge reste en place). */}
                 </>
               }
             >
@@ -384,9 +377,7 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
                   <Badge variant="approved" className="mt-4 w-full justify-center py-2">
                     Inscrit ✓
                   </Badge>
-                  <Button asChild variant="outline" className="mt-2 w-full justify-center">
-                    <Link href={`/evenements/${event.id}/badge`}>Voir mon badge</Link>
-                  </Button>
+                  {/* 5 nov. 2026 — « Voir mon badge » masqué (voir plus haut). */}
                   {!isPast && <CancelRegistrationButton eventId={event.id} />}
                 </>
               ) : isPast ? (
