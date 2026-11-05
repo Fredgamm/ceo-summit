@@ -54,8 +54,9 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
   const event = await prisma.event.findUnique({
     where: { id: params.id },
     include: {
+      // 5 nov. 2026 — le visiteur ne se voit pas dans la liste des participants.
       registrations: {
-        where: { status: { in: TAKEN_STATUSES } },
+        where: { status: { in: TAKEN_STATUSES }, userId: { not: session.user.id } },
         include: {
           user: {
             select: {
@@ -95,6 +96,8 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
 
   const isRegistered =
     viewerRegistration !== null && TAKEN_STATUSES.includes(viewerRegistration.status);
+  // Inscrits hors visiteur : la liste ne le montre pas, le décompte non plus.
+  const otherParticipants = event._count.registrations - (isRegistered ? 1 : 0);
   const capacity = eventCapacityBadge(event.capacity, event._count.registrations);
   const spotsLeft = Math.max(0, event.capacity - event._count.registrations);
   const isPast = event.date < new Date();
@@ -271,11 +274,6 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
                             <span className="truncate text-sm font-semibold text-navy">
                               {r.user.name}
                             </span>
-                            {r.user.id === viewer.id && (
-                              <span className="shrink-0 rounded-full bg-navy-light px-2 py-0.5 text-[10px] font-semibold text-navy">
-                                Vous
-                              </span>
-                            )}
                           </span>
                           {details && (
                             <span className="block truncate text-xs text-text-muted">
@@ -292,10 +290,9 @@ export default async function EventDetailPage(props: { params: Promise<{ id: str
                   );
                 })}
               </ul>
-              {event._count.registrations > event.registrations.length && (
+              {otherParticipants > event.registrations.length && (
                 <p className="mt-3 text-xs text-text-muted">
-                  et {event._count.registrations - event.registrations.length} autre(s)
-                  participant(s)
+                  et {otherParticipants - event.registrations.length} autre(s) participant(s)
                 </p>
               )}
             </div>
