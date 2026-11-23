@@ -17,8 +17,24 @@ import { EvoliaPushResendButton } from "@/components/admin/entreprises/evolia-pu
 import { isEvoliaPaymentMethod } from "@/lib/payment-methods";
 import { COMPANY_PAYMENT_REMINDER_ACTION } from "@/lib/company-payment-reminder";
 import { PaymentReminderButton } from "@/components/admin/entreprises/payment-reminder-button";
+import { EmailLink, ExternalLink, PhoneLinks } from "@/components/admin/entreprises/contact-links";
 
 export const metadata: Metadata = { title: "Admin — Entreprise" };
+
+const SOCIAL_LABEL: Record<string, string> = {
+  linkedin: "LinkedIn",
+  facebook: "Facebook",
+  instagram: "Instagram",
+};
+
+function ContactRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <dt className="w-24 shrink-0 text-text-muted">{label}</dt>
+      <dd className="min-w-0 break-words text-text-mid">{children}</dd>
+    </div>
+  );
+}
 
 const METHOD_LABEL: Record<string, string> = {
   VIREMENT: "Virement bancaire",
@@ -57,8 +73,20 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
   const company = await prisma.company.findUnique({
     where: { id: params.id },
     include: {
-      companyAdmin: { select: { id: true, name: true, email: true } },
-      users: { select: { id: true, name: true, email: true, status: true } },
+      companyAdmin: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          title: true,
+          phone: true,
+          country: true,
+          linkedinUrl: true,
+        },
+      },
+      users: {
+        select: { id: true, name: true, email: true, title: true, phone: true, status: true },
+      },
       subscription: {
         include: {
           plan: true,
@@ -86,6 +114,11 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
     }),
   ]);
   const awaitingPayment = company.subscription?.status === "PENDING_PAYMENT";
+  const socialLinks = Object.fromEntries(
+    Object.entries((company.socialLinks as Record<string, unknown> | null) ?? {}).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""
+    )
+  );
 
   // Audit (25 septembre 2026) — tous les paiements en attente, pas seulement
   // le plus récent : un paiement initial et un supplément (ou deux
@@ -123,12 +156,79 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
       <div className="rounded-lg border border-border bg-white p-6">
         <h1 className="text-xl font-bold text-navy">{company.name}</h1>
         <p className="text-sm text-text-muted">
-          {company.sector} · {company.country}
+          {company.sector} · {company.country} · inscrite le {formatDateFr(company.createdAt)}
         </p>
-        <p className="mt-2 text-sm text-text-mid">
-          Admin entreprise : {company.companyAdmin?.name ?? "—"}{" "}
-          {company.companyAdmin && `(${company.companyAdmin.email})`}
-        </p>
+
+        {/* 23 nov. 2026 — coordonnées complètes saisies, pour relancer et
+            contacter l'entreprise en dehors de la plateforme. */}
+        <div className="mt-4 grid gap-6 border-t border-border pt-4 sm:grid-cols-2">
+          <div>
+            <h2 className="mb-2 text-xs font-bold uppercase text-text-muted">
+              Contact (admin entreprise)
+            </h2>
+            {company.companyAdmin ? (
+              <dl className="flex flex-col gap-1.5 text-sm">
+                <ContactRow label="Nom">
+                  {company.companyAdmin.name}
+                  {company.companyAdmin.title && (
+                    <span className="text-text-muted"> · {company.companyAdmin.title}</span>
+                  )}
+                </ContactRow>
+                <ContactRow label="E-mail">
+                  <EmailLink email={company.companyAdmin.email} />
+                </ContactRow>
+                <ContactRow label="Téléphone">
+                  <PhoneLinks phone={company.companyAdmin.phone} />
+                </ContactRow>
+                {company.companyAdmin.country && (
+                  <ContactRow label="Pays">{company.companyAdmin.country}</ContactRow>
+                )}
+                {company.companyAdmin.linkedinUrl && (
+                  <ContactRow label="LinkedIn">
+                    <ExternalLink url={company.companyAdmin.linkedinUrl} />
+                  </ContactRow>
+                )}
+              </dl>
+            ) : (
+              <p className="text-sm text-text-muted">Aucun admin entreprise.</p>
+            )}
+          </div>
+          <div>
+            <h2 className="mb-2 text-xs font-bold uppercase text-text-muted">Entreprise</h2>
+            <dl className="flex flex-col gap-1.5 text-sm">
+              <ContactRow label="Téléphone">
+                <PhoneLinks phone={company.phone} />
+              </ContactRow>
+              <ContactRow label="Adresse">
+                {company.address ? (
+                  <span className="whitespace-pre-line">{company.address}</span>
+                ) : (
+                  <span className="text-text-muted">—</span>
+                )}
+              </ContactRow>
+              <ContactRow label="Site web">
+                {company.website ? (
+                  <ExternalLink url={company.website} />
+                ) : (
+                  <span className="text-text-muted">—</span>
+                )}
+              </ContactRow>
+              {Object.entries(socialLinks).map(([network, url]) => (
+                <ContactRow key={network} label={SOCIAL_LABEL[network] ?? network}>
+                  <ExternalLink url={url} />
+                </ContactRow>
+              ))}
+            </dl>
+          </div>
+        </div>
+        {company.additionalInfo && (
+          <div className="mt-4 border-t border-border pt-4 text-sm">
+            <h2 className="mb-1 text-xs font-bold uppercase text-text-muted">
+              Informations complémentaires
+            </h2>
+            <p className="whitespace-pre-line text-text-mid">{company.additionalInfo}</p>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-border bg-white p-6">
@@ -283,10 +383,17 @@ export default async function AdminCompanyDetailPage(props: { params: Promise<{ 
         <h2 className="mb-3 text-base font-bold text-navy">Membres ({company.users.length})</h2>
         <div className="flex flex-col gap-2">
           {company.users.map((u) => (
-            <div key={u.id} className="flex items-center justify-between text-sm">
-              <span>
-                {u.name} <span className="text-text-muted">({u.email})</span>
-              </span>
+            <div key={u.id} className="flex items-center justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p>
+                  {u.name}
+                  {u.title && <span className="text-text-muted"> · {u.title}</span>}
+                </p>
+                <p className="flex flex-wrap gap-x-3 text-xs">
+                  <EmailLink email={u.email} />
+                  {u.phone && <PhoneLinks phone={u.phone} />}
+                </p>
+              </div>
               <Badge variant={u.status === "ACTIVE" ? "active" : "pending"}>{u.status}</Badge>
             </div>
           ))}

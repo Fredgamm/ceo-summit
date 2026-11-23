@@ -13,6 +13,7 @@ import { InvitePartnerForm } from "@/components/admin/partners/invite-partner-fo
 import { PartnerInviteActions } from "@/components/admin/partners/partner-invite-actions";
 import { PaymentReminderButton } from "@/components/admin/entreprises/payment-reminder-button";
 import { COMPANY_PAYMENT_REMINDER_ACTION } from "@/lib/company-payment-reminder";
+import { EmailLink, PhoneLinks } from "@/components/admin/entreprises/contact-links";
 
 export const metadata: Metadata = { title: "Admin — Entreprises" };
 
@@ -56,7 +57,14 @@ export default async function AdminEntreprisesPage() {
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: {
       company: {
-        select: { id: true, name: true, companyAdmin: { select: { name: true, email: true } } },
+        select: {
+          id: true,
+          name: true,
+          sector: true,
+          country: true,
+          phone: true,
+          companyAdmin: { select: { name: true, email: true, title: true, phone: true } },
+        },
       },
       plan: {
         select: {
@@ -188,12 +196,12 @@ export default async function AdminEntreprisesPage() {
       {subscriptions.length === 0 ? (
         <EmptyState title="Aucune entreprise n'a encore choisi d'offre" />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-white">
+        <div className="overflow-x-auto rounded-lg border border-border bg-white">
           <table className="w-full text-sm">
             <thead className="bg-surface text-xs uppercase text-text-muted">
               <tr>
                 <th className="px-4 py-2.5 text-left">Entreprise</th>
-                <th className="px-4 py-2.5 text-left">Admin</th>
+                <th className="px-4 py-2.5 text-left">Contact</th>
                 <th className="px-4 py-2.5 text-left">Offre</th>
                 <th className="px-4 py-2.5 text-left">Statut</th>
                 <th className="px-4 py-2.5 text-left">Mise à jour</th>
@@ -203,9 +211,39 @@ export default async function AdminEntreprisesPage() {
             <tbody className="divide-y divide-border">
               {subscriptions.map((sub) => (
                 <tr key={sub.id}>
-                  <td className="px-4 py-3 font-semibold text-navy">{sub.company.name}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-navy">{sub.company.name}</p>
+                    <p className="text-xs text-text-muted">
+                      {sub.company.sector} · {sub.company.country}
+                    </p>
+                    {sub.company.phone && (
+                      <p className="text-xs">
+                        <PhoneLinks phone={sub.company.phone} />
+                      </p>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-text-mid">
-                    {sub.company.companyAdmin?.name ?? "—"}
+                    {sub.company.companyAdmin ? (
+                      <div className="flex flex-col gap-0.5">
+                        <p>
+                          {sub.company.companyAdmin.name}
+                          {sub.company.companyAdmin.title && (
+                            <span className="text-xs text-text-muted">
+                              {" "}
+                              · {sub.company.companyAdmin.title}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs">
+                          <EmailLink email={sub.company.companyAdmin.email} />
+                        </p>
+                        <p className="text-xs">
+                          <PhoneLinks phone={sub.company.companyAdmin.phone} />
+                        </p>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-4 py-3 text-text-mid">
                     {isPartnerOffer(sub.plan) ? (
