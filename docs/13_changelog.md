@@ -6,6 +6,16 @@
 
 ---
 
+## 2026-11-24 — Evolia : liste des participants refusée juste après le paiement
+
+Cas réel en production : à la confirmation d'un paiement par carte, la plateforme inscrivait les membres et envoyait la liste des participants **pendant** l'appel du webhook d'Evolia, avant de lui répondre. Pour Evolia, le paiement était donc encore en attente : liste refusée (HTTP 409 « Paiement en attente »). Elle n'est arrivée que parce que la gérante l'a validée une minute plus tard.
+
+### Corrigé
+
+- **Webhook de paiement** : les listes de participants déclenchées par la confirmation (inscription automatique des membres, supplément de places) sont mises de côté et envoyées 5 secondes **après** la réponse à Evolia (`deferParticipantPushes`, `after()`).
+- **Partout** : une liste refusée par Evolia pour paiement en attente est recalculée et renvoyée automatiquement après 30 s, 2 min puis 10 min. L'envoi refusé passe à « Non transmis », avec la raison. Si le serveur redémarre entre-temps, l'envoi reste en échec et peut être relancé depuis la fiche de l'entreprise.
+- **« Relancer » une liste depuis la fiche entreprise** : en cas d'échec, le message affiche la réponse d'Evolia au nouvel envoi, et non « Remplacé par la liste à jour ».
+
 ## 2026-11-24 — Paiement carte / Mobile Money : recommencer après un échec
 
 Un gérant qui s'était trompé en saisissant sa carte chez Evolia ne pouvait pas toujours recommencer : la page d'Evolia n'acceptait plus la même référence, et la page « Accès en attente » n'offrait aucune action.

@@ -32,6 +32,14 @@ vi.mock("@/lib/payment-confirmations", () => ({
   notifyCompanyPaymentFailed: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/evolia", () => ({
+  deferParticipantPushes: vi.fn(async (fn: () => Promise<unknown>) => ({
+    result: await fn(),
+    companyIds: [],
+  })),
+  flushDeferredParticipantPushes: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, retryAfterSec: 0 }),
 }));
@@ -48,6 +56,7 @@ import {
   notifyCompanyPaymentFailed,
 } from "@/lib/payment-confirmations";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { deferParticipantPushes, flushDeferredParticipantPushes } from "@/lib/evolia";
 import { FAILED_AT_EVOLIA_REASON } from "@/lib/payment-methods";
 
 const SECRET = "test-payment-secret";
@@ -132,6 +141,29 @@ describe("POST /api/webhooks/payments", () => {
         data: expect.objectContaining({ status: "PROCESSED" }),
       })
     );
+  });
+
+  it("envoie la liste des participants après la réponse, pas pendant (24 nov. 2026)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(deferParticipantPushes).mockImplementationOnce(async (fn) => ({
+        result: await fn(),
+        companyIds: ["company_1"],
+      }));
+      const body = JSON.stringify({
+        event: "payment.confirmed",
+        type: "company_payment",
+        reference: "payment_1",
+      });
+      const res = await POST(makeRequest(body, sign(body)));
+
+      expect(res.status).toBe(200);
+      expect(flushDeferredParticipantPushes).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(flushDeferredParticipantPushes).toHaveBeenCalledWith(["company_1"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("honours a payment the company cancelled but paid anyway at Evolia", async () => {
