@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "async_hooks";
 import { createHmac } from "crypto";
 import type { Prisma } from "@prisma/client";
 
@@ -162,9 +163,115 @@ export async function pushRegistrationToEvolia(companyPaymentId: string): Promis
   }
 }
 
+// ─── Liste envoyée trop tôt (24 nov. 2026) ────────────────────────────────
+//
+// Evolia refuse une liste (409 « Paiement en attente ») tant qu'il n'a pas
+// enregistré l'encaissement de son côté. Or la confirmation d'un paiement par
+// son webhook inscrit les membres et envoie la liste PENDANT l'appel, avant
+// notre réponse : Evolia considère alors encore le paiement en attente (cas
+// réel en production, 24 nov. 2026). Deux protections :
+// 1. pendant le webhook, les listes sont mises de côté puis envoyées après la
+//    réponse (`deferParticipantPushes`, appelé par la route) ;
+// 2. partout, une liste refusée pour paiement en attente est recalculée et
+//    renvoyée automatiquement (30 s, 2 min, 10 min).
+
+const deferredParticipantPushes = new AsyncLocalStorage<Set<string>>();
+
+/**
+ * Exécute `fn` en mettant de côté les listes de participants qu'il enverrait.
+ * Renvoie les entreprises concernées : à transmettre ensuite, une fois la
+ * réponse partie, avec `flushDeferredParticipantPushes`.
+ */
+export async function deferParticipantPushes<T>(
+  fn: () => Promise<T>
+): Promise<{ result: T; companyIds: string[] }> {
+  const companies = new Set<string>();
+  const result = await deferredParticipantPushes.run(companies, fn);
+  return { result, companyIds: [...companies] };
+}
+
+export async function flushDeferredParticipantPushes(companyIds: string[]): Promise<void> {
+  for (const companyId of companyIds) {
+    await pushParticipantsToEvolia(companyId);
+  }
+}
+
+/** Délais des nouveaux essais après un refus « paiement en attente ». */
+export const PENDING_PAYMENT_RETRY_DELAYS_MS = [30_000, 120_000, 600_000];
+const pendingRetries = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function isPendingPaymentRefusal(push: {
+  event: string;
+  httpStatus: number | null;
+  lastError: string | null;
+}): boolean {
+  return (
+    push.event === "company.participants.confirmed" &&
+    push.httpStatus === 409 &&
+    /paiement en attente/i.test(push.lastError ?? "")
+  );
+}
+
+/**
+ * Programme un nouvel essai de la liste d'une entreprise. Un seul essai en
+ * attente par entreprise : la liste est recalculée au moment de l'envoi.
+ * Perdu si le serveur redémarre entre-temps — l'envoi refusé reste alors
+ * visible et renvoyable depuis la fiche de l'entreprise.
+ */
+function scheduleParticipantsRetry(companyId: string, failedPushId: string, attempt: number) {
+  const delay = PENDING_PAYMENT_RETRY_DELAYS_MS[attempt];
+  if (delay == null) return;
+  clearTimeout(pendingRetries.get(companyId));
+  const timer = setTimeout(() => {
+    pendingRetries.delete(companyId);
+    void retryParticipantsPush(companyId, failedPushId, attempt + 1).catch((err) =>
+      console.error("[evolia] participants retry failed", err)
+    );
+  }, delay);
+  timer.unref?.();
+  pendingRetries.set(companyId, timer);
+}
+
+async function retryParticipantsPush(companyId: string, failedPushId: string, attempt: number) {
+  const failed = await prisma.evoliaPush.findUnique({
+    where: { id: failedPushId },
+    select: { status: true, createdAt: true },
+  });
+  // Renvoyé à la main entre-temps (bouton « Relancer ») : rien à faire.
+  if (!failed || failed.status !== "FAILED") return;
+  const newer = await prisma.evoliaPush.findFirst({
+    where: {
+      companyId,
+      event: "company.participants.confirmed",
+      status: "SENT",
+      createdAt: { gt: failed.createdAt },
+    },
+    select: { id: true },
+  });
+  if (!newer) await pushParticipantsToEvolia(companyId, attempt);
+  await prisma.evoliaPush.updateMany({
+    where: { id: failedPushId, status: "FAILED" },
+    data: {
+      status: "SKIPPED",
+      lastError: newer
+        ? "Remplacé par une liste plus récente, reçue par Evolia."
+        : "Paiement pas encore enregistré chez Evolia : remplacé par un nouvel essai automatique.",
+    },
+  });
+}
+
 /** `company.participants.confirmed` — la liste validée par le gérant, qui fait foi pour les badges. */
-/** Renvoie `true` si Evolia a reçu la liste (retenue, vide ou refusée : `false`). */
-export async function pushParticipantsToEvolia(companyId: string): Promise<boolean> {
+/** Renvoie `true` si Evolia a reçu la liste (retenue, vide, refusée ou différée : `false`). */
+export async function pushParticipantsToEvolia(
+  companyId: string,
+  /** Nouvel essai après un refus « paiement en attente » (0 = premier envoi). */
+  retryAttempt = 0
+): Promise<boolean> {
+  const deferred = deferredParticipantPushes.getStore();
+  if (deferred) {
+    deferred.add(companyId);
+    return false;
+  }
   try {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -208,7 +315,18 @@ export async function pushParticipantsToEvolia(companyId: string): Promise<boole
       eventDetails: eventInfo(company),
       participants,
     };
-    return await sendToEvolia(company.id, payload.event, reference, payload);
+    const ok = await sendToEvolia(company.id, payload.event, reference, payload);
+    if (!ok) {
+      const last = await prisma.evoliaPush.findFirst({
+        where: { companyId: company.id, event: payload.event },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, event: true, status: true, httpStatus: true, lastError: true },
+      });
+      if (last?.status === "FAILED" && isPendingPaymentRefusal(last)) {
+        scheduleParticipantsRetry(company.id, last.id, retryAttempt);
+      }
+    }
+    return ok;
   } catch (err) {
     console.error("[evolia] failed to build participants push", err);
     return false;
@@ -352,6 +470,12 @@ export async function releaseHeldEvoliaPushes(
   let skipped = 0;
   let deferred = 0;
 
+  // Une inscription en échec est reconstruite à partir des données actuelles
+  // plutôt que renvoyée telle quelle : son contenu enregistré date parfois d'avant
+  // une évolution de l'API d'Evolia (montant, devise, fin de l'événement…) et
+  // serait refusé à chaque fois (« Corps de requête invalide »).
+  const rebuilt = new Set<string>();
+
   for (const push of registrations) {
     const payment = push.reference
       ? await prisma.companyPayment.findUnique({
@@ -371,6 +495,39 @@ export async function releaseHeldEvoliaPushes(
       continue;
     }
     if (!(await claim(push.id, push.from))) continue;
+
+    if (push.from === "FAILED" && payment && push.reference) {
+      if (rebuilt.has(push.reference)) {
+        // Plusieurs échecs pour le même paiement : un seul envoi reconstruit suffit.
+        await setAside(push.id, "PENDING", "Doublon : remplacé par un envoi reconstruit.");
+        skipped++;
+        continue;
+      }
+      rebuilt.add(push.reference);
+      const startedAt = new Date();
+      const ok = await pushRegistrationToEvolia(push.reference);
+      const replacement = await prisma.evoliaPush.findFirst({
+        where: {
+          reference: push.reference,
+          event: "company.registration.pushed",
+          createdAt: { gte: startedAt },
+        },
+        select: { id: true },
+      });
+      if (replacement) {
+        await setAside(push.id, "PENDING", "Reconstruit avec les données à jour : nouvel envoi.");
+      } else {
+        // Rien n'a pu être reconstruit : l'envoi d'origine reste en échec, visible et renvoyable.
+        await prisma.evoliaPush.updateMany({
+          where: { id: push.id, status: "PENDING" },
+          data: { status: "FAILED", lastError: "Reconstruction impossible : données manquantes." },
+        });
+      }
+      if (ok) sent++;
+      else failed++;
+      continue;
+    }
+
     if (await deliverEvoliaPush(push.id)) sent++;
     else failed++;
   }

@@ -12,6 +12,8 @@ import {
 import { loadMeetingCalendarInput } from "@/lib/meeting-calendar";
 import { buildMeetingIcs, googleCalendarUrl } from "@/lib/meeting-ics";
 import { meetingEventIdFor } from "@/lib/meeting-participation";
+import { meetingPush } from "@/lib/meeting-push";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * Module 21 lot 7 (3 nov. 2026) — emails des rendez-vous B2B (annexe
@@ -19,6 +21,9 @@ import { meetingEventIdFor } from "@/lib/meeting-participation";
  * mieux » : un email qui ne part pas (SMTP en panne, modèle désactivé par
  * l'admin) est journalisé mais ne fait jamais échouer l'action du membre —
  * la demande, la réponse ou l'expiration sont déjà enregistrées.
+ *
+ * 4 nov. 2026 (module 24) — chaque événement part aussi en notification push
+ * vers les appareils abonnés du membre (`sendPushToUser`, même règle : au mieux).
  */
 
 /**
@@ -137,6 +142,15 @@ export async function sendMeetingRequestEmail(bookingId: string, token: string):
     declineUrl: respond("decliner"),
     expiresAt: ctx.expiresLabel,
   });
+  await sendPushToUser(
+    booking.recipient.id,
+    meetingPush("request", {
+      bookingId,
+      partnerName: cleanForEmail(booking.requester.name),
+      partnerCompany: cleanForEmail(booking.requester.company?.name),
+      when: `${shared.slotDate}, ${shared.slotTime}`,
+    })
+  );
 }
 
 /** Confirmation aux deux participants : coordonnées du partenaire et fichier .ics joint. */
@@ -178,6 +192,15 @@ export async function sendMeetingConfirmedEmails(bookingId: string): Promise<voi
           },
         ]
       );
+      await sendPushToUser(
+        self.id,
+        meetingPush("confirmed", {
+          bookingId,
+          partnerName: cleanForEmail(partner.name),
+          partnerCompany: cleanForEmail(partner.companyName),
+          when: `${shared.slotDate}, ${shared.slotTime}`,
+        })
+      );
     } catch (err) {
       console.error(`[meeting-email] confirmation non préparée pour ${self.id}`, err);
     }
@@ -197,6 +220,15 @@ export async function sendMeetingDeclinedEmail(bookingId: string): Promise<void>
     directoryUrl: `${appUrl()}/catalogue`,
     responseMessageSentence: responseMessageSentence(booking.responseMessage),
   });
+  await sendPushToUser(
+    booking.requester.id,
+    meetingPush("declined", {
+      bookingId,
+      partnerName: cleanForEmail(booking.recipient.name),
+      partnerCompany: cleanForEmail(booking.recipient.company?.name),
+      message: cleanForEmail(booking.responseMessage) || null,
+    })
+  );
 }
 
 /**
@@ -215,6 +247,14 @@ export async function sendMeetingPartnerMessageEmail(bookingId: string): Promise
     message: cleanForEmail(booking.responseMessage),
     conversationUrl: `${appUrl()}/messagerie?new=${booking.recipient.id}`,
   });
+  await sendPushToUser(
+    booking.requester.id,
+    meetingPush("partner-message", {
+      bookingId,
+      partnerName: cleanForEmail(booking.recipient.name),
+      message: cleanForEmail(booking.responseMessage),
+    })
+  );
 }
 
 /** Expiration : prévient les deux personnes. */
@@ -236,6 +276,22 @@ export async function sendMeetingExpiredEmails(bookingId: string): Promise<void>
     requesterCompany: cleanForEmail(booking.requester.company?.name),
     requesterProfileUrl: profileUrl(booking.requester.id),
   });
+  await sendPushToUser(
+    booking.requester.id,
+    meetingPush("expired-requester", {
+      bookingId,
+      partnerName: cleanForEmail(booking.recipient.name),
+      partnerCompany: cleanForEmail(booking.recipient.company?.name),
+    })
+  );
+  await sendPushToUser(
+    booking.recipient.id,
+    meetingPush("expired-recipient", {
+      bookingId,
+      partnerName: cleanForEmail(booking.requester.name),
+      partnerCompany: cleanForEmail(booking.requester.company?.name),
+    })
+  );
 }
 
 /**
@@ -264,6 +320,16 @@ export async function sendMeetingCancelledEmails(
         statusSentence,
         directoryUrl: `${appUrl()}/catalogue`,
       });
+      await sendPushToUser(
+        self.id,
+        meetingPush("cancelled", {
+          bookingId: id,
+          partnerName: cleanForEmail(other.name),
+          partnerCompany: cleanForEmail(other.company?.name),
+          when: `${shared.slotDate}, ${shared.slotTime}`,
+          wasConfirmed,
+        })
+      );
     }
   }
 }
@@ -306,6 +372,7 @@ export async function sendMeetingSlotsOpenEmails(eventId: string): Promise<numbe
           timezoneLabel: timezoneLabel(event.timezone),
           mySlotsUrl: `${appUrl()}/profil?onglet=creneaux`,
         });
+        await sendPushToUser(user.id, meetingPush("slots-open", { eventTitle: event.title }));
       })
     );
   }

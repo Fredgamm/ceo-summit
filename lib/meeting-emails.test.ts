@@ -11,12 +11,14 @@ vi.mock("@/lib/email-template-resolver", () => ({ resolveEmail: vi.fn() }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn() }));
 vi.mock("@/lib/meeting-calendar", () => ({ loadMeetingCalendarInput: vi.fn() }));
 vi.mock("@/lib/meeting-participation", () => ({ meetingEventIdFor: vi.fn() }));
+vi.mock("@/lib/push", () => ({ sendPushToUser: vi.fn() }));
 
 import { prisma } from "@/lib/prisma";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { loadMeetingCalendarInput } from "@/lib/meeting-calendar";
 import { meetingEventIdFor } from "@/lib/meeting-participation";
+import { sendPushToUser } from "@/lib/push";
 import {
   cleanForEmail,
   firstNameOf,
@@ -115,6 +117,29 @@ describe("meeting emails", () => {
       /\/rendez-vous\/repondre\/TOKEN123\?choix=decliner$/
     );
     expect(JSON.stringify(variables)).not.toMatch(/phone|téléphone|\+262/i);
+  });
+
+  it("request: also pushes a notification to the recipient's devices, never the requester's", async () => {
+    await sendMeetingRequestEmail("b1", "TOKEN123");
+
+    expect(sendPushToUser).toHaveBeenCalledTimes(1);
+    expect(sendPushToUser).toHaveBeenCalledWith(
+      "paul",
+      expect.objectContaining({
+        title: "Nouvelle demande de rendez-vous",
+        body: expect.stringContaining("Marie Andrianina"),
+        url: "/profil?onglet=mes-rendez-vous",
+      })
+    );
+  });
+
+  it("declined: pushes to the requester", async () => {
+    await sendMeetingDeclinedEmail("b1");
+
+    expect(sendPushToUser).toHaveBeenCalledWith(
+      "marie",
+      expect.objectContaining({ title: "Demande de rendez-vous refusée" })
+    );
   });
 
   it("request: a motif typed with markdown cannot become a link in the email", async () => {

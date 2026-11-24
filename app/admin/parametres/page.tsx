@@ -32,6 +32,36 @@ const TABS = [
  * Accès restreint à SUPER_ADMIN (voir lib/admin-rbac.ts — "parametres"
  * n'apparaît dans aucune autre liste de sections).
  */
+/**
+ * Résultat de la dernière « Transmission des envois retenus » (journal d'audit) et
+ * dernière erreur renvoyée par Evolia : la transmission tourne en arrière-plan,
+ * l'admin doit pouvoir voir ce qu'elle a donné sans consulter les journaux.
+ */
+async function loadLastEvoliaRelease() {
+  const [audit, failure] = await Promise.all([
+    prisma.auditLog.findFirst({
+      where: { action: "evolia_push.release" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, metadata: true },
+    }),
+    prisma.evoliaPush.findFirst({
+      where: { status: "FAILED" },
+      orderBy: { updatedAt: "desc" },
+      select: { lastError: true },
+    }),
+  ]);
+  const m = (audit?.metadata ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  return {
+    at: audit ? audit.createdAt.toISOString() : null,
+    sent: num(m.sent),
+    failed: num(m.failed),
+    skipped: num(m.skipped),
+    deferred: num(m.deferred),
+    lastError: failure?.lastError ?? null,
+  };
+}
+
 export default async function AdminParametresPage(props: {
   searchParams: Promise<{ tab?: string }>;
 }) {
@@ -171,6 +201,7 @@ export default async function AdminParametresPage(props: {
               OR: [{ status: "HELD" }, { status: "FAILED", event: "company.registration.pushed" }],
             },
           })}
+          lastRelease={await loadLastEvoliaRelease()}
         />
         <BrevoSettings status={brevoStatus} />
         <IntegrationCard

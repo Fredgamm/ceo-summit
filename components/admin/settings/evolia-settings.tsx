@@ -29,10 +29,20 @@ const SOURCE_LABEL: Record<SettingSource, string> = {
 export function EvoliaSettings({
   status,
   heldCount,
+  lastRelease,
 }: {
   status: EvoliaSettingsStatus;
   /** Envois retenus, et inscriptions en échec (réessayées par « Transmettre »). */
   heldCount: number;
+  /** Résultat de la dernière transmission et dernière erreur d'Evolia. */
+  lastRelease: {
+    at: string | null;
+    sent: number;
+    failed: number;
+    skipped: number;
+    deferred: number;
+    lastError: string | null;
+  };
 }) {
   const router = useRouter();
   const [registrationUrl, setRegistrationUrl] = React.useState(status.registrationUrl.value);
@@ -216,6 +226,26 @@ export function EvoliaSettings({
               >
                 {transmitting ? "Transmission…" : "Transmettre les envois retenus"}
               </Button>
+            </div>
+          )}
+          {status.live && lastRelease.at && (
+            <div className="mt-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-mid">
+              <p className="font-semibold text-navy">
+                Dernière transmission :{" "}
+                {new Date(lastRelease.at).toLocaleString("fr-FR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </p>
+              <p>
+                {lastRelease.sent} accepté(s) par Evolia · {lastRelease.failed} refusé(s) ·{" "}
+                {lastRelease.skipped} écarté(s) · {lastRelease.deferred} en attente
+              </p>
+              {lastRelease.failed > 0 && lastRelease.lastError && (
+                <p className="mt-1 break-words">
+                  Dernière réponse d&apos;Evolia : <em>{lastRelease.lastError}</em>
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -226,6 +226,7 @@ model User {
   reportsFiled                 RoomReport[]             @relation("ReportedBy")
   auditLogsAsAdmin             AuditLog[]               @relation("AuditActor")
   meetingSlots                 MeetingParticipantSlot[]
+  pushSubscriptions            PushSubscription[]
   meetingRequestsSent          MeetingBooking[]         @relation("MeetingRequester")
   meetingRequestsReceived      MeetingBooking[]         @relation("MeetingRecipient")
 
@@ -1358,4 +1359,22 @@ model EventAttachment {
   createdAt DateTime @default(now())
 
   @@index([eventId, position])
+}
+
+/// Notifications push de la PWA (module 22) : un appareil (navigateur ou application
+/// installée) abonné par un membre. Un membre peut en avoir plusieurs (téléphone, ordinateur).
+/// `endpoint` est l'adresse du service de push du navigateur ; `p256dh` et `auth` sont les
+/// clés publiques qui chiffrent le message pour cet appareil seulement.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
 }

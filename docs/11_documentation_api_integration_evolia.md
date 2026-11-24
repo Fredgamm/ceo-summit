@@ -108,7 +108,8 @@ Depuis le 21 octobre 2026, un `payment.failed` sur un paiement d'entreprise (`"t
 ```
 
 - Même signature, même clé et mêmes codes de réponse que `payment.confirmed`. `200` = paiement annulé ; `409` = référence inconnue ou paiement déjà confirmé / déjà annulé.
-- **À envoyer quand le client annule sur votre page ou que le paiement est refusé.** Sans lui, le paiement reste « en cours » chez nous jusqu'à ce que le gestionnaire l'annule lui-même (bouton « Changer de mode de paiement », voir §3).
+- **À envoyer quand la référence est définitivement abandonnée** : le client annule sur votre page, la référence expire, ou il ne peut plus réessayer chez vous. Tant qu'il peut encore réessayer sur votre page (carte refusée, erreur de saisie), il vaut mieux ne pas l'envoyer. Sans lui, le paiement reste « en cours » chez nous jusqu'à ce que le gestionnaire le relance ou l'annule lui-même (voir §3). Le gestionnaire reçoit un e-mail avec le lien pour recommencer (depuis le 24 novembre 2026).
+- **Champ facultatif `reason`** (depuis le 24 novembre 2026), 200 caractères au plus, par exemple `card_declined`, `cancelled_by_user`, `expired`, `mobile_money_timeout`. Il est conservé dans notre journal ; un motif absent ou inconnu ne change rien au traitement.
 - Une **confirmation envoyée ensuite** pour la même référence (`payment.confirmed`) **reste acceptée** : le client a bien payé, l'accès s'active. Si l'offre avait entre-temps été réglée autrement, le doublon est signalé à l'équipe CEO Summit pour remboursement.
 
 ### Environnement de test
@@ -127,6 +128,8 @@ https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}
 
 Evolia encaisse le paiement et confirme via le webhook de l'échange 2 (§2) une fois le paiement reçu. Tant que cette confirmation n'est pas arrivée, l'espace CEO Summit du gestionnaire lui propose un lien « Reprendre le paiement » vers la même page (paiement interrompu, onglet fermé…) : la page doit donc rester utilisable pour une même `ceoSummitReference` tant qu'elle n'a pas été payée.
 
+**Recommencer sous une nouvelle référence (24 novembre 2026) :** le gestionnaire peut aussi choisir « Réessayer avec une autre carte ou un autre numéro ». L'ancienne `ceoSummitReference` est alors annulée chez nous, et une nouvelle inscription vous est transmise (`company.registration.pushed`, **même `companyId`, nouvelle `ceoSummitReference`**), suivie d'une redirection vers la page de paiement de cette nouvelle référence. Ce second envoi ne doit pas être rejeté comme doublon. Une confirmation reçue malgré tout pour l'ancienne référence reste acceptée, et un éventuel double paiement nous est signalé pour remboursement.
+
 **Changement de mode de paiement :** à tout moment avant votre confirmation, le gestionnaire peut aussi annuler ce paiement depuis son espace pour en choisir un autre (bouton « Changer de mode de paiement », disponible immédiatement depuis le 21 octobre 2026). La `ceoSummitReference` est alors annulée chez nous ; une confirmation reçue malgré tout pour elle reste acceptée (voir §2, « Annulation ou échec du paiement »).
 
 **Retour vers CEO Summit après paiement :** une fois le paiement finalisé sur votre page, redirigez le gestionnaire vers :
@@ -136,6 +139,14 @@ https://app.ceo-summit.mg/entreprise/paiement/confirmation?ref={ceoSummitReferen
 ```
 
 Cette page attend que votre confirmation (§2) soit enregistrée, quelques secondes au plus, puis ouvre l'espace du gestionnaire sur la désignation des participants à l'événement. Elle fonctionne même si la redirection précède votre webhook. Cette redirection ne remplace pas le webhook : c'est lui seul qui active l'accès.
+
+**Retour après un échec (24 novembre 2026) :** merci d'y renvoyer aussi le gestionnaire quand le paiement n'aboutit pas, avec le statut :
+
+```
+https://app.ceo-summit.mg/entreprise/paiement/confirmation?ref={ceoSummitReference}&status=failed
+```
+
+(`status=cancelled` si le client a lui-même annulé.) La page affiche alors « Paiement non abouti » et propose de reprendre le paiement, de recommencer avec une autre carte ou un autre numéro, ou de payer par virement. Ce paramètre n'annule rien chez nous : seul `payment.failed` (§2) annule la référence. Sans statut, ces mêmes choix s'affichent si votre confirmation n'est pas arrivée au bout de 30 secondes.
 
 ### Endpoint et authentification
 

@@ -12,7 +12,7 @@ import {
 } from "@/lib/event-timezone";
 import { eventDayKeys } from "@/lib/meeting-slots";
 import { MEETING_EVENT_TYPE } from "@/lib/meeting-participation";
-import { formatDateFr } from "@/lib/utils";
+import { cn, formatDateFr } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,15 +26,60 @@ import { MeetingPublishButton } from "@/components/admin/meetings/meeting-publis
 export const metadata: Metadata = { title: "Admin — Créneaux rendez-vous" };
 
 const SLOT_BADGE = {
-  DRAFT: { variant: "draft", label: "Brouillon" },
-  PUBLISHED: { variant: "active", label: "Publié" },
+  DRAFT: { variant: "draft", label: "Pas encore publié" },
+  PUBLISHED: { variant: "active", label: "Visible" },
   DISABLED: { variant: "refused", label: "Désactivé" },
 } as const;
+
+type StepState = "done" | "current" | "todo";
+
+/** Pastille numérotée d'une étape : ✓ quand elle est faite. */
+function StepNumber({ n, state }: { n: number; state: StepState }) {
+  return (
+    <span
+      className={cn(
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+        state === "done" && "bg-emerald-600 text-white",
+        state === "current" && "bg-navy text-white",
+        state === "todo" && "border border-border bg-white text-text-muted"
+      )}
+      aria-hidden
+    >
+      {state === "done" ? "✓" : n}
+    </span>
+  );
+}
+
+function StepTitle({
+  n,
+  state,
+  title,
+  hint,
+}: {
+  n: number;
+  state: StepState;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <StepNumber n={n} state={state} />
+      <div>
+        <CardTitle>
+          Étape {n} · {title}
+        </CardTitle>
+        <p className="mt-1 text-sm font-normal text-text-muted">{hint}</p>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Module 21 lot 2 (8 oct. 2026) — créneaux de rendez-vous B2B d'un
  * événement (conception/21 §3.0 étape 4, P1). Option distincte du
  * Programme (agenda multi-salles). Heures dans le fuseau de l'événement.
+ * 5 nov. 2026 : page réorganisée en 3 étapes guidées (lieu, horaires,
+ * publication) avec leur avancement, pour être comprise sans mode d'emploi.
  */
 export default async function EventMeetingSlotsPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -97,57 +142,61 @@ export default async function EventMeetingSlotsPage(props: { params: Promise<{ i
     slotsByDay.set(key, [...(slotsByDay.get(key) ?? []), slot]);
   }
 
+  // Avancement : chaque étape est « faite », « en cours » ou « à venir ».
+  const step1: StepState = setup ? "done" : "current";
+  const step2: StepState = !setup ? "todo" : slots.length > 0 ? "done" : "current";
+  const step3: StepState =
+    slots.length === 0 ? "todo" : published && draftCount === 0 ? "done" : "current";
+
+  const statusText = published
+    ? `Publié${setup?.publishedAt ? ` depuis le ${formatDateFr(setup.publishedAt, event.timezone)}` : ""} : les participants voient les créneaux et peuvent se demander des rendez-vous.`
+    : "Pas encore publié : les participants ne voient encore rien.";
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link href={`/admin/evenements/${event.id}/editer`} className="text-sm text-text-muted">
-            ← {event.title}
+      <div>
+        <Link href={`/admin/evenements/${event.id}/editer`} className="text-sm text-text-muted">
+          ← {event.title}
+        </Link>
+        <h1 className="text-xl font-bold text-navy">Créneaux de rendez-vous B2B</h1>
+        <p className="mt-1 max-w-3xl text-sm text-text-mid">
+          Ici, vous choisissez <strong>où</strong> et <strong>à quelles heures</strong> les
+          participants pourront se rencontrer en tête-à-tête pendant l&apos;événement. Une fois
+          publiés, les {event._count.registrations} participants inscrits verront ces créneaux et
+          pourront se demander des rendez-vous.
+        </p>
+        <p className="mt-1 text-xs text-text-muted">
+          Toutes les heures sont en {tzLabel} ·{" "}
+          <Link
+            href={`/admin/evenements/${event.id}/editer`}
+            className="font-semibold text-navy-mid"
+          >
+            Changer le fuseau horaire →
           </Link>
-          <h1 className="text-xl font-bold text-navy">Créneaux rendez-vous</h1>
-          <p className="text-xs text-text-muted">
-            Horaires en {tzLabel} ·{" "}
-            <Link
-              href={`/admin/evenements/${event.id}/editer`}
-              className="font-semibold text-navy-mid"
-            >
-              Modifier le fuseau dans l&apos;événement →
-            </Link>
-          </p>
-        </div>
-        {setup && editable && (
-          <MeetingPublishButton
-            eventId={event.id}
-            draftCount={draftCount}
-            alreadyPublished={published}
-          />
-        )}
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-border bg-white p-4">
-          <p className="text-2xl font-bold text-navy">{slots.length}</p>
-          <p className="text-sm text-text-muted">Créneaux</p>
-        </div>
-        <div className="rounded-lg border border-border bg-white p-4">
-          <p className="text-2xl font-bold text-navy">{days.length}</p>
-          <p className="text-sm text-text-muted">Jour(s) d&apos;événement</p>
-        </div>
-        <div className="rounded-lg border border-border bg-white p-4">
-          <p className="text-2xl font-bold text-navy">{event._count.registrations}</p>
-          <p className="text-sm text-text-muted">Participants inscrits</p>
-        </div>
-        <div className="rounded-lg border border-border bg-white p-4">
-          <p className="text-sm font-bold text-navy">
-            {published ? "Publié" : setup ? "Brouillon" : "Non configuré"}
-          </p>
-          <p className="text-sm text-text-muted">
-            {published && setup?.publishedAt
-              ? `depuis le ${formatDateFr(setup.publishedAt, event.timezone)}`
-              : "Statut"}
-          </p>
-        </div>
-      </div>
+      {editable && (
+        <ol className="grid gap-2 sm:grid-cols-3">
+          {[
+            { n: 1, state: step1, label: "Indiquer le lieu" },
+            { n: 2, state: step2, label: "Choisir les horaires" },
+            { n: 3, state: step3, label: "Publier" },
+          ].map((s) => (
+            <li
+              key={s.n}
+              className={cn(
+                "flex items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm",
+                s.state === "current" ? "border-navy font-semibold text-navy" : "border-border",
+                s.state === "todo" && "text-text-muted"
+              )}
+            >
+              <StepNumber n={s.n} state={s.state} />
+              {s.label}
+            </li>
+          ))}
+        </ol>
+      )}
 
       {notSummit && (
         <Alert>
@@ -177,7 +226,12 @@ export default async function EventMeetingSlotsPage(props: { params: Promise<{ i
       {editable && (
         <Card>
           <CardHeader>
-            <CardTitle>1. Zone RDV</CardTitle>
+            <StepTitle
+              n={1}
+              state={step1}
+              title="Où ont lieu les rendez-vous ?"
+              hint="L'endroit où les participants se retrouvent sur place."
+            />
           </CardHeader>
           <CardContent>
             <MeetingSetupForm
@@ -192,42 +246,94 @@ export default async function EventMeetingSlotsPage(props: { params: Promise<{ i
         </Card>
       )}
 
-      {setup && editable && (
-        <Card>
+      {editable && (
+        <Card className={cn(!setup && "opacity-60")}>
           <CardHeader>
-            <CardTitle>2. Générer les créneaux</CardTitle>
+            <StepTitle
+              n={2}
+              state={step2}
+              title="À quelles heures ?"
+              hint="Indiquez une ou plusieurs plages horaires : chacune est découpée automatiquement en rendez-vous."
+            />
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <MeetingGridForm
-              eventId={event.id}
-              eventDays={days}
-              defaultDuration={setup.slotDurationMinutes}
-              timeZone={event.timezone}
-              published={published}
-              draftCount={draftCount}
-            />
-            <div className="border-t border-border pt-4">
-              <p className="mb-2 text-sm font-semibold text-navy">
-                Ou ajouter un créneau à la main
-              </p>
-              <MeetingSlotAddForm eventId={event.id} eventDays={days} />
-            </div>
+            {setup ? (
+              <>
+                <MeetingGridForm
+                  eventId={event.id}
+                  eventDays={days}
+                  defaultDuration={setup.slotDurationMinutes}
+                  timeZone={event.timezone}
+                  published={published}
+                  draftCount={draftCount}
+                />
+                <details className="border-t border-border pt-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-navy-mid">
+                    Besoin d&apos;un créneau en dehors de ces horaires ? Ajoutez-le à la main
+                  </summary>
+                  <div className="mt-3">
+                    <MeetingSlotAddForm eventId={event.id} eventDays={days} />
+                  </div>
+                </details>
+              </>
+            ) : (
+              <p className="text-sm text-text-muted">Enregistrez d&apos;abord le lieu (étape 1).</p>
+            )}
           </CardContent>
         </Card>
       )}
 
-      <Card>
+      <Card className={cn(editable && slots.length === 0 && "opacity-60")}>
         <CardHeader>
-          <CardTitle>{setup && editable ? "3. Créneaux" : "Créneaux"}</CardTitle>
+          {editable ? (
+            <StepTitle
+              n={3}
+              state={step3}
+              title="Vérifier et publier"
+              hint={
+                slots.length === 0
+                  ? "Les créneaux créés apparaîtront ici."
+                  : "Vérifiez la liste, retirez ce qui ne convient pas, puis publiez."
+              }
+            />
+          ) : (
+            <CardTitle>Créneaux</CardTitle>
+          )}
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          {slots.length > 0 && (
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4",
+                published && draftCount === 0
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-gold bg-gold-pale"
+              )}
+            >
+              <p className="text-sm text-text-mid">
+                <strong className="text-navy">{slots.length} créneau(x)</strong> sur{" "}
+                {slotsByDay.size} jour(s). {statusText}
+                {published && draftCount > 0 && (
+                  <> {draftCount} nouveau(x) créneau(x) reste(nt) à publier.</>
+                )}
+              </p>
+              {setup && editable && (
+                <MeetingPublishButton
+                  eventId={event.id}
+                  draftCount={draftCount}
+                  alreadyPublished={published}
+                />
+              )}
+            </div>
+          )}
+
           {slots.length === 0 ? (
             <EmptyState
-              title="Aucun créneau"
+              title="Aucun créneau pour l'instant"
               description={
                 setup
-                  ? "Générez la grille ou ajoutez un créneau à la main."
-                  : "Enregistrez d'abord la zone RDV."
+                  ? "Choisissez les horaires à l'étape 2 puis cliquez sur « Créer ces créneaux »."
+                  : "Commencez par indiquer le lieu des rendez-vous (étape 1)."
               }
             />
           ) : (
@@ -254,10 +360,13 @@ export default async function EventMeetingSlotsPage(props: { params: Promise<{ i
                               {formatTimeRangeInZone(slot.startTime, slot.endTime, event.timezone)}
                             </span>
                             <Badge variant={badge.variant}>{badge.label}</Badge>
-                            <span className="text-xs text-text-muted">
-                              {slot._count.participantSlots} disponible(s) · {pending} en attente ·{" "}
-                              {confirmed} confirmé(s)
-                            </span>
+                            {slot.status === "PUBLISHED" && (
+                              <span className="text-xs text-text-muted">
+                                {slot._count.participantSlots} participant(s) disponible(s) ·{" "}
+                                {pending} demande(s) en attente · {confirmed} rendez-vous
+                                confirmé(s)
+                              </span>
+                            )}
                           </div>
                           <MeetingSlotActions
                             slotId={slot.id}

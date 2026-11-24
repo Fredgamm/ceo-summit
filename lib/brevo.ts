@@ -94,8 +94,17 @@ function describeBrevoFailure(status: number, body: string): string {
   } catch {
     detail = body.slice(0, 300);
   }
-  if (status === 401)
-    return "Clé d'API Brevo refusée : vérifiez-la dans Paramètres › Intégrations.";
+  if (status === 401) {
+    // 26 oct. 2026 — Brevo bloque par défaut les appels d'une IP inconnue,
+    // avec une clé pourtant valide : à autoriser dans son compte.
+    const ip = /unrecogni[sz]ed IP address\s+([0-9a-f.:]+)/i
+      .exec(detail)?.[1]
+      ?.replace(/[.:]+$/, "");
+    if (ip) {
+      return `Brevo bloque l'adresse IP du serveur (${ip}) : ajoutez-la dans Brevo › Sécurité › IP autorisées (app.brevo.com/security/authorised_ips).`;
+    }
+    return `Clé d'API Brevo refusée : vérifiez-la dans Paramètres › Intégrations${detail ? ` (Brevo : ${detail})` : "."}`;
+  }
   if (status === 402) return "Crédits d'envoi Brevo épuisés : rechargez le compte Brevo.";
   if (/sender/i.test(detail)) {
     return `Expéditeur refusé par Brevo : l'adresse doit être validée dans votre compte Brevo (${detail}).`;

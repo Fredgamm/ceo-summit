@@ -6,9 +6,40 @@
 
 ---
 
+## 2026-11-24 — Evolia : liste des participants refusée juste après le paiement
+
+Cas réel en production : à la confirmation d'un paiement par carte, la plateforme inscrivait les membres et envoyait la liste des participants **pendant** l'appel du webhook d'Evolia, avant de lui répondre. Pour Evolia, le paiement était donc encore en attente : liste refusée (HTTP 409 « Paiement en attente »). Elle n'est arrivée que parce que la gérante l'a validée une minute plus tard.
+
+### Corrigé
+
+- **Webhook de paiement** : les listes de participants déclenchées par la confirmation (inscription automatique des membres, supplément de places) sont mises de côté et envoyées 5 secondes **après** la réponse à Evolia (`deferParticipantPushes`, `after()`).
+- **Partout** : une liste refusée par Evolia pour paiement en attente est recalculée et renvoyée automatiquement après 30 s, 2 min puis 10 min. L'envoi refusé passe à « Non transmis », avec la raison. Si le serveur redémarre entre-temps, l'envoi reste en échec et peut être relancé depuis la fiche de l'entreprise.
+- **« Relancer » une liste depuis la fiche entreprise** : en cas d'échec, le message affiche la réponse d'Evolia au nouvel envoi, et non « Remplacé par la liste à jour ».
+
+## 2026-11-24 — Paiement carte / Mobile Money : recommencer après un échec
+
+Un gérant qui s'était trompé en saisissant sa carte chez Evolia ne pouvait pas toujours recommencer : la page d'Evolia n'acceptait plus la même référence, et la page « Accès en attente » n'offrait aucune action.
+
+### Ajouté
+
+- **« Réessayer avec une autre carte ou un autre numéro »** (étape Paiement, supplément de places, page de retour Evolia) : annule le paiement en cours et relance le même mode sous une nouvelle référence, avec les contrôles d'un premier paiement (`retryEvoliaPayment`). Aussi possible après un `payment.failed`. Une confirmation tardive de l'ancienne référence reste honorée.
+- **E-mail « Votre paiement n'a pas abouti »** (`company-payment-failed`, modifiable dans Admin › Emails), envoyé au gérant sur `payment.failed`, avec le lien pour recommencer.
+- **Champ facultatif `reason`** sur `payment.failed` (journalisé).
+- **Page de retour Evolia** : `&status=failed` ou `cancelled` affiche « Paiement non abouti » et les choix ; sans statut, ces choix apparaissent après 30 secondes d'attente.
+
+### Modifié
+
+- **« Accès en attente »** : le gérant qui a un paiement Evolia en cours est renvoyé vers l'étape Paiement (reprendre, recommencer, payer autrement) ; ses collaborateurs voient « Paiement en cours chez Evolia ».
+- Boutons renommés : « Reprendre le paiement », « Réessayer avec une autre carte ou un autre numéro », « Payer autrement (virement, chèque) ».
+- Documentation Evolia (`docs/11`) : nouvelle référence pour une nouvelle tentative, retour après échec, quand envoyer `payment.failed`.
+
+---
+
 ## 2026-11-03 — Rendez-vous B2B : suite du module 21 (réponses, emails, suivi admin)
 
 **Profil membre (mobile) et « Mes rendez-vous ».** Quatre onglets sur une ligne (Profil, Entreprise, Opportunités, Services) ; « Rendez-vous » devient un bouton de l'en-tête (avec pastille des demandes en attente) et un élément du menu « Profil » ; « Mes créneaux » est une vue « Demandes | Mes créneaux ». Le bureau garde ses onglets. Cartes de rendez-vous refaites (tuile de date, heure en grand, statut coloré, motif en citation, lieu, échéance, contacts et boutons larges) ; filtres vides masqués.
+
+**Notifications push de la PWA (module 24, local).** Carte « Activer les notifications » sur la page Notifications ; push pour chaque événement du module Rendez-vous (demande, confirmation, refus, expiration, annulation, mot du partenaire, créneaux ouverts). Nouvelle table `PushSubscription`, dépendance `web-push`, clés VAPID à créer par instance. Voir `docs/24_notifications_push_pwa.md`.
 
 Pas encore déployé à la date de cette entrée. Développé en local sur la branche `feat/rdv-b2b-v1-suite` (partie de `production`) ; la recette (lot 10) reste à faire. Voir `docs/21_rdv_b2b_specification_integration.md` §9 pour l'avancement détaillé.
 

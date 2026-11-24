@@ -23,8 +23,12 @@ vi.mock("@/lib/prisma", () => ({
 
 import { prisma } from "@/lib/prisma";
 import {
+  deferParticipantPushes,
   deliverEvoliaPush,
   evoliaPaymentUrl,
+  flushDeferredParticipantPushes,
+  isPendingPaymentRefusal,
+  PENDING_PAYMENT_RETRY_DELAYS_MS,
   pushParticipantsToEvolia,
   pushRegistrationToEvolia,
   releaseHeldEvoliaPushes,
@@ -190,6 +194,106 @@ describe("pushParticipantsToEvolia", () => {
       ],
     });
     expect(pushedPayload().payload).not.toHaveProperty("paymentMethod");
+  });
+});
+
+describe("liste refusée pour paiement en attente (24 nov. 2026)", () => {
+  const PENDING_ERROR =
+    '{"error":"Paiement en attente — la liste des participants ne peut pas être validée avant encaissement (référence(s) en attente : payment_1)"}';
+
+  beforeEach(() => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
+    ] as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("met la liste de côté pendant un appel différé, sans rien envoyer", async () => {
+    const { result, companyIds } = await deferParticipantPushes(async () => {
+      await pushParticipantsToEvolia("company_1");
+      await pushParticipantsToEvolia("company_1");
+      return "ok";
+    });
+
+    expect(result).toBe("ok");
+    expect(companyIds).toEqual(["company_1"]);
+    expect(prisma.evoliaPush.create).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await flushDeferredParticipantPushes(companyIds);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("renvoie la liste recalculée 30 s après un refus « paiement en attente »", async () => {
+    vi.useFakeTimers();
+    const failedAt = new Date("2026-11-24T07:06:29Z");
+    vi.mocked(prisma.evoliaPush.findUnique).mockImplementation((async (args: {
+      select?: unknown;
+    }) => {
+      if (args.select) return { status: "FAILED", createdAt: failedAt };
+      const created = vi.mocked(prisma.evoliaPush.create).mock.calls.at(-1)?.[0] as {
+        data: { payload: unknown };
+      };
+      return { id: "push_1", payload: created.data.payload };
+    }) as never);
+    vi.mocked(prisma.evoliaPush.findFirst)
+      .mockResolvedValueOnce({
+        id: "push_1",
+        event: "company.participants.confirmed",
+        status: "FAILED",
+        httpStatus: 409,
+        lastError: PENDING_ERROR,
+      } as never)
+      .mockResolvedValueOnce(null); // aucune liste plus récente reçue entre-temps
+    fetchMock
+      .mockResolvedValueOnce(new Response(PENDING_ERROR, { status: 409 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+
+    expect(await pushParticipantsToEvolia("company_1")).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(PENDING_PAYMENT_RETRY_DELAYS_MS[0]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(prisma.evoliaPush.updateMany).toHaveBeenCalledWith({
+      where: { id: "push_1", status: "FAILED" },
+      data: expect.objectContaining({ status: "SKIPPED" }),
+    });
+  });
+
+  it("ne réessaie pas un autre refus", async () => {
+    vi.useFakeTimers();
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValueOnce({
+      id: "push_1",
+      event: "company.participants.confirmed",
+      status: "FAILED",
+      httpStatus: 422,
+      lastError: '{"error":"Corps de requête invalide"}',
+    } as never);
+    fetchMock.mockResolvedValueOnce(new Response("invalide", { status: 422 }));
+
+    await pushParticipantsToEvolia("company_1");
+    await vi.advanceTimersByTimeAsync(PENDING_PAYMENT_RETRY_DELAYS_MS.at(-1)! * 2);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconnaît le refus « paiement en attente » d'Evolia", () => {
+    const push = { event: "company.participants.confirmed", httpStatus: 409 };
+    expect(isPendingPaymentRefusal({ ...push, lastError: PENDING_ERROR })).toBe(true);
+    expect(isPendingPaymentRefusal({ ...push, lastError: "Conflit" })).toBe(false);
+    expect(
+      isPendingPaymentRefusal({
+        ...push,
+        event: "company.registration.pushed",
+        lastError: PENDING_ERROR,
+      })
+    ).toBe(false);
   });
 });
 
@@ -537,6 +641,56 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
 
     expect(result).toEqual({ sent: 0, failed: 0, skipped: 0, deferred: 1 });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rebuilds a failed registration from current data instead of resending the stale one", async () => {
+    // Deux échecs pour le même paiement, dont le contenu enregistré date d'avant l'API actuelle.
+    vi.mocked(prisma.evoliaPush.findMany)
+      .mockResolvedValueOnce([] as never) // retenus
+      .mockResolvedValueOnce([
+        { id: "old_1", reference: "payment_1" },
+        { id: "old_2", reference: "payment_1" },
+      ] as never); // inscriptions en échec
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...payment(),
+      status: "CONFIRMED",
+    } as never);
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue({ id: "push_1" } as never);
+
+    const result = await releaseHeldEvoliaPushes({ retryFailedRegistrations: true });
+
+    // Un seul nouvel envoi, avec le montant et la devise que l'ancien n'avait pas.
+    expect(prisma.evoliaPush.create).toHaveBeenCalledTimes(1);
+    expect(pushedPayload().payload).toMatchObject({
+      paymentMethod: "evolia",
+      amountDue: 12_500_000,
+      currency: "MGA",
+    });
+    expect(result).toEqual({ sent: 1, failed: 0, skipped: 1, deferred: 0 });
+    const setAside = vi
+      .mocked(prisma.evoliaPush.updateMany)
+      .mock.calls.filter(([args]) => args.data.status === "SKIPPED")
+      .map(([args]) => (args.where as { id: string }).id);
+    expect(setAside.sort()).toEqual(["old_1", "old_2"]);
+  });
+
+  it("keeps the failed registration as is when nothing could be rebuilt", async () => {
+    vi.mocked(prisma.evoliaPush.findMany)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([{ id: "old_1", reference: "payment_1" }] as never);
+    vi.mocked(prisma.companyPayment.findUnique)
+      .mockResolvedValueOnce({ status: "CONFIRMED" } as never) // contrôle du paiement
+      .mockResolvedValueOnce(null as never); // reconstruction : paiement introuvable
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue(null);
+
+    const result = await releaseHeldEvoliaPushes({ retryFailedRegistrations: true });
+
+    expect(prisma.evoliaPush.create).not.toHaveBeenCalled();
+    expect(result.failed).toBe(1);
+    expect(vi.mocked(prisma.evoliaPush.updateMany)).toHaveBeenCalledWith({
+      where: { id: "old_1", status: "PENDING" },
+      data: expect.objectContaining({ status: "FAILED" }),
+    });
   });
 
   it("never sends a push another release already claimed", async () => {

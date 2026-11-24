@@ -92,4 +92,71 @@ describe("buildSlotGrid", () => {
     });
     expect(result.ok).toBe(false);
   });
+
+  describe("several time ranges per day", () => {
+    const multi = {
+      days: ["2027-03-12"],
+      durationMinutes: 30,
+      timeZone: REUNION,
+    };
+
+    it("cuts each range into slots, in time order", () => {
+      const result = buildSlotGrid({
+        ...multi,
+        ranges: [
+          { start: "15:00", end: "16:00" },
+          { start: "11:00", end: "12:00" },
+        ],
+      });
+      expect(hours(result)).toEqual(["11h00", "11h30", "15h00", "15h30"]);
+    });
+
+    it("takes precedence over the legacy single range + pause", () => {
+      const result = buildSlotGrid({
+        ...multi,
+        ranges: [{ start: "11:00", end: "12:00" }],
+        dayStart: "09:00",
+        dayEnd: "17:00",
+      });
+      expect(hours(result)).toEqual(["11h00", "11h30"]);
+    });
+
+    it("repeats every range on each chosen day", () => {
+      const result = buildSlotGrid({
+        ...multi,
+        days: ["2027-03-12", "2027-03-13"],
+        ranges: [
+          { start: "11:00", end: "12:00" },
+          { start: "15:00", end: "16:00" },
+        ],
+      });
+      expect(result.ok && result.slots.length).toBe(8);
+    });
+
+    it("rejects overlapping or inverted ranges", () => {
+      expect(
+        buildSlotGrid({
+          ...multi,
+          ranges: [
+            { start: "11:00", end: "12:30" },
+            { start: "12:00", end: "13:00" },
+          ],
+        }).ok
+      ).toBe(false);
+      expect(buildSlotGrid({ ...multi, ranges: [{ start: "12:00", end: "11:00" }] }).ok).toBe(
+        false
+      );
+    });
+
+    it("accepts back-to-back ranges", () => {
+      const result = buildSlotGrid({
+        ...multi,
+        ranges: [
+          { start: "11:00", end: "12:00" },
+          { start: "12:00", end: "12:30" },
+        ],
+      });
+      expect(hours(result)).toEqual(["11h00", "11h30", "12h00"]);
+    });
+  });
 });

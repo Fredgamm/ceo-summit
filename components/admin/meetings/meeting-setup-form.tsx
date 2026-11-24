@@ -4,21 +4,18 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import { saveMeetingSetup } from "@/app/actions/admin-meetings";
-import { SLOT_DURATIONS } from "@/lib/meeting-slots";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
-/** Module 21 lot 2 — zone RDV, indications d'accès et durée par défaut des créneaux. */
+/**
+ * Module 21 lot 2 — lieu des rendez-vous et indications d'accès.
+ * 5 nov. 2026 : la durée n'est plus demandée ici (elle l'était aussi à
+ * l'étape 2, ce qui prêtait à confusion) ; la valeur enregistrée est
+ * conservée telle quelle et sert de durée proposée par défaut à l'étape 2.
+ */
 export function MeetingSetupForm({
   eventId,
   initialValues,
@@ -53,10 +50,10 @@ export function MeetingSetupForm({
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="meeting-zone">Zone RDV *</Label>
+        <Label htmlFor="meeting-zone">Nom du lieu *</Label>
         <Input
           id="meeting-zone"
-          placeholder="ex. Espace B2B, niveau 1"
+          placeholder="ex. Salle B2B, niveau 1"
           value={values.zone}
           onChange={(e) => setValues((v) => ({ ...v, zone: e.target.value }))}
           maxLength={140}
@@ -64,7 +61,7 @@ export function MeetingSetupForm({
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="meeting-access">Indications d&apos;accès *</Label>
+        <Label htmlFor="meeting-access">Comment s&apos;y rendre *</Label>
         <Textarea
           id="meeting-access"
           rows={3}
@@ -75,26 +72,8 @@ export function MeetingSetupForm({
           required
         />
         <p className="text-xs text-text-muted">
-          Reprises dans les emails de confirmation de rendez-vous.
+          Ce texte est envoyé aux participants dans l&apos;e-mail qui confirme chaque rendez-vous.
         </p>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="meeting-duration">Durée d&apos;un créneau</Label>
-        <Select
-          value={String(values.slotDurationMinutes)}
-          onValueChange={(v) => setValues((s) => ({ ...s, slotDurationMinutes: Number(v) }))}
-        >
-          <SelectTrigger id="meeting-duration" className="sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SLOT_DURATIONS.map((d) => (
-              <SelectItem key={d} value={String(d)}>
-                {d} minutes
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {error && (
@@ -104,9 +83,9 @@ export function MeetingSetupForm({
       )}
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={saving}>
-          {saving ? "Enregistrement…" : "Enregistrer"}
+          {saving ? "Enregistrement…" : "Enregistrer le lieu"}
         </Button>
-        {saved && <span className="text-sm text-emerald-700">Enregistré.</span>}
+        {saved && <span className="text-sm text-emerald-700">✓ Lieu enregistré.</span>}
       </div>
     </form>
   );
