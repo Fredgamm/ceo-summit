@@ -29,6 +29,7 @@ vi.mock("@/lib/payment-confirmations", () => ({
   evoliaPaymentMismatch: vi.fn().mockResolvedValue(null),
   holdRevivedPaymentForReview: vi.fn().mockResolvedValue(undefined),
   cancelPendingEvoliaPaymentCore: vi.fn().mockResolvedValue(true),
+  notifyCompanyPaymentFailed: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -44,6 +45,7 @@ import {
   holdRevivedPaymentForReview,
   confirmEventRegistrationPaymentCore,
   reviveCancelledEvoliaPayment,
+  notifyCompanyPaymentFailed,
 } from "@/lib/payment-confirmations";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { FAILED_AT_EVOLIA_REASON } from "@/lib/payment-methods";
@@ -264,6 +266,27 @@ describe("POST /api/webhooks/payments", () => {
       null
     );
     expect(confirmCompanyPaymentCore).not.toHaveBeenCalled();
+    expect(notifyCompanyPaymentFailed).toHaveBeenCalledWith("payment_1");
+  });
+
+  it("accepts an optional reason on payment.failed", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValueOnce({
+      id: "payment_2",
+      status: "PENDING",
+      method: "MOBILE_MONEY",
+      upsellQuantity: null,
+      companySubscriptionId: "sub_1",
+    } as never);
+    const body = JSON.stringify({
+      event: "payment.failed",
+      type: "company_payment",
+      reference: "payment_2",
+      reason: "card_declined",
+    });
+    const res = await POST(makeRequest(body, sign(body)));
+
+    expect(res.status).toBe(200);
+    expect(cancelPendingEvoliaPaymentCore).toHaveBeenCalled();
   });
 
   it("returns 409 when payment.failed targets an unknown or already-resolved company payment", async () => {

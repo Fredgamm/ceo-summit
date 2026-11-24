@@ -136,6 +136,39 @@ export const COMPANY_BILLING_TEMPLATES: EmailTemplateDefinition[] = [
     ],
   },
   {
+    key: "company-payment-failed",
+    category: "COMPANY_BILLING",
+    label: "Paiement carte / Mobile Money non abouti",
+    description:
+      "Envoyé à l'administrateur de l'entreprise quand Evolia signale que son paiement par carte ou Mobile Money a été annulé ou refusé : il peut recommencer, avec une autre carte ou un autre numéro, ou payer autrement.",
+    triggerHint: "app/api/webhooks/payments/route.ts (payment.failed)",
+    variables: [
+      { key: "adminName", label: "Nom de l'administrateur", example: "Jean-Pierre Rakoto" },
+      { key: "companyName", label: "Nom de l'entreprise", example: "Rakoto Holding" },
+      { key: "appUrl", label: "Adresse de la plateforme", example: "https://b2b.ceo-summit.mg" },
+    ],
+    defaultSubject: "Votre paiement n'a pas abouti",
+    defaultBlocks: [
+      { id: "1", type: "heading", text: "Bonjour {{adminName}}," },
+      {
+        id: "2",
+        type: "paragraph",
+        text: "Le paiement par carte ou Mobile Money pour **{{companyName}}** n'a pas abouti (erreur de saisie, carte refusée ou délai dépassé). Si vous avez malgré tout été débité, écrivez-nous à register@ceo-summit.mg : nous régulariserons votre situation.",
+      },
+      {
+        id: "3",
+        type: "paragraph",
+        text: "Vous pouvez recommencer, avec une autre carte ou un autre numéro Mobile Money, ou choisir le virement ou le chèque.",
+      },
+      {
+        id: "4",
+        type: "button",
+        label: "Reprendre mon paiement",
+        url: "{{appUrl}}/entreprise/paiement",
+      },
+    ],
+  },
+  {
     key: "company-payment-confirmed",
     category: "COMPANY_BILLING",
     label: "Paiement entreprise confirmé",

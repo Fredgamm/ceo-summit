@@ -15,6 +15,7 @@ import { AriaryHint } from "@/components/ui/ariary-hint";
 import { unitPriceAr } from "@/lib/company-payment-amount";
 import { cn, formatEuro, planPriceEur } from "@/lib/utils";
 import { getEurToArRate } from "@/lib/currency-conversion";
+import { EVOLIA_PAYMENT_METHODS } from "@/lib/payment-methods";
 
 export const metadata: Metadata = { title: "Accès en attente" };
 
@@ -97,11 +98,31 @@ export default async function PaymentPendingPage() {
   }
 
   if (company && status === "PENDING_REVIEW") {
+    // 24 nov. 2026 — paiement carte / Mobile Money en attente chez Evolia :
+    // cette page n'offrait aucune action, et un gérant revenu après une erreur
+    // de saisie ne pouvait ni reprendre ni recommencer. Il retrouve l'étape
+    // Paiement, avec ces choix ; ses collaborateurs sont informés.
+    const pendingEvolia = await prisma.companyPayment.findFirst({
+      where: {
+        companySubscriptionId: subscription!.id,
+        status: "PENDING",
+        upsellQuantity: null,
+        method: { in: EVOLIA_PAYMENT_METHODS },
+      },
+      select: { id: true },
+    });
+    if (pendingEvolia && company.companyAdminId === viewer!.id) redirect("/entreprise/paiement");
     return (
       <JourneyShell
         current="activation"
-        title="Paiement en cours de vérification"
-        subtitle="L'accès complet à la plateforme s'active automatiquement dès que le paiement est confirmé. Vous recevrez un e-mail."
+        title={
+          pendingEvolia ? "Paiement en cours chez Evolia" : "Paiement en cours de vérification"
+        }
+        subtitle={
+          pendingEvolia
+            ? "Le gérant de votre entreprise a lancé le paiement par carte ou Mobile Money. L'accès s'active dès qu'Evolia le confirme ; s'il a été interrompu, seul le gérant peut le reprendre depuis son espace."
+            : "L'accès complet à la plateforme s'active automatiquement dès que le paiement est confirmé. Vous recevrez un e-mail."
+        }
         card={card}
         headerAction={signOut}
       >
