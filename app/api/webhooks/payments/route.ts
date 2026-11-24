@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { deferParticipantPushes, flushDeferredParticipantPushes } from "@/lib/evolia";
 import { verifyHmacSignature } from "@/lib/hmac";
 import { getEvoliaConfig } from "@/lib/evolia-config";
 import { FAILED_AT_EVOLIA_REASON, isEvoliaPaymentMethod } from "@/lib/payment-methods";
@@ -118,7 +119,13 @@ export async function POST(req: Request) {
   });
 
   try {
-    const result = await dispatchPaymentWebhook(payload);
+    // 24 nov. 2026 — la liste des participants envoyée pendant cet appel était
+    // refusée par Evolia (409 « Paiement en attente ») : il n'a enregistré
+    // l'encaissement qu'après notre réponse. Elle part donc après la réponse.
+    const { result, companyIds } = await deferParticipantPushes(() =>
+      dispatchPaymentWebhook(payload)
+    );
+    if (companyIds.length > 0) sendParticipantsAfterResponse(companyIds);
     if (!result.success) {
       await prisma.webhookLog.update({
         where: { id: log.id },
@@ -264,6 +271,22 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
     case "event_registration": {
       return confirmEventRegistrationPaymentCore(payload.reference, null);
     }
+  }
+}
+
+/** Laisse à Evolia le temps d'enregistrer l'encaissement après notre réponse. */
+const PARTICIPANTS_AFTER_RESPONSE_DELAY_MS = 5_000;
+
+function sendParticipantsAfterResponse(companyIds: string[]) {
+  const send = () =>
+    new Promise<void>((resolve) => setTimeout(resolve, PARTICIPANTS_AFTER_RESPONSE_DELAY_MS))
+      .then(() => flushDeferredParticipantPushes(companyIds))
+      .catch((err) => console.error("[payments webhook] deferred participants push failed", err));
+  try {
+    after(send);
+  } catch {
+    // Hors du contexte de requête Next (appel direct en test) : envoi détaché.
+    void send();
   }
 }
 

@@ -311,7 +311,14 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
   });
   revalidatePath(`/admin/entreprises/${push.companyId}`);
   if (!delivered) {
-    const updated = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
+    // Une liste renvoyée est un nouvel envoi : c'est sa réponse qu'on affiche.
+    const updated =
+      push.event === "company.participants.confirmed"
+        ? await prisma.evoliaPush.findFirst({
+            where: { companyId: push.companyId, event: push.event },
+            orderBy: { createdAt: "desc" },
+          })
+        : await prisma.evoliaPush.findUnique({ where: { id: pushId } });
     return {
       success: false,
       error: `Evolia n'a pas accepté l'envoi : ${updated?.lastError ?? "erreur inconnue"}`,
