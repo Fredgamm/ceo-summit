@@ -375,6 +375,38 @@ export async function cancelPendingEvoliaPaymentCore(
 }
 
 /**
+ * 24 nov. 2026 — Evolia signale un paiement carte / Mobile Money non abouti
+ * (`payment.failed`) : le gérant reçoit un e-mail avec le lien pour
+ * recommencer ou payer autrement. Un échec d'envoi n'empêche jamais
+ * l'annulation, déjà faite.
+ */
+export async function notifyCompanyPaymentFailed(companyPaymentId: string): Promise<void> {
+  try {
+    const payment = await prisma.companyPayment.findUnique({
+      where: { id: companyPaymentId },
+      select: {
+        companySubscription: {
+          select: {
+            company: {
+              select: { name: true, companyAdmin: { select: { name: true, email: true } } },
+            },
+          },
+        },
+      },
+    });
+    const company = payment?.companySubscription.company;
+    if (!company?.companyAdmin) return;
+    const email = await resolveEmail("company-payment-failed", {
+      adminName: company.companyAdmin.name,
+      companyName: company.name,
+    });
+    if (email) await sendTransactionalEmail({ to: company.companyAdmin.email, ...email });
+  } catch (err) {
+    console.error("[notifyCompanyPaymentFailed] failed to send email", err);
+  }
+}
+
+/**
  * 23 oct. 2026 — un paiement Evolia confirmé après annulation porte sur ce que
  * l'entreprise avait choisi à ce moment-là (instantané de l'inscription
  * envoyée à Evolia). Si elle a depuis changé d'offre ou de nombre de

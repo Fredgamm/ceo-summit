@@ -19,6 +19,7 @@ import { getEurToArRate } from "@/lib/currency-conversion";
 import {
   CANCELLED_BY_COMPANY_REASON,
   EVOLIA_PUSH_FAILED_REASON,
+  REVIVABLE_EVOLIA_REASONS,
   isEvoliaPaymentMethod,
 } from "@/lib/payment-methods";
 import { evoliaPaymentUrl, pushRegistrationToEvolia } from "@/lib/evolia";
@@ -525,4 +526,65 @@ export async function cancelPendingEvoliaPayment(companyPaymentId: string): Prom
   revalidatePath(`/entreprises/${subscription.companyId}`);
   revalidatePath("/entreprise/paiement");
   return { success: true, data: undefined };
+}
+
+/**
+ * 24 nov. 2026 — « Réessayer avec une autre carte ou un autre numéro » : un
+ * gérant qui s'est trompé de carte ou de numéro Mobile Money ne pouvait pas
+ * toujours recommencer sur la page d'Evolia (référence déjà utilisée). On
+ * annule le paiement en cours (s'il l'est encore : après un `payment.failed`
+ * il est déjà annulé) et on relance le même mode de paiement sous une
+ * nouvelle référence, avec les mêmes contrôles qu'un premier paiement
+ * (`submitPaymentProof` / `purchaseUpsellSeats`). Une confirmation tardive de
+ * l'ancienne référence reste honorée (`reviveCancelledEvoliaPayment`).
+ */
+export async function retryEvoliaPayment(
+  companyPaymentId: string
+): Promise<ActionResult<PaymentSubmission>> {
+  const viewerResult = await requireViewer();
+  if (!viewerResult.success) return viewerResult;
+  const { viewer } = viewerResult;
+
+  const payment = await prisma.companyPayment.findUnique({
+    where: { id: companyPaymentId },
+    include: { companySubscription: { include: { company: true } } },
+  });
+  if (!payment) return { success: false, error: "Paiement introuvable." };
+  const subscription = payment.companySubscription;
+  if (subscription.company.companyAdminId !== viewer.id) {
+    return { success: false, error: "Seul le gérant de l'entreprise peut relancer ce paiement." };
+  }
+  if (!isEvoliaPaymentMethod(payment.method)) {
+    return { success: false, error: "Ce paiement ne peut pas être relancé." };
+  }
+
+  if (payment.status === "PENDING") {
+    const cancelled = await cancelPendingEvoliaPaymentCore(
+      payment,
+      CANCELLED_BY_COMPANY_REASON,
+      viewer.id
+    );
+    if (!cancelled) return { success: false, error: "Ce paiement vient d'être traité." };
+  } else if (
+    payment.status !== "REJECTED" ||
+    !REVIVABLE_EVOLIA_REASONS.includes(payment.rejectionReason ?? "")
+  ) {
+    return { success: false, error: "Ce paiement ne peut pas être relancé." };
+  }
+
+  const result =
+    payment.upsellQuantity != null && payment.upsellPlanId
+      ? await purchaseUpsellSeats(subscription.id, {
+          method: payment.method,
+          upsellPlanId: payment.upsellPlanId,
+          quantity: payment.upsellQuantity,
+        })
+      : await submitPaymentProof(subscription.id, {
+          method: payment.method,
+          declaredParticipants: subscription.declaredParticipants ?? undefined,
+        });
+
+  revalidatePath(`/entreprises/${subscription.companyId}`);
+  revalidatePath("/entreprise/paiement");
+  return result;
 }

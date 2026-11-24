@@ -13,6 +13,7 @@ import {
   evoliaPaymentMismatch,
   holdRevivedPaymentForReview,
   confirmEventRegistrationPaymentCore,
+  notifyCompanyPaymentFailed,
 } from "@/lib/payment-confirmations";
 
 const WEBHOOK_RATE_LIMIT = 60;
@@ -178,7 +179,13 @@ async function dispatchPaymentWebhook(payload: PaymentWebhookPayload): Promise<D
       if (!payment || payment.status !== "PENDING" || !isEvoliaPaymentMethod(payment.method)) {
         return { success: false, error: "Paiement introuvable ou déjà traité." };
       }
-      await cancelPendingEvoliaPaymentCore(payment, FAILED_AT_EVOLIA_REASON, null);
+      const cancelled = await cancelPendingEvoliaPaymentCore(
+        payment,
+        FAILED_AT_EVOLIA_REASON,
+        null
+      );
+      // 24 nov. 2026 — le gérant est prévenu, avec le lien pour recommencer.
+      if (cancelled) await notifyCompanyPaymentFailed(payment.id);
     }
     return { success: true };
   }
