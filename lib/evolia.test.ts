@@ -150,15 +150,19 @@ describe("pushRegistrationToEvolia", () => {
     });
   });
 
-  it("sends no amount for a bank transfer (information only)", async () => {
+  // 25 nov. 2026 — Evolia exige le montant même pour un virement (422 sinon).
+  it("sends the amount for a bank transfer too", async () => {
     vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
       payment({ method: "VIREMENT" }) as never
     );
 
     await pushRegistrationToEvolia("payment_1");
 
-    expect(pushedPayload().payload).not.toHaveProperty("amountDue");
-    expect(pushedPayload().payload).toMatchObject({ paymentMethod: "virement" });
+    expect(pushedPayload().payload).toMatchObject({
+      paymentMethod: "virement",
+      amountDue: expect.any(Number),
+      currency: "MGA",
+    });
   });
 
   it("describes only the purchased seats for an upsell", async () => {
@@ -409,8 +413,9 @@ describe("Evolia constraints", () => {
       event: "company.registration.pushed",
       ceoSummitReference: "sub_1",
       paymentMethod: "virement",
+      amountDue: 0,
+      currency: "MGA",
     });
-    expect(registration).not.toHaveProperty("amountDue");
     // 25 nov. 2026 — Evolia refuse la liste tant que le paiement n'est pas confirmé.
     expect(confirmation).toEqual({
       event: "payment.confirmed",
@@ -451,9 +456,10 @@ describe("Evolia constraints", () => {
       { id: "upsell_1", amount: 500_000 },
     ] as never);
     // Le supplément est déjà confirmé chez Evolia : seule l'offre manque.
-    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([
-      { reference: "upsell_1" },
-    ] as never);
+    vi.mocked(prisma.evoliaPush.findMany)
+      .mockResolvedValueOnce([{ reference: "upsell_1" }] as never)
+      // son inscription, elle, est déjà arrivée
+      .mockResolvedValueOnce([{ reference: "payment_1" }] as never);
     vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
       { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
     ] as never);
@@ -474,6 +480,42 @@ describe("Evolia constraints", () => {
         where: expect.objectContaining({
           OR: [{ method: { in: ["VIREMENT", "CHEQUE"] } }, { reviewedById: { not: null } }],
         }),
+      })
+    );
+  });
+
+  it("renvoie d'abord une inscription jamais reçue par Evolia (IXEO, 25 nov. 2026)", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      ...COMPANY,
+      subscription: { ...COMPANY.subscription, id: "sub_1" },
+    } as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+    vi.mocked(prisma.companyPayment.findMany).mockResolvedValueOnce([
+      { id: "payment_1", amount: 4_316_394 },
+    ] as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      payment({ method: "VIREMENT" }) as never
+    );
+    vi.mocked(prisma.evoliaPush.findMany)
+      .mockResolvedValueOnce([] as never) // aucune confirmation
+      .mockResolvedValueOnce([] as never); // ni inscription reçue
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    expect(createdPayloads().map((p) => p.event)).toEqual([
+      "company.registration.pushed",
+      "payment.confirmed",
+      "company.participants.confirmed",
+    ]);
+    expect(createdPayloads()[0]).toMatchObject({ amountDue: expect.any(Number), currency: "MGA" });
+    // l'ancienne inscription refusée ne sera plus renvoyée telle quelle
+    expect(prisma.evoliaPush.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { event: "company.registration.pushed", reference: "payment_1", status: "FAILED" },
+        data: expect.objectContaining({ status: "SKIPPED" }),
       })
     );
   });

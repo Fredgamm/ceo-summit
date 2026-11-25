@@ -142,7 +142,10 @@ export async function pushRegistrationToEvolia(companyPaymentId: string): Promis
       // Valeurs attendues par Evolia : « evolia » (à encaisser par eux) ou
       // « virement » (virement ou chèque, déjà validé par l'admin CEO Summit).
       paymentMethod: collectsPayment ? "evolia" : "virement",
-      ...(collectsPayment ? { amountDue: payment.amount, currency: "MGA" } : {}),
+      // 25 nov. 2026 — Evolia exige `amountDue` et `currency` dans tous les cas,
+      // virement compris (422 « amountDue requis » sinon : IXEO en production).
+      amountDue: payment.amount,
+      currency: "MGA",
       company: companyInfo(company),
       offer: {
         name: plan.name,
@@ -363,6 +366,10 @@ async function ensurePaymentlessRegistration(company: CompanyForPush, reference:
     companyId: company.id,
     ceoSummitReference: reference,
     paymentMethod: "virement",
+    // Evolia (25 nov. 2026) : offre sans paiement = `amountDue: 0`, puis
+    // `payment.confirmed` avec `amount: 0`.
+    amountDue: 0,
+    currency: "MGA",
     company: companyInfo(company),
     offer: {
       name: company.subscription.plan.name,
@@ -440,8 +447,40 @@ async function ensurePaymentConfirmations(
     select: { reference: true },
   });
   const confirmed = new Set(done.map((d) => d.reference));
-  for (const { reference, amount } of due) {
-    if (!confirmed.has(reference)) await confirmPaymentToEvolia(companyId, reference, amount);
+  const pending = due.filter((d) => !confirmed.has(d.reference));
+  if (pending.length === 0) return;
+
+  // Evolia refuse la confirmation d'une référence qu'il ne connaît pas : une
+  // inscription jamais reçue (ex. refusée avant le correctif `amountDue`) est
+  // d'abord renvoyée, recalculée. L'offre sans paiement est déjà traitée par
+  // `ensurePaymentlessRegistration`.
+  const paidRefs = pending.map((d) => d.reference).filter((r) => r !== paymentlessReference);
+  const registered =
+    paidRefs.length === 0
+      ? []
+      : await prisma.evoliaPush.findMany({
+          where: {
+            event: "company.registration.pushed",
+            reference: { in: paidRefs },
+            status: { in: ["SENT", "HELD", "PENDING"] },
+          },
+          select: { reference: true },
+        });
+  const known = new Set(registered.map((r) => r.reference));
+  for (const { reference, amount } of pending) {
+    if (paidRefs.includes(reference) && !known.has(reference)) {
+      const delivered = await pushRegistrationToEvolia(reference);
+      if (delivered) {
+        // L'ancienne inscription refusée ne doit plus être renvoyée telle quelle.
+        await prisma.evoliaPush.updateMany({
+          where: { event: "company.registration.pushed", reference, status: "FAILED" },
+          data: { status: "SKIPPED", lastError: "Remplacée par l'inscription recalculée." },
+        });
+      } else if ((await getEvoliaConfig()).live) {
+        continue; // inscription refusée : la confirmation le serait aussi
+      }
+    }
+    await confirmPaymentToEvolia(companyId, reference, amount);
   }
 }
 

@@ -28,7 +28,7 @@ vi.mock("@/lib/prisma", () => ({
       count: vi.fn().mockResolvedValue(0),
     },
     auditLog: { create: vi.fn() },
-    evoliaPush: { findUnique: vi.fn() },
+    evoliaPush: { findUnique: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
     emailTemplateOverride: { findUnique: vi.fn().mockResolvedValue(null) },
     $transaction: vi.fn(),
   },
@@ -367,12 +367,18 @@ describe("resendEvoliaPush", () => {
       event: "company.registration.pushed",
       reference: "payment_1",
     } as never);
-    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({ status: "PENDING" } as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      id: "payment_1",
+      status: "PENDING",
+    } as never);
+    vi.mocked(pushRegistrationToEvolia).mockResolvedValueOnce(true);
 
     const result = await resendEvoliaPush("push_1");
 
     expect(result.success).toBe(true);
-    expect(deliverEvoliaPush).toHaveBeenCalledWith("push_1");
+    // 25 nov. 2026 — recalculée, pas renvoyée telle quelle (ancien envoi sans amountDue).
+    expect(pushRegistrationToEvolia).toHaveBeenCalledWith("payment_1");
+    expect(deliverEvoliaPush).not.toHaveBeenCalled();
   });
 
   it("refuses to resend a push set aside at Evolia's activation", async () => {
