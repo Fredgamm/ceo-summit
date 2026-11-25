@@ -73,6 +73,7 @@ const evoliaSettingsSchema = z.object({
     (value) => value === "" || value.includes(PAYMENT_URL_PLACEHOLDER),
     `Adresse de paiement : doit contenir ${PAYMENT_URL_PLACEHOLDER}.`
   ),
+  confirmationUrl: endpointSchema("Adresse de confirmation des paiements"),
   secret: secretSchema,
   clearSecret: z.boolean(),
   /** 23 oct. 2026 — clé de production validée : envois et carte / Mobile Money activés. */
@@ -85,6 +86,7 @@ export type EvoliaSettingsInput = z.infer<typeof evoliaSettingsSchema>;
 const FIELD_LABEL: Record<EvoliaUrlField | "secret" | "live", string> = {
   registrationUrl: "adresse d'inscription",
   paymentUrl: "lien de paiement",
+  confirmationUrl: "adresse de confirmation des paiements",
   secret: "clé Evolia",
   live: "activation d'Evolia",
 };
@@ -117,7 +119,7 @@ export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
   const writes: Prisma.PrismaPromise<unknown>[] = [];
   const changed: (EvoliaUrlField | "secret" | "live")[] = [];
 
-  for (const field of ["registrationUrl", "paymentUrl"] as const) {
+  for (const field of ["registrationUrl", "paymentUrl", "confirmationUrl"] as const) {
     const key = EVOLIA_SETTING_KEYS[field];
     const value = data[field];
     if (value === "") {
@@ -196,6 +198,9 @@ export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
             ? { registrationUrl: data.registrationUrl || null }
             : {}),
           ...(changed.includes("paymentUrl") ? { paymentUrl: data.paymentUrl || null } : {}),
+          ...(changed.includes("confirmationUrl")
+            ? { confirmationUrl: data.confirmationUrl || null }
+            : {}),
           ...(changed.includes("live") ? { live: data.live } : {}),
         },
       },

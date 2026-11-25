@@ -46,6 +46,7 @@ const METHOD_LABEL: Record<string, string> = {
 const EVOLIA_EVENT_LABEL: Record<string, string> = {
   "company.registration.pushed": "Inscription / paiement",
   "company.participants.confirmed": "Liste des participants",
+  "payment.confirmed": "Confirmation du paiement (virement, chèque)",
 };
 
 const EVOLIA_STATUS: Record<

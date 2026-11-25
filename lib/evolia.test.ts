@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    companyPayment: { findUnique: vi.fn(), findFirst: vi.fn().mockResolvedValue(null) },
+    companyPayment: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     // Evolia activé ; aucun autre réglage saisi : repli sur les variables d'environnement.
     platformSetting: {
       findMany: vi.fn(async () => [{ key: "evolia.live", value: "true", updatedAt: new Date() }]),
@@ -23,6 +27,7 @@ vi.mock("@/lib/prisma", () => ({
 
 import { prisma } from "@/lib/prisma";
 import {
+  confirmPaymentToEvolia,
   deferParticipantPushes,
   deliverEvoliaPush,
   evoliaPaymentUrl,
@@ -395,15 +400,24 @@ describe("Evolia constraints", () => {
       { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
     ] as never);
 
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([]);
+
     await pushParticipantsToEvolia("company_1");
 
-    const [registration, list] = createdPayloads();
+    const [registration, confirmation, list] = createdPayloads();
     expect(registration).toMatchObject({
       event: "company.registration.pushed",
       ceoSummitReference: "sub_1",
       paymentMethod: "virement",
     });
     expect(registration).not.toHaveProperty("amountDue");
+    // 25 nov. 2026 — Evolia refuse la liste tant que le paiement n'est pas confirmé.
+    expect(confirmation).toEqual({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "sub_1",
+      amount: 0,
+    });
     expect(list).toMatchObject({
       event: "company.participants.confirmed",
       ceoSummitReference: "sub_1",
@@ -416,6 +430,7 @@ describe("Evolia constraints", () => {
       subscription: { ...COMPANY.subscription, id: "sub_1" },
     } as never);
     vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue({ id: "push_old" } as never);
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([{ reference: "sub_1" }] as never);
     vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
       { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
     ] as never);
@@ -423,6 +438,66 @@ describe("Evolia constraints", () => {
     await pushParticipantsToEvolia("company_1");
 
     expect(createdPayloads().map((p) => p.event)).toEqual(["company.participants.confirmed"]);
+  });
+
+  it("confirme un virement pas encore confirmé avant d'envoyer la liste (25 nov. 2026)", async () => {
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      ...COMPANY,
+      subscription: { ...COMPANY.subscription, id: "sub_1" },
+    } as never);
+    vi.mocked(prisma.companyPayment.findFirst).mockResolvedValue({ id: "payment_1" } as never);
+    vi.mocked(prisma.companyPayment.findMany).mockResolvedValueOnce([
+      { id: "payment_1", amount: 4_316_394 },
+      { id: "upsell_1", amount: 500_000 },
+    ] as never);
+    // Le supplément est déjà confirmé chez Evolia : seule l'offre manque.
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([
+      { reference: "upsell_1" },
+    ] as never);
+    vi.mocked(prisma.eventRegistration.findMany).mockResolvedValue([
+      { user: { id: "manager_1", name: "Marie Dupont", email: "marie@example.mg" } },
+    ] as never);
+
+    await pushParticipantsToEvolia("company_1");
+
+    expect(createdPayloads()).toEqual([
+      {
+        event: "payment.confirmed",
+        type: "company_payment",
+        reference: "payment_1",
+        amount: 4_316_394,
+      },
+      expect.objectContaining({ event: "company.participants.confirmed" }),
+    ]);
+    expect(prisma.companyPayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ method: { in: ["VIREMENT", "CHEQUE"] } }),
+      })
+    );
+  });
+
+  it("envoie la confirmation à l'adresse de confirmation, pas à celle des inscriptions", async () => {
+    vi.stubEnv("EVOLIA_CONFIRMATION_URL", "https://evolia.test/payments/webhook");
+    vi.mocked(prisma.evoliaPush.findUnique).mockResolvedValue({
+      id: "push_1",
+      event: "payment.confirmed",
+      payload: {
+        event: "payment.confirmed",
+        type: "company_payment",
+        reference: "payment_1",
+        amount: 10,
+      },
+    } as never);
+
+    await confirmPaymentToEvolia("company_1", "payment_1", 10);
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://evolia.test/payments/webhook");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      event: "payment.confirmed",
+      type: "company_payment",
+      reference: "payment_1",
+      amount: 10,
+    });
   });
 
   it("converts a legacy payment method when resending an old push", async () => {
@@ -564,7 +639,7 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
 
   it("releases registrations first, then sends each company's current list once", async () => {
     const at = (m: number) => new Date(Date.UTC(2026, 9, 23, 10, m));
-    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([
       {
         id: "list_old",
         companyId: "company_1",
@@ -627,7 +702,7 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
   });
 
   it("keeps a list held while its company's registration has not reached Evolia", async () => {
-    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([
       {
         id: "list_c9",
         companyId: "c9",
@@ -694,7 +769,7 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
   });
 
   it("never sends a push another release already claimed", async () => {
-    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValueOnce([
       {
         id: "reg_x",
         companyId: "cx",

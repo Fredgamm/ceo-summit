@@ -275,7 +275,10 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
 
   // Un paiement annulé ou refusé ne doit pas redevenir encaissable chez Evolia :
   // sa confirmation serait ensuite refusée par notre webhook.
-  if (push.event === "company.registration.pushed" && push.reference) {
+  if (
+    (push.event === "company.registration.pushed" || push.event === "payment.confirmed") &&
+    push.reference
+  ) {
     const payment = await prisma.companyPayment.findUnique({
       where: { id: push.reference },
       select: { status: true },

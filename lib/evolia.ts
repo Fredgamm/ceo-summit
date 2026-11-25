@@ -301,6 +301,13 @@ export async function pushParticipantsToEvolia(
 
     const reference = offerPayment?.id ?? company.subscription.id;
     if (!offerPayment) await ensurePaymentlessRegistration(company, reference);
+    // 25 nov. 2026 — Evolia refuse la liste tant qu'un paiement encaissé chez
+    // nous (virement, chèque) ne lui a pas été confirmé : rattrapage ici.
+    await ensurePaymentConfirmations(
+      company.id,
+      company.subscription.id,
+      offerPayment ? null : reference
+    );
 
     const payload = {
       event: "company.participants.confirmed",
@@ -366,6 +373,74 @@ async function ensurePaymentlessRegistration(company: CompanyForPush, reference:
     participants: managerOnly(company),
   };
   await sendToEvolia(company.id, payload.event, reference, payload);
+}
+
+// ─── Confirmation d'un paiement encaissé chez nous (25 nov. 2026) ─────────
+//
+// Evolia ne connaît comme réglés que les paiements qu'il a encaissés (carte,
+// Mobile Money). Un virement ou un chèque validé par notre admin reste « en
+// attente » chez lui, et il refuse alors la liste des participants (409) :
+// on lui confirme l'encaissement sur son adresse dédiée.
+
+const CONFIRMATION_EVENT = "payment.confirmed";
+
+/** Confirme à Evolia un paiement encaissé chez nous. `true` si Evolia l'a reçu. */
+export async function confirmPaymentToEvolia(
+  companyId: string,
+  reference: string,
+  amount: number
+): Promise<boolean> {
+  const payload = {
+    event: CONFIRMATION_EVENT,
+    type: "company_payment",
+    reference,
+    amount,
+  };
+  try {
+    return await sendToEvolia(companyId, CONFIRMATION_EVENT, reference, payload);
+  } catch (err) {
+    // Comme les autres envois : jamais d'échec de l'action qui l'a déclenché.
+    console.error("[evolia] failed to send payment confirmation", err);
+    return false;
+  }
+}
+
+/**
+ * Envoie les confirmations qui manquent pour l'abonnement : chaque virement
+ * ou chèque confirmé (offre et suppléments), et l'abonnement lui-même pour une
+ * offre sans paiement (`paymentlessReference`, montant 0). Une confirmation
+ * déjà reçue ou retenue n'est pas renvoyée.
+ */
+async function ensurePaymentConfirmations(
+  companyId: string,
+  subscriptionId: string,
+  paymentlessReference: string | null
+) {
+  const payments = await prisma.companyPayment.findMany({
+    where: {
+      companySubscriptionId: subscriptionId,
+      status: "CONFIRMED",
+      method: { in: ["VIREMENT", "CHEQUE"] },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, amount: true },
+  });
+  const due = payments.map((p) => ({ reference: p.id, amount: p.amount }));
+  if (paymentlessReference) due.push({ reference: paymentlessReference, amount: 0 });
+  if (due.length === 0) return;
+
+  const done = await prisma.evoliaPush.findMany({
+    where: {
+      event: CONFIRMATION_EVENT,
+      reference: { in: due.map((d) => d.reference) },
+      status: { in: ["SENT", "HELD", "PENDING"] },
+    },
+    select: { reference: true },
+  });
+  const confirmed = new Set(done.map((d) => d.reference));
+  for (const { reference, amount } of due) {
+    if (!confirmed.has(reference)) await confirmPaymentToEvolia(companyId, reference, amount);
+  }
 }
 
 // ─── Envoi et relance ─────────────────────────────────────────────────────
@@ -532,6 +607,14 @@ export async function releaseHeldEvoliaPushes(
     else failed++;
   }
 
+  // 25 nov. 2026 — confirmations des virements et chèques, avant les listes :
+  // sans elles, Evolia refuse la liste (paiement en attente).
+  for (const push of held.filter((p) => p.event === CONFIRMATION_EVENT)) {
+    if (!(await claim(push.id, "HELD"))) continue;
+    if (await deliverEvoliaPush(push.id)) sent++;
+    else failed++;
+  }
+
   // Une liste par entreprise, recalculée maintenant : jamais un instantané
   // périmé qui écraserait chez Evolia une liste plus récente (badges).
   const companies = [...new Set(heldLists.map((p) => p.companyId))];
@@ -570,7 +653,9 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
   const push = await prisma.evoliaPush.findUnique({ where: { id: pushId } });
   if (!push) return false;
 
-  const { outboundSecret: secret, registrationUrl: url } = await getEvoliaConfig();
+  const config = await getEvoliaConfig();
+  const secret = config.outboundSecret;
+  const url = push.event === CONFIRMATION_EVENT ? config.confirmationUrl : config.registrationUrl;
   const record = (data: Prisma.EvoliaPushUpdateInput) =>
     prisma.evoliaPush.update({
       where: { id: pushId },
