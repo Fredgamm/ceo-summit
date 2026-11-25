@@ -33,6 +33,7 @@ const SECRET = "s3cr3t".repeat(8);
 const BASE: EvoliaSettingsInput = {
   registrationUrl: "",
   paymentUrl: "",
+  confirmationUrl: "",
   secret: "",
   clearSecret: false,
   live: false,

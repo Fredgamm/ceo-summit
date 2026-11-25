@@ -7,7 +7,11 @@ import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { isEvoliaPaymentMethod, REVIVABLE_EVOLIA_REASONS } from "@/lib/payment-methods";
-import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
+import {
+  confirmPaymentToEvolia,
+  pushParticipantsToEvolia,
+  pushRegistrationToEvolia,
+} from "@/lib/evolia";
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 class AlreadyActiveError extends Error {}
@@ -264,11 +268,17 @@ async function notifyEvolia(
   payment: {
     id: string;
     method: PaymentMethod;
+    amount: number;
     companySubscription: { companyId: string; participantsValidatedAt: Date | null };
   },
   isUpsell: boolean
 ) {
-  if (!isEvoliaPaymentMethod(payment.method)) await pushRegistrationToEvolia(payment.id);
+  if (!isEvoliaPaymentMethod(payment.method)) {
+    await pushRegistrationToEvolia(payment.id);
+    // 25 nov. 2026 — puis l'encaissement, sans quoi Evolia garde le paiement
+    // « en attente » et refuse la liste des participants qui suit.
+    await confirmPaymentToEvolia(payment.companySubscription.companyId, payment.id, payment.amount);
+  }
   if (isUpsell && payment.companySubscription.participantsValidatedAt) {
     await pushParticipantsToEvolia(payment.companySubscription.companyId);
   }

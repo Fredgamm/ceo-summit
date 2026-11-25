@@ -6,6 +6,18 @@
 
 ---
 
+## 2026-11-25 — Evolia : confirmation des virements et chèques
+
+Evolia ne considère comme réglés que les paiements qu'il encaisse lui-même. Un virement ou un chèque validé par notre admin restait « en attente » chez lui, et toutes les listes de participants qui suivaient étaient refusées (409). En production, IXEO était bloquée depuis le 11 novembre.
+
+### Ajouté
+
+- **Confirmation de l'encaissement à Evolia** (`payment.confirmed`, référence et montant en Ariary), envoyée quand l'admin confirme un virement ou un chèque (offre ou supplément), juste après l'inscription. Pour une offre sans paiement (partenaire), la confirmation est envoyée avec un montant de 0.
+- **Rattrapage automatique** : avant chaque liste de participants, les confirmations qui manquent sont envoyées. Pour une entreprise déjà bloquée, cliquer sur « Relancer » sur sa liste suffit.
+- **Paramètres › Intégrations** : nouveau champ « Adresse de confirmation des paiements » (par défaut l'adresse de production d'Evolia, variable `EVOLIA_CONFIRMATION_URL`). La préprod doit y saisir l'adresse de test.
+- Fiche entreprise : les envois « Confirmation du paiement (virement, chèque) » apparaissent dans « Envois à Evolia », et peuvent être relancés (sauf pour un paiement annulé ou refusé).
+- À l'activation d'Evolia, les confirmations retenues partent après les inscriptions et avant les listes.
+
 ## 2026-11-24 — Evolia : liste des participants refusée juste après le paiement
 
 Cas réel en production : à la confirmation d'un paiement par carte, la plateforme inscrivait les membres et envoyait la liste des participants **pendant** l'appel du webhook d'Evolia, avant de lui répondre. Pour Evolia, le paiement était donc encore en attente : liste refusée (HTTP 409 « Paiement en attente »). Elle n'est arrivée que parce que la gérante l'a validée une minute plus tard.

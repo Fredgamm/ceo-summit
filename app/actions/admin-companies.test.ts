@@ -48,6 +48,7 @@ vi.mock("@/lib/evolia-config", () => ({ isEvoliaLive: vi.fn(async () => true) })
 vi.mock("@/lib/evolia", () => ({
   pushRegistrationToEvolia: vi.fn().mockResolvedValue(undefined),
   pushParticipantsToEvolia: vi.fn().mockResolvedValue(undefined),
+  confirmPaymentToEvolia: vi.fn().mockResolvedValue(true),
   deliverEvoliaPush: vi.fn().mockResolvedValue(true),
 }));
 

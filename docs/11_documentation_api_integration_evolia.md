@@ -338,6 +338,18 @@ Chaque appel transmet un **instantané complet** de l'entreprise à cet instant 
 - `participants` n'est jamais vide. Pour un supplément acheté avant la validation de la liste, il contient le gestionnaire.
 - Une liste de participants n'est envoyée qu'une fois l'abonnement actif, donc après l'encaissement.
 - Offre sans paiement (partenaire institutionnel intégré par CEO Summit) : avant sa première liste, un `company.registration.pushed` part avec `paymentMethod: "virement"`, sans montant, et pour référence l'identifiant de son abonnement.
+- **Paiement encaissé par CEO Summit (25 novembre 2026)** — virement ou chèque validé par l'admin : juste après le `company.registration.pushed`, CEO Summit confirme l'encaissement sur votre adresse de confirmation (`POST https://event.aiolia.us/integration/ceosummit/payments/webhook`, test : `https://dev-event.aiolia.us/…`), signé comme les autres envois :
+
+  ```json
+  {
+    "event": "payment.confirmed",
+    "type": "company_payment",
+    "reference": "<ceoSummitReference>",
+    "amount": 4316394
+  }
+  ```
+
+  `amount` en Ariary. Même chose pour un supplément payé par virement. Pour une offre sans paiement, la référence est celle de l'abonnement et `amount` vaut `0`. Une confirmation manquante est envoyée avant toute liste de participants : sans elle, la liste serait refusée (« Paiement en attente »).
 
 > **Point d'attention — ne pas générer de badge à partir d'un `company.registration.pushed`.** Le gestionnaire qui inscrit l'entreprise et paie n'est pas forcément quelqu'un qui assistera à l'évènement (souvent une secrétaire ou un assistant). Générez badges/QR uniquement à réception d'un `company.participants.confirmed` — jamais à partir du seul push d'inscription/paiement, même s'il contient déjà un nom.
 
