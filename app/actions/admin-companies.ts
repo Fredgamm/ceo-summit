@@ -6,7 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { isEvoliaLive } from "@/lib/evolia-config";
 import { requireAdmin } from "@/lib/admin-auth";
 import { confirmCompanyPaymentCore } from "@/lib/payment-confirmations";
-import { deliverEvoliaPush, pushParticipantsToEvolia } from "@/lib/evolia";
+import {
+  deliverEvoliaPush,
+  pushParticipantsToEvolia,
+  pushRegistrationToEvolia,
+} from "@/lib/evolia";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { appUrl } from "@/lib/app-url";
@@ -300,6 +304,23 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
       data: { status: "SKIPPED", lastError: "Remplacé par la liste à jour, renvoyée par l'admin." },
     });
     delivered = await pushParticipantsToEvolia(push.companyId);
+  } else if (
+    push.event === "company.registration.pushed" &&
+    push.reference &&
+    (await prisma.companyPayment.findUnique({
+      where: { id: push.reference },
+      select: { id: true },
+    }))
+  ) {
+    // 25 nov. 2026 — inscription recalculée elle aussi : un ancien envoi peut
+    // être incomplet (sans `amountDue`, refusé 422 par Evolia).
+    delivered = await pushRegistrationToEvolia(push.reference);
+    if (delivered) {
+      await prisma.evoliaPush.updateMany({
+        where: { id: pushId, status: { in: ["FAILED", "PENDING"] } },
+        data: { status: "SKIPPED", lastError: "Remplacée par l'inscription recalculée." },
+      });
+    }
   } else {
     delivered = await deliverEvoliaPush(pushId);
   }
@@ -314,11 +335,19 @@ export async function resendEvoliaPush(pushId: string): Promise<ActionResult> {
   });
   revalidatePath(`/admin/entreprises/${push.companyId}`);
   if (!delivered) {
-    // Une liste renvoyée est un nouvel envoi : c'est sa réponse qu'on affiche.
+    // Une liste ou une inscription renvoyée est un nouvel envoi : c'est sa
+    // réponse qu'on affiche.
     const updated =
-      push.event === "company.participants.confirmed"
+      push.event === "company.participants.confirmed" ||
+      push.event === "company.registration.pushed"
         ? await prisma.evoliaPush.findFirst({
-            where: { companyId: push.companyId, event: push.event },
+            where: {
+              companyId: push.companyId,
+              event: push.event,
+              ...(push.event === "company.registration.pushed"
+                ? { reference: push.reference }
+                : {}),
+            },
             orderBy: { createdAt: "desc" },
           })
         : await prisma.evoliaPush.findUnique({ where: { id: pushId } });
