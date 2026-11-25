@@ -471,7 +471,9 @@ describe("Evolia constraints", () => {
     ]);
     expect(prisma.companyPayment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ method: { in: ["VIREMENT", "CHEQUE"] } }),
+        where: expect.objectContaining({
+          OR: [{ method: { in: ["VIREMENT", "CHEQUE"] } }, { reviewedById: { not: null } }],
+        }),
       })
     );
   });

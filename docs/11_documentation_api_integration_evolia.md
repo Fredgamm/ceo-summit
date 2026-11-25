@@ -338,7 +338,7 @@ Chaque appel transmet un **instantané complet** de l'entreprise à cet instant 
 - `participants` n'est jamais vide. Pour un supplément acheté avant la validation de la liste, il contient le gestionnaire.
 - Une liste de participants n'est envoyée qu'une fois l'abonnement actif, donc après l'encaissement.
 - Offre sans paiement (partenaire institutionnel intégré par CEO Summit) : avant sa première liste, un `company.registration.pushed` part avec `paymentMethod: "virement"`, sans montant, et pour référence l'identifiant de son abonnement.
-- **Paiement encaissé par CEO Summit (25 novembre 2026)** — virement ou chèque validé par l'admin : juste après le `company.registration.pushed`, CEO Summit confirme l'encaissement sur votre adresse de confirmation (`POST https://event.aiolia.us/integration/ceosummit/payments/webhook`, test : `https://dev-event.aiolia.us/…`), signé comme les autres envois :
+- **Paiement encaissé par CEO Summit (25 novembre 2026)** — virement ou chèque validé par l'admin : juste après le `company.registration.pushed`, CEO Summit confirme l'encaissement sur votre adresse de confirmation (`POST https://api-event.aiolia.us/integration/ceosummit/payments/webhook`, test : `https://dev-api-event.aiolia.us/integration/ceosummit/payments/webhook`), signé comme les autres envois :
 
   ```json
   {

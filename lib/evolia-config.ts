@@ -46,7 +46,7 @@ export const DEFAULT_REGISTRATION_URL =
   "https://api-event.aiolia.us/integration/ceosummit/registrations";
 export const DEFAULT_PAYMENT_URL = "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
 export const DEFAULT_CONFIRMATION_URL =
-  "https://event.aiolia.us/integration/ceosummit/payments/webhook";
+  "https://api-event.aiolia.us/integration/ceosummit/payments/webhook";
 export const PAYMENT_URL_PLACEHOLDER = "{ceoSummitReference}";
 
 // ─── Lecture ──────────────────────────────────────────────────────────────
