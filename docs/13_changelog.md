@@ -24,6 +24,7 @@ Evolia ne considère comme réglés que les paiements qu'il encaisse lui-même. 
 - **Carte ou Mobile Money confirmé à la main par l'admin** (Evolia ne l'a pas vu passer) : la confirmation est aussi envoyée à Evolia, à la validation et au rattrapage avant une liste. Un paiement confirmé par le webhook d'Evolia n'est pas renvoyé.
 - **Inscription d'un virement ou d'un chèque refusée (422 « amountDue requis »)** : `amountDue` et `currency` sont désormais toujours envoyés, `amountDue: 0` pour un partenaire. C'est ce qui bloquait IXEO en production : son inscription n'était jamais arrivée chez Evolia.
 - **Rattrapage** : avant de confirmer un paiement, son inscription est renvoyée (recalculée) si Evolia ne l'a jamais reçue ; l'ancienne, refusée, passe à « Non transmis ». « Relancer » une inscription la recalcule aussi au lieu de renvoyer l'ancien contenu.
+- **Référence inconnue d'Evolia** (409 « reference introuvable » sur une confirmation, vu en préprod sur une carte confirmée à la main) : l'inscription recalculée est renvoyée, puis la confirmation, une seule fois.
 - Evolia confirme : même signature que les inscriptions, `amount: 0` accepté pour un partenaire (inscription préalable avec `amountDue: 0`), envoi en double sans risque (réponse 200 avec `duplicate: true`).
 
 ## 2026-11-24 — Evolia : liste des participants refusée juste après le paiement

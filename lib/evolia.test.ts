@@ -830,3 +830,66 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+// 25 nov. 2026 — essai en préprod : Evolia ne retrouvait plus la référence
+// d'une carte confirmée à la main (409 « reference introuvable »).
+describe("confirmPaymentToEvolia — référence inconnue d'Evolia", () => {
+  function createdEvents() {
+    return vi
+      .mocked(prisma.evoliaPush.create)
+      .mock.calls.map((c) => (c[0] as { data: { event: string } }).data.event);
+  }
+
+  beforeEach(() => {
+    // Chaque envoi relit son propre contenu (le dernier créé).
+    vi.mocked(prisma.evoliaPush.findUnique).mockImplementation((async () => {
+      const calls = vi.mocked(prisma.evoliaPush.create).mock.calls;
+      const last = calls[calls.length - 1]?.[0] as { data: { payload: unknown; event: string } };
+      return { id: "push_1", event: last.data.event, payload: last.data.payload };
+    }) as never);
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(
+      payment({ method: "CARTE_BANCAIRE" }) as never
+    );
+  });
+
+  it("renvoie l'inscription puis la confirmation, une seule fois", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{"error":"reference introuvable"}', { status: 409 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValueOnce({
+      id: "push_old",
+      httpStatus: 409,
+      lastError: '{"error":"reference introuvable"}',
+    } as never);
+
+    const ok = await confirmPaymentToEvolia("company_1", "payment_1", 10);
+
+    expect(ok).toBe(true);
+    expect(createdEvents()).toEqual([
+      "payment.confirmed",
+      "company.registration.pushed",
+      "payment.confirmed",
+    ]);
+    expect(prisma.evoliaPush.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "push_old", status: "FAILED" },
+        data: expect.objectContaining({ status: "SKIPPED" }),
+      })
+    );
+  });
+
+  it("ne renvoie rien pour un autre refus", async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{"error":"montant invalide"}', { status: 422 }));
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValueOnce({
+      id: "push_old",
+      httpStatus: 422,
+      lastError: '{"error":"montant invalide"}',
+    } as never);
+
+    const ok = await confirmPaymentToEvolia("company_1", "payment_1", 10);
+
+    expect(ok).toBe(false);
+    expect(createdEvents()).toEqual(["payment.confirmed"]);
+  });
+});

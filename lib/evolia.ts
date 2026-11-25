@@ -404,12 +404,43 @@ export async function confirmPaymentToEvolia(
     amount,
   };
   try {
+    if (await sendToEvolia(companyId, CONFIRMATION_EVENT, reference, payload)) return true;
+
+    // Evolia ne retrouve plus la référence (inscription perdue de son côté,
+    // cas réel en préprod le 25 nov. 2026) : on lui renvoie l'inscription
+    // recalculée — il la rouvre avec la même référence — puis la confirmation,
+    // une seule fois. L'offre sans paiement n'a pas de CompanyPayment : non concernée.
+    const refused = await prisma.evoliaPush.findFirst({
+      where: { event: CONFIRMATION_EVENT, reference },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, httpStatus: true, lastError: true },
+    });
+    if (!refused || !isUnknownReferenceRefusal(refused)) return false;
+    if (!(await pushRegistrationToEvolia(reference))) return false;
+    await prisma.evoliaPush.updateMany({
+      where: { id: refused.id, status: "FAILED" },
+      data: {
+        status: "SKIPPED",
+        lastError: "Référence inconnue d'Evolia : inscription renvoyée, puis confirmation.",
+      },
+    });
     return await sendToEvolia(companyId, CONFIRMATION_EVENT, reference, payload);
   } catch (err) {
     // Comme les autres envois : jamais d'échec de l'action qui l'a déclenché.
     console.error("[evolia] failed to send payment confirmation", err);
     return false;
   }
+}
+
+/** Confirmation refusée par Evolia parce qu'il ne connaît pas la référence. */
+export function isUnknownReferenceRefusal(push: {
+  httpStatus: number | null;
+  lastError: string | null;
+}): boolean {
+  return (
+    (push.httpStatus === 404 || push.httpStatus === 409) &&
+    /r[ée]f[ée]rence introuvable/i.test(push.lastError ?? "")
+  );
 }
 
 /**
