@@ -18,6 +18,12 @@ Evolia ne considère comme réglés que les paiements qu'il encaisse lui-même. 
 - Fiche entreprise : les envois « Confirmation du paiement (virement, chèque) » apparaissent dans « Envois à Evolia », et peuvent être relancés (sauf pour un paiement annulé ou refusé).
 - À l'activation d'Evolia, les confirmations retenues partent après les inscriptions et avant les listes.
 
+### Corrigé (réponse d'Evolia du 25 novembre)
+
+- **Adresse de confirmation** : l'adresse par défaut pointe désormais vers l'API d'Evolia (`https://api-event.aiolia.us/integration/ceosummit/payments/webhook`) et non vers leur site public. Test : `https://dev-api-event.aiolia.us/integration/ceosummit/payments/webhook`.
+- **Carte ou Mobile Money confirmé à la main par l'admin** (Evolia ne l'a pas vu passer) : la confirmation est aussi envoyée à Evolia, à la validation et au rattrapage avant une liste. Un paiement confirmé par le webhook d'Evolia n'est pas renvoyé.
+- Evolia confirme : même signature que les inscriptions, `amount: 0` accepté pour un partenaire (inscription préalable avec `amountDue: 0`), envoi en double sans risque (réponse 200 avec `duplicate: true`).
+
 ## 2026-11-24 — Evolia : liste des participants refusée juste après le paiement
 
 Cas réel en production : à la confirmation d'un paiement par carte, la plateforme inscrivait les membres et envoyait la liste des participants **pendant** l'appel du webhook d'Evolia, avant de lui répondre. Pour Evolia, le paiement était donc encore en attente : liste refusée (HTTP 409 « Paiement en attente »). Elle n'est arrivée que parce que la gérante l'a validée une minute plus tard.

@@ -420,7 +420,9 @@ async function ensurePaymentConfirmations(
     where: {
       companySubscriptionId: subscriptionId,
       status: "CONFIRMED",
-      method: { in: ["VIREMENT", "CHEQUE"] },
+      // Virement / chèque, ou carte / Mobile Money confirmé à la main par l'admin
+      // (`reviewedById` vide = confirmé par le webhook d'Evolia lui-même).
+      OR: [{ method: { in: ["VIREMENT", "CHEQUE"] } }, { reviewedById: { not: null } }],
     },
     orderBy: { createdAt: "asc" },
     select: { id: true, amount: true },

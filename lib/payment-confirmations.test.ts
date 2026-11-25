@@ -19,12 +19,18 @@ vi.mock("@/lib/event-registration-lock", () => ({
 }));
 vi.mock("@/lib/resend", () => ({ sendTransactionalEmail: vi.fn().mockResolvedValue({}) }));
 vi.mock("@/lib/sms", () => ({ sendSms: vi.fn().mockResolvedValue({}) }));
+vi.mock("@/lib/evolia", () => ({
+  confirmPaymentToEvolia: vi.fn().mockResolvedValue(undefined),
+  pushParticipantsToEvolia: vi.fn().mockResolvedValue(true),
+  pushRegistrationToEvolia: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { confirmCompanyPaymentCore, reviveCancelledEvoliaPayment } from "./payment-confirmations";
 import { CANCELLED_BY_COMPANY_REASON } from "@/lib/payment-methods";
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
+import { confirmPaymentToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
 
 const UPSELL_PAYMENT = {
   id: "payment_1",
@@ -110,6 +116,33 @@ describe("confirmCompanyPaymentCore — upsell branch", () => {
     const result = await confirmCompanyPaymentCore("payment_1", "admin_1");
 
     expect(result.success).toBe(true);
+  });
+
+  // 25 nov. 2026 — réponse d'Evolia : un encaissement constaté hors d'Evolia
+  // doit lui être confirmé, sinon la liste des participants est refusée.
+  it("confirms a card payment validated by hand to Evolia", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...UPSELL_PAYMENT,
+      method: "CARTE_BANCAIRE",
+      amount: 4_715_800,
+    } as never);
+
+    await confirmCompanyPaymentCore("payment_1", "admin_1");
+
+    expect(pushRegistrationToEvolia).not.toHaveBeenCalled();
+    expect(confirmPaymentToEvolia).toHaveBeenCalledWith("company_1", "payment_1", 4_715_800);
+  });
+
+  it("does not send back a card payment Evolia confirmed itself", async () => {
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue({
+      ...UPSELL_PAYMENT,
+      method: "CARTE_BANCAIRE",
+      amount: 4_715_800,
+    } as never);
+
+    await confirmCompanyPaymentCore("payment_1", null);
+
+    expect(confirmPaymentToEvolia).not.toHaveBeenCalled();
   });
 });
 
