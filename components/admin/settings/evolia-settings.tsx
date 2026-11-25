@@ -47,6 +47,7 @@ export function EvoliaSettings({
   const router = useRouter();
   const [registrationUrl, setRegistrationUrl] = React.useState(status.registrationUrl.value);
   const [paymentUrl, setPaymentUrl] = React.useState(status.paymentUrl.value);
+  const [confirmationUrl, setConfirmationUrl] = React.useState(status.confirmationUrl.value);
   const [secret, setSecret] = React.useState("");
   const [clearSecret, setClearSecret] = React.useState(false);
   const [live, setLive] = React.useState(status.live);
@@ -81,6 +82,7 @@ export function EvoliaSettings({
       const result = await updateEvoliaSettings({
         registrationUrl,
         paymentUrl,
+        confirmationUrl,
         secret,
         clearSecret,
         live,
@@ -139,6 +141,14 @@ export function EvoliaSettings({
           value={paymentUrl}
           onChange={setPaymentUrl}
           source={status.paymentUrl.source}
+        />
+        <UrlField
+          id="evolia-confirmation-url"
+          label="Adresse de confirmation des paiements"
+          hint="Nous y confirmons les virements et chèques validés par l'admin."
+          value={confirmationUrl}
+          onChange={setConfirmationUrl}
+          source={status.confirmationUrl.source}
         />
 
         <div>

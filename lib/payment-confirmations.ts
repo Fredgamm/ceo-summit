@@ -7,7 +7,11 @@ import { sendSms } from "@/lib/sms";
 import { formatDateFr } from "@/lib/utils";
 import { resolveEmail } from "@/lib/email-template-resolver";
 import { isEvoliaPaymentMethod, REVIVABLE_EVOLIA_REASONS } from "@/lib/payment-methods";
-import { pushParticipantsToEvolia, pushRegistrationToEvolia } from "@/lib/evolia";
+import {
+  confirmPaymentToEvolia,
+  pushParticipantsToEvolia,
+  pushRegistrationToEvolia,
+} from "@/lib/evolia";
 import { autoRegisterCompanyMembers } from "@/lib/event-auto-registration";
 
 class AlreadyActiveError extends Error {}
@@ -122,7 +126,7 @@ export async function confirmCompanyPaymentCore(
       }
     }
 
-    await notifyEvolia(payment, true);
+    await notifyEvolia(payment, true, actorId);
     // Module 21 — les nouvelles places sont remplies par les membres pas encore inscrits.
     await autoRegisterCompanyMembers(
       payment.companySubscription.companyId,
@@ -243,7 +247,7 @@ export async function confirmCompanyPaymentCore(
     }
   }
 
-  await notifyEvolia(payment, false);
+  await notifyEvolia(payment, false, actorId);
   await autoRegisterCompanyMembers(
     payment.companySubscription.companyId,
     "confirmCompanyPaymentCore"
@@ -258,17 +262,30 @@ export async function confirmCompanyPaymentCore(
  *   l'a déjà été au lancement du paiement, `startEvoliaPayment`) ;
  * - supplément : si le gérant a déjà validé sa liste, elle est renvoyée avec
  *   la nouvelle capacité totale.
+ * - carte ou Mobile Money confirmé à la main par l'admin (`actorId`) :
+ *   Evolia ne l'a pas forcément vu passer, on lui confirme l'encaissement
+ *   (un doublon lui est sans effet : réponse 200 `duplicate: true`).
  * Les échecs sont journalisés (`EvoliaPush`) sans faire échouer la confirmation.
  */
 async function notifyEvolia(
   payment: {
     id: string;
     method: PaymentMethod;
+    amount: number;
     companySubscription: { companyId: string; participantsValidatedAt: Date | null };
   },
-  isUpsell: boolean
+  isUpsell: boolean,
+  actorId: string | null
 ) {
-  if (!isEvoliaPaymentMethod(payment.method)) await pushRegistrationToEvolia(payment.id);
+  const companyId = payment.companySubscription.companyId;
+  if (!isEvoliaPaymentMethod(payment.method)) {
+    await pushRegistrationToEvolia(payment.id);
+    // 25 nov. 2026 — puis l'encaissement, sans quoi Evolia garde le paiement
+    // « en attente » et refuse la liste des participants qui suit.
+    await confirmPaymentToEvolia(companyId, payment.id, payment.amount);
+  } else if (actorId) {
+    await confirmPaymentToEvolia(companyId, payment.id, payment.amount);
+  }
   if (isUpsell && payment.companySubscription.participantsValidatedAt) {
     await pushParticipantsToEvolia(payment.companySubscription.companyId);
   }

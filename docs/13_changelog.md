@@ -6,6 +6,27 @@
 
 ---
 
+## 2026-11-25 — Evolia : confirmation des virements et chèques
+
+Evolia ne considère comme réglés que les paiements qu'il encaisse lui-même. Un virement ou un chèque validé par notre admin restait « en attente » chez lui, et toutes les listes de participants qui suivaient étaient refusées (409). En production, IXEO était bloquée depuis le 11 novembre.
+
+### Ajouté
+
+- **Confirmation de l'encaissement à Evolia** (`payment.confirmed`, référence et montant en Ariary), envoyée quand l'admin confirme un virement ou un chèque (offre ou supplément), juste après l'inscription. Pour une offre sans paiement (partenaire), la confirmation est envoyée avec un montant de 0.
+- **Rattrapage automatique** : avant chaque liste de participants, les confirmations qui manquent sont envoyées. Pour une entreprise déjà bloquée, cliquer sur « Relancer » sur sa liste suffit.
+- **Paramètres › Intégrations** : nouveau champ « Adresse de confirmation des paiements » (par défaut l'adresse de production d'Evolia, variable `EVOLIA_CONFIRMATION_URL`). La préprod doit y saisir l'adresse de test.
+- Fiche entreprise : les envois « Confirmation du paiement (virement, chèque) » apparaissent dans « Envois à Evolia », et peuvent être relancés (sauf pour un paiement annulé ou refusé).
+- À l'activation d'Evolia, les confirmations retenues partent après les inscriptions et avant les listes.
+
+### Corrigé (réponse d'Evolia du 25 novembre)
+
+- **Adresse de confirmation** : l'adresse par défaut pointe désormais vers l'API d'Evolia (`https://api-event.aiolia.us/integration/ceosummit/payments/webhook`) et non vers leur site public. Test : `https://dev-api-event.aiolia.us/integration/ceosummit/payments/webhook`.
+- **Carte ou Mobile Money confirmé à la main par l'admin** (Evolia ne l'a pas vu passer) : la confirmation est aussi envoyée à Evolia, à la validation et au rattrapage avant une liste. Un paiement confirmé par le webhook d'Evolia n'est pas renvoyé.
+- **Inscription d'un virement ou d'un chèque refusée (422 « amountDue requis »)** : `amountDue` et `currency` sont désormais toujours envoyés, `amountDue: 0` pour un partenaire. C'est ce qui bloquait IXEO en production : son inscription n'était jamais arrivée chez Evolia.
+- **Rattrapage** : avant de confirmer un paiement, son inscription est renvoyée (recalculée) si Evolia ne l'a jamais reçue ; l'ancienne, refusée, passe à « Non transmis ». « Relancer » une inscription la recalcule aussi au lieu de renvoyer l'ancien contenu.
+- **Référence inconnue d'Evolia** (409 « reference introuvable » sur une confirmation, vu en préprod sur une carte confirmée à la main) : l'inscription recalculée est renvoyée, puis la confirmation, une seule fois.
+- Evolia confirme : même signature que les inscriptions, `amount: 0` accepté pour un partenaire (inscription préalable avec `amountDue: 0`), envoi en double sans risque (réponse 200 avec `duplicate: true`).
+
 ## 2026-11-24 — Evolia : liste des participants refusée juste après le paiement
 
 Cas réel en production : à la confirmation d'un paiement par carte, la plateforme inscrivait les membres et envoyait la liste des participants **pendant** l'appel du webhook d'Evolia, avant de lui répondre. Pour Evolia, le paiement était donc encore en attente : liste refusée (HTTP 409 « Paiement en attente »). Elle n'est arrivée que parce que la gérante l'a validée une minute plus tard.

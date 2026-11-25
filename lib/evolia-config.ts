@@ -29,6 +29,8 @@ export { decryptSetting, encryptSetting } from "@/lib/settings-crypto";
 export const EVOLIA_SETTING_KEYS = {
   registrationUrl: "evolia.registration_url",
   paymentUrl: "evolia.payment_url",
+  /** 25 nov. 2026 — adresse où nous confirmons un paiement encaissé chez nous (virement, chèque). */
+  confirmationUrl: "evolia.confirmation_url",
   secret: "evolia.webhook_secret",
   /**
    * 23 oct. 2026 — « true » une fois la clé de production Evolia validée.
@@ -38,11 +40,13 @@ export const EVOLIA_SETTING_KEYS = {
   live: "evolia.live",
 } as const;
 
-export type EvoliaUrlField = "registrationUrl" | "paymentUrl";
+export type EvoliaUrlField = "registrationUrl" | "paymentUrl" | "confirmationUrl";
 
 export const DEFAULT_REGISTRATION_URL =
   "https://api-event.aiolia.us/integration/ceosummit/registrations";
 export const DEFAULT_PAYMENT_URL = "https://event.aiolia.us/ceosummit/payment/{ceoSummitReference}";
+export const DEFAULT_CONFIRMATION_URL =
+  "https://api-event.aiolia.us/integration/ceosummit/payments/webhook";
 export const PAYMENT_URL_PLACEHOLDER = "{ceoSummitReference}";
 
 // ─── Lecture ──────────────────────────────────────────────────────────────
@@ -74,6 +78,7 @@ async function loadSettings() {
   return {
     registrationUrl: url("registrationUrl", "EVOLIA_REGISTRATION_URL", DEFAULT_REGISTRATION_URL),
     paymentUrl: url("paymentUrl", "EVOLIA_PAYMENT_URL", DEFAULT_PAYMENT_URL),
+    confirmationUrl: url("confirmationUrl", "EVOLIA_CONFIRMATION_URL", DEFAULT_CONFIRMATION_URL),
     adminSecret,
     secretUnreadable: Boolean(secretRow && !adminSecret),
     secretUpdatedAt: adminSecret ? (secretRow?.updatedAt ?? null) : null,
@@ -84,6 +89,8 @@ async function loadSettings() {
 export interface EvoliaConfig {
   registrationUrl: string;
   paymentUrlTemplate: string;
+  /** Confirmation d'un paiement encaissé chez nous (virement, chèque). */
+  confirmationUrl: string;
   /** Signe nos envois vers Evolia. */
   outboundSecret: string | null;
   /** Vérifie leurs confirmations de paiement (webhook entrant). */
@@ -98,6 +105,7 @@ export async function getEvoliaConfig(): Promise<EvoliaConfig> {
   return {
     registrationUrl: s.registrationUrl.value,
     paymentUrlTemplate: s.paymentUrl.value,
+    confirmationUrl: s.confirmationUrl.value,
     outboundSecret: s.adminSecret ?? (process.env.EVOLIA_WEBHOOK_SECRET || null),
     inboundSecret: s.adminSecret ?? (process.env.PAYMENT_WEBHOOK_SECRET || null),
     live: s.live,
@@ -112,6 +120,7 @@ export async function isEvoliaLive(): Promise<boolean> {
 export interface EvoliaSettingsStatus {
   registrationUrl: { value: string; source: SettingSource };
   paymentUrl: { value: string; source: SettingSource };
+  confirmationUrl: { value: string; source: SettingSource };
   secret: {
     source: SettingSource;
     /** « …ab12 » — jamais la clé entière. */
@@ -130,6 +139,7 @@ export async function getEvoliaSettingsStatus(): Promise<EvoliaSettingsStatus> {
   return {
     registrationUrl: s.registrationUrl,
     paymentUrl: s.paymentUrl,
+    confirmationUrl: s.confirmationUrl,
     secret: {
       source: s.adminSecret ? "admin" : envSecret ? "env" : "none",
       hint: secret && secret.length >= 16 ? `…${secret.slice(-4)}` : null,
