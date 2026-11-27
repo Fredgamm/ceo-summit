@@ -12,7 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     platformSetting: {
       findMany: vi.fn(async () => [{ key: "evolia.live", value: "true", updatedAt: new Date() }]),
     },
-    company: { findUnique: vi.fn() },
+    company: { findUnique: vi.fn(), findFirst: vi.fn() },
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
       findMany: vi.fn(),
@@ -22,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    auditLog: { create: vi.fn().mockResolvedValue({}) },
   },
 }));
 
@@ -38,6 +39,7 @@ import {
   pushRegistrationToEvolia,
   releaseHeldEvoliaPushes,
   signEvoliaBody,
+  startEvoliaReleaseInBackground,
 } from "./evolia";
 
 const EVENT = {
@@ -793,6 +795,42 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
     expect(setAside.sort()).toEqual(["old_1", "old_2"]);
   });
 
+  // 27 nov. 2026 — cas réel en prod : inscription d'un partenaire (référence =
+  // abonnement) en échec depuis avant `amountDue`/`currency`, renvoyée telle
+  // quelle et refusée à chaque essai ; la liste de l'entreprise restait en attente.
+  it("rebuilds a failed paymentless (partner) registration with amountDue and currency", async () => {
+    vi.mocked(prisma.evoliaPush.findMany)
+      .mockResolvedValueOnce([] as never) // retenus
+      .mockResolvedValueOnce([
+        { id: "old_p1", reference: "sub_1" },
+        { id: "old_p2", reference: "sub_1" },
+      ] as never); // inscriptions en échec
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.company.findFirst).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue(null);
+
+    const result = await releaseHeldEvoliaPushes({ retryFailedRegistrations: true });
+
+    expect(prisma.company.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { subscription: { id: "sub_1" } } })
+    );
+    expect(prisma.evoliaPush.create).toHaveBeenCalledTimes(1);
+    expect(pushedPayload().reference).toBe("sub_1");
+    expect(pushedPayload().payload).toMatchObject({
+      event: "company.registration.pushed",
+      ceoSummitReference: "sub_1",
+      amountDue: 0,
+      currency: "MGA",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ sent: 1, failed: 0, skipped: 1, deferred: 0 });
+    const setAside = vi
+      .mocked(prisma.evoliaPush.updateMany)
+      .mock.calls.filter(([args]) => args.data.status === "SKIPPED")
+      .map(([args]) => (args.where as { id: string }).id);
+    expect(setAside.sort()).toEqual(["old_p1", "old_p2"]);
+  });
+
   it("keeps the failed registration as is when nothing could be rebuilt", async () => {
     vi.mocked(prisma.evoliaPush.findMany)
       .mockResolvedValueOnce([] as never)
@@ -891,5 +929,35 @@ describe("confirmPaymentToEvolia — référence inconnue d'Evolia", () => {
 
     expect(ok).toBe(false);
     expect(createdEvents()).toEqual(["payment.confirmed"]);
+  });
+});
+
+describe("startEvoliaReleaseInBackground — suivi à l'écran (27 nov. 2026)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const actions = () =>
+    vi
+      .mocked(prisma.auditLog.create)
+      .mock.calls.map((c) => (c[0] as { data: { action: string } }).data.action);
+
+  it("logs the start before returning, then the result", async () => {
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([]);
+    await startEvoliaReleaseInBackground("admin_1", { retryFailedRegistrations: true });
+    expect(actions()).toEqual(["evolia_push.release_started"]);
+    await vi.waitFor(() =>
+      expect(actions()).toEqual(["evolia_push.release_started", "evolia_push.release"])
+    );
+  });
+
+  it("logs the error when the transmission crashes", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(prisma.evoliaPush.findMany).mockRejectedValue(new Error("base indisponible"));
+    await startEvoliaReleaseInBackground("admin_1");
+    await vi.waitFor(() => expect(actions()).toContain("evolia_push.release_failed"));
+    const failed = vi
+      .mocked(prisma.auditLog.create)
+      .mock.calls.map((c) => (c[0] as { data: { action: string; metadata: unknown } }).data)
+      .find((d) => d.action === "evolia_push.release_failed");
+    expect(failed?.metadata).toEqual({ error: "base indisponible" });
   });
 });
