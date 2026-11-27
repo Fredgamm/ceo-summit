@@ -21,6 +21,17 @@ const VALID_STATUSES: CompanySubscriptionStatus[] = [
   "CANCELLED",
 ];
 
+/** Libellés des statuts d'abonnement (tableau et export CSV de /admin/entreprises). */
+export const SUBSCRIPTION_STATUS_LABEL: Record<CompanySubscriptionStatus, string> = {
+  DRAFT: "Aucune offre",
+  PENDING_PAYMENT: "En attente de paiement",
+  PENDING_REVIEW: "À valider",
+  ACTIVE: "Active",
+  EXPIRED: "Expirée",
+  SUSPENDED: "Suspendue",
+  CANCELLED: "Annulée",
+};
+
 /** Abonnements à valider : en revue, ou avec un paiement (supplément) en attente. */
 export const TO_REVIEW_WHERE: Prisma.CompanySubscriptionWhereInput = {
   OR: [{ status: "PENDING_REVIEW" }, { payments: { some: { status: "PENDING" } } }],
