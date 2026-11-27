@@ -782,24 +782,31 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
 /**
  * Lance la transmission des envois retenus sans la faire attendre à l'écran :
  * des centaines d'envois (jusqu'à 10 s chacun) dépasseraient le délai d'une
- * requête. Le résultat est inscrit au journal d'audit ; le nombre d'envois
- * retenus restant s'affiche dans Paramètres › Intégrations.
+ * requête. Le début, puis le résultat (ou l'erreur) sont inscrits au journal
+ * d'audit : Paramètres › Intégrations affiche « en cours » puis le compte rendu.
  */
-export function startEvoliaReleaseInBackground(
+export async function startEvoliaReleaseInBackground(
   actorId: string,
   options: { retryFailedRegistrations?: boolean } = {}
-): void {
+): Promise<void> {
+  const log = (action: string, metadata: Prisma.InputJsonValue = {}) =>
+    prisma.auditLog.create({
+      data: { actorId, action, targetType: "EvoliaPush", targetId: "held", metadata },
+    });
+  // 27 nov. 2026 — attendu, pour que l'écran rechargé voie la transmission en cours.
+  await log(EVOLIA_RELEASE_STARTED_ACTION).catch((err) =>
+    console.error("[evolia] failed to log release start", err)
+  );
   void releaseHeldEvoliaPushes(options)
-    .then((result) =>
-      prisma.auditLog.create({
-        data: {
-          actorId,
-          action: "evolia_push.release",
-          targetType: "EvoliaPush",
-          targetId: "held",
-          metadata: result,
-        },
-      })
-    )
-    .catch((err) => console.error("[evolia] background release failed", err));
+    .then((result) => log(EVOLIA_RELEASE_DONE_ACTION, result))
+    .catch(async (err) => {
+      console.error("[evolia] background release failed", err);
+      await log(EVOLIA_RELEASE_FAILED_ACTION, {
+        error: String((err as Error)?.message ?? err).slice(0, 500),
+      }).catch(() => undefined);
+    });
 }
+
+export const EVOLIA_RELEASE_STARTED_ACTION = "evolia_push.release_started";
+export const EVOLIA_RELEASE_DONE_ACTION = "evolia_push.release";
+export const EVOLIA_RELEASE_FAILED_ACTION = "evolia_push.release_failed";

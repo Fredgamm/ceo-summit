@@ -22,6 +22,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
+    auditLog: { create: vi.fn().mockResolvedValue({}) },
   },
 }));
 
@@ -38,6 +39,7 @@ import {
   pushRegistrationToEvolia,
   releaseHeldEvoliaPushes,
   signEvoliaBody,
+  startEvoliaReleaseInBackground,
 } from "./evolia";
 
 const EVENT = {
@@ -891,5 +893,35 @@ describe("confirmPaymentToEvolia — référence inconnue d'Evolia", () => {
 
     expect(ok).toBe(false);
     expect(createdEvents()).toEqual(["payment.confirmed"]);
+  });
+});
+
+describe("startEvoliaReleaseInBackground — suivi à l'écran (27 nov. 2026)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const actions = () =>
+    vi
+      .mocked(prisma.auditLog.create)
+      .mock.calls.map((c) => (c[0] as { data: { action: string } }).data.action);
+
+  it("logs the start before returning, then the result", async () => {
+    vi.mocked(prisma.evoliaPush.findMany).mockResolvedValue([]);
+    await startEvoliaReleaseInBackground("admin_1", { retryFailedRegistrations: true });
+    expect(actions()).toEqual(["evolia_push.release_started"]);
+    await vi.waitFor(() =>
+      expect(actions()).toEqual(["evolia_push.release_started", "evolia_push.release"])
+    );
+  });
+
+  it("logs the error when the transmission crashes", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.mocked(prisma.evoliaPush.findMany).mockRejectedValue(new Error("base indisponible"));
+    await startEvoliaReleaseInBackground("admin_1");
+    await vi.waitFor(() => expect(actions()).toContain("evolia_push.release_failed"));
+    const failed = vi
+      .mocked(prisma.auditLog.create)
+      .mock.calls.map((c) => (c[0] as { data: { action: string; metadata: unknown } }).data)
+      .find((d) => d.action === "evolia_push.release_failed");
+    expect(failed?.metadata).toEqual({ error: "base indisponible" });
   });
 });
