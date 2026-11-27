@@ -86,3 +86,34 @@ export interface ActivityItem {
 export function buildActivityFeed(items: ActivityItem[], limit = 8): ActivityItem[] {
   return [...items].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, limit);
 }
+
+/**
+ * 27 nov. 2026 — places vendues pour un événement : somme des places des
+ * abonnements actifs (quota de l'offre + suppléments). Une offre sans
+ * plafond (Staff, quota non renseigné) est comptée à part, pas en places.
+ */
+export function sumSeatsSold(caps: (number | null)[]): { seats: number; unlimited: number } {
+  let seats = 0;
+  let unlimited = 0;
+  for (const cap of caps) {
+    if (cap == null) unlimited++;
+    else seats += cap;
+  }
+  return { seats, unlimited };
+}
+
+/** Somme des montants encaissés, au total et depuis une date (début du mois en cours). */
+export function sumCollected(
+  entries: { amount: number; amountEur: number; date: Date }[],
+  since: Date
+): { totalAr: number; totalEur: number; sinceAr: number; count: number } {
+  let totalAr = 0;
+  let totalEur = 0;
+  let sinceAr = 0;
+  for (const e of entries) {
+    totalAr += e.amount;
+    totalEur += e.amountEur;
+    if (e.date >= since) sinceAr += e.amount;
+  }
+  return { totalAr, totalEur: Math.round(totalEur * 100) / 100, sinceAr, count: entries.length };
+}
