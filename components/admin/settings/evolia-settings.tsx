@@ -36,6 +36,11 @@ export function EvoliaSettings({
   heldCount: number;
   /** Résultat de la dernière transmission et dernière erreur d'Evolia. */
   lastRelease: {
+    /** Transmission lancée, pas encore terminée : l'écran se rafraîchit seul. */
+    running: boolean;
+    startedAt: string | null;
+    /** Dernière transmission arrêtée par une erreur, ou sans compte rendu. */
+    crashError: string | null;
     at: string | null;
     sent: number;
     failed: number;
@@ -53,6 +58,20 @@ export function EvoliaSettings({
   const [live, setLive] = React.useState(status.live);
   const [transmitting, setTransmitting] = React.useState(false);
 
+  // 27 nov. 2026 — suivi de la transmission en arrière-plan : la page se
+  // rafraîchit toute seule jusqu'au compte rendu, sans recharger à la main.
+  const wasRunning = React.useRef(lastRelease.running);
+  React.useEffect(() => {
+    if (wasRunning.current && !lastRelease.running) {
+      if (lastRelease.crashError) toast.error("La transmission vers Evolia s'est arrêtée.");
+      else toast.success("Transmission vers Evolia terminée.");
+    }
+    wasRunning.current = lastRelease.running;
+    if (!lastRelease.running) return;
+    const timer = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(timer);
+  }, [lastRelease.running, lastRelease.crashError, router]);
+
   async function handleTransmit() {
     setTransmitting(true);
     try {
@@ -61,9 +80,7 @@ export function EvoliaSettings({
         toast.error(result.error);
         return;
       }
-      toast.success(
-        "Transmission lancée en arrière-plan. Rechargez la page dans quelques minutes pour suivre le nombre restant."
-      );
+      toast.success("Transmission lancée : son avancement s'affiche ci-dessous.");
       router.refresh();
     } finally {
       setTransmitting(false);
@@ -99,7 +116,7 @@ export function EvoliaSettings({
       );
       if (result.data.releaseStarted) {
         toast.success(
-          "Evolia activé : la transmission des envois retenus est lancée. Rechargez la page dans quelques minutes pour suivre le nombre restant."
+          "Evolia activé : la transmission des envois retenus est lancée, son avancement s'affiche ci-dessous."
         );
       }
       setSecret("");
@@ -222,7 +239,21 @@ export function EvoliaSettings({
               {heldCount} envoi(s) retenu(s) partiront à l&apos;activation.
             </p>
           )}
-          {status.live && heldCount > 0 && (
+          {status.live && lastRelease.running && (
+            <p
+              className="mt-2 flex items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs font-semibold text-navy"
+              role="status"
+            >
+              <span
+                className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-navy border-t-transparent"
+                aria-hidden
+              />
+              Transmission en cours
+              {lastRelease.startedAt && <> depuis {formatTime(lastRelease.startedAt)}</>} ·{" "}
+              {heldCount} envoi(s) restant(s). Cette zone se met à jour toute seule.
+            </p>
+          )}
+          {status.live && !lastRelease.running && heldCount > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <p className="text-xs font-semibold text-navy">
                 {heldCount} envoi(s) retenu(s) ou inscription(s) en échec.
@@ -238,14 +269,16 @@ export function EvoliaSettings({
               </Button>
             </div>
           )}
-          {status.live && lastRelease.at && (
+          {status.live && !lastRelease.running && lastRelease.crashError && (
+            <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+              Dernière transmission arrêtée avant la fin : {lastRelease.crashError} Vous pouvez la
+              relancer.
+            </p>
+          )}
+          {status.live && !lastRelease.running && lastRelease.at && (
             <div className="mt-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-text-mid">
               <p className="font-semibold text-navy">
-                Dernière transmission :{" "}
-                {new Date(lastRelease.at).toLocaleString("fr-FR", {
-                  dateStyle: "short",
-                  timeStyle: "short",
-                })}
+                Dernière transmission terminée : {formatTime(lastRelease.at)}
               </p>
               <p>
                 {lastRelease.sent} accepté(s) par Evolia · {lastRelease.failed} refusé(s) ·{" "}
@@ -283,6 +316,10 @@ export function EvoliaSettings({
       </div>
     </form>
   );
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
 function UrlField({

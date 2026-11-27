@@ -349,7 +349,11 @@ export async function pushParticipantsToEvolia(
  * On lui transmet donc une fois l'inscription, comme réglée (« virement »,
  * sans montant), sous la référence de l'abonnement.
  */
-async function ensurePaymentlessRegistration(company: CompanyForPush, reference: string) {
+/** Renvoie le résultat de l'envoi, ou `null` si l'inscription est déjà transmise (ou retenue). */
+async function ensurePaymentlessRegistration(
+  company: CompanyForPush,
+  reference: string
+): Promise<boolean | null> {
   const alreadySent = await prisma.evoliaPush.findFirst({
     // Retenu (Evolia pas encore activé) compte comme déjà transmis : il partira à l'activation.
     where: {
@@ -359,7 +363,7 @@ async function ensurePaymentlessRegistration(company: CompanyForPush, reference:
     },
     select: { id: true },
   });
-  if (alreadySent || !company.subscription) return;
+  if (alreadySent || !company.subscription) return null;
 
   const payload = {
     event: "company.registration.pushed",
@@ -379,7 +383,7 @@ async function ensurePaymentlessRegistration(company: CompanyForPush, reference:
     eventDetails: eventInfo(company),
     participants: managerOnly(company),
   };
-  await sendToEvolia(company.id, payload.event, reference, payload);
+  return sendToEvolia(company.id, payload.event, reference, payload);
 }
 
 // ─── Confirmation d'un paiement encaissé chez nous (25 nov. 2026) ─────────
@@ -675,6 +679,31 @@ export async function releaseHeldEvoliaPushes(
       continue;
     }
 
+    // 27 nov. 2026 — offre sans paiement (partenaire) : la référence est
+    // l'abonnement. Son inscription en échec date parfois d'avant
+    // `amountDue`/`currency` (refusée à chaque essai, et la liste de
+    // l'entreprise restait en attente) : reconstruite elle aussi.
+    if (push.from === "FAILED" && !payment && push.reference) {
+      const company = await prisma.company.findFirst({
+        where: { subscription: { id: push.reference } },
+        include: COMPANY_INCLUDE,
+      });
+      if (company) {
+        if (rebuilt.has(push.reference)) {
+          await setAside(push.id, "PENDING", "Doublon : remplacé par un envoi reconstruit.");
+          skipped++;
+          continue;
+        }
+        rebuilt.add(push.reference);
+        await setAside(push.id, "PENDING", "Reconstruit avec les données à jour : nouvel envoi.");
+        const ok = await ensurePaymentlessRegistration(company, push.reference);
+        if (ok === null) skipped++;
+        else if (ok) sent++;
+        else failed++;
+        continue;
+      }
+    }
+
     if (await deliverEvoliaPush(push.id)) sent++;
     else failed++;
   }
@@ -782,24 +811,31 @@ export async function deliverEvoliaPush(pushId: string): Promise<boolean> {
 /**
  * Lance la transmission des envois retenus sans la faire attendre à l'écran :
  * des centaines d'envois (jusqu'à 10 s chacun) dépasseraient le délai d'une
- * requête. Le résultat est inscrit au journal d'audit ; le nombre d'envois
- * retenus restant s'affiche dans Paramètres › Intégrations.
+ * requête. Le début, puis le résultat (ou l'erreur) sont inscrits au journal
+ * d'audit : Paramètres › Intégrations affiche « en cours » puis le compte rendu.
  */
-export function startEvoliaReleaseInBackground(
+export async function startEvoliaReleaseInBackground(
   actorId: string,
   options: { retryFailedRegistrations?: boolean } = {}
-): void {
+): Promise<void> {
+  const log = (action: string, metadata: Prisma.InputJsonValue = {}) =>
+    prisma.auditLog.create({
+      data: { actorId, action, targetType: "EvoliaPush", targetId: "held", metadata },
+    });
+  // 27 nov. 2026 — attendu, pour que l'écran rechargé voie la transmission en cours.
+  await log(EVOLIA_RELEASE_STARTED_ACTION).catch((err) =>
+    console.error("[evolia] failed to log release start", err)
+  );
   void releaseHeldEvoliaPushes(options)
-    .then((result) =>
-      prisma.auditLog.create({
-        data: {
-          actorId,
-          action: "evolia_push.release",
-          targetType: "EvoliaPush",
-          targetId: "held",
-          metadata: result,
-        },
-      })
-    )
-    .catch((err) => console.error("[evolia] background release failed", err));
+    .then((result) => log(EVOLIA_RELEASE_DONE_ACTION, result))
+    .catch(async (err) => {
+      console.error("[evolia] background release failed", err);
+      await log(EVOLIA_RELEASE_FAILED_ACTION, {
+        error: String((err as Error)?.message ?? err).slice(0, 500),
+      }).catch(() => undefined);
+    });
 }
+
+export const EVOLIA_RELEASE_STARTED_ACTION = "evolia_push.release_started";
+export const EVOLIA_RELEASE_DONE_ACTION = "evolia_push.release";
+export const EVOLIA_RELEASE_FAILED_ACTION = "evolia_push.release_failed";

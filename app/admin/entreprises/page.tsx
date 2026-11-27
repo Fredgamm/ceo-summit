@@ -17,6 +17,7 @@ import { EmailLink, PhoneLinks } from "@/components/admin/entreprises/contact-li
 import { SubscriptionFilters } from "@/components/admin/entreprises/subscription-filters";
 import {
   ADMIN_SUBSCRIPTIONS_PAGE_SIZE,
+  SUBSCRIPTION_STATUS_LABEL,
   TO_REVIEW_FILTER,
   TO_REVIEW_WHERE,
   buildAdminSubscriptionsQuery,
@@ -25,15 +26,7 @@ import {
 
 export const metadata: Metadata = { title: "Admin — Entreprises" };
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Aucune offre",
-  PENDING_PAYMENT: "En attente de paiement",
-  PENDING_REVIEW: "À valider",
-  ACTIVE: "Active",
-  EXPIRED: "Expirée",
-  SUSPENDED: "Suspendue",
-  CANCELLED: "Annulée",
-};
+const STATUS_LABEL: Record<string, string> = SUBSCRIPTION_STATUS_LABEL;
 const STATUS_BADGE: Record<string, "active" | "pending" | "refused" | "draft"> = {
   DRAFT: "draft",
   PENDING_PAYMENT: "pending",
@@ -226,7 +219,16 @@ export default async function AdminEntreprisesPage(props: {
       <section id="abonnements" className="flex scroll-mt-20 flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-base font-bold text-navy">Abonnements</h2>
-          {hasFilters && <p className="text-sm text-text-muted">{filteredCount} résultat(s)</p>}
+          <div className="flex items-center gap-3">
+            {hasFilters && <p className="text-sm text-text-muted">{filteredCount} résultat(s)</p>}
+            {filteredCount > 0 && (
+              <Button asChild variant="outline" size="sm">
+                <a href={buildExportLink(searchParams)} download>
+                  ↓ Export CSV
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
 
         <SubscriptionFilters
@@ -373,6 +375,17 @@ export default async function AdminEntreprisesPage(props: {
       </section>
     </div>
   );
+}
+
+/** Export CSV des abonnements avec les filtres affichés (toutes les pages). */
+function buildExportLink(searchParams: AdminSubscriptionsSearchParams) {
+  const params = new URLSearchParams();
+  for (const key of ["q", "statut", "offre"] as const) {
+    const value = searchParams[key];
+    if (typeof value === "string" && value) params.set(key, value);
+  }
+  const query = params.toString();
+  return query ? `/api/admin/entreprises/export?${query}` : "/api/admin/entreprises/export";
 }
 
 /** Lien vers une autre page, en gardant les filtres ; ancré sur le tableau. */

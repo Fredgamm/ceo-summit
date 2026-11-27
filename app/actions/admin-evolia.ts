@@ -209,7 +209,7 @@ export async function updateEvoliaSettings(input: EvoliaSettingsInput): Promise<
 
   // Activation : tout ce qui a été retenu part maintenant chez Evolia.
   const releaseStarted = changed.includes("live") && data.live;
-  if (releaseStarted) startEvoliaReleaseInBackground(userId);
+  if (releaseStarted) await startEvoliaReleaseInBackground(userId);
 
   revalidatePath("/admin/parametres");
   revalidatePath("/entreprise/paiement");
@@ -229,6 +229,7 @@ export async function transmitHeldEvoliaPushes(): Promise<ActionResult> {
   if (!(await isEvoliaLive())) {
     return { success: false, error: "Evolia n'est pas activé : les envois restent retenus." };
   }
-  startEvoliaReleaseInBackground(userId, { retryFailedRegistrations: true });
+  await startEvoliaReleaseInBackground(userId, { retryFailedRegistrations: true });
+  revalidatePath("/admin/parametres");
   return { success: true, data: undefined };
 }

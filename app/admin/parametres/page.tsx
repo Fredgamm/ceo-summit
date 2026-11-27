@@ -14,6 +14,11 @@ import { StaffOrganizationCard } from "@/components/admin/settings/staff-organiz
 import { getShowStaffInDirectory } from "@/lib/staff-visibility";
 import { getBrevoConfig, isBrevoReady } from "@/lib/brevo";
 import { getEvoliaConfig, getEvoliaSettingsStatus } from "@/lib/evolia-config";
+import {
+  EVOLIA_RELEASE_DONE_ACTION,
+  EVOLIA_RELEASE_FAILED_ACTION,
+  EVOLIA_RELEASE_STARTED_ACTION,
+} from "@/lib/evolia";
 import { appUrl } from "@/lib/app-url";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,12 +43,16 @@ const TABS = [
  * l'admin doit pouvoir voir ce qu'elle a donné sans consulter les journaux.
  */
 async function loadLastEvoliaRelease() {
-  const [audit, failure] = await Promise.all([
+  const latest = (action: string) =>
     prisma.auditLog.findFirst({
-      where: { action: "evolia_push.release" },
+      where: { action },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true, metadata: true },
-    }),
+    });
+  const [audit, started, crashed, failure] = await Promise.all([
+    latest(EVOLIA_RELEASE_DONE_ACTION),
+    latest(EVOLIA_RELEASE_STARTED_ACTION),
+    latest(EVOLIA_RELEASE_FAILED_ACTION),
     prisma.evoliaPush.findFirst({
       where: { status: "FAILED" },
       orderBy: { updatedAt: "desc" },
@@ -52,7 +61,25 @@ async function loadLastEvoliaRelease() {
   ]);
   const m = (audit?.metadata ?? {}) as Record<string, unknown>;
   const num = (v: unknown) => (typeof v === "number" ? v : 0);
+  const time = (entry: { createdAt: Date } | null) => entry?.createdAt.getTime() ?? 0;
+  // 27 nov. 2026 — transmission lancée et pas encore terminée. Au-delà de
+  // 30 min sans compte rendu, on la considère interrompue (serveur redémarré).
+  const running =
+    started != null &&
+    time(started) > Math.max(time(audit), time(crashed)) &&
+    Date.now() - time(started) < 30 * 60 * 1000;
+  const interrupted =
+    !running && started != null && time(started) > Math.max(time(audit), time(crashed));
+  const crashedLast = crashed != null && time(crashed) > time(audit);
   return {
+    running,
+    startedAt: started ? started.createdAt.toISOString() : null,
+    /** Dernière transmission arrêtée par une erreur, ou sans compte rendu. */
+    crashError: interrupted
+      ? "Transmission interrompue sans compte rendu (serveur redémarré ?)."
+      : crashedLast
+        ? String((crashed!.metadata as Record<string, unknown> | null)?.error ?? "Erreur inconnue.")
+        : null,
     at: audit ? audit.createdAt.toISOString() : null,
     sent: num(m.sent),
     failed: num(m.failed),
