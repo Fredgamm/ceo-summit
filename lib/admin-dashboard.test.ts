@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { computeMRR, buildMonthlyRevenueSeries, buildActivityFeed } from "./admin-dashboard";
+import {
+  computeMRR,
+  buildMonthlyRevenueSeries,
+  buildActivityFeed,
+  sumCollected,
+  sumSeatsSold,
+} from "./admin-dashboard";
 
 describe("computeMRR", () => {
   it("spreads an annual membership's price evenly across 12 months", () => {
@@ -75,5 +81,27 @@ describe("buildActivityFeed", () => {
     const feed = buildActivityFeed(items, 2);
 
     expect(feed.map((i) => i.message)).toEqual(["newest", "middle"]);
+  });
+});
+
+describe("sumSeatsSold", () => {
+  it("adds capped seats and counts uncapped offers apart", () => {
+    expect(sumSeatsSold([1, 3, null, 2])).toEqual({ seats: 6, unlimited: 1 });
+    expect(sumSeatsSold([])).toEqual({ seats: 0, unlimited: 0 });
+  });
+});
+
+describe("sumCollected", () => {
+  it("totals Ariary and euros, and what was collected since the given date", () => {
+    const since = new Date("2026-11-01T00:00:00Z");
+    expect(
+      sumCollected(
+        [
+          { amount: 4_316_394, amountEur: 830.5, date: new Date("2026-10-27") },
+          { amount: 4_294_097, amountEur: 826.25, date: new Date("2026-11-24") },
+        ],
+        since
+      )
+    ).toEqual({ totalAr: 8_610_491, totalEur: 1656.75, sinceAr: 4_294_097, count: 2 });
   });
 });

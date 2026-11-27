@@ -2,10 +2,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
-import { buildActivityFeed, buildMonthlyRevenueSeries, computeMRR } from "@/lib/admin-dashboard";
+import {
+  buildActivityFeed,
+  buildMonthlyRevenueSeries,
+  sumCollected,
+  sumSeatsSold,
+} from "@/lib/admin-dashboard";
+import {
+  COMPANY_PAYMENT_FINANCE_INCLUDE,
+  companyPaymentToTransaction,
+  eventRegistrationToTransaction,
+  toEuroAmount,
+} from "@/lib/finance";
+import { getEurToArRate } from "@/lib/currency-conversion";
+import { seatCap } from "@/lib/company-seats";
+import { TO_REVIEW_FILTER, TO_REVIEW_WHERE } from "@/lib/admin-subscriptions-query";
 import { RevenueChart } from "@/components/admin/revenue-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatAriary, formatDateFr } from "@/lib/utils";
+import { formatAriary, formatDateFr, formatEuro } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Admin — Tableau de bord" };
 
@@ -22,6 +36,10 @@ export default async function AdminDashboardPage() {
     activeSubscriptions,
     allCompanyPaymentsForRevenue,
     paidEventRegistrations,
+    subscriptionsByStatus,
+    toReviewCount,
+    pendingCompanyPayments,
+    eurToArRate,
     pendingEventPayments,
     pendingReports,
     upcomingEvents,
@@ -29,27 +47,41 @@ export default async function AdminDashboardPage() {
     recentRegistrations,
   ] = await Promise.all([
     prisma.user.count({ where: { status: "ACTIVE" } }),
+    // Abonnements actifs : places vendues par événement.
     prisma.companySubscription.findMany({
-      where: { status: { in: ["ACTIVE", "EXPIRED"] } },
+      where: { status: "ACTIVE" },
       select: {
-        startDate: true,
-        endDate: true,
-        payments: {
-          where: { status: "CONFIRMED" },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { amount: true },
-        },
+        declaredParticipants: true,
+        extraSeats: true,
+        memberLimit: true,
+        unlimitedSeats: true,
+        plan: { select: { eventId: true, pricingMode: true, maxTeamMembers: true } },
       },
     }),
+    // 27 nov. 2026 — mêmes paiements que la page Finances (encaissé total, en € et Ar).
     prisma.companyPayment.findMany({
-      where: { status: "CONFIRMED", reviewedAt: { not: null } },
-      select: { amount: true, reviewedAt: true },
+      where: { status: "CONFIRMED" },
+      include: COMPANY_PAYMENT_FINANCE_INCLUDE,
     }),
     prisma.eventRegistration.findMany({
       where: { paymentStatus: "PAID" },
-      select: { createdAt: true, event: { select: { price: true } } },
+      select: {
+        id: true,
+        eurToArRate: true,
+        paymentMethod: true,
+        createdAt: true,
+        user: { select: { name: true } },
+        event: { select: { title: true, price: true } },
+      },
     }),
+    prisma.companySubscription.groupBy({ by: ["status"], _count: true }),
+    prisma.companySubscription.count({ where: TO_REVIEW_WHERE }),
+    prisma.companyPayment.aggregate({
+      where: { status: "PENDING" },
+      _count: true,
+      _sum: { amount: true },
+    }),
+    getEurToArRate(),
     prisma.eventRegistration.count({ where: { paymentStatus: "PENDING" } }),
     prisma.roomReport.count({ where: { status: "PENDING" } }),
     prisma.event.findMany({
@@ -81,28 +113,40 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
-  // Un abonnement ACTIVE/EXPIRED a toujours des dates réelles — filtre
-  // défensif, voir admin/finances/page.tsx.
-  const mrr = computeMRR(
-    activeSubscriptions
-      .filter(
-        (s): s is typeof s & { startDate: Date; endDate: Date } =>
-          s.startDate != null && s.endDate != null
-      )
-      .map((s) => ({
-        price: s.payments[0]?.amount ?? 0,
-        startDate: s.startDate,
-        endDate: s.endDate,
-      }))
-  );
-
-  const revenueEntries = [
-    ...allCompanyPaymentsForRevenue.map((p) => ({ amount: p.amount, date: p.reviewedAt! })),
-    ...paidEventRegistrations.map((r) => ({ amount: r.event.price, date: r.createdAt })),
+  // Encaissé : la date de validation du paiement (celle du graphique), à défaut sa création.
+  const collectedEntries = [
+    ...allCompanyPaymentsForRevenue.map((p) => ({
+      amount: p.amount,
+      amountEur: toEuroAmount(companyPaymentToTransaction(p), eurToArRate).amountEur,
+      date: p.reviewedAt ?? p.createdAt,
+    })),
+    // Les événements gratuits (inscription comprise dans l'offre) ne comptent pas.
+    ...paidEventRegistrations
+      .filter((r) => r.event.price > 0)
+      .map((r) => ({
+        amount: r.event.price,
+        amountEur: toEuroAmount(eventRegistrationToTransaction(r), eurToArRate).amountEur,
+        date: r.createdAt,
+      })),
   ];
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const collected = sumCollected(collectedEntries, startOfMonth);
+  const revenueEntries = collectedEntries.map((e) => ({ amount: e.amount, date: e.date }));
+
+  const statusCount = (status: string) =>
+    subscriptionsByStatus.find((g) => g.status === status)?._count ?? 0;
+  const awaitingPaymentCount = statusCount("PENDING_PAYMENT");
+  const activeCompaniesCount = statusCount("ACTIVE");
+
   const revenueSeries = buildMonthlyRevenueSeries(revenueEntries, 12);
 
   const nextEvent = upcomingEvents[0];
+  const seatsSold = nextEvent
+    ? sumSeatsSold(
+        activeSubscriptions.filter((s) => s.plan.eventId === nextEvent.id).map((s) => seatCap(s))
+      )
+    : null;
 
   const activity = buildActivityFeed(
     [
@@ -149,36 +193,49 @@ export default async function AdminDashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-navy">{activeUsersCount}</p>
-            <p className="text-sm text-text-muted">Membres actifs</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-navy">{formatAriary(mrr)}</p>
-            <p className="text-sm text-text-muted">MRR estimé</p>
-            <p className="mt-2 text-xs text-text-muted">
-              Abonnement entreprise actif, réparti sur la durée du terme
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            {nextEvent ? (
-              <>
-                <p className="text-2xl font-bold text-navy">
-                  {nextEvent._count.registrations}/{nextEvent.capacity}
-                </p>
-                <p className="truncate text-sm text-text-muted">Inscrits — {nextEvent.title}</p>
-              </>
-            ) : (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          href="/admin/finances"
+          value={formatAriary(collected.totalAr)}
+          label="Encaissé"
+          details={[
+            `≈ ${formatEuro(collected.totalEur)} · ${collected.count} paiement(s)`,
+            `Ce mois-ci : ${formatAriary(collected.sinceAr)}`,
+          ]}
+        />
+        <KpiCard
+          href="/admin/entreprises?statut=PENDING_PAYMENT"
+          value={String(awaitingPaymentCount)}
+          label="Entreprises en attente de paiement"
+          details={[
+            pendingCompanyPayments._count > 0
+              ? `${pendingCompanyPayments._count} paiement(s) en cours · ${formatAriary(pendingCompanyPayments._sum.amount ?? 0)}`
+              : "Aucun paiement en cours",
+          ]}
+        />
+        <KpiCard
+          href={`/admin/entreprises?statut=${TO_REVIEW_FILTER}`}
+          value={String(activeCompaniesCount)}
+          label="Entreprises actives"
+          details={[`${toReviewCount} à valider`, `${activeUsersCount} membres actifs`]}
+        />
+        {nextEvent && seatsSold ? (
+          <KpiCard
+            href="/admin/evenements"
+            value={`${nextEvent._count.registrations} / ${seatsSold.seats}`}
+            label="Participants nommés / places vendues"
+            details={[
+              nextEvent.title,
+              `Capacité ${nextEvent.capacity}${seatsSold.unlimited > 0 ? ` · ${seatsSold.unlimited} offre(s) sans plafond` : ""}`,
+            ]}
+          />
+        ) : (
+          <Card>
+            <CardContent className="pt-6">
               <p className="text-sm text-text-muted">Aucun événement à venir</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -245,5 +302,35 @@ export default async function AdminDashboardPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function KpiCard({
+  href,
+  value,
+  label,
+  details,
+}: {
+  href: string;
+  value: string;
+  label: string;
+  details: string[];
+}) {
+  return (
+    <Link href={href} className="group rounded-lg focus-visible:outline-none focus-visible:ring-2">
+      <Card className="h-full transition-colors group-hover:border-navy-mid">
+        <CardContent className="pt-6">
+          <p className="text-2xl font-bold text-navy">{value}</p>
+          <p className="text-sm text-text-muted">{label}</p>
+          <div className="mt-2 flex flex-col gap-0.5 text-xs text-text-muted">
+            {details.map((d) => (
+              <p key={d} className="truncate">
+                {d}
+              </p>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
