@@ -12,7 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     platformSetting: {
       findMany: vi.fn(async () => [{ key: "evolia.live", value: "true", updatedAt: new Date() }]),
     },
-    company: { findUnique: vi.fn() },
+    company: { findUnique: vi.fn(), findFirst: vi.fn() },
     eventRegistration: { findMany: vi.fn().mockResolvedValue([]) },
     evoliaPush: {
       findMany: vi.fn(),
@@ -793,6 +793,42 @@ describe("before Evolia is activated (23 oct. 2026)", () => {
       .mock.calls.filter(([args]) => args.data.status === "SKIPPED")
       .map(([args]) => (args.where as { id: string }).id);
     expect(setAside.sort()).toEqual(["old_1", "old_2"]);
+  });
+
+  // 27 nov. 2026 — cas réel en prod : inscription d'un partenaire (référence =
+  // abonnement) en échec depuis avant `amountDue`/`currency`, renvoyée telle
+  // quelle et refusée à chaque essai ; la liste de l'entreprise restait en attente.
+  it("rebuilds a failed paymentless (partner) registration with amountDue and currency", async () => {
+    vi.mocked(prisma.evoliaPush.findMany)
+      .mockResolvedValueOnce([] as never) // retenus
+      .mockResolvedValueOnce([
+        { id: "old_p1", reference: "sub_1" },
+        { id: "old_p2", reference: "sub_1" },
+      ] as never); // inscriptions en échec
+    vi.mocked(prisma.companyPayment.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.company.findFirst).mockResolvedValue(COMPANY as never);
+    vi.mocked(prisma.evoliaPush.findFirst).mockResolvedValue(null);
+
+    const result = await releaseHeldEvoliaPushes({ retryFailedRegistrations: true });
+
+    expect(prisma.company.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { subscription: { id: "sub_1" } } })
+    );
+    expect(prisma.evoliaPush.create).toHaveBeenCalledTimes(1);
+    expect(pushedPayload().reference).toBe("sub_1");
+    expect(pushedPayload().payload).toMatchObject({
+      event: "company.registration.pushed",
+      ceoSummitReference: "sub_1",
+      amountDue: 0,
+      currency: "MGA",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ sent: 1, failed: 0, skipped: 1, deferred: 0 });
+    const setAside = vi
+      .mocked(prisma.evoliaPush.updateMany)
+      .mock.calls.filter(([args]) => args.data.status === "SKIPPED")
+      .map(([args]) => (args.where as { id: string }).id);
+    expect(setAside.sort()).toEqual(["old_p1", "old_p2"]);
   });
 
   it("keeps the failed registration as is when nothing could be rebuilt", async () => {

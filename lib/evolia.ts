@@ -349,7 +349,11 @@ export async function pushParticipantsToEvolia(
  * On lui transmet donc une fois l'inscription, comme réglée (« virement »,
  * sans montant), sous la référence de l'abonnement.
  */
-async function ensurePaymentlessRegistration(company: CompanyForPush, reference: string) {
+/** Renvoie le résultat de l'envoi, ou `null` si l'inscription est déjà transmise (ou retenue). */
+async function ensurePaymentlessRegistration(
+  company: CompanyForPush,
+  reference: string
+): Promise<boolean | null> {
   const alreadySent = await prisma.evoliaPush.findFirst({
     // Retenu (Evolia pas encore activé) compte comme déjà transmis : il partira à l'activation.
     where: {
@@ -359,7 +363,7 @@ async function ensurePaymentlessRegistration(company: CompanyForPush, reference:
     },
     select: { id: true },
   });
-  if (alreadySent || !company.subscription) return;
+  if (alreadySent || !company.subscription) return null;
 
   const payload = {
     event: "company.registration.pushed",
@@ -379,7 +383,7 @@ async function ensurePaymentlessRegistration(company: CompanyForPush, reference:
     eventDetails: eventInfo(company),
     participants: managerOnly(company),
   };
-  await sendToEvolia(company.id, payload.event, reference, payload);
+  return sendToEvolia(company.id, payload.event, reference, payload);
 }
 
 // ─── Confirmation d'un paiement encaissé chez nous (25 nov. 2026) ─────────
@@ -673,6 +677,31 @@ export async function releaseHeldEvoliaPushes(
       if (ok) sent++;
       else failed++;
       continue;
+    }
+
+    // 27 nov. 2026 — offre sans paiement (partenaire) : la référence est
+    // l'abonnement. Son inscription en échec date parfois d'avant
+    // `amountDue`/`currency` (refusée à chaque essai, et la liste de
+    // l'entreprise restait en attente) : reconstruite elle aussi.
+    if (push.from === "FAILED" && !payment && push.reference) {
+      const company = await prisma.company.findFirst({
+        where: { subscription: { id: push.reference } },
+        include: COMPANY_INCLUDE,
+      });
+      if (company) {
+        if (rebuilt.has(push.reference)) {
+          await setAside(push.id, "PENDING", "Doublon : remplacé par un envoi reconstruit.");
+          skipped++;
+          continue;
+        }
+        rebuilt.add(push.reference);
+        await setAside(push.id, "PENDING", "Reconstruit avec les données à jour : nouvel envoi.");
+        const ok = await ensurePaymentlessRegistration(company, push.reference);
+        if (ok === null) skipped++;
+        else if (ok) sent++;
+        else failed++;
+        continue;
+      }
     }
 
     if (await deliverEvoliaPush(push.id)) sent++;
